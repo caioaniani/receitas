@@ -106,7 +106,7 @@ def _duracao(minutos):
     return f'{m} min'
 
 
-def padrao_receita(rec, *, resolver_estoque=True):
+def padrao_receita(rec, *, resolver_estoque=True, farinha_g=None):
     """Calcula UMA batelada completa, jamais adapta a farinha ao rendimento.
 
     A farinha é o total dos ingredientes de farinha, não necessariamente
@@ -115,7 +115,7 @@ def padrao_receita(rec, *, resolver_estoque=True):
     Sem peso unitário preserva o rendimento proporcional cadastrado.
     ``resolver_estoque=False`` serve à previsão sem exigir cadastro de MPs.
     """
-    farinha = farinha_padrao_g(rec)
+    farinha = farinha_g if farinha_g is not None else farinha_padrao_g(rec)
     if farinha is None:
         return None
     peso = _numero(rec.peso_base, f'{rec.nome}: peso base', positivo=True)
@@ -250,6 +250,10 @@ def normalizar_item(it, *, permitir_novo=True):
     if snapshot is None:
         if not permitir_novo or produzido > 0 or alvo <= 0:
             return None
+        from app.services.viennoiserie import eh_massa_compartilhada
+        if eh_massa_compartilhada(it.receita):
+            raise ValueError('Planeje a massa para folhar pelo planejamento semanal: '
+                             'o sistema distribui o batimento de 25 kg entre os produtos.')
         dados = padrao_receita(it.receita)
         if dados is None:
             return None
@@ -356,6 +360,11 @@ def consumir_item(it, unidades, usuario_id, referencia, *, produzido_antes=None)
     for sub_id in sorted(sub_ids):
         consumo = deltas['subs'][sub_id]
         if consumo <= 0:
+            continue
+        from app.services.estoque_massa import consumir_massa, eh_massa_folhar
+        if eh_massa_folhar(subs[sub_id]):
+            res = consumir_massa(subs[sub_id], consumo, usuario_id, referencia)
+            out.append({'sub_id': sub_id, **res})
             continue
         Receita.query.filter_by(id=sub_id).with_for_update().populate_existing().one()
         frac = ConsumoSubFracao.query.filter_by(

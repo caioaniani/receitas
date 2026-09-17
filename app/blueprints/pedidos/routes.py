@@ -1645,7 +1645,8 @@ def congelados():
     sugestoes = svc_cong.sugerir_para_pendentes(pendentes) if pendentes else {}
     return render_template('pedidos/congelados.html', itens=itens,
                            receitas=receitas, produtos=produtos,
-                           sugestoes=sugestoes)
+                           sugestoes=sugestoes,
+                           saldos_massa=svc_cong.saldos_massa_para_tela(itens))
 
 
 @pedidos_bp.route('/congelados/movs/<int:estoque_id>')
@@ -1805,12 +1806,22 @@ def congelados_ajuste():
     tipo = request.form.get('tipo_ajuste', 'ajuste')
 
     ep = EstoqueProducao.query.get_or_404(ep_id)
-    ep.quantidade = max(0, ep.quantidade - qtd)
-    db.session.add(MovEstoqueProducao(
-        estoque_producao_id=ep.id, tipo=tipo,
-        quantidade=qtd, referencia=request.form.get('referencia', '').strip() or None,
-        usuario_id=current_user.id,
-    ))
+    from app.services.estoque_massa import consumir_massa, eh_massa_folhar
+    referencia = request.form.get('referencia', '').strip() or None
+    if eh_massa_folhar(ep.receita):
+        try:
+            consumir_massa(ep.receita, qtd, current_user.id, referencia, tipo=tipo)
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), 'warning')
+            return redirect(url_for('pedidos.congelados'))
+    else:
+        ep.quantidade = max(0, ep.quantidade - qtd)
+        db.session.add(MovEstoqueProducao(
+            estoque_producao_id=ep.id, tipo=tipo,
+            quantidade=qtd, referencia=referencia,
+            usuario_id=current_user.id,
+        ))
     db.session.commit()
     flash(f'Ajuste de {qtd} unidades registrado.', 'success')
     return redirect(url_for('pedidos.congelados'))
@@ -1868,6 +1879,24 @@ def congelados_vincular():
 
     # Apelido global — proximo balanco com o mesmo nome resolve direto.
     _salvar_apelido_global(nome_orfao, alvo_tipo, alvo_id)
+
+    from app.services.estoque_massa import eh_massa_folhar
+    receita_alvo = db.session.get(Receita, alvo_id) if alvo_tipo == 'receita' else None
+    if eh_massa_folhar(receita_alvo):
+        from app.services.estoque_congelados import entrada_producao, obter_linha_producao
+        if qtd_orfao > 0:
+            existente = entrada_producao(
+                receita_id=alvo_id, quantidade=qtd_orfao, usuario_id=current_user.id,
+                referencia=f'Vinculação de pendente "{nome_orfao}"')
+        else:
+            existente = obter_linha_producao(receita_id=alvo_id, usuario_id=current_user.id)
+        for movimento in list(orfao.movimentacoes):
+            movimento.estoque = existente
+        db.session.delete(orfao)
+        db.session.commit()
+        flash(f'"{nome_orfao}" vinculado a {existente.nome_item} (+{qtd_orfao} bolas).',
+              'success')
+        return redirect(url_for('pedidos.congelados'))
 
     if existente and existente.id != orfao.id:
         anterior = existente.quantidade or 0
@@ -1927,8 +1956,10 @@ def congelados_conferencia():
     item, digita a quantidade real, ve a divergencia e ajusta pra bater (com
     auditoria em MovEstoqueProducao). Espelha a conferencia de loja. Permite
     adicionar item que apareceu no fisico mas ainda nao tem linha de estoque."""
+    from app.services.estoque_massa import ajustar_contagem_bolas, eh_massa_folhar
     if request.method == 'POST':
         ajustes = 0
+        massa_conferida = False
         # 1) ajusta os itens existentes (campos real_<id>)
         for key, val in request.form.items():
             if not key.startswith('real_') or not val.strip():
@@ -1942,6 +1973,13 @@ def congelados_conferencia():
                 continue
             ep = EstoqueProducao.query.get(ep_id)
             if not ep:
+                continue
+            if eh_massa_folhar(ep.receita):
+                ajuste = ajustar_contagem_bolas(
+                    ep.receita, real, current_user.id,
+                    f'Conferência por {current_user.nome}: real {real} bolas')
+                massa_conferida = True
+                ajustes += int(ajuste['delta_g'] != 0)
                 continue
             diff = real - (ep.quantidade or 0)
             if diff == 0:
@@ -1968,6 +2006,14 @@ def congelados_conferencia():
             tipo, _, rid = alvo.partition(':')
             if tipo not in ('receita', 'produto') or not rid.isdigit():
                 continue
+            receita_nova = db.session.get(Receita, int(rid)) if tipo == 'receita' else None
+            if eh_massa_folhar(receita_nova):
+                ajuste = ajustar_contagem_bolas(
+                    receita_nova, qtd, current_user.id,
+                    f'Conferência (item adicionado) por {current_user.nome}: {qtd} bolas')
+                massa_conferida = True
+                ajustes += int(ajuste['delta_g'] != 0)
+                continue
             filtro = ({'receita_id': int(rid)} if tipo == 'receita'
                       else {'produto_id': int(rid)})
             ep = EstoqueProducao.query.filter_by(estado=None, **filtro).first()
@@ -1984,8 +2030,11 @@ def congelados_conferencia():
                 usuario_id=current_user.id))
             ep.quantidade = qtd
             ajustes += 1
-        if ajustes:
+        if ajustes or massa_conferida:
+            # A conversão de fração legada pode registrar falta mesmo quando
+            # a contagem inteira já é zero; ela também precisa ser confirmada.
             db.session.commit()
+        if ajustes:
             flash(f'Conferência aplicada: {ajustes} ajuste(s) registrado(s).', 'success')
         else:
             flash('Nenhum ajuste necessário — o estoque já bate.', 'info')
@@ -2011,8 +2060,10 @@ def congelados_conferencia():
                     if r.id not in com_rec]
     produtos_add = [p for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
                     if p.id not in com_prod]
+    from app.services.estoque_congelados import saldos_massa_para_tela
     return render_template('pedidos/congelados_conferencia.html', itens=itens,
-                           receitas_add=receitas_add, produtos_add=produtos_add)
+                           receitas_add=receitas_add, produtos_add=produtos_add,
+                           saldos_massa=saldos_massa_para_tela(itens))
 
 
 # ── Estoque de Loja ──

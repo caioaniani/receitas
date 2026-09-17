@@ -395,6 +395,19 @@ Testes: `tests/test_briefing_dono.py`.
 
 ## Branches & Deploy
 
+### Batimentos padronizados (17/09/2026)
+
+- Sourdough: 25.000 g de farinha **por sabor**; francês: 12.000 g. Não agrupar sabores.
+- Viennoiserie: 25.000 g de farinha **na massa compartilhada** para croissant,
+  Danish, pain au chocolat e derivados. Excedente aumenta produtos por necessidade
+  líquida decrescente, com estoque, prazo, tetos e ordens já enviadas preservados.
+- Novas ordens da massa contam batimentos; estoque/fichas legadas continuam em
+  bolas equivalentes, com complemento exato em gramas. Nunca arredondar uma
+  batida para 12/13 bolas, nem somar ledger exato com sua projeção inteira.
+- Regras e retorno seguro: `docs/bateladas-paes.md` e `docs/bateladas-viennoiserie.md`.
+  Tabelas novas criadas pelo startup; não remover leitores de snapshots/resíduo
+  enquanto existirem ordens ou saldo nesse regime.
+
 - **Branch de produção (Railway acompanha)**: `claude/continue-controller-conversation-aGS3F`
 - **URL publica de prod**: https://gestao.opaopadariaartesanal.com.br/
 - **Auto-deploy** no Railway (Auto deploys ON, **Wait for CI ON** — religado pelo

@@ -213,6 +213,13 @@
                 <td class="plan-cell {{ 'is-today' if c.data == crono.hoje }} {{ 'is-readonly' if r.insumo or r.retorno or c.bloqueado or fechado }} {{ 'has-risk' if c.data in r.risco_datas }}" data-rid="{{ r.receita_id }}" data-date="{{ c.data }}" data-batches="{{ c.fornadas if c.fornadas is not none else '' }}" data-derived="{{ 1 if r.insumo else 0 }}">
                   <input type="number" min="0" inputmode="numeric" value="{{ c.qtd or 0 }}" aria-label="{{ r.nome }}, {{ c.data }}" class="plan-input {{ 'is-zero' if not c.qtd }}" data-last="{{ c.qtd or 0 }}" data-editable="{{ 0 if r.insumo or r.retorno or c.bloqueado or fechado else 1 }}" readonly tabindex="-1">
                   <small class="batch-label">{% if c.batelada_padrao and c.qtd %}{{ c.bateladas }} × {{ '%.0f'|format(c.batelada_padrao.farinha_g / 1000) }} kg farinha{% elif c.fornadas is not none and c.qtd %}{{ c.fornadas }} forn.{% elif r.insumo and c.qtd %}calculado{% endif %}</small>
+                  {% if c.reforco_viennoiserie %}<small>+{{ c.reforco_viennoiserie }} para aproveitar a massa</small>{% endif %}
+                  {% if c.massa_viennoiserie and c.qtd %}
+                  <details><summary>Distribuição da massa</summary>
+                    {% for destino in c.massa_viennoiserie.produtos or c.massa_viennoiserie.distribuicao %}<small>{{ destino.nome }}: {{ destino.quantidade }} un{% if destino.massa_g is defined %} ({{ '%.2f'|format(destino.massa_g / 1000) }} kg){% endif %}</small>{% endfor %}
+                    {% if c.massa_viennoiserie.residuo_g %}<small>Massa não distribuída: {{ '%.0f'|format(c.massa_viennoiserie.residuo_g) }} g. Confira os limites e as ordens já enviadas.</small>{% endif %}
+                  </details>
+                  {% endif %}
                   {% if c.batelada_bloqueada %}<small class="text-danger">{{ c.batelada_bloqueada }}</small>{% endif %}
                   {% if difere_cel %}<span class="sent-value" title="Esta é a quantidade que já está na tela do padeiro"><i class="bi bi-send-check"></i> Ordem enviada: {{ env_dia.get(r.receita_id, 0) }}</span>{% endif %}
                 </td>

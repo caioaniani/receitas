@@ -18,6 +18,9 @@ def _marcar(celula, padrao, qtd):
         ('farinha_g', 'unidades', 'rendimento_teorico', 'escala')}
     if 'subs' in padrao:
         celula['batelada_padrao']['subs'] = padrao['subs']
+    for chave in ('tipo', 'unidade_producao', 'massa_g', 'peso_bola_g'):
+        if chave in padrao:
+            celula['batelada_padrao'][chave] = padrao[chave]
     celula['bateladas'] = ceil(int(qtd) / padrao['unidades']) if qtd else 0
     celula['fornadas'] = celula['bateladas'] or None
     celula['farinha_total_g'] = celula['bateladas'] * padrao['farinha_g']
@@ -42,7 +45,8 @@ def _contexto_ordens(dias, receitas, lead):
     for plano in planos:
         for it in plano.itens:
             snapshot = getattr(it, 'batelada_padrao', None)
-            if snapshot and it.receita_id in receitas:
+            if (snapshot and it.receita_id in receitas
+                    and snapshot.dados.get('tipo') != 'massa_viennoiserie'):
                 snapshots[it.receita_id, plano.data] = {
                     **snapshot.dados,
                     'produzido_confirmado': int(it.produzido_qtd or 0)}

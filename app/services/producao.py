@@ -37,6 +37,7 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
     from app.models import PlanejamentoItem
     from app.services.bateladas_paes import normalizar_item
     from app.services.previsao_producao import ant_insumo, cronograma_producao
+    from app.services.viennoiserie import instalar_batelada
 
     if crono is None:
         crono = cronograma_producao(horizonte_dias=horizonte_dias,
@@ -45,6 +46,7 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
                                     equilibrar=equilibrar, motor=motor)
     iso = data_alvo.isoformat()
     alvo = {}  # receita_id -> unidades no dia
+    celulas = {}
     for rec in crono['receitas']:
         # Receita de RETORNO nunca entra na ordem (dono, 13/07/2026): o
         # padeiro não produz devolução. Defesa em profundidade — o balanço
@@ -53,8 +55,9 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
         if rec.get('retorno'):
             continue
         for c in rec['por_dia']:
-            if c['data'] == iso and c['qtd'] > 0:
+            if c['data'] == iso and (c['qtd'] > 0 or c.get('qtd_solicitada', 0) > 0):
                 alvo[rec['receita_id']] = c['qtd']
+                celulas[rec['receita_id']] = c
 
     receitas = {r.id: r for r in Receita.query.all()}
     existentes = {it.receita_id: it for it in plano.itens}
@@ -93,9 +96,10 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
             # aqui viraria croissant sem massa (decisão do dono: "não entra
             # + avisa"). O 🔄 humano continua podendo forçar.
             atual = int(it.qtd_alvo or 0) if it is not None else 0
-            if atual != int(qtd):
+            solicitado = int(celulas[rid].get('qtd_solicitada', qtd))
+            if atual != solicitado:
                 congelados.append(((rec.nome if rec else f'#{rid}'),
-                                   atual, int(qtd),
+                                   atual, solicitado,
                                    (data_alvo - hoje()).days))
             continue
         if it is None:
@@ -104,6 +108,7 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
                 receita=rec,
                 multiplicador=max(1, ceil(qtd / rend)), qtd_alvo=qtd)
             db.session.add(it)
+            instalar_batelada(it, celulas[rid])
             normalizar_item(it)
         else:
             # A parcela EXTRA (reagendada da auditoria) SOMA ao alvo do grid —
@@ -111,6 +116,7 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
             extra = int(it.qtd_extra or 0)
             it.qtd_alvo = max(qtd + extra, int(it.produzido_qtd or 0))
             it.multiplicador = max(1, ceil(it.qtd_alvo / rend))
+            instalar_batelada(it, celulas[rid])
             normalizar_item(it, permitir_novo=plano.enviado_ao_padeiro is False)
 
     # Receitas que sairam do cronograma: remove, EXCETO as que ja produziram
@@ -632,7 +638,7 @@ def mise_en_place(receita, unidades):
     }
 
 
-def consumir_subreceitas_prontas(rec, unidades, user_id):
+def consumir_subreceitas_prontas(rec, unidades, user_id, *, produzido_antes=0):
     """Baixa do congelado as SUB-RECEITAS prontas consumidas ao produzir `rec`
     (ex: croissant almond consome croissant tradicional congelado; croissant
     consome bolas de massa para folhar). Liga por FK (`sub_receita_id`); cai
@@ -667,6 +673,22 @@ def consumir_subreceitas_prontas(rec, unidades, user_id):
             if rend else 0.0)
         if consumo <= 0:
             continue
+        from app.services.estoque_massa import consumir_massa, eh_massa_folhar, peso_bola_g
+        sub = db.session.get(Receita, sub_id)
+        if eh_massa_folhar(sub):
+            from decimal import Decimal
+            peso = peso_bola_g(sub)
+            coef = Decimal(str(unidades_subreceita(
+                ing.tipo, ing.porcentagem, rec.peso_base))) / Decimal(str(rend)) * peso
+            antes = int(produzido_antes or 0)
+            passo = Decimal('.000001')
+            delta_g = ((coef * (antes + unidades)).quantize(passo) -
+                       (coef * antes).quantize(passo))
+            consumo = delta_g / peso
+            res = consumir_massa(sub, consumo, user_id,
+                                 'Consumo p/ %s (%d un)' % (rec.nome, unidades))
+            out.append({'sub_id': sub_id, **res})
+            continue
         frac = ConsumoSubFracao.query.filter_by(receita_id=sub_id).first()
         if frac is None:
             frac = ConsumoSubFracao(receita_id=sub_id, fracao_pendente=0.0)
@@ -685,7 +707,8 @@ def consumir_subreceitas_prontas(rec, unidades, user_id):
     return out
 
 
-def consumir_ficha(rec, unidades, user_id, referencia_mp, *, saldo_assinado=False):
+def consumir_ficha(rec, unidades, user_id, referencia_mp, *, saldo_assinado=False,
+                  produzido_antes=0):
     """Consome da ficha técnica o que PRODUZIR `unidades` da receita consome:
     MP proporcional (multiplicador fracionário = unidades/rendimento — consumo
     REAL, não batida cheia) + sub-receitas prontas do congelado (fração
@@ -700,6 +723,8 @@ def consumir_ficha(rec, unidades, user_id, referencia_mp, *, saldo_assinado=Fals
     baixado/falta por sub) — a tela de perdas avisa quando o congelado não
     cobriu a sub; o produzir ignora (comportamento de sempre)."""
     from app.models import MateriaPrima, MovimentacaoEstoque
+    from app.services.viennoiserie import travar_massas_consumidas
+    travar_massas_consumidas(rec)
 
     rend = rendimento_massa_crua(rec)
     mult = unidades / rend if rend > 0 else 0
@@ -717,10 +742,11 @@ def consumir_ficha(rec, unidades, user_id, referencia_mp, *, saldo_assinado=Fals
         saldo = (mp.estoque_atual or 0) - qtd
         mp.estoque_atual = saldo if saldo_assinado else max(0, saldo)
 
-    return consumir_subreceitas_prontas(rec, unidades, user_id)
+    return consumir_subreceitas_prontas(rec, unidades, user_id, produzido_antes=produzido_antes)
 
 
-def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=True):
+def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=True,
+                       produzido_esperado=None):
     """OPCAO B: o padeiro produz `unidades` de um item do plano aprovado.
     Numa unica transacao: (1) credita o produto pronto na industria
     (entrada_producao), (2) DESCONTA a MP da ficha tecnica proporcional as
@@ -754,6 +780,8 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=Tr
             .with_for_update().populate_existing().first())
     if item is None:
         return {'ok': False, 'erro': 'Item do plano não encontrado.'}
+    if produzido_esperado is not None and int(item.produzido_qtd or 0) != produzido_esperado:
+        return {'ok': False, 'erro': 'Esta produção já foi atualizada. Recarregue a tela antes de registrar novamente.'}
     # Item DISPENSADO pelo admin (auditoria: "OK, não vai produzir") não pode ser
     # produzido — o admin fechou a pendência. Pra produzir, reverta a dispensa na
     # tela de auditoria. (Sem isso, produzir creditava estoque de algo que o admin
@@ -764,10 +792,25 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=Tr
     rec = item.receita
     if rec is None:
         return {'ok': False, 'erro': 'Receita do item não encontrada.'}
+    from app.services.viennoiserie import travar_massas_consumidas
+    travar_massas_consumidas(rec, item.batelada_padrao.dados if item.batelada_padrao else None)
 
-    # 1) credita o produto pronto (nao commita — controlamos a transacao).
-    entrada_producao(receita_id=rec.id, quantidade=unidades, usuario_id=user_id,
-                     referencia='Produção (cronograma) %s' % rec.nome)
+    # Batimentos não são bolas. Credita a massa exata, sem perder o restante
+    # fracionário e sem mudar a unidade de fichas/estoque históricos.
+    from app.services.viennoiserie import eh_item_massa
+    if eh_item_massa(item):
+        from decimal import Decimal
+
+        from app.services.estoque_massa import registrar_entrada_massa
+        if unidades > max(0, int(item.qtd_alvo or 0) - int(item.produzido_qtd or 0)):
+            return {'ok': False, 'erro': 'Quantidade maior que os batimentos pendentes da ordem.'}
+        registrar_entrada_massa(
+            rec, Decimal(str(item.batelada_padrao.dados['massa_g'])) * unidades,
+            user_id, 'Produção (cronograma) %s: %d batimentos' % (rec.nome, unidades),
+            peso_bola_g_snapshot=item.batelada_padrao.dados['peso_bola_g'])
+    else:
+        entrada_producao(receita_id=rec.id, quantidade=unidades, usuario_id=user_id,
+                         referencia='Produção (cronograma) %s' % rec.nome)
 
     # 3) avanca o produzido do item.
     item.produzido_qtd = int(item.produzido_qtd or 0) + unidades
@@ -790,13 +833,14 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=Tr
     if consumir_item(item, unidades, user_id, referencia,
                      produzido_antes=item.produzido_qtd - unidades) is None:
         consumir_ficha(rec, unidades, user_id, referencia_mp=referencia,
+                      produzido_antes=item.produzido_qtd - unidades,
                       saldo_assinado=any(it.batelada_padrao is not None
                                          for it in item.planejamento.itens))
     if commit:
         db.session.commit()
     return {'ok': True, 'produzido': item.produzido_qtd,
             'encerrado': encerrado, 'falta_restante': falta_restante,
-            'unidade': unidade_producao(rec)}
+            'unidade': 'batimentos' if eh_item_massa(item) else unidade_producao(rec)}
 
 
 def consolidar_lista_compras(itens):

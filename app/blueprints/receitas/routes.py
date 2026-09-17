@@ -1382,6 +1382,27 @@ def vinculos_transferir(id):
     if tipo_destino not in ('receita', 'mp'):
         return jsonify(erro=f'tipo de destino "{tipo_destino}" inválido'), 400
 
+    def _massa_controlada(ids):
+        from app.models.estoque_massa import MovEstoqueMassa, SaldoResidualMassa
+        from app.models.producao_batelada import PlanejamentoItemBatelada
+        from app.services.viennoiserie import TIPO_MASSA
+        # Mesma trava do adaptador: uma primeira entrada não pode criar o
+        # complemento de massa entre a verificação e a fusão dos estoques.
+        Receita.query.filter(Receita.id.in_(ids)).order_by(Receita.id) \
+            .with_for_update().all()
+        return (SaldoResidualMassa.query.filter(
+            SaldoResidualMassa.receita_id.in_(ids)).first() is not None
+            or MovEstoqueMassa.query.filter(
+                MovEstoqueMassa.receita_id.in_(ids)).first() is not None
+            or PlanejamentoItem.query.join(PlanejamentoItemBatelada).filter(
+                PlanejamentoItem.receita_id.in_(ids),
+                PlanejamentoItemBatelada.dados['tipo'].as_string() == TIPO_MASSA,
+            ).first() is not None)
+
+    erro_massa = ('Esta transferência envolve uma receita com saldo ou histórico '
+                  'de massa controlado em gramas. A fusão não pode converter '
+                  'suas bolas e batimentos com segurança; mantenha os cadastros '
+                  'separados para preservar o estoque e as ordens existentes.')
     if tipo_destino == 'mp':
         mp_destino = (MateriaPrima.query
                       .filter(func.lower(MateriaPrima.nome) == nome_destino.lower())
@@ -1389,6 +1410,8 @@ def vinculos_transferir(id):
         if not mp_destino:
             return jsonify(erro=f'matéria-prima "{nome_destino}" não encontrada '
                                 '— use o nome exato (o campo autocompleta)'), 400
+        if _massa_controlada([origem.id]):
+            return jsonify(erro=erro_massa), 409
         return _transferir_para_mp(origem, mp_destino)
 
     destino = (Receita.query
@@ -1399,6 +1422,8 @@ def vinculos_transferir(id):
                             'use o nome exato (o campo autocompleta)'), 400
     if destino.id == origem.id:
         return jsonify(erro='o destino é a própria receita'), 400
+    if _massa_controlada([origem.id, destino.id]):
+        return jsonify(erro=erro_massa), 409
 
     movidos = {}
 

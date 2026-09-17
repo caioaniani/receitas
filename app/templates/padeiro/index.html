@@ -493,6 +493,7 @@
             onsubmit="return prodConfirma(this, {{ it.falta }}, '{{ it.nome|e }}');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="encerrar" value="">
+        <input type="hidden" name="produzido_esperado" value="{{ it.produzido }}">
         <input type="number" name="unidades" min="1" value="{{ it.falta }}"
                class="prod-dia-qtd" id="qtd-{{ it.item_id }}" aria-label="Quantidade produzida de {{ it.nome }} em {{ it.unidade }}">
         <button type="submit" class="prod-dia-btn">Registrar produção</button>
@@ -753,8 +754,21 @@
           h += '<div class="mep-base-massa">' + _mepG(d.farinha_g) +
                ' de farinha por batimento<small>Ordem: ' + d.bateladas +
                ' batelada' + (d.bateladas != 1 ? 's' : '') +
-               ' deste sabor. Pese os ingredientes abaixo para cada batelada, separadamente.</small></div>';
-          h += '<p>Rendimento previsto: ' + d.unidades + ' ' +
+               (d.tipo === 'massa_viennoiserie' ? ' de massa compartilhada.' : ' deste sabor.') +
+               ' Pese os ingredientes abaixo para cada batelada, separadamente.</small></div>';
+          if (d.tipo === 'massa_viennoiserie') {
+            h += '<p>Massa por batimento: ' + _mepG(d.massa_g) +
+                 '. Prepare com a antecedência da ficha; os produtos são registrados separadamente.</p>';
+            var destinos = (d.produtos || []).length ? d.produtos : (d.distribuicao || []);
+            if (destinos.length) {
+              h += '<div class="mep-sub">Distribuição prevista da massa</div><ul>';
+              destinos.forEach(function (destino) {
+                h += '<li>' + _mepEsc(destino.nome) + ': ' + destino.quantidade +
+                     ' un' + (destino.massa_g != null ? ' · ' + _mepG(destino.massa_g) : '') + '</li>';
+              });
+              h += '</ul>';
+            }
+          } else h += '<p>Rendimento previsto: ' + d.unidades + ' ' +
                _mepEsc(d.unidade_producao) + ' por batelada · ' + d.unidades_total +
                ' ' + _mepEsc(d.unidade_producao) + ' na ordem. Registre somente o que realmente produziu.</p>';
           (d.avisos || []).forEach(function (aviso) {

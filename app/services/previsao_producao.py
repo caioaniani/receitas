@@ -796,6 +796,10 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     for ep in (EstoqueProducao.query
                .filter(EstoqueProducao.receita_id.isnot(None)).all()):
         em_estoque[ep.receita_id] += int(ep.quantidade or 0)
+    from app.services.estoque_massa import eh_massa_folhar, saldo_bolas
+    for rid, rec in receitas.items():
+        if eh_massa_folhar(rec):
+            em_estoque[rid] = float(saldo_bolas(rec))
 
     # 1b. Producao JA MANDADA e ainda nao confirmada (WIP), com inicio ANTES do
     # horizonte ([hoje, inicio_d)): e suprimento a caminho — sem isso o balanco
@@ -809,9 +813,9 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     em_producao_por_dia = defaultdict(lambda: defaultdict(int))
     if inicio_d > hoje_d:
         from app.models import PlanejamentoItem, PlanejamentoProducao
-        for rid_w, alvo_w, prod_w, data_w in (db.session.query(
-                PlanejamentoItem.receita_id, PlanejamentoItem.qtd_alvo,
-                PlanejamentoItem.produzido_qtd, PlanejamentoProducao.data)
+        from app.services.viennoiserie import quantidade_em_bolas
+        for item_w, data_w in (db.session.query(
+                PlanejamentoItem, PlanejamentoProducao.data)
                 .join(PlanejamentoProducao,
                       PlanejamentoItem.planejamento_id == PlanejamentoProducao.id)
                 .filter(PlanejamentoProducao.data >= hoje_d,
@@ -819,7 +823,9 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                         PlanejamentoProducao.enviado_ao_padeiro.isnot(False),
                         PlanejamentoItem.dispensada_em.is_(None),
                         PlanejamentoItem.falta_encerrada_em.is_(None)).all()):
-            restante = max(0, int(alvo_w or 0) - int(prod_w or 0))
+            rid_w = item_w.receita_id
+            restante = quantidade_em_bolas(item_w, max(
+                0, int(item_w.qtd_alvo or 0) - int(item_w.produzido_qtd or 0)))
             em_producao[rid_w] += restante
             pronta_em = data_w + timedelta(days=lead.get(rid_w, 0))
             em_producao_por_dia[rid_w][pronta_em.isoformat()] += restante
@@ -2382,9 +2388,9 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
                 # Flag da ficha (dono 19/07/2026): o fisico nao entra na
                 # conta — so a producao JA MANDADA (plano de hoje, WIP)
                 # cobre consumo. Vale tambem pra cobertura da vespera.
-                efetivo = int(it.get('em_producao', 0) or 0)
+                efetivo = it.get('em_producao', 0) or 0
             else:
-                efetivo = int(it.get('em_estoque_efetivo', it.get('em_estoque', 0)) or 0)
+                efetivo = it.get('em_estoque_efetivo', it.get('em_estoque', 0)) or 0
             # Usa a demanda diária já consolidada pelo balanço. O max
             # agregado liberava estoque comprometido em datas diferentes.
             demanda = it.get('demanda')
@@ -2395,6 +2401,9 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
         rec_f = receitas.get(rid)
         if rec_f is not None and getattr(rec_f, 'estoque_nao_abate', False):
             return 0
+        from app.services.estoque_massa import eh_massa_folhar, saldo_bolas
+        if eh_massa_folhar(rec_f):
+            return float(saldo_bolas(rec_f))
         return est_extra.get(rid, 0)
 
     # Cap "so de sobras" ANTES da propagacao: pai que consome retorno produz no
@@ -2547,6 +2556,11 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
             # tela parecia "nao calculou nada" (caso real 03/07/2026: 10.000
             # pains = 333 bolas de massa, engolidas pelo estoque de 900).
             rr['consumo_janela'] = round(sum(cons), 1)
+            # Precisão e datas da massa compartilhada: o planejador de
+            # batimentos não pode usar o ceil legado de bolas inteiras.
+            rr['_consumo_por_dia'] = list(cons)
+            rr['_necessidade_insumo_por_dia'] = _rolar_pesos_permitidos(
+                residual, permitido_i)
             # Regra da vespera: consumo iminente (dentro do lead) que o
             # estoque pronto NAO cobre — nao da mais tempo de produzir o
             # insumo. Vira aviso visivel na linha; NUNCA producao no grid.
@@ -3223,14 +3237,16 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     from app.services.cronograma_edit import aplicar_overrides
     aplicar_overrides(receitas_out, dias_prod)
 
-    from app.services.cronograma_bateladas import normalizar_cronograma, quantidade_pendente
+    from app.services.cronograma_bateladas import normalizar_cronograma
     normalizar_cronograma(receitas_out, dias_prod, receitas, lead,
                           piso=piso_sourdough, pesos=pesos_bateladas)
 
     # MRP: explode sub-receitas (massa para folhar, creme de amendoas...) em
     # linhas de producao proprias, produzidas ANTES do produto final que as
     # consome. Usa a producao final ja calculada/editada. No-op sem sub-receita.
-    _explodir_bom(receitas_out, dias_prod, receitas, lead, bal)
+    from app.services.cronograma_viennoiserie import planejar_viennoiserie
+    planejar_viennoiserie(receitas_out, dias_prod, receitas, lead, bal,
+                          explodir=_explodir_bom)
 
     # Produtos que a loja PEDE mas estao SEM demanda nesta janela (o balanco os
     # exclui pra nao listar zeros). Pro PLANEJAMENTO o usuario quer ve-los na
@@ -3297,11 +3313,19 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # entao a massa ja batida aparecia como "em estoque: 0" mesmo cobrindo a
         # demanda dos croissants — a producao 0 estava certa, o numero exibido nao.
         # No-op pra produto (ja vinha de it['em_estoque']).
+        from app.services.estoque_massa import eh_massa_folhar, saldo_bolas
+        from app.services.viennoiserie import pendente_em_bolas
+        massa_compartilhada = eh_massa_folhar(rec)
+        numero_estoque = float if massa_compartilhada else int
         if it is not None:
-            rr['em_estoque'] = int(it['em_estoque'])
+            rr['em_estoque'] = numero_estoque(it['em_estoque'])
+        elif massa_compartilhada:
+            rr['em_estoque'] = float(saldo_bolas(rec))
+        if massa_compartilhada:
+            rr['unidade_estoque'] = 'bolas equivalentes'
         comp = int(it['comprometido']) if it else 0
         prev = int(it['previsto']) if it else 0
-        est_ef = int(it['em_estoque_efetivo']) if it else int(rr['em_estoque'])
+        est_ef = numero_estoque(it['em_estoque_efetivo']) if it else numero_estoque(rr['em_estoque'])
         # Flag "estoque nao abate" (19/07/2026): saldo/produzir/projecao da
         # linha usam o MESMO numero da conta do balanco (so a producao ja
         # mandada, WIP) — manter o fisico aqui faria a caixa dizer "nao
@@ -3309,11 +3333,13 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # deixaria estoque fantasma CALAR o alerta de entrega em risco.
         # O fisico real segue visivel em rr['em_estoque'].
         if rr.get('estoque_nao_abate'):
-            est_ef = int(it.get('em_producao', 0) or 0) if it else 0
+            est_ef = numero_estoque(it.get('em_producao', 0) or 0) if it else 0
         # Demanda do balanco: max diario das lojas + B2B/site. Linha
         # fora do balanco (insumo injetado) cai no agregado antigo.
         demanda = int(it['demanda']) if it and it.get('demanda') is not None \
             else max(comp, prev)
+        if massa_compartilhada:
+            demanda += sum(rr.get('_consumo_por_dia', []))
         rr['comprometido'] = comp
         rr['previsto'] = prev        # a PREVISAO (historico) que tambem puxa producao
         rr['demanda'] = demanda      # mesma demanda diaria do balanco
@@ -3346,11 +3372,11 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # vamos simular. WIP é só o restante não confirmado de ordens ANTES
         # do grid e entra na data de término, sem duplicar produção real.
         wip_dias = it.get('em_producao_por_dia', {}) if it else {}
-        running = 0 if rr.get('estoque_nao_abate') else int(rr['em_estoque'])
+        running = 0 if rr.get('estoque_nao_abate') else numero_estoque(rr['em_estoque'])
         running_f = running
         dia_pre = hoje_d
         while dia_pre < inicio_d:
-            entrada_pre = int(wip_dias.get(dia_pre.isoformat(), 0))
+            entrada_pre = numero_estoque(wip_dias.get(dia_pre.isoformat(), 0))
             running += entrada_pre - _demanda_planejada(
                 firme_origem[rid].get(dia_pre, {}),
                 int(round(_previsto_dia(rid, dia_pre))))
@@ -3359,12 +3385,14 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         projecao = []
         rr['dia_falta'] = None
         for i, d in enumerate(dias_prod):
-            prod_i = quantidade_pendente(rr['por_dia'][i - L]) if i - L >= 0 else 0
-            prod_i += int(wip_dias.get(d.isoformat(), 0))
+            prod_i = pendente_em_bolas(rr['por_dia'][i - L]) if i - L >= 0 else 0
+            prod_i += numero_estoque(wip_dias.get(d.isoformat(), 0))
             firme_i = int(firme[rid].get(d, 0))
             prev_i = int(round(_previsto_dia(rid, d)))   # previsto saindo no dia d
             saida_i = _demanda_planejada(
                 firme_origem[rid].get(d, {}), prev_i)
+            consumos = rr.get('_consumo_por_dia', []) if massa_compartilhada else []
+            saida_i += consumos[i] if i < len(consumos) else 0
             running += prod_i - saida_i
             if running < 0 and rr['dia_falta'] is None:
                 rr['dia_falta'] = dias_out[i]['label']
@@ -3391,8 +3419,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # projecao detalhada (subconjunto, nunca contradiz a tela).
         entregas_risco = []
         for i, d in enumerate(dias_prod):
-            prod_i = quantidade_pendente(rr['por_dia'][i - L]) if i - L >= 0 else 0
-            prod_i += int(wip_dias.get(d.isoformat(), 0))
+            prod_i = pendente_em_bolas(rr['por_dia'][i - L]) if i - L >= 0 else 0
+            prod_i += numero_estoque(wip_dias.get(d.isoformat(), 0))
             firme_i = int(firme[rid].get(d, 0))
             running_f += prod_i - firme_i
             if running_f < 0 and firme_i > 0:

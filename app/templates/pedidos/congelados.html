@@ -144,7 +144,12 @@
                     <span class="badge bg-secondary" style="font-size:10px;">Produto</span>
                     {% endif %}
                 </td>
-                <td class="text-center fw-bold">{{ ep.quantidade }}</td>
+                <td class="text-center fw-bold">{{ ep.quantidade }}{% if saldos_massa.get(ep.id) %} bolas
+                    {% if saldos_massa[ep.id].erro %}<small class="d-block text-danger">{{ saldos_massa[ep.id].erro }}</small>
+                    {% else %}
+                    <small class="d-block fw-normal">Saldo exato: {{ '{:,.3f}'.format(saldos_massa[ep.id].gramas).replace(',', '_').replace('.', ',').replace('_', '.') }} g</small>
+                    {% endif %}
+                    {% endif %}</td>
                 <td>
                     <form method="POST" action="{{ url_for('pedidos.congelados_ajuste') }}" class="d-flex gap-1 align-items-center">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

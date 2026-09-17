@@ -35,19 +35,20 @@ def pendencias_por_receita():
     mandadas (qtd_alvo) e ainda não confirmadas (produzido_qtd), das ordens
     ENVIADAS ao padeiro. NÃO é estoque real: é a projeção (o verde do grid)."""
     from app.models import PlanejamentoItem, PlanejamentoProducao
+    from app.services.viennoiserie import quantidade_em_bolas
 
     hoje_d = hoje()
     out = defaultdict(lambda: {'agendado': 0, 'vencido': 0})
     rows = (db.session.query(
-        PlanejamentoProducao.data, PlanejamentoItem.receita_id,
-        PlanejamentoItem.qtd_alvo, PlanejamentoItem.produzido_qtd)
+        PlanejamentoProducao.data, PlanejamentoItem)
         .join(PlanejamentoItem,
               PlanejamentoItem.planejamento_id == PlanejamentoProducao.id)
         .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False),
                 PlanejamentoItem.dispensada_em.is_(None))   # dispensada some
         .all())
-    for data, rid, alvo, produzido in rows:
-        falta = _falta(alvo, produzido)
+    for data, item in rows:
+        rid = item.receita_id
+        falta = quantidade_em_bolas(item, _falta(item.qtd_alvo, item.produzido_qtd))
         if falta <= 0 or rid is None or data is None:
             continue
         chave = 'vencido' if data < hoje_d else 'agendado'
@@ -222,6 +223,13 @@ def reagendar_para_hoje(item_ids, user_id):
     ids = [int(i) for i in (item_ids or []) if str(i).strip().isdigit()]
     if not ids:
         return {'movidos': 0, 'unidades': 0}
+
+    from app.services.viennoiserie import eh_item_massa, eh_massa_compartilhada
+    for item in PlanejamentoItem.query.filter(PlanejamentoItem.id.in_(ids)).all():
+        if eh_item_massa(item) or eh_massa_compartilhada(item.receita):
+            raise ValueError('Replaneje a massa para folhar no planejamento semanal, '
+                             'junto dos produtos que a consomem. Reagendar apenas a '
+                             'massa não preserva as 24 horas de descanso.')
 
     hoje_d = hoje()
     plano_hoje = (PlanejamentoProducao.query

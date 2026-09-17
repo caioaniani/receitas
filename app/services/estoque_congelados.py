@@ -7,6 +7,7 @@ e quantidade=|delta| pra auditar a diferenca entre o sistema e a contagem.
 """
 import re
 import unicodedata
+from decimal import Decimal
 
 from app.extensions import db
 from app.models import EstoqueProducao, MovEstoqueProducao, Produto, Receita
@@ -245,6 +246,10 @@ def resolver_lista(linhas_parseadas):
                     produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
                 ).first()
             atual = ep.quantidade if ep else 0
+            if ep and ep.receita_id:
+                from app.services.estoque_massa import eh_massa_folhar, saldo_bolas
+                if eh_massa_folhar(ep.receita):
+                    atual = saldo_bolas(ep.receita)
         delta = item['quantidade'] - atual
         enriq.append({
             **item,
@@ -327,18 +332,23 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
             tipo_resultado = 'pendente'
             nome_resultado = nome_digitado
 
-        anterior = ep.quantidade or 0
-        delta = nova_qtd - anterior
-        ep.quantidade = nova_qtd
-
-        if delta != 0:
-            db.session.add(MovEstoqueProducao(
-                estoque_producao_id=ep.id,
-                tipo='balanco_entrada' if delta > 0 else 'balanco_saida',
-                quantidade=abs(delta),
-                referencia=f'{ref} (era {anterior}, ficou {nova_qtd})',
-                usuario_id=getattr(user, 'id', None),
-            ))
+        from app.services.estoque_massa import ajustar_contagem_bolas, eh_massa_folhar, saldo_bolas
+        if eh_massa_folhar(ep.receita):
+            anterior = saldo_bolas(ep.receita)
+            ajustar_contagem_bolas(ep.receita, nova_qtd, getattr(user, 'id', None), ref)
+            delta = nova_qtd - anterior
+        else:
+            anterior = ep.quantidade or 0
+            delta = nova_qtd - anterior
+            ep.quantidade = nova_qtd
+            if delta != 0:
+                db.session.add(MovEstoqueProducao(
+                    estoque_producao_id=ep.id,
+                    tipo='balanco_entrada' if delta > 0 else 'balanco_saida',
+                    quantidade=abs(delta),
+                    referencia=f'{ref} (era {anterior}, ficou {nova_qtd})',
+                    usuario_id=getattr(user, 'id', None),
+                ))
 
         aplicados.append({
             'nome': nome_resultado,
@@ -386,6 +396,12 @@ def obter_linha_producao(*, receita_id=None, produto_id=None, usuario_id=None):
                 usuario_id=usuario_id))
         for mov in list(extra.movimentacoes):
             mov.estoque = canonica
+        # Movimentos exatos de massa também apontam à linha de estoque.
+        # Preservá-los antes de remover uma duplicata legada evita histórico
+        # órfão ou falha da FK em PostgreSQL.
+        from app.models.estoque_massa import MovEstoqueMassa
+        MovEstoqueMassa.query.filter_by(estoque_producao_id=extra.id).update(
+            {'estoque_producao_id': canonica.id}, synchronize_session='fetch')
         db.session.delete(extra)
 
     if canonica.estado is not None:
@@ -414,6 +430,13 @@ def entrada_producao(*, receita_id=None, produto_id=None, estado=None,
     if quantidade <= 0:
         raise ValueError('quantidade deve ser positiva.')
 
+    if receita_id is not None:
+        from app.services.estoque_massa import eh_massa_folhar, registrar_entrada_bolas
+        rec = db.session.get(Receita, receita_id)
+        if eh_massa_folhar(rec):
+            registrar_entrada_bolas(rec, quantidade, usuario_id, referencia)
+            return obter_linha_producao(receita_id=receita_id, usuario_id=usuario_id)
+
     ep = obter_linha_producao(receita_id=receita_id, produto_id=produto_id,
                               usuario_id=usuario_id)
     ep.quantidade = (ep.quantidade or 0) + quantidade
@@ -435,6 +458,10 @@ def saida_producao(*, receita_id, quantidade, usuario_id, referencia='Consumo',
     `<tipo>_sem_estoque` (não trava a produção). NÃO commita.
     Retorna {'baixado': int, 'falta': int}.
     """
+    from app.services.estoque_massa import consumir_massa, eh_massa_folhar
+    rec = db.session.get(Receita, receita_id)
+    if eh_massa_folhar(rec):
+        return consumir_massa(rec, quantidade or 0, usuario_id, referencia, tipo=tipo)
     quantidade = int(quantidade or 0)
     if quantidade <= 0:
         return {'baixado': 0, 'falta': 0}
@@ -453,3 +480,31 @@ def saida_producao(*, receita_id, quantidade, usuario_id, referencia='Consumo',
             quantidade=falta, referencia='%s (faltou %d no estoque)' % (
                 referencia, falta), usuario_id=usuario_id))
     return {'baixado': baixa, 'falta': falta}
+
+
+def saldos_massa_para_tela(itens):
+    """Saldo exato para leitura, sem criar ou consolidar linhas de estoque.
+
+    Uma massa com duplicatas antigas recebe o total somente na primeira
+    linha; as demais não repetem o mesmo saldo agregado na tela.
+    """
+    from app.services.estoque_massa import eh_massa_folhar, peso_bola_g, saldo_bolas
+    saldos = {}
+    vistos = set()
+    for item in sorted(itens, key=lambda it: it.id):
+        if item.receita_id in vistos or not eh_massa_folhar(item.receita):
+            continue
+        vistos.add(item.receita_id)
+        try:
+            bolas = saldo_bolas(item.receita)
+            peso = peso_bola_g(item.receita)
+        except ValueError as exc:
+            # Cadastro sem peso precisa de correção visível; não pode impedir
+            # a consulta do restante do estoque nem inventar uma conversão.
+            saldos[item.id] = {'erro': str(exc)}
+            continue
+        gramas = (bolas * peso).quantize(Decimal('0.000001'))
+        inteiro = Decimal(item.quantidade or 0) * peso
+        saldos[item.id] = {'gramas': gramas, 'bolas': bolas,
+                          'diferenca_g': gramas - inteiro}
+    return saldos

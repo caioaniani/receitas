@@ -71,9 +71,18 @@
                         {% set cat_atual.val = cat_item %}
                         <tr class="cat-header"><td colspan="4">{{ cat_item or 'Outros' }}</td></tr>
                     {% endif %}
-                    <tr class="conf-row" data-sistema="{{ it.quantidade|int }}">
+                    <tr class="conf-row" data-sistema="{{ it.quantidade|int }}"
+                        {% if saldos_massa.get(it.id) and not saldos_massa[it.id].erro %}data-diferenca-massa="{{ saldos_massa[it.id].diferenca_g }}"{% endif %}>
                         <td>{{ it.nome_item_com_estado }}</td>
-                        <td class="text-center qtd-sistema">{{ it.quantidade|int }}</td>
+                        <td class="text-center qtd-sistema">{{ it.quantidade|int }}
+                            {% if saldos_massa.get(it.id) %}bolas
+                            {% if saldos_massa[it.id].erro %}<small class="d-block text-danger">{{ saldos_massa[it.id].erro }}</small>
+                            {% else %}
+                            <small class="d-block">Saldo exato: {{ '{:,.3f}'.format(saldos_massa[it.id].gramas).replace(',', '_').replace('.', ',').replace('_', '.') }} g</small>
+                            <small class="d-block">A contagem informa bolas completas e substitui também o saldo fracionário.</small>
+                            {% endif %}
+                            {% endif %}
+                        </td>
                         <td class="text-center">
                             <input type="number" name="real_{{ it.id }}" class="form-control form-control-sm qtd-real"
                                    min="0" step="1" placeholder="—" inputmode="numeric" onfocus="this.select()">
@@ -137,7 +146,10 @@
         var real = parseInt(realStr, 10);
         if (isNaN(real)) { diffCell.textContent = '—'; return; }
         var diff = real - sistema;
-        if (diff === 0) { diffCell.textContent = '✓ bate'; row.dataset.diff = 'zero'; }
+        if (diff === 0 && Number(row.dataset.diferencaMassa || 0) !== 0) {
+            diffCell.textContent = 'Ajusta também a fração de massa'; row.dataset.diff = 'neg';
+        }
+        else if (diff === 0) { diffCell.textContent = '✓ bate'; row.dataset.diff = 'zero'; }
         else if (diff > 0) { diffCell.textContent = '+' + diff; row.dataset.diff = 'pos'; }
         else { diffCell.textContent = diff; row.dataset.diff = 'neg'; }
     }

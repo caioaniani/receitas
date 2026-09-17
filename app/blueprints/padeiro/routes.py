@@ -585,8 +585,10 @@ def produzir_plano(item_id):
         unidades = 0
     encerrar = request.form.get('encerrar') == '1'
     try:
+        esperado = request.form.get('produzido_esperado')
+        esperado = int(esperado) if esperado is not None else None
         res = produzir_item_plano(item_id, unidades, current_user.id,
-                                  encerrar=encerrar)
+                                  encerrar=encerrar, produzido_esperado=esperado)
     except ValueError as exc:
         db.session.rollback()
         res = {'ok': False, 'erro': str(exc)}
@@ -1210,7 +1212,8 @@ def produzir():
             return jsonify(ok=False, erro=f'Item {i}: item nao encontrado.'), 400
         if tipo == 'receita':
             from app.services.bateladas_paes import farinha_padrao_g
-            if farinha_padrao_g(obj):
+            from app.services.viennoiserie import eh_massa_compartilhada
+            if farinha_padrao_g(obj) or eh_massa_compartilhada(obj):
                 return jsonify(ok=False, erro=(
                     f'{obj.nome}: registre pela ordem de produção, para manter '
                     'a pesagem por batelada e a baixa correta dos ingredientes.')), 400

@@ -171,10 +171,15 @@ def registrar(receita_id, quantidade, motivo, usuario_id, fornada=False,
                     'Se a prateleira tinha mais, confira o estoque.')
     else:
         from app.services.estoque_congelados import saida_producao
-        res = saida_producao(
-            receita_id=rec.id, quantidade=quantidade, usuario_id=usuario_id,
-            referencia='Perda #%d — %s' % (perda.id, MOTIVOS[motivo]),
-            tipo='perda_producao')
+        from app.services.estoque_massa import consumir_massa, eh_massa_folhar
+        referencia = 'Perda #%d — %s' % (perda.id, MOTIVOS[motivo])
+        if eh_massa_folhar(rec):
+            res = consumir_massa(rec, quantidade, usuario_id, referencia,
+                                  tipo='perda_producao', perda_id=perda.id)
+        else:
+            res = saida_producao(
+                receita_id=rec.id, quantidade=quantidade, usuario_id=usuario_id,
+                referencia=referencia, tipo='perda_producao')
         baixado, falta = res['baixado'], res['falta']
         if falta > 0:
             avisos.append(
@@ -185,7 +190,7 @@ def registrar(receita_id, quantidade, motivo, usuario_id, fornada=False,
 
     db.session.commit()
     logger.info('perda_producao #%d: %s x%d motivo=%s fornada=%s '
-                'baixado=%d falta=%d', perda.id, rec.nome, quantidade,
+                'baixado=%s falta=%s', perda.id, rec.nome, quantidade,
                 motivo, bool(fornada), baixado, falta)
     return {'perda_id': perda.id, 'baixado': baixado, 'falta': falta,
             'avisos': avisos}
@@ -216,6 +221,14 @@ def excluir(perda_id, usuario_id):
     # com usuario_id) registra quem excluiu — o delete em massa não passa
     # pelos listeners do AuditLog, e essa troca é deliberada.
     pid, receita_id_perda = perda.id, perda.receita_id
+    from app.models.estoque_massa import MovEstoqueMassa
+    # Captura as FKs antes do DELETE (SET NULL conserva o histórico). Não
+    # depende da referência humana e não mistura o débito inteiro projetado
+    # com o débito exato em gramas, que representam o mesmo movimento.
+    movimentos_massa = MovEstoqueMassa.query.filter_by(perda_producao_id=pid).all()
+    ids_massa = [m.id for m in movimentos_massa]
+    inteiros_massa = {m.movimento_inteiro_id for m in movimentos_massa
+                      if m.movimento_inteiro_id is not None}
     apagadas = (db.session.query(PerdaProducao)
                 .filter(PerdaProducao.id == pid)
                 .delete(synchronize_session=False))
@@ -235,7 +248,18 @@ def excluir(perda_id, usuario_id):
                     MovEstoqueProducao.referencia.like(ref_prefixo + '%'))
             .all())
     estornado = 0
+    if ids_massa:
+        from app.services.estoque_massa import estornar_movimentos_massa
+        rec = db.session.get(Receita, receita_id_perda)
+        resultado = estornar_movimentos_massa(
+            rec, ids_massa, usuario_id, 'Estorno da perda #%d (excluída)' % pid)
+        estornado += resultado['estornado']
+        # SQLite sem enforcement de FK também mantém a relação consistente.
+        MovEstoqueMassa.query.filter(MovEstoqueMassa.id.in_(ids_massa)).update(
+            {'perda_producao_id': None}, synchronize_session='fetch')
     for m in movs:
+        if m.id in inteiros_massa:
+            continue
         ep = db.session.get(EstoqueProducao, m.estoque_producao_id)
         q = int(m.quantidade or 0)
         if ep is not None and q > 0:
@@ -247,7 +271,7 @@ def excluir(perda_id, usuario_id):
                 usuario_id=usuario_id))
             estornado += q
     db.session.commit()
-    logger.info('perda_producao #%d excluída: %d un estornadas', perda_id,
+    logger.info('perda_producao #%d excluída: %s un estornadas', perda_id,
                 estornado)
     return {'estornado': estornado}
 

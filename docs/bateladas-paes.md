@@ -2,8 +2,9 @@
 
 Decisão do proprietário, 16/09/2026: sourdough em bateladas completas de
 25.000 g de farinha por sabor; pão francês em bateladas de 12.000 g. Não
-agrupar os novos itens em massa-base. Não alterar brioche, viennoiserie,
-preparos auxiliares, montagens ou retornos.
+agrupar os novos itens em massa-base. Não alterar brioche, preparos auxiliares,
+montagens ou retornos. Para viennoiserie, aplica-se a extensão de 17/09/2026
+documentada em [bateladas-viennoiserie.md](bateladas-viennoiserie.md).
 
 ## Planejamento e pesagem
 

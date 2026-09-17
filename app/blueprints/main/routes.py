@@ -3598,6 +3598,12 @@ def arquivadas_saldo():
         Produto,
         Receita,
     )
+    from app.models.estoque_massa import SaldoResidualMassa
+    from app.services.estoque_massa import (
+        ajustar_contagem_bolas,
+        eh_massa_folhar,
+        saldo_bolas,
+    )
 
     executar = request.args.get('executar') == '1'
     ref = 'Zerar saldo de item arquivado (limpeza owner /admin/arquivadas-saldo)'
@@ -3638,7 +3644,10 @@ def arquivadas_saldo():
             zerados += 1
 
     for ep in (EstoqueProducao.query
-               .filter(EstoqueProducao.quantidade != 0)
+               .filter(db.or_(
+                   EstoqueProducao.quantidade != 0,
+                   EstoqueProducao.receita_id.in_(db.session.query(
+                       SaldoResidualMassa.receita_id).filter(SaldoResidualMassa.g > 0))))
                .outerjoin(Receita, EstoqueProducao.receita_id == Receita.id)
                .outerjoin(Produto, EstoqueProducao.produto_id == Produto.id)
                .filter(db.or_(Receita.arquivada_em.isnot(None),
@@ -3646,14 +3655,22 @@ def arquivadas_saldo():
         motivo, nome = _morto(ep)
         if not motivo:
             continue
-        linhas.append({'onde': 'industria', 'item': nome, 'motivo': motivo,
-                       'quantidade': ep.quantidade})
+        massa = ep.receita is not None and eh_massa_folhar(ep.receita)
+        residual = db.session.get(SaldoResidualMassa, ep.receita_id) if ep.receita_id else None
+        info = {'onde': 'industria', 'item': nome, 'motivo': motivo,
+                'quantidade': max(0, float(saldo_bolas(ep.receita))) if massa else ep.quantidade}
+        if residual is not None:
+            info['residual_g'] = float(residual.g)
+        linhas.append(info)
         if executar:
-            db.session.add(MovEstoqueProducao(
-                estoque_producao_id=ep.id, tipo='ajuste',
-                quantidade=ep.quantidade, referencia=ref,
-                usuario_id=current_user.id))
-            ep.quantidade = 0
+            if massa:
+                ajustar_contagem_bolas(ep.receita, 0, current_user.id, ref)
+            else:
+                db.session.add(MovEstoqueProducao(
+                    estoque_producao_id=ep.id, tipo='ajuste',
+                    quantidade=ep.quantidade, referencia=ref,
+                    usuario_id=current_user.id))
+                ep.quantidade = 0
             zerados += 1
 
     if executar:
