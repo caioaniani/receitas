@@ -172,8 +172,15 @@ def calcular_custos_produtos(receita_custos, mp_info):
     iterativa, mesma logica do `calcular_custos_receitas`. Produtos sem
     composicao usam `custo_direto`. Produtos com itens somam os componentes.
     """
-    from app.models import Produto
-    produtos = Produto.query.filter(Produto.ativo.is_(True)).all()
+    from app.models import Produto, ProdutoItem
+    # Composição e nomes via FK em lote: a ficha do produto calcula o índice
+    # inteiro, e o carregamento lazy emitia um SELECT por produto/componente
+    # (Sentry GESTAO-PADARIA-2V). Não depende do cache da sessão de receitas/MPs.
+    produtos = Produto.query.options(
+        selectinload(Produto.itens).selectinload(ProdutoItem.receita),
+        selectinload(Produto.itens).selectinload(ProdutoItem.materia_prima),
+        selectinload(Produto.itens).selectinload(ProdutoItem.produto_componente),
+    ).filter(Produto.ativo.is_(True)).all()
 
     custos = {}
     # Primeira passada: produtos sem dependencia de outro produto.
