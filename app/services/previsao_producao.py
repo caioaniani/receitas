@@ -730,6 +730,16 @@ def _demanda_planejada(origens, previsto):
     return max(lojas, previsto) + adicionais
 
 
+def _estoque_para_planejamento(item):
+    """Saldo disponivel do balanco, depois da demanda anterior a janela."""
+    if 'em_estoque_planejamento' in item:
+        return item['em_estoque_planejamento'] or 0
+    # Compatibilidade com balancos resumidos usados na explosao de fichas.
+    if item.get('estoque_nao_abate'):
+        return item.get('em_producao', 0) or 0
+    return item.get('em_estoque_efetivo', item.get('em_estoque', 0)) or 0
+
+
 def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                       inicio_offset_dias=0, motor='pedidos'):
     """Balanco de producao da industria por receita.
@@ -971,22 +981,33 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             datas_possiveis=datas_possiveis_dow[dow])
         return p_ven if motor == 'vendas' else max(p_ped, p_ven)
 
-    # 4b. Demanda IMINENTE: entregas entre HOJE e o inicio da janela de
-    # producao de cada receita ([hoje, inicio+lead-1]). Elas CONSOMEM estoque
-    # mas nao entram no "produzir" (nao da mais pra produzi-las neste
-    # horizonte). Ignorar isso superestimava o estoque disponivel e
-    # SUBPRODUZIA (ex: estoque "coberto" por entregas de amanha era contado
-    # como livre pra a semana). O estoque efetivo desconta essa demanda.
-    pre_demanda = defaultdict(int)
+    # 4b. Saldo antes da primeira entrega que esta janela consegue produzir.
+    # As entregas iminentes consomem o fisico E o WIP que chega por dia.
+    # Somar WIP depois de descontar a demanda somente do fisico reutilizava
+    # producao ja comprometida: 20 no forno para hoje viravam desconto em
+    # outro pedido de 40 para amanha, sugerindo apenas 20.
+    # A conta assinada acompanha a projecao do cronograma; uma falta anterior
+    # nao libera o proximo recebimento como se o pedido tivesse desaparecido.
+    # Com estoque_nao_abate, a mesma conta parte de zero, sem o fisico.
+    estoque_efetivo = {}
+    estoque_planejamento = {}
     for rid in receitas:
+        saldo = em_estoque.get(rid, 0)
+        saldo_sem_fisico = 0
         L = lead.get(rid, 0)
         d = hoje_d
         fim_pre = inicio_d + timedelta(days=L - 1)
         while d <= fim_pre:
-            pre_demanda[rid] += _demanda_planejada(
+            entrada = em_producao_por_dia[rid].get(d.isoformat(), 0)
+            saida = _demanda_planejada(
                 firme_origem[rid].get(d, {}),
                 int(round(_previsto_dia(rid, d))))
+            saldo += entrada - saida
+            saldo_sem_fisico += entrada - saida
             d += timedelta(days=1)
+        estoque_efetivo[rid] = max(0, saldo)
+        estoque_planejamento[rid] = max(
+            0, saldo_sem_fisico if receitas[rid].estoque_nao_abate else saldo)
 
     # 5. Monta itens — so receitas com algum sinal (estoque/comprometido/
     # previsto). Nao listar centenas de receitas zeradas.
@@ -997,12 +1018,7 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     for rid, rec in receitas.items():
         est = em_estoque.get(rid, 0)
         wip = em_producao.get(rid, 0)
-        # Estoque efetivo = o que sobra DEPOIS das entregas iminentes (que
-        # ja vao consumir estoque antes da janela) + a producao ja MANDADA
-        # (WIP — pronta antes do inicio do horizonte; ver bloco 1b). As
-        # entregas iminentes nao podem ser servidas pelo WIP (ainda nao esta
-        # pronto), por isso o max() vem antes da soma.
-        est_efetivo = max(0, est - pre_demanda.get(rid, 0)) + wip
+        est_efetivo = estoque_efetivo[rid]
         comp = comprometido.get(rid, 0)
         firme_iminente = sum(qtd for data_ent, qtd in _firme_dia[rid].items()
                             if data_ent < inicio_d + timedelta(days=lead[rid]))
@@ -1024,11 +1040,11 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         # cap "so de sobras" ainda manda sobre o piso.
         alvo = max(demanda, minimo_ind)
         # Flag "estoque nao abate" (dono 19/07/2026, caso Massa para folhar):
-        # o fisico do ledger nao e confiavel pra esta receita — so a producao
-        # JA MANDADA (WIP) abate o que falta produzir. O em_estoque_efetivo
-        # exibido segue sendo o real; muda so a conta do planejamento.
+        # o fisico do ledger nao e confiavel pra esta receita — so o WIP
+        # restante apos as entregas iminentes abate o que falta produzir.
+        # O em_estoque_efetivo exibido segue incluindo o fisico real.
         nao_abate = bool(getattr(rec, 'estoque_nao_abate', False))
-        est_planejamento = wip if nao_abate else est_efetivo
+        est_planejamento = estoque_planejamento[rid]
         produzir = max(0, alvo - est_planejamento)
         limitado_por_minimo = minimo_ind > demanda and produzir > 0
         # Retorno nunca sugere producao (nem por firme): so entra por
@@ -1049,6 +1065,7 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             'nome': rec.nome,
             'em_estoque': est,
             'em_estoque_efetivo': est_efetivo,
+            'em_estoque_planejamento': est_planejamento,
             'em_producao': wip,
             'em_producao_por_dia': dict(em_producao_por_dia.get(rid, {})),
             'comprometido_iminente': firme_iminente,
@@ -2384,13 +2401,7 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
         """Estoque da receita disponivel PRA OS PAIS (alem da demanda propria)."""
         it = bal_map.get(rid)
         if it is not None:
-            if it.get('estoque_nao_abate'):
-                # Flag da ficha (dono 19/07/2026): o fisico nao entra na
-                # conta — so a producao JA MANDADA (plano de hoje, WIP)
-                # cobre consumo. Vale tambem pra cobertura da vespera.
-                efetivo = it.get('em_producao', 0) or 0
-            else:
-                efetivo = it.get('em_estoque_efetivo', it.get('em_estoque', 0)) or 0
+            efetivo = _estoque_para_planejamento(it)
             # Usa a demanda diária já consolidada pelo balanço. O max
             # agregado liberava estoque comprometido em datas diferentes.
             demanda = it.get('demanda')
@@ -2718,13 +2729,9 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # Estoque EFETIVO (apos as entregas iminentes) e o que cobre a janela —
         # mesmo numero que o balanco usou pra achar o "Produzir". Usar o estoque
         # bruto aqui front-loadaria estoque que ja vai embora antes da janela.
-        # Flag "estoque nao abate": a curva usa o MESMO numero da conta do
-        # balanco (so WIP), senao os primeiros dias sairiam esvaziados por um
-        # fisico que o produzir ignorou.
-        if it.get('estoque_nao_abate'):
-            estoque_efetivo = int(it.get('em_producao', 0) or 0)
-        else:
-            estoque_efetivo = int(it.get('em_estoque_efetivo', estoque))
+        # A flag "estoque nao abate" ja foi aplicada pelo balanco, inclusive
+        # o consumo do WIP pelas entregas anteriores a esta janela.
+        estoque_efetivo = int(_estoque_para_planejamento(it))
 
         # Curva de demanda diaria: producao do dia i mira a entrega (i + lead).
         # FRACIONARIO de proposito: o previsto eh fracao/dia (ex: 0,43). Arredondar
@@ -3325,15 +3332,13 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             rr['unidade_estoque'] = 'bolas equivalentes'
         comp = int(it['comprometido']) if it else 0
         prev = int(it['previsto']) if it else 0
-        est_ef = numero_estoque(it['em_estoque_efetivo']) if it else numero_estoque(rr['em_estoque'])
-        # Flag "estoque nao abate" (19/07/2026): saldo/produzir/projecao da
-        # linha usam o MESMO numero da conta do balanco (so a producao ja
-        # mandada, WIP) — manter o fisico aqui faria a caixa dizer "nao
-        # falta" com a linha produzindo (a classe de bug de 30/06) e
-        # deixaria estoque fantasma CALAR o alerta de entrega em risco.
-        # O fisico real segue visivel em rr['em_estoque'].
-        if rr.get('estoque_nao_abate'):
-            est_ef = numero_estoque(it.get('em_producao', 0) or 0) if it else 0
+        # O resumo usa o mesmo saldo da distribuicao e do BOM. O fisico
+        # continua visivel em em_estoque; WIP comprometido nao reaparece aqui.
+        if it is not None:
+            est_ef = numero_estoque(_estoque_para_planejamento(it))
+        else:
+            est_ef = (0 if rr.get('estoque_nao_abate') else
+                      numero_estoque(rr['em_estoque']))
         # Demanda do balanco: max diario das lojas + B2B/site. Linha
         # fora do balanco (insumo injetado) cai no agregado antigo.
         demanda = int(it['demanda']) if it and it.get('demanda') is not None \
