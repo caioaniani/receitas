@@ -594,6 +594,21 @@ def gerar_nota_fiscal_pedido(pedido_id, modelo='NFe'):
     return {'ok': False, 'erro': erro}
 
 
+def classificar_situacao_nota(nf):
+    """Situação fiscal da nota, distinta do processamento da chamada à API."""
+    textos = {str(nf.get(k) or '').strip().lower() for k in
+              ('situacao', 'descricao_situacao', 'situacao_descricao', 'status_nfe')}
+    autorizada = str(nf.get('situacao')) in ('6', '7') or bool(
+        textos & {'autorizada', 'autorizado', 'autorizada na sefaz',
+                  'autorizado o uso da nf-e', 'emitida danfe'})
+    rejeitada = str(nf.get('situacao')) in ('5', '10') or any(
+        t.startswith(('rejeit', 'denegad')) for t in textos)
+    if rejeitada or str(nf.get('situacao')) == '3' or any(
+            t.startswith(('não autoriz', 'nao autoriz', 'cancelad')) for t in textos):
+        autorizada = False
+    return {'autorizada': autorizada, 'rejeitada': rejeitada}
+
+
 def emitir_nota_fiscal(nota_id):
     """nota.fiscal.emitir.php — autoriza a NF na SEFAZ. A emissão é
     ASSÍNCRONA: o Tiny devolve um `status_processamento`. Códigos
@@ -609,27 +624,24 @@ def emitir_nota_fiscal(nota_id):
         return {'ok': False, 'erro': _consumir_falha() or 'sem resposta'}
     sp = str(retorno.get('status_processamento')
              or retorno.get('status') or '').strip().lower()
-    if sp in ('3', 'ok', '100', 'autorizada', 'emitida'):
-        return {'ok': True, 'status': 'autorizada'}
     erro = _extrair_erros(retorno)
     erro_low = (erro or '').lower()
-    # NF que JÁ está em estado autorizada/emitida = sucesso (re-emissão).
-    # Duas mensagens distintas do Tiny indicam isso:
-    # (a) "Nota fiscal já autorizada / emitida"
-    # (b) "apenas notas pendentes ou rejeitadas podem ser enviadas" (cod 32):
-    #     o Tiny dizendo que a NOSSA não é pendente nem rejeitada — logo,
-    #     está autorizada/emitida (confirmado em prod com a 011428).
-    if ('autoriz' in erro_low or 'emitida' in erro_low
-            or 'pendentes ou rejeitadas' in erro_low):
+    if sp in ('3', '100', 'autorizada') and not erro:
         return {'ok': True, 'status': 'autorizada'}
-    if sp in ('1', 'processando', 'enviada', 'aguardando'):
+    # Só o aviso explícito de autorização já existente confirma por texto.
+    # "Não autorizada", "emitida" e restrição de estado exigem consultar a nota.
+    if erro_low.strip(' .') in ('nota fiscal já autorizada', 'nota fiscal ja autorizada'):
+        return {'ok': True, 'status': 'autorizada'}
+    if (sp in ('1', 'ok', 'emitida', 'processando', 'enviada', 'aguardando')
+            or 'autoriz' in erro_low or 'emitida' in erro_low
+            or 'pendentes ou rejeitadas' in erro_low):
         # Assíncrono: confirma a situação real antes de declarar falha.
         nf = obter_nota_fiscal(nota_id) or {}
         situ = str(nf.get('situacao') or '').strip().lower()
-        if 'autoriz' in situ or situ == 'emitida':
+        if classificar_situacao_nota(nf)['autorizada']:
             return {'ok': True, 'status': 'autorizada'}
         return {'ok': False, 'processando': True, 'status': situ or 'processando',
-                'erro': 'NF enviada, aguardando autorização da SEFAZ — '
+                'erro': erro or 'NF enviada, aguardando autorização da SEFAZ — '
                         'atualize em instantes (NÃO use Refazer, duplicaria).'}
     return {'ok': False, 'status': sp, 'erro': erro or f'status {sp}'}
 

@@ -444,18 +444,8 @@ def _sincronizar_situacao(pedido):
         logger.info('tiny obter NF %s: sem situacao (campos=%s)',
                     pedido.tiny_nota_fiscal_id, list(nf.keys())[:20])
         return None
-    # Situação da NOTA (não status_processamento): 6=Autorizada, 2=Emitida
-    # ainda não prova autorização. Texto como "não autorizada" não é sucesso.
-    textos = {str(nf.get(k) or '').strip().lower() for k in
-              ('situacao', 'descricao_situacao', 'situacao_descricao', 'status_nfe')}
-    autorizada = str(nf.get('situacao')) in ('6', '7') or bool(
-        textos & {'autorizada', 'autorizado', 'autorizada na sefaz', 'autorizado o uso da nf-e',
-                  'emitida danfe'})
-    rejeitada = str(nf.get('situacao')) in ('5', '10') or any(
-        t.startswith(('rejeit', 'denegad')) for t in textos)
-    if rejeitada or str(nf.get('situacao')) == '3' or any(
-            t.startswith(('não autoriz', 'nao autoriz', 'cancelad')) for t in textos):
-        autorizada = False
+    fiscal = tiny.classificar_situacao_nota(nf)
+    autorizada, rejeitada = fiscal['autorizada'], fiscal['rejeitada']
     if not (autorizada or rejeitada):
         logger.info('tiny obter NF %s: situacao desconhecida (sigs=%r, '
                     'campos=%s)', pedido.tiny_nota_fiscal_id, sigs[:120],
