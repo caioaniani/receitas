@@ -102,3 +102,133 @@ def preparar(conversa, historico, *, min_minutos=10):
     if not row.grave and base < row.inicio_em + timedelta(minutes=min_minutos):
         return None
     return row
+
+
+def registrar_alerta(veredito):
+    """Incidente grave visível imediatamente, antes do cron e do reconhecimento."""
+    from sqlalchemy import case
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+    cid = str(veredito.conv_id or '')
+    if (not veredito.alerta or veredito.gravidade != 'alta' or
+            not cid.isascii() or not cid.isdigit() or int(cid) <= 0):
+        return
+    tabela = EsperaAtendimento.__table__
+    inserir = pg_insert if db.engine.dialect.name == 'postgresql' else sqlite_insert
+    stmt = inserir(tabela).values(
+        conversa_id=cid, inicio_em=veredito.criado_em, nome=veredito.cliente,
+        mensagem=veredito.mensagem_cliente, grave=True, estado='aguardando',
+    )
+    db.session.execute(stmt.on_conflict_do_update(
+        index_elements=['conversa_id'],
+        set_={'grave': True, 'estado': 'aguardando', 'nome': stmt.excluded.nome,
+              'mensagem': stmt.excluded.mensagem,
+              'inicio_em': case((tabela.c.estado.in_(('aguardando', 'em_atendimento')),
+                                 tabela.c.inicio_em), else_=stmt.excluded.inicio_em),
+              'proximo_aviso_em': None},
+        where=db.and_(
+            db.or_(tabela.c.resolvido_em.is_(None), tabela.c.resolvido_em < veredito.criado_em),
+            tabela.c.inicio_em <= veredito.criado_em),
+    ))
+    db.session.commit()
+
+
+def alertas_painel():
+    """Fila de atendimento, não de recibos de leitura. Sem HTTP a cada poll."""
+    from app.services.chatbot_vigia import _janela_horas
+
+    base = agora()
+    recentes = VigiaVeredito.query.filter(
+        VigiaVeredito.alerta.is_(True), VigiaVeredito.gravidade == 'alta',
+        VigiaVeredito.criado_em >= base - timedelta(hours=_janela_horas()),
+    ).order_by(VigiaVeredito.criado_em.desc(), VigiaVeredito.id.desc()).all()
+    ultimos = {}
+    for v in recentes:
+        cid = str(v.conv_id or '')
+        if cid.isascii() and cid.isdigit() and int(cid) > 0:
+            ultimos.setdefault(cid, v)
+    esperas = {r.conversa_id: r for r in EsperaAtendimento.query.filter(db.or_(
+        EsperaAtendimento.estado.in_(('aguardando', 'em_atendimento')),
+        EsperaAtendimento.conversa_id.in_(list(ultimos)),
+    )).all()}
+    out = []
+    for cid in set(esperas) | set(ultimos):
+        if not (cid.isascii() and cid.isdigit() and int(cid) > 0):
+            continue
+        row, veredito = esperas.get(cid), ultimos.get(cid)
+        if row:
+            # Um caso encerrado não volta por um aviso antigo ou por um clique.
+            if row.estado not in ('aguardando', 'em_atendimento'):
+                continue
+            if row.resolvido_em and row.inicio_em <= row.resolvido_em:
+                continue
+            if not row.grave and (row.estado != 'aguardando' or
+                                  base < row.inicio_em + timedelta(minutes=10)):
+                continue
+            inicio, grave, estado = row.inicio_em, row.grave, row.estado
+            nome, mensagem = row.nome, row.mensagem
+            chave = f'{cid}:{inicio.isoformat()}:{int(grave)}'
+        else:
+            # Novo incidente grave aparece antes do próximo ciclo do monitor.
+            # As esperas já acompanhadas acima não dependem de reconhecimento.
+            if not veredito:
+                continue
+            inicio = veredito.criado_em
+            grave = veredito.bot_acao != 'espera_humano'
+            estado, nome, mensagem = 'aguardando', veredito.cliente, veredito.mensagem_cliente
+            chave = f'{cid}:alerta:{veredito.id}'
+        motivo = ('Caso grave com resposta, ainda precisa ser resolvido.' if estado == 'em_atendimento'
+                  else 'Cliente aguardando uma resposta da equipe.')
+        if grave and veredito and veredito.bot_acao != 'espera_humano':
+            motivo = veredito.motivo_vigia or veredito.bot_motivo or motivo
+        out.append(dict(chave=chave, conv_id=cid, cliente=nome or 'Cliente',
+                        motivo=motivo[:500], mensagem=(mensagem or '')[:300],
+                        grave=bool(grave), estado=estado,
+                        ha_minutos=max(0, int((base - inicio).total_seconds() // 60))))
+    return sorted(out, key=lambda a: (not a['grave'], -a['ha_minutos'], a['conv_id']))
+
+
+def confirmar_acao_painel(cid, acao, *, iniciado_em, usuario_id):
+    """Chamado só depois de envio/resolução confirmado pelo Chatwoot."""
+    if acao not in ('responder', 'resolved'):
+        return
+    cid = str(cid)
+    row = EsperaAtendimento.query.filter_by(conversa_id=cid).with_for_update().first()
+    recentes = VigiaVeredito.query.filter(
+        VigiaVeredito.conv_id == cid, VigiaVeredito.alerta.is_(True),
+        VigiaVeredito.gravidade == 'alta', VigiaVeredito.criado_em <= iniciado_em,
+    )
+    if row and row.resolvido_em:
+        recentes = recentes.filter(VigiaVeredito.criado_em > row.resolvido_em)
+    vereditos = recentes.order_by(VigiaVeredito.criado_em.desc()).all()
+    if row is None and vereditos:
+        v = vereditos[0]
+        row = EsperaAtendimento(conversa_id=cid, inicio_em=v.criado_em,
+                                nome=v.cliente, mensagem=v.mensagem_cliente,
+                                grave=any(v.bot_acao != 'espera_humano' for v in vereditos))
+        db.session.add(row)
+    if row is None and acao == 'resolved':
+        # Guarda a resolução mesmo antes de a primeira avaliação de IA terminar.
+        row = EsperaAtendimento(conversa_id=cid, inicio_em=iniciado_em,
+                                estado='resolvido', grave=False)
+        db.session.add(row)
+    novo_incidente = VigiaVeredito.query.filter(
+        VigiaVeredito.conv_id == cid, VigiaVeredito.alerta.is_(True),
+        VigiaVeredito.gravidade == 'alta', VigiaVeredito.criado_em > iniciado_em,
+        db.or_(VigiaVeredito.bot_acao != 'espera_humano', VigiaVeredito.bot_acao.is_(None)),
+    ).first()
+    if row and row.inicio_em <= iniciado_em and not novo_incidente:
+        if acao == 'resolved':
+            row.estado = 'resolvido'
+            row.resolvido_em = iniciado_em
+            row.proximo_aviso_em = None
+        elif row.estado != 'resolvido':
+            row.grave = bool(row.grave or any(v.bot_acao != 'espera_humano' for v in vereditos))
+            row.estado = 'em_atendimento' if row.grave else 'respondido'
+            row.proximo_aviso_em = agora() + timedelta(hours=1) if row.grave else None
+    for v in vereditos:
+        if not v.reconhecido_em:
+            v.reconhecido_em = agora()
+            v.reconhecido_por_id = usuario_id
+    db.session.commit()

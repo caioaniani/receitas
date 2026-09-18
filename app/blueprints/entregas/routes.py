@@ -363,6 +363,28 @@ def api_atendimento_conversas():
     return jsonify({'conversas': conversas, 'status': status})
 
 
+@entregas_bp.route('/api/atendimento/alertas')
+@login_required
+def api_atendimento_alertas():
+    from flask_wtf.csrf import generate_csrf
+
+    from app.services import atendimento_pendente
+    resposta = jsonify(alertas=atendimento_pendente.alertas_painel(), csrf=generate_csrf())
+    resposta.headers['Cache-Control'] = 'no-store'
+    return resposta
+
+
+def _confirmar_atendimento_painel(cid, acao, iniciado_em):
+    from app.services import atendimento_pendente
+    try:
+        atendimento_pendente.confirmar_acao_painel(
+            cid, acao, iniciado_em=iniciado_em, usuario_id=current_user.id)
+    except Exception:  # noqa: BLE001
+        # O envio externo já aconteceu: não devolver falha que incentive duplicação.
+        db.session.rollback()
+        current_app.logger.exception('painel: falha ao atualizar alerta da conversa %s', cid)
+
+
 @entregas_bp.route('/api/atendimento/conversa/<int:cid>')
 @login_required
 def api_atendimento_conversa(cid):
@@ -395,7 +417,10 @@ def api_atendimento_enviar(cid):
         return jsonify({'ok': False, 'erro': 'mensagem vazia'}), 400
     if len(content) > 4000:
         return jsonify({'ok': False, 'erro': 'mensagem muito longa (max 4000)'}), 400
+    iniciado_em = agora()
     res = cw_svc.enviar_mensagem_painel(cid, content)
+    if res.get('ok'):
+        _confirmar_atendimento_painel(cid, 'responder', iniciado_em)
     return jsonify(res), (200 if res.get('ok') else 502)
 
 
@@ -411,7 +436,10 @@ def api_atendimento_status(cid):
     status = (data.get('status') or '').strip()
     if status not in ('open', 'pending', 'resolved'):
         return jsonify({'ok': False, 'erro': 'status invalido'}), 400
+    iniciado_em = agora()
     res = cw_svc.definir_status(cid, status)
+    if res.get('ok') and status == 'resolved':
+        _confirmar_atendimento_painel(cid, status, iniciado_em)
     return jsonify(res), (200 if res.get('ok') else 502)
 
 

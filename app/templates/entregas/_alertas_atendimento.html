@@ -1,0 +1,37 @@
+<div id="painel-alertas-atendimento"
+     data-url="{{ url_for('entregas.api_atendimento_alertas') }}">
+  <div class="pa-at-indicador">
+    <button type="button" class="pa-at-botao" data-pa-botao hidden
+            aria-haspopup="dialog" aria-controls="pa-at-dialog" aria-expanded="false">
+      <span class="pa-at-sinal" aria-hidden="true">!</span>
+      <span>Atendimento</span>
+      <span class="pa-at-contador" data-pa-contador>0</span>
+    </button>
+    <p class="pa-at-aviso-local" data-pa-adiamento role="status" hidden></p>
+    <p class="pa-at-erro pa-at-erro-fora" data-pa-erro-fora role="status" hidden></p>
+  </div>
+
+  <dialog id="pa-at-dialog" class="pa-at-dialog" data-pa-dialog
+          aria-labelledby="pa-at-titulo" aria-describedby="pa-at-descricao">
+    <div class="pa-at-cabecalho">
+      <span class="pa-at-sinal pa-at-sinal-grande" aria-hidden="true">!</span>
+      <div>
+        <p class="pa-at-sobretitulo">Pendências de atendimento</p>
+        <h2 id="pa-at-titulo">Cliente precisa de atendimento</h2>
+      </div>
+      <button type="button" class="pa-at-fechar" data-pa-fechar
+              aria-label="Adiar aviso por 5 minutos" autofocus>×</button>
+    </div>
+    <p id="pa-at-descricao" class="pa-at-descricao">
+      Abra a conversa para atender. Fechar este aviso adia a exibição por 5 minutos;
+      a pendência continua aberta. Novas pendências aparecem imediatamente.
+    </p>
+    <p class="pa-at-erro" data-pa-erro-dentro role="status" hidden></p>
+    <p class="pa-at-resumo" data-pa-resumo aria-live="polite" aria-atomic="true"></p>
+    <ul class="pa-at-lista" data-pa-lista aria-label="Clientes que precisam de atendimento"></ul>
+    <div class="pa-at-rodape">
+      <span>O indicador permanece disponível no painel.</span>
+      <button type="button" class="pa-at-adiar" data-pa-adiar>Adiar por 5 minutos</button>
+    </div>
+  </dialog>
+</div>

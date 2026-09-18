@@ -503,7 +503,7 @@ def _montar_mensagem(veredicto, nome_contato, conv_id):
 
 
 def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente,
-               resultado_bot=None):
+               resultado_bot=None, iniciado_em=None):
     """Adiciona o resultado ao historico em memoria (`_historico`) E persiste
     em VigiaVeredito (pro auditor diario achar padroes). Persistencia e
     best-effort: nunca propaga erro."""
@@ -537,6 +537,7 @@ def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente,
                       if isinstance(tools, (list, tuple))
                       else None)
         row = VigiaVeredito(
+            criado_em=iniciado_em or _ag(),
             conv_id=str(conv_id) if conv_id is not None else None,
             cliente=(nome_contato or '')[:200] or None,
             mensagem_cliente=(ultima_mensagem_cliente or '')[:2000] or None,
@@ -550,7 +551,14 @@ def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente,
         )
         db.session.add(row)
         db.session.commit()
-        return row.id      # ID = claim (usado pelo abandono, claim-first)
+        row_id = row.id
+        try:
+            from app.services import atendimento_pendente
+            atendimento_pendente.registrar_alerta(row)
+        except Exception:  # noqa: BLE001
+            db.session.rollback()
+            logger.exception('vigia: acompanhar alerta no painel falhou')
+        return row_id      # ID = claim (usado pelo abandono, claim-first)
     except Exception:  # noqa: BLE001
         logger.exception('vigia: persistir VigiaVeredito falhou')
         try:
@@ -569,6 +577,8 @@ def avaliar(historico, *, conv_id=None, nome_contato='', resultado_bot=None):
     `historico`: lista [{'role', 'content'}] da conversa
     `resultado_bot`: {'acao', 'texto', 'motivo'?} do que o bot acabou de fazer
     """
+    from app.utils import agora
+    iniciado_em = agora()
     res = _avaliar_interno(historico, conv_id=conv_id,
                             nome_contato=nome_contato,
                             resultado_bot=resultado_bot)
@@ -579,7 +589,7 @@ def avaliar(historico, *, conv_id=None, nome_contato='', resultado_bot=None):
             break
     try:
         _registrar(res, conv_id, nome_contato, ultima_msg,
-                   resultado_bot=resultado_bot)
+                   resultado_bot=resultado_bot, iniciado_em=iniciado_em)
     except Exception:  # noqa: BLE001
         logger.exception('vigia: registro no historico falhou')
     return res
@@ -734,6 +744,8 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
     if not api_key:
         return {'pulou': 'sem ANTHROPIC_API_KEY'}
 
+    from app.utils import agora
+    iniciado_em = agora()
     try:
         contexto = (
             f'Cliente: {nome_contato or "(sem nome)"}\n'
@@ -763,7 +775,8 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
     # So alta (desistencia clara / perda de venda) dispara na hora; media -> resumo.
     if not veredicto.get('alerta') or veredicto.get('gravidade') != 'alta':
         try:
-            _registrar(res, conv_id, nome_contato, f'[ABANDONO {minutos_sem_resposta}min] {ultima_msg}')
+            _registrar(res, conv_id, nome_contato, f'[ABANDONO {minutos_sem_resposta}min] {ultima_msg}',
+                       iniciado_em=iniciado_em)
         except Exception:  # noqa: BLE001
             logger.exception('vigia abandono: registro falhou')
         return res
@@ -787,7 +800,8 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
     try:
         claim = _registrar({'enviado': False, 'veredicto': veredicto},
                            conv_id, nome_contato,
-                           f'[ABANDONO {minutos_sem_resposta}min] {ultima_msg}')
+                           f'[ABANDONO {minutos_sem_resposta}min] {ultima_msg}',
+                           iniciado_em=iniciado_em)
     except Exception:  # noqa: BLE001
         logger.exception('vigia abandono: registro falhou')
     try:

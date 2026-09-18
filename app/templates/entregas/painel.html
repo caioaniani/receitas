@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Painel + Atendimento</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/painel-alertas-atendimento.css') }}?v={{ static_v['css/painel-alertas-atendimento.css'] }}">
 <style>
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -168,6 +169,7 @@
   </div>
 
   <div id="toast" class="toast"></div>
+  {% include 'entregas/_alertas_atendimento.html' %}
 
   <div class="split" id="split">
     <div class="pane" id="pane-painel">
@@ -298,6 +300,8 @@
     var att = document.getElementById('at-att');
     var compose = document.getElementById('compose-texto');
     var btnEnviar = document.getElementById('compose-enviar');
+    var rascunhos = new Map(); // apenas nesta página; não persiste mensagens no navegador
+    var versaoThread = 0;
 
     document.querySelectorAll('.at-topo .filtros button').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -347,16 +351,21 @@
     }
 
     function abrirThread(id, nome) {
+      id = String(id);
+      if (!/^[1-9][0-9]*$/.test(id)) return;
+      if (convAtual) rascunhos.set(convAtual, compose.value);
       convAtual = id;
+      var versao = ++versaoThread;
       threadNome.textContent = nome || ('Conversa ' + id);
       threadCorpo.innerHTML = '<div class="at-vazio">Carregando…</div>';
       lista.classList.add('hidden');
       thread.classList.remove('hidden');
-      compose.value = '';
+      compose.value = rascunhos.get(id) || '';
       compose.style.height = 'auto';
       fetch('/entregas/api/atendimento/conversa/' + id, {credentials: 'same-origin'})
-        .then(function (r) { return r.ok ? r.json() : {mensagens: []}; })
+        .then(function (r) { if (!r.ok) throw new Error('Atendimento indisponível'); return r.json(); })
         .then(function (data) {
+          if (versao !== versaoThread || convAtual !== id) return;
           var ms = (data && data.mensagens) || [];
           if (!ms.length) {
             threadCorpo.innerHTML = '<div class="at-vazio">Sem mensagens.</div>';
@@ -376,28 +385,34 @@
           threadCorpo.scrollTop = threadCorpo.scrollHeight;
         })
         .catch(function () {
+          if (versao !== versaoThread || convAtual !== id) return;
           threadCorpo.innerHTML = '<div class="at-vazio">Erro ao carregar.</div>';
         });
     }
 
     // ── Enviar mensagem ──
     function enviar() {
-      if (!convAtual) return;
+      if (!convAtual || btnEnviar.disabled) return;
+      var cid = convAtual, nome = threadNome.textContent, rascunho = compose.value;
       var texto = (compose.value || '').trim();
       if (!texto) { compose.focus(); return; }
       btnEnviar.disabled = true;
       btnEnviar.textContent = 'Enviando…';
-      postJSON('/entregas/api/atendimento/conversa/' + convAtual + '/enviar',
+      postJSON('/entregas/api/atendimento/conversa/' + cid + '/enviar',
                { content: texto })
         .then(function (r) {
           btnEnviar.disabled = false;
           btnEnviar.textContent = 'Enviar';
           if (r.status === 200 && r.body && r.body.ok) {
-            compose.value = '';
-            compose.style.height = 'auto';
+            if (rascunhos.get(cid) === rascunho) rascunhos.delete(cid);
+            if (convAtual === cid && compose.value === rascunho) {
+              compose.value = '';
+              compose.style.height = 'auto';
+            }
             toast('Mensagem enviada', 'ok');
+            document.dispatchEvent(new Event('atendimento:atualizado'));
             // recarrega a thread pra mostrar a propria msg
-            abrirThread(convAtual, threadNome.textContent);
+            if (convAtual === cid) abrirThread(cid, nome);
           } else {
             toast('Erro ao enviar: ' + ((r.body && r.body.erro) || r.status), 'erro');
           }
@@ -437,14 +452,18 @@
     function mudarStatus(novoStatus, msgOk, confirmacao) {
       if (!convAtual) return;
       if (confirmacao && !confirm(confirmacao)) return;
-      postJSON('/entregas/api/atendimento/conversa/' + convAtual + '/status',
+      var cid = convAtual;
+      postJSON('/entregas/api/atendimento/conversa/' + cid + '/status',
                { status: novoStatus })
         .then(function (r) {
           if (r.status === 200 && r.body && r.body.ok) {
             toast(msgOk, 'ok');
+            document.dispatchEvent(new Event('atendimento:atualizado'));
             // volta pra lista — a conversa nao esta mais no status atual
-            thread.classList.add('hidden');
-            lista.classList.remove('hidden');
+            if (convAtual === cid) {
+              thread.classList.add('hidden');
+              lista.classList.remove('hidden');
+            }
             carregarLista();
           } else {
             toast('Erro: ' + ((r.body && r.body.erro) || r.status), 'erro');
@@ -519,6 +538,17 @@
     // Alerta do vigia (no iframe do painel à esquerda) pede pra abrir a
     // conversa aqui na direita. Valida a origem (same-origin) por seguranca —
     // ignora postMessage de qualquer outra janela/origem.
+    document.addEventListener('atendimento:abrir', function (e) {
+      var d = e.detail || {};
+      if (/^[1-9][0-9]*$/.test(String(d.conv_id || ''))) {
+        abrirThread(String(d.conv_id), d.nome || ('Conversa ' + d.conv_id));
+        document.getElementById('pane-chat').scrollIntoView({block: 'nearest'});
+        compose.focus();
+      }
+    });
+    document.addEventListener('atendimento:csrf', function (e) {
+      if (e.detail && e.detail.csrf) CSRF = e.detail.csrf;
+    });
     window.addEventListener('message', function (e) {
       if (e.origin !== location.origin) return;
       var d = e.data || {};
@@ -635,5 +665,6 @@
   }
 })();
 </script>
+<script src="{{ url_for('static', filename='js/painel-alertas-atendimento.js') }}?v={{ static_v['js/painel-alertas-atendimento.js'] }}" defer></script>
 </body>
 </html>

@@ -61,6 +61,15 @@ cron existente a cada cinco minutos, independentemente do modelo de IA.
 - Contenção, automação, campanha, nota interna ou envio falho não contam como
   atendimento. Agradecimento não resolve uma ocorrência grave.
 - Reconhecer o banner significa ter visto o aviso, não resolver o caso.
+- O Painel do Dia abre um pop-up com as pendências para usuários com acesso ao
+  atendimento. Consulta a fila local a cada vinte segundos, sem chamadas externas.
+  Fechar adia o aviso por cinco minutos apenas naquela aba; novas pendências
+  continuam avisando. O indicador permite abrir a lista a qualquer momento.
+- Abrir a conversa não resolve nem reconhece o atendimento. Uma resposta enviada
+  com sucesso encerra a espera comum; caso grave permanece até resolução confirmada.
+  Falhas não encerram a pendência. Acompanhamentos ativos não expiram ao mudar o dia.
+- O pop-up respeita mensagens sendo digitadas. Rascunhos de conversas diferentes
+  ficam separados em memória, sem gravar texto de clientes no armazenamento local.
 - Conversas abertas são paginadas; incidentes ativos fora da lista têm status
   consultado diretamente. Falha da API não significa resolução.
 - Contenção ao cliente mantém deduplicação por contato e por conversa. O dono
