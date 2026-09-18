@@ -28,6 +28,12 @@
     var compondo = false;
     var timerPoll = null;
     var timerReabrir = null;
+    var timerSom = null;
+    var audioCtx = null;
+    var audioSolicitado = false;
+    var audioFalhou = false;
+    var proximoSomEm = 0;
+    var tonsAtivos = [];
     var erroAtual = '';
 
     function texto(valor, padrao) {
@@ -80,6 +86,94 @@
       return compondo || Boolean(compose && compose.value.length);
     }
 
+    function pararSom() {
+      clearTimeout(timerSom);
+      timerSom = null;
+      tonsAtivos.forEach(function (tom) {
+        try { tom.osc.stop(); } catch (_) { /* O tom pode já ter terminado. */ }
+        tom.osc.disconnect();
+        tom.gain.disconnect();
+      });
+      tonsAtivos = [];
+    }
+
+    function agendarSom() {
+      clearTimeout(timerSom);
+      timerSom = null;
+      if (suspenso || document.hidden || !audioCtx || audioCtx.state !== 'running' || !alertas.length) return;
+      var elegivelEm = Math.min.apply(null, alertas.map(function (alerta) {
+        return adiados.get(alerta.chave) || 0;
+      }));
+      // O vencimento é absoluto: os polls de 20s não reiniciam a contagem.
+      var quando = Math.max(Date.now(), proximoSomEm, elegivelEm);
+      timerSom = setTimeout(tocarSom, Math.max(0, quando - Date.now()));
+    }
+
+    function tocarSom() {
+      timerSom = null;
+      var elegivel = alertas.some(function (alerta) {
+        return (adiados.get(alerta.chave) || 0) <= Date.now();
+      });
+      if (suspenso || document.hidden || !audioCtx || audioCtx.state !== 'running'
+          || !elegivel || proximoSomEm > Date.now()) {
+        agendarSom();
+        return;
+      }
+      // Um único reforço por janela, sem acumular disparos após aba suspensa.
+      proximoSomEm = Date.now() + adiamentoMs;
+      try {
+        var inicio = audioCtx.currentTime;
+        [660, 880].forEach(function (frequencia, indice) {
+          var osc = audioCtx.createOscillator();
+          var gain = audioCtx.createGain();
+          var tom = { osc: osc, gain: gain };
+          tonsAtivos.push(tom);
+          osc.type = 'sine';
+          osc.frequency.value = frequencia;
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          var t = inicio + indice * 0.2;
+          gain.gain.setValueAtTime(0.0001, t);
+          gain.gain.exponentialRampToValueAtTime(0.12, t + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.17);
+          osc.onended = function () {
+            osc.disconnect();
+            gain.disconnect();
+            tonsAtivos = tonsAtivos.filter(function (atual) { return atual !== tom; });
+          };
+          osc.start(t);
+          osc.stop(t + 0.19);
+        });
+      } catch (erro) {
+        pararSom();
+        console.warn('Não foi possível tocar o aviso breve de atendimento.', erro.name);
+      }
+      agendarSom();
+    }
+
+    function armarSom() {
+      if (suspenso || document.hidden) return;
+      audioSolicitado = true;
+      var TipoAudio = window.AudioContext || window.webkitAudioContext;
+      if (!TipoAudio) return;
+      function falhaAudio(erro) {
+        if (!audioFalhou) console.warn('Áudio de atendimento aguarda permissão do navegador.', erro.name);
+        audioFalhou = true;
+      }
+      try {
+        if (!audioCtx || audioCtx.state === 'closed') {
+          audioCtx = new TipoAudio();
+          audioCtx.addEventListener('statechange', agendarSom);
+        }
+        var retomada = audioCtx.state === 'suspended' ? audioCtx.resume() : Promise.resolve();
+        Promise.resolve(retomada).then(function () {
+          if (audioCtx.state === 'running') audioFalhou = false;
+          // Revalida fila, adiamento e visibilidade após um resume assíncrono.
+          agendarSom();
+        }).catch(falhaAudio);
+      } catch (erro) { falhaAudio(erro); }
+    }
+
     function armarReabertura() {
       clearTimeout(timerReabrir);
       timerReabrir = null;
@@ -91,6 +185,7 @@
           limparAdiamentos();
           mostrar(false);
           armarReabertura();
+          agendarSom();
         }, Math.max(1, Math.min.apply(null, futuro) - Date.now()));
       }
     }
@@ -117,6 +212,8 @@
       avisoLocal.textContent = 'Aviso adiado por 5 minutos nesta aba. As pendências continuam abertas.';
       avisoLocal.hidden = !alertas.length;
       armarReabertura();
+      pararSom();
+      agendarSom();
     }
 
     function elemento(tag, classe, conteudo) {
@@ -185,10 +282,12 @@
       if (!alertas.length) {
         fechar();
         avisoLocal.hidden = true;
+        pararSom();
       }
       limparAdiamentos();
       mostrar(false);
       armarReabertura();
+      agendarSom();
     }
 
     function normalizar(payload) {
@@ -279,12 +378,29 @@
         mostrar(false);
       }
     });
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) mostrar(false); });
+    ['click', 'pointerdown', 'keydown', 'touchend'].forEach(function (tipo) {
+      window.addEventListener(tipo, function (evento) {
+        if (evento.isTrusted && !evento.repeat) armarSom();
+      }, { passive: true });
+    });
+    window.addEventListener('message', function (evento) {
+      var painel = document.querySelector('#pane-painel iframe');
+      if (evento.origin !== window.location.origin || !painel || evento.source !== painel.contentWindow) return;
+      if (evento.data && evento.data.tipo === 'painel-audio-armado') armarSom();
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) pararSom();
+      else {
+        mostrar(false);
+        if (audioSolicitado) armarSom();
+      }
+    });
     window.addEventListener('pagehide', function () {
       suspenso = true;
       versao += 1;
       clearInterval(timerPoll);
       clearTimeout(timerReabrir);
+      pararSom();
       if (requisicao) {
         requisicao.obsoleta = true;
         requisicao.controller.abort();
@@ -296,6 +412,7 @@
       timerPoll = setInterval(function () { consultar(false); }, intervalo);
       consultar(true);
       armarReabertura();
+      if (audioSolicitado) armarSom();
     });
     timerPoll = setInterval(function () { consultar(false); }, intervalo);
     consultar(false);

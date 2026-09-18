@@ -919,7 +919,7 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
     e ficou no vacuo.
 
     Estado durável por conversa. Automação não encerra espera; aviso ao dono
-    repete em 15 minutos. Caso grave respondido segue a cada hora até resolved.
+    repete em 15 minutos até resolved, mesmo após uma resposta humana.
     Sem limite de idade por padrão. Cron serializa ciclos pelo lock 7737."""
     from datetime import datetime, timedelta
 
@@ -979,12 +979,12 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
                'humano — alguem da equipe precisa olhar.'
                + (f'\n\n{link}' if link else ''))
         if espera.estado == 'em_atendimento':
-            msg = (f'*Caso grave ainda aberto — acompanhar até resolver*\n'
+            tipo = 'Caso grave' if espera.grave else 'Atendimento'
+            msg = (f'*{tipo} ainda aberto — acompanhar até resolver*\n'
                    f'Cliente: {nome} (conversa #{conv_id})\n'
                    f'Assunto: {ultima}\nJá houve resposta humana, mas a conversa continua aberta.'
                    + (f'\n\n{link}' if link else ''))
-        else:
-            msg += '\n\nVou lembrar novamente em 15 minutos enquanto não houver resposta humana.'
+        msg += '\n\nVou lembrar novamente em 15 minutos até a conversa ser marcada como resolvida.'
         # CLAIM-FIRST (20/08/2026): o registro É o dedupe, então ele fica
         # COMMITADO antes do envio. O que isso cobre de verdade: o processo
         # morrer ENTRE o envio e a gravação (deploy no meio do ciclo), que
@@ -998,8 +998,7 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
             logger.warning('espera-humano: claim falhou conv=%s — pula '
                            'este ciclo (retenta no proximo)', conv_id)
             continue
-        espera.proximo_aviso_em = agora() + timedelta(
-            minutes=60 if espera.estado == 'em_atendimento' else 15)
+        espera.proximo_aviso_em = agora() + timedelta(minutes=15)
         db.session.commit()
         try:
             envio = zapi.enviar_texto(numero, msg)

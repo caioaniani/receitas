@@ -11,9 +11,20 @@ def candidatos():
     conversas = chatwoot.listar_conversas_paradas(
         min_minutos=0, status='open', limite=None, estrito=True)
     vistos = {str(c['id']) for c in conversas if c.get('id')}
-    for row in EsperaAtendimento.query.filter(
-            EsperaAtendimento.estado.in_(('aguardando', 'em_atendimento'))).all():
+    alerta_do_episodio = db.exists().where(db.and_(
+        VigiaVeredito.conv_id == EsperaAtendimento.conversa_id,
+        VigiaVeredito.alerta.is_(True), VigiaVeredito.gravidade == 'alta',
+        VigiaVeredito.criado_em >= EsperaAtendimento.inicio_em,
+        db.or_(EsperaAtendimento.resolvido_em.is_(None),
+               VigiaVeredito.criado_em > EsperaAtendimento.resolvido_em),
+    ))
+    for row in EsperaAtendimento.query.filter(db.or_(
+            EsperaAtendimento.estado.in_(('aguardando', 'em_atendimento')),
+            db.and_(EsperaAtendimento.estado == 'respondido', alerta_do_episodio),
+    )).all():
         if row.conversa_id in vistos:
+            if row.estado == 'respondido':
+                row.estado = 'em_atendimento'
             continue
         atual = chatwoot.consultar_conversa(row.conversa_id)
         if not atual:
@@ -21,7 +32,10 @@ def candidatos():
         if atual.get('status') == 'resolved':
             row.estado = 'resolvido'
             row.resolvido_em = agora()
+            row.proximo_aviso_em = None
         elif atual.get('status') in ('open', 'pending', 'snoozed'):
+            if row.estado == 'respondido':
+                row.estado = 'em_atendimento'
             conversas.append({'id': row.conversa_id, 'nome_contato': row.nome,
                               'minutos_paradas': int((agora() - row.inicio_em).total_seconds() / 60)})
     db.session.commit()
@@ -33,6 +47,32 @@ def _instante(mensagem, fallback):
         return datetime.fromtimestamp(float(mensagem['created_at']), UTC).astimezone(BRT).replace(tzinfo=None)
     except (KeyError, TypeError, ValueError, OverflowError, OSError):
         return fallback
+
+
+def _acompanhar_ate_resolver(row, base, min_minutos=10):
+    """Resposta não apaga um alerta; atendimento rápido sem alerta não vira incidente."""
+    if not row or row.estado == 'resolvido':
+        return False
+    if row.grave or row.estado == 'em_atendimento' or row.proximo_aviso_em:
+        return True
+    aviso = VigiaVeredito.query.filter(
+        VigiaVeredito.conv_id == row.conversa_id, VigiaVeredito.alerta.is_(True),
+        VigiaVeredito.gravidade == 'alta', VigiaVeredito.criado_em >= row.inicio_em)
+    if row.resolvido_em:
+        aviso = aviso.filter(VigiaVeredito.criado_em > row.resolvido_em)
+    return bool(aviso.first() or (base and row.estado == 'aguardando'
+                and base >= row.inicio_em + timedelta(minutes=min_minutos)))
+
+
+def _limitar_proximo_aviso(row, base):
+    # Preserva cobranças vencidas e encurta os antigos intervalos de uma hora.
+    if row.proximo_aviso_em and row.proximo_aviso_em > base + timedelta(minutes=15):
+        row.proximo_aviso_em = base + timedelta(minutes=15)
+
+
+def _primeira_resposta(historico, inicio):
+    instantes = [_instante(m, None) for m in historico if m.get('role') == 'assistant']
+    return min((t for t in instantes if t and t >= inicio), default=None)
 
 
 def preparar(conversa, historico, *, min_minutos=10):
@@ -52,7 +92,7 @@ def preparar(conversa, historico, *, min_minutos=10):
     efetivas = [m for m in historico if m.get('role') == 'user' or
                 (m.get('role') == 'assistant' and m.get('humano', True)
                  and TEXTO_CONTENCAO_ESPERA[:40] not in (m.get('content') or ''))]
-    if grave or (row and row.grave):
+    if grave or _acompanhar_ate_resolver(row, base, min_minutos):
         efetivas = [m for m in efetivas if m.get('role') != 'user'
                     or not (_e_fechamento(m.get('content')) or _e_mencao_story(m.get('content')))]
     if not efetivas:
@@ -71,10 +111,11 @@ def preparar(conversa, historico, *, min_minutos=10):
                                     grave=True, estado='em_atendimento')
             db.session.add(row)
         if row:
+            if row.estado == 'resolvido':
+                return None
             row.grave = bool(row.grave or grave)
-            if row.grave and row.estado != 'resolvido':
-                if row.estado != 'em_atendimento':
-                    row.proximo_aviso_em = base + timedelta(hours=1)
+            if _acompanhar_ate_resolver(row, _primeira_resposta(efetivas, row.inicio_em), min_minutos):
+                _limitar_proximo_aviso(row, base)
                 row.estado = 'em_atendimento'
             else:
                 row.estado = 'respondido'
@@ -82,14 +123,22 @@ def preparar(conversa, historico, *, min_minutos=10):
         return row if row and row.estado == 'em_atendimento' else None
     texto = ultima.get('content') or ''
     if _e_mencao_story(texto) or _e_fechamento(texto):
-        return row if row and row.grave and row.estado in ('aguardando', 'em_atendimento') else None
+        return row if _acompanhar_ate_resolver(row, base, min_minutos) else None
     inicio = _instante(ultima, base - timedelta(minutes=conversa.get('minutos_paradas', 0)))
     if row and row.resolvido_em and inicio <= row.resolvido_em:
         return None
     if row is None:
         row = EsperaAtendimento(conversa_id=conv_id, inicio_em=inicio, estado='aguardando')
         db.session.add(row)
-    elif row.estado in ('resolvido', 'respondido', 'em_atendimento'):
+    elif row.estado == 'aguardando' and not _acompanhar_ate_resolver(row, None, min_minutos):
+        primeira = _primeira_resposta(efetivas, row.inicio_em)
+        if primeira and primeira < inicio and primeira < row.inicio_em + timedelta(minutes=min_minutos):
+            # Resposta rápida entre dois ciclos encerrou a espera anterior.
+            row.inicio_em = inicio
+    elif row.estado == 'em_atendimento':
+        # A conversa ainda não foi resolvida: outra mensagem não zera o alerta.
+        row.estado = 'aguardando'
+    elif row.estado in ('resolvido', 'respondido'):
         if row.estado == 'resolvido':
             row.grave = False
         row.inicio_em = inicio
@@ -163,8 +212,8 @@ def alertas_painel():
                 continue
             if row.resolvido_em and row.inicio_em <= row.resolvido_em:
                 continue
-            if not row.grave and (row.estado != 'aguardando' or
-                                  base < row.inicio_em + timedelta(minutes=10)):
+            if (not row.grave and row.estado == 'aguardando'
+                    and base < row.inicio_em + timedelta(minutes=10)):
                 continue
             inicio, grave, estado = row.inicio_em, row.grave, row.estado
             nome, mensagem = row.nome, row.mensagem
@@ -178,7 +227,7 @@ def alertas_painel():
             grave = veredito.bot_acao != 'espera_humano'
             estado, nome, mensagem = 'aguardando', veredito.cliente, veredito.mensagem_cliente
             chave = f'{cid}:alerta:{veredito.id}'
-        motivo = ('Caso grave com resposta, ainda precisa ser resolvido.' if estado == 'em_atendimento'
+        motivo = ('Já houve resposta, mas o atendimento ainda precisa ser resolvido.' if estado == 'em_atendimento'
                   else 'Cliente aguardando uma resposta da equipe.')
         if grave and veredito and veredito.bot_acao != 'espera_humano':
             motivo = veredito.motivo_vigia or veredito.bot_motivo or motivo
@@ -225,8 +274,12 @@ def confirmar_acao_painel(cid, acao, *, iniciado_em, usuario_id):
             row.proximo_aviso_em = None
         elif row.estado != 'resolvido':
             row.grave = bool(row.grave or any(v.bot_acao != 'espera_humano' for v in vereditos))
-            row.estado = 'em_atendimento' if row.grave else 'respondido'
-            row.proximo_aviso_em = agora() + timedelta(hours=1) if row.grave else None
+            acompanhar = bool(vereditos) or _acompanhar_ate_resolver(row, iniciado_em)
+            row.estado = 'em_atendimento' if acompanhar else 'respondido'
+            if acompanhar:
+                _limitar_proximo_aviso(row, iniciado_em)
+            else:
+                row.proximo_aviso_em = None
     for v in vereditos:
         if not v.reconhecido_em:
             v.reconhecido_em = agora()

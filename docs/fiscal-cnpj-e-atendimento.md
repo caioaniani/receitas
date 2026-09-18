@@ -55,21 +55,25 @@ e 7 (Emitida DANFE, após autorização/impressão) confirmam; 2 (Emitida) não 
 cron existente a cada cinco minutos, independentemente do modelo de IA.
 
 - Caso comum: primeiro aviso após dez minutos sem resposta humana.
-- Enquanto aguarda humano: nova cobrança ao dono a cada quinze minutos.
-- Caso grave: primeiro aviso sem a espera inicial; após resposta humana,
-  acompanha a cada sessenta minutos até `resolved` confirmado no Chatwoot.
+- Após gerar um alerta: nova cobrança ao dono a cada quinze minutos até
+  `resolved` confirmado no Chatwoot. Uma resposta humana mantém o caso em
+  atendimento; não encerra a cobrança. Casos graves dispensam a espera inicial.
 - Contenção, automação, campanha, nota interna ou envio falho não contam como
   atendimento. Agradecimento não resolve uma ocorrência grave.
 - Reconhecer o banner significa ter visto o aviso, não resolver o caso.
 - O Painel do Dia abre um pop-up com as pendências para usuários com acesso ao
   atendimento. Consulta a fila local a cada vinte segundos, sem chamadas externas.
   Fechar adia o aviso por cinco minutos apenas naquela aba; novas pendências
-  continuam avisando. O indicador permite abrir a lista a qualquer momento.
+  continuam avisando. Um som breve reforça as pendências a cada cinco minutos,
+  após a interação que habilita áudio no navegador. O indicador permite abrir a lista.
 - Abrir a conversa não resolve nem reconhece o atendimento. Uma resposta enviada
-  com sucesso encerra a espera comum; caso grave permanece até resolução confirmada.
+  com sucesso mantém um caso já alertado até resolução confirmada.
   Falhas não encerram a pendência. Acompanhamentos ativos não expiram ao mudar o dia.
 - O pop-up respeita mensagens sendo digitadas. Rascunhos de conversas diferentes
   ficam separados em memória, sem gravar texto de clientes no armazenamento local.
+- Atendimento respondido antes do prazo, sem alerta anterior, não vira cobrança
+  por uma reconciliação tardia. Casos legados respondidos só retomam a cobrança
+  quando há alerta do episódio e o Chatwoot confirma que continuam abertos.
 - Conversas abertas são paginadas; incidentes ativos fora da lista têm status
   consultado diretamente. Falha da API não significa resolução.
 - Contenção ao cliente mantém deduplicação por contato e por conversa. O dono
