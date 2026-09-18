@@ -241,14 +241,27 @@ def _solicita_troca(historico):
     """Detecta pedido de troca/substituicao que o bot nao pode negociar.
 
     Vale para pedido ja feito e para personalizacao de cesta antes da compra.
-    Quando a ultima fala e curta ("nao pode?"), inclui a fala anterior para
-    manter o contexto sem reabrir assuntos antigos.
+    Só uma pergunta explícita de continuação ("nao pode?") recupera a fala
+    anterior. Agradecimentos ou respostas a um atendente não reabrem a troca.
     """
     falas = [str((m or {}).get('content') or '')
              for m in (historico or []) if (m or {}).get('role') == 'user']
     if not falas:
         return False
-    partes = falas[-2:] if len(falas[-1].strip()) <= 40 else falas[-1:]
+    ultima = falas[-1].strip()
+    continuacao = re.fullmatch(
+        r'(?i)(?:(?:mas|e|ent[aã]o)\s+)?(?:n[aã]o\s+)?'
+        r'(?:pode|poderia|d[aá]|seria\s+poss[ií]vel)(?:\s+(?:mesmo|trocar))?\s*\?',
+        ultima)
+    # Uma intervenção humana encerra a ligação com a pergunta anterior.
+    anteriores = []
+    for m in reversed((historico or [])[:-1]):
+        if m.get('humano'):
+            break
+        if m.get('role') == 'user':
+            anteriores = [str(m.get('content') or '')]
+            break
+    partes = anteriores + [ultima] if continuacao else [ultima]
     texto = ' '.join(partes)
     acao = re.search(
         r'(?i)\b(troc\w*|substitu\w*|no\s+lugar|em\s+vez|ao\s+inv[eé]s)\b',
@@ -1446,6 +1459,11 @@ def _followup_gerar_texto(api_key, historico, minutos):
     return texto.strip('"“” ').strip()
 
 
+def _tem_encaminhamento_humano(historico):
+    """Cron não retoma um handoff desta conversa só porque passaram 90 min."""
+    return any(m.get('handoff_em') and not m.get('herdada') for m in historico)
+
+
 def followup_conversas_paradas():
     """Ciclo do follow-up: acha conversas pending com cliente silencioso
     na janela configurada e manda UMA mensagem de retomada por conversa.
@@ -1475,9 +1493,12 @@ def followup_conversas_paradas():
             continue
         if _followup_ja_enviado(conv_id):
             continue
-        historico = chatwoot.buscar_historico(conv_id)
+        historico = chatwoot.buscar_historico(
+            conv_id, incluir_autoria=True, somente_bot=True)
         if not historico:
             continue
+        if _tem_encaminhamento_humano(carregar_historico(conv_id)):
+            continue  # um encaminhamento humano não vence por tempo
         # Ultima mensagem tem que ser NOSSA (cliente silencioso).
         ultima = historico[-1]
         if ultima.get('role') != 'assistant':
@@ -1490,25 +1511,27 @@ def followup_conversas_paradas():
             continue
         if not texto:
             continue
-        envio = chatwoot.enviar_mensagem(conv_id, texto)
-        ok = bool(envio.get('ok'))
-        _followup_registrar(conv_id, c.get('nome_contato') or '',
-                            minutos, texto, ok)
-        if ok:
-            enviadas += 1
-            # Persiste o cutucao no store local — sem isso o proximo turno do
-            # bot nao sabia que cutucou. Mescla no ultimo assistant (a API
-            # nao aceita dois turnos assistant seguidos). Locks do webhook
-            # em volta do read-modify-write (revisao 19/07/2026 — mesmo
-            # racional da vassoura).
-            try:
-                from app.blueprints.crm.routes import (
-                    _lock_conv_cross_worker,
-                    _lock_para_conv,
-                )
-                with _lock_para_conv(conv_id), \
-                        _lock_conv_cross_worker(conv_id):
-                    base = carregar_historico(conv_id)
+        from app.blueprints.crm.routes import (
+            _lock_conv_cross_worker,
+            _lock_para_conv,
+        )
+        # Serializa a validação, envio e persistência com webhook/vassoura.
+        # Um handoff pode ter acontecido enquanto o texto era gerado, antes
+        # de o Chatwoot refletir a mudança de status.
+        with _lock_para_conv(conv_id), _lock_conv_cross_worker(conv_id):
+            base = carregar_historico(conv_id)
+            if _tem_encaminhamento_humano(base) or _followup_ja_enviado(conv_id):
+                continue
+            if chatwoot.buscar_historico(
+                    conv_id, incluir_autoria=True, somente_bot=True) != historico:
+                continue
+            envio = chatwoot.enviar_mensagem(conv_id, texto)
+            ok = bool(envio.get('ok'))
+            _followup_registrar(conv_id, c.get('nome_contato') or '',
+                                minutos, texto, ok)
+            if ok:
+                enviadas += 1
+                try:
                     if base and base[-1].get('role') == 'assistant':
                         base[-1]['content'] = (
                             (base[-1].get('content') or '')
@@ -1516,9 +1539,10 @@ def followup_conversas_paradas():
                     else:
                         base.append({'role': 'assistant', 'content': texto})
                     salvar_historico(conv_id, base, '')
-            except Exception:  # noqa: BLE001
-                logger.exception('followup: persistir no store falhou conv=%s',
-                                 conv_id)
+                except Exception:  # noqa: BLE001
+                    logger.exception('followup: persistir no store falhou conv=%s',
+                                     conv_id)
+        if ok:
             logger.info('followup enviado conv=%s (%smin)', conv_id, minutos)
         else:
             logger.warning('followup falhou conv=%s: %s', conv_id, envio)
@@ -1552,7 +1576,8 @@ def varrer_pendentes_sem_resposta():
         minutos = c.get('minutos_paradas', 0)
         if not conv_id or minutos > max_sil:
             continue
-        api_hist = chatwoot.buscar_historico(conv_id)
+        api_hist = chatwoot.buscar_historico(
+            conv_id, incluir_autoria=True, somente_bot=True)
         if not api_hist:
             continue
         # So quando a ULTIMA mensagem e do CLIENTE (o bot ficou devendo).
@@ -1571,6 +1596,10 @@ def varrer_pendentes_sem_resposta():
         )
         try:
             with _lock_para_conv(conv_id), _lock_conv_cross_worker(conv_id):
+                atual = chatwoot.buscar_historico(
+                    conv_id, incluir_autoria=True, somente_bot=True)
+                if atual != api_hist:
+                    continue
                 # O STORE local e a fonte confiavel de contexto (40 msgs +
                 # marcadores handoff_em); a API do Chatwoot (20 msgs,
                 # instavel) so diz O QUE FALTA responder. Antes a vassoura
@@ -1579,6 +1608,12 @@ def varrer_pendentes_sem_resposta():
                 # store; anexa as msgs finais do cliente (texto E imagens)
                 # que o store nao tem.
                 store = carregar_historico(conv_id)
+                if _tem_encaminhamento_humano(store):
+                    # Recuperar um bot interrompido é diferente de devolver
+                    # uma espera humana ao bot. Mantém a fila sem nova fala,
+                    # mesmo depois da janela de dedupe de 90 minutos.
+                    chatwoot.definir_status(conv_id, 'open')
+                    continue
                 if store:
                     pendentes = []
                     for m in reversed(api_hist):
@@ -1611,7 +1646,8 @@ def varrer_pendentes_sem_resposta():
                         historico.append(msg)
                 else:
                     historico = api_hist
-                resultado = responder(historico, telefone_contato=telefone)
+                resultado = responder(historico, telefone_contato=telefone,
+                                      conversa_id=conv_id)
                 acao = (resultado or {}).get('acao')
                 texto = (resultado or {}).get('texto') or ''
                 # Mesmo dedupe do webhook: conversa ja transferida ha pouco
@@ -1619,6 +1655,9 @@ def varrer_pendentes_sem_resposta():
                 if acao == 'handoff' and handoff_recente(conv_id):
                     acao = 'handoff_repetido'
                     texto = TEXTO_HANDOFF_REPETIDO
+                if chatwoot.buscar_historico(
+                        conv_id, incluir_autoria=True, somente_bot=True) != api_hist:
+                    continue
                 if texto:
                     envio = chatwoot.enviar_mensagem(conv_id, texto)
                     if envio.get('ok'):

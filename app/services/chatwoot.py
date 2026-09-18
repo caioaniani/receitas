@@ -155,7 +155,7 @@ def enviar_mensagem_painel(conversation_id, content):
         return {'ok': False, 'erro': str(exc)}
 
 
-def enviar_mensagem(conversation_id, content):
+def enviar_mensagem(conversation_id, content, *, status_esperado=None):
     """Posta uma resposta do bot numa conversa. Retorna {'ok': bool}.
 
     Guarda de INSTÂNCIA CANÔNICA (20/08/2026): o Chatwoot é EXTERNO e
@@ -171,6 +171,10 @@ def enviar_mensagem(conversation_id, content):
         return {'ok': False, 'erro': 'Chatwoot bot nao configurado'}
     url = f'{_base()}/conversations/{conversation_id}/messages'
     try:
+        if status_esperado is not None:
+            atual = consultar_conversa(conversation_id)
+            if not atual or atual.get('status') != status_esperado:
+                return {'ok': False, 'pulou': 'status_nao_confirmado'}
         r = requests.post(url, json={'content': content, 'message_type': 'outgoing'},
                           headers=_bot_headers(), timeout=10)
         if r.status_code not in (200, 201):
@@ -229,7 +233,8 @@ def _mensagem_humana(m):
                      or atributos.get('external_echo')))
 
 
-def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False):
+def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
+                     somente_bot=False):
     """Mensagens recentes da conversa, em ordem cronologica, mapeadas pra
     [{'role': 'user'|'assistant', 'content': str, 'imagens'?: [url]}] (pro
     Claude). Cliente = user (incoming), bot/atendente = assistant (outgoing).
@@ -264,7 +269,7 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False):
     msgs = data.get('payload') if isinstance(data, dict) else data
     if not isinstance(msgs, list):
         return []
-    if incluir_autoria:
+    if incluir_autoria or somente_bot:
         # Notas internas e automações podem ocupar a página inteira. Procura
         # uma fronteira real (cliente/humano), em vez de concluir silêncio.
         lote = msgs
@@ -300,7 +305,7 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False):
         mt = m.get('message_type')
         imagens = [a.get('data_url') for a in (m.get('attachments') or [])
                    if a.get('file_type') == 'image' and a.get('data_url')]
-        if incluir_autoria and not content and m.get('attachments'):
+        if (incluir_autoria or somente_bot) and not content and m.get('attachments'):
             content = '[Mensagem com anexo]'
         if not content and not imagens:
             continue
@@ -321,9 +326,18 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False):
                 continue  # imagem do bot/atendente nao precisa ir pro Claude
             hist.append({'role': 'assistant', 'content': content,
                          'created_at': ts})
-        if incluir_autoria and mt in ('incoming', 0, 'outgoing', 1) and hist:
+        if (incluir_autoria or somente_bot) and mt in ('incoming', 0, 'outgoing', 1) and hist:
             hist[-1]['humano'] = _mensagem_humana(m)
             hist[-1]['message_id'] = m.get('id')
+    if somente_bot:
+        # Rotinas sem nova mensagem do cliente não podem retomar atendimento
+        # humano. A listagem de pending é apenas um retrato anterior; falha de
+        # leitura ou mudança de status cancela a intervenção automática.
+        if any(m.get('humano') for m in hist):
+            return []
+        atual = consultar_conversa(conversation_id)
+        if not atual or atual.get('status') != 'pending':
+            return []
     return hist if incluir_autoria else hist[-limite:]
 
 

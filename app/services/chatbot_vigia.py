@@ -1042,7 +1042,11 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
                             '(duplicaria pro contato)', conv_id)
             else:
                 try:
-                    resultado_contencao = chatwoot.enviar_mensagem(conv_id, TEXTO_CONTENCAO_ESPERA)
+                    # O acompanhamento inclui pending/snoozed, mas esta fala
+                    # exige atendimento humano. O gateway reconfirma o status
+                    # imediatamente antes de enviar a mensagem ao cliente.
+                    resultado_contencao = chatwoot.enviar_mensagem(
+                        conv_id, TEXTO_CONTENCAO_ESPERA, status_esperado='open')
                     if resultado_contencao and resultado_contencao.get('ok'):
                         espera.contencao_em = agora()
                         db.session.commit()
