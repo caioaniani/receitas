@@ -1,6 +1,9 @@
 {% extends 'loja/_base.html' %}
 {% block title %}Agendar {{ kit.nome|texto_opcao_cafe }} — O Pão{% endblock %}
-{% block styles %}<link rel="stylesheet" href="{{ url_for('loja.static', filename='kits.css') }}?v={{ static_v['loja/kits.css'] }}">{% endblock %}
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('loja.static', filename='kits.css') }}?v={{ static_v['loja/kits.css'] }}">
+<link rel="stylesheet" href="{{ url_for('loja.static', filename='fiscal-cnpj.css') }}?v={{ static_v['loja/fiscal-cnpj.css'] }}">
+{% endblock %}
 {% block content %}
 <section class="kits-compra">
   {% set grupos_kit = grupos|default([]) %}
@@ -111,6 +114,7 @@
           <label for="kit-cpf">CPF ou CNPJ<input type="text" name="cpf" id="kit-cpf" inputmode="numeric" maxlength="18" value="{{ form.get('cpf', '') }}" required></label>
         </div>
       </section>
+      {% include 'loja/_fiscal_cnpj.html' %}
     </div>
     <aside class="kits-order-summary checkout-bloco" aria-labelledby="kit-resumo-titulo">
       {% if kit_imagens %}
@@ -198,5 +202,6 @@
 </section>
 {% endblock %}
 {% block scripts %}
+<script src="{{ url_for('loja.static', filename='fiscal-cnpj.js') }}?v={{ static_v['loja/fiscal-cnpj.js'] }}" defer></script>
 <script src="{{ url_for('loja.static', filename='kits.js') }}?v={{ static_v['loja/kits.js'] }}" defer></script>
 {% endblock %}

@@ -223,6 +223,31 @@
       $('#t-total').textContent = fmtBRL(total);
     }
 
+    function aplicarEnderecoFiscal() {
+      var modo = modoSelecionado();
+      var doc = form.querySelector('[name="cpf"]');
+      var pj = doc && (doc.value || '').replace(/\D/g, '').length === 14;
+      var retiradaPJ = modo === 'retirada' && pj;
+      var bloco = document.getElementById('bloco-entrega');
+      bloco.style.display = retiradaPJ ? 'none' : 'block';
+      // PJ informa endereço fiscal no bloco próprio; a retirada não usa entrega.
+      // Valores ficam preservados caso o cliente volte a escolher entrega/CPF.
+      // Botões mantêm o estado da cotação assíncrona; não restaurar um
+      // disabled antigo quando a consulta de frete já terminou.
+      bloco.querySelectorAll('input, select, textarea').forEach(function (input) {
+        if (retiradaPJ) {
+          if (!input.hasAttribute('data-fiscal-disabled-anterior')) {
+            input.setAttribute('data-fiscal-disabled-anterior', input.disabled ? '1' : '0');
+          }
+          input.disabled = true;
+        } else if (input.hasAttribute('data-fiscal-disabled-anterior')) {
+          input.disabled = input.getAttribute('data-fiscal-disabled-anterior') === '1';
+          input.removeAttribute('data-fiscal-disabled-anterior');
+        }
+      });
+    }
+    form.addEventListener('fiscal:tipo', aplicarEnderecoFiscal);
+
     function aplicarModo() {
       var modo = modoSelecionado();
       var ehEntrega = (modo === 'agendada' || modo === 'express');
@@ -255,6 +280,7 @@
       popularJanelas(modo);
       atualizarTotais();
       conferirEndereco();
+      aplicarEnderecoFiscal();
     }
 
     // ── Conferência do endereço (dono 09/08/2026, pós-Dia dos Pais:

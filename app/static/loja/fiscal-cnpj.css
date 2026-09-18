@@ -1,0 +1,17 @@
+.fiscal-cnpj[hidden] { display: none !important; }
+.fiscal-campos { border: 0; padding: 0; margin: 0; min-width: 0; }
+.fiscal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.fiscal-grid label { display: block; margin: 0; font-size: 14px; }
+.fiscal-grid input, .fiscal-grid select {
+  display: block; box-sizing: border-box; width: 100%; min-width: 0; margin-top: 5px;
+  padding: 11px 12px; border: 1px solid var(--linha, #ddd3c4); border-radius: 4px;
+  background: #fff; color: var(--texto, #333); font: inherit;
+}
+.fiscal-grid input:focus, .fiscal-grid select:focus { outline: 2px solid var(--texto, #333); outline-offset: 2px; }
+.fiscal-linha-inteira { grid-column: 1 / -1; }
+.fiscal-status { margin: 10px 0 16px; }
+.fiscal-status:empty { display: none; }
+.fiscal-confirmacao { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; }
+.fiscal-confirmacao input { flex: 0 0 auto; width: auto; margin-top: 3px; }
+.fiscal-grid [hidden] { display: none !important; }
+@media (max-width: 560px) { .fiscal-grid { grid-template-columns: minmax(0, 1fr); } }

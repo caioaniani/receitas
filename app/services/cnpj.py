@@ -57,11 +57,11 @@ def _normalizar(d):
     }
 
 
-def _consultar_url(url):
+def _consultar_url(url, *, timeout=_TIMEOUT):
     """GET num provedor. Devolve dict do JSON, 'nao_encontrado' (404) ou
     None (erro/transiente — tenta o próximo provedor)."""
     try:
-        r = requests.get(url, timeout=_TIMEOUT,
+        r = requests.get(url, timeout=timeout,
                          headers={'Accept': 'application/json'})
     except requests.RequestException as exc:
         logger.warning('cnpj: %s falhou (%s)', url, type(exc).__name__)
@@ -79,7 +79,7 @@ def _consultar_url(url):
     return d if isinstance(d, dict) else None
 
 
-def consultar(cnpj):
+def consultar(cnpj, *, timeout=_TIMEOUT):
     """Consulta o CNPJ nos provedores em cascata. Devolve o dict
     normalizado (com 'cnpj' incluso) ou {'erro': mensagem}."""
     digitos = _so_digitos(cnpj)
@@ -89,7 +89,7 @@ def consultar(cnpj):
             f'https://minhareceita.org/{digitos}')
     achou_404 = False
     for url in urls:
-        d = _consultar_url(url)
+        d = _consultar_url(url, timeout=timeout)
         if d == 'nao_encontrado':
             achou_404 = True
             continue

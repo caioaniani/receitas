@@ -10,10 +10,29 @@ Cada checkout, incluindo cada entrega de kit, congela CPF/CNPJ em
 documento. Ao mudar o documento de um cliente, pedidos legados sem snapshot
 preservam o valor anterior. Dados antigos já incorretos exigem conferência.
 
-Antes de incluir NF com CNPJ, consulta o cadastro interno do Tiny por documento
-exato (duplicatas são pendência), consulta a base CNPJ pública para razão social
-e endereço e aproveita a IE do Tiny quando está na mesma UF. As APIs públicas
-atualmente usadas não fornecem IE: ausência não significa isenção.
+No checkout comum e nos kits, digitar CNPJ consulta razão social, endereço fiscal
+e IE na base pública CNPJ.ws. Só aproveita uma IE ativa, do CNPJ exato e da UF
+do endereço fiscal, sem ambiguidade. A cobertura de IE depende da UF (inclui SP).
+É uma base cadastral, não uma validação em tempo real na SEFAZ. O cliente confere
+os campos; endereço de entrega e contato do comprador não são substituídos.
+
+O servidor assina o resultado da consulta por duas horas. Documento e campos
+devem corresponder à consulta para a IE ser considerada encontrada. Alteração
+manual, ausência de IE ou consulta indisponível permitem a compra, mas deixam
+a emissão pendente de conferência do owner. Ausência nunca significa isenção.
+Cada entrega de kit recebe seu próprio snapshot na mesma transação, sem novas
+chamadas externas; a conferência do cliente não registra aprovação do owner.
+
+Cache e reserva global de chamadas ficam em tabelas novas, compartilhados entre
+workers. Respeitam o limite público de três consultas por minuto sem esperar
+dentro da transação do checkout. Quando necessário, BrasilAPI/MinhaReceita
+completam somente os dados cadastrais. O endpoint público usa CSRF, limite por
+cliente e lista explícita de campos; não consulta nem expõe contatos do Tiny.
+
+Pedidos legados continuam consultando o cadastro interno do Tiny por documento
+exato (duplicatas são pendência), a base CNPJ para razão social e endereço e a IE
+do Tiny quando está na mesma UF. Uma reconsulta explícita do owner pode atualizar
+o snapshot; emissões automáticas preservam o que foi conferido no checkout.
 
 Sem dados completos, a emissão fica pendente no detalhe do pedido. Somente o
 owner pode consultar novamente ou confirmar razão social, endereço e condição
@@ -50,5 +69,5 @@ cron existente a cada cinco minutos, independentemente do modelo de IA.
   casos ainda sem aviso. Claim anterior ao envio evita duplicação no restart;
   falha confirmada permite nova tentativa.
 
-As duas tabelas são novas e criadas pelo `create_all` serializado do startup.
+As tabelas adicionais são novas e criadas pelo `create_all` serializado do startup.
 Não há alteração de colunas antigas nem emissão retroativa em massa.

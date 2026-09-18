@@ -1065,6 +1065,23 @@ def checkout():
     return render_template('loja/checkout.html', **_ctx_checkout())
 
 
+@loja_bp.route('/api/cnpj', methods=['POST'])
+@limiter.limit('10 per minute')
+def api_cnpj():
+    """Autocompleta somente dados públicos; CSRF e orçamento global do provedor."""
+    from app.services import checkout_fiscal, consulta_empresa
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify(erro='Informe um CNPJ válido.'), 400
+    doc = loja_checkout._so_digitos(str(body.get('cnpj') or ''))
+    if not loja_checkout._cnpj_valido(doc):
+        return jsonify(erro='Informe um CNPJ válido.'), 400
+    consulta = consulta_empresa.consultar(doc)
+    resposta = jsonify(checkout_fiscal.resposta_consulta(doc, consulta))
+    resposta.headers['Cache-Control'] = 'no-store'
+    return resposta
+
+
 @loja_bp.route('/api/cep/<cep>', methods=['GET'])
 @limiter.limit('30 per minute')
 def api_cep(cep):

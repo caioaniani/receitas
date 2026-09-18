@@ -1,0 +1,71 @@
+{% set fiscal_doc = form.get('cpf', '')|replace('.', '')|replace('/', '')|replace('-', '')|replace(' ', '') %}
+{% set fiscal_pj = fiscal_doc|length == 14 %}
+<input type="hidden" name="fiscal_checkout" value="1">
+<section class="checkout-bloco fiscal-cnpj" data-fiscal-cnpj
+         data-consulta-url="{{ url_for('loja.api_cnpj') }}"
+         aria-labelledby="fiscal-titulo" {{ 'hidden' if not fiscal_pj }}>
+  <h2 id="fiscal-titulo">Nota fiscal da empresa</h2>
+  <p class="small">Confira a razão social e o endereço fiscal do CNPJ informado.
+    O endereço de entrega é escolhido separadamente.</p>
+  <fieldset class="fiscal-campos" {{ 'disabled' if not fiscal_pj }}>
+    <input type="hidden" name="fiscal_token" value="{{ form.get('fiscal_token', '') }}">
+    <button type="button" class="btn-loja-secundario" data-fiscal-consultar>Consultar dados do CNPJ</button>
+    <p class="fiscal-status small" data-fiscal-status role="status" aria-live="polite"></p>
+    <div class="fiscal-grid">
+      <label class="fiscal-linha-inteira" for="fiscal-nome">Razão social
+        <input type="text" name="fiscal_nome" id="fiscal-nome" maxlength="50"
+               autocomplete="organization" value="{{ form.get('fiscal_nome', '') }}" required>
+      </label>
+      <label for="fiscal-cep">CEP fiscal
+        <input type="text" name="fiscal_cep" id="fiscal-cep" inputmode="numeric" maxlength="9"
+               autocomplete="section-fiscal postal-code" value="{{ form.get('fiscal_cep', '') }}" required>
+      </label>
+      <label for="fiscal-endereco">Rua ou avenida
+        <input type="text" name="fiscal_endereco" id="fiscal-endereco" maxlength="50"
+               autocomplete="section-fiscal address-line1" value="{{ form.get('fiscal_endereco', '') }}" required>
+      </label>
+      <label for="fiscal-numero">Número
+        <input type="text" name="fiscal_numero" id="fiscal-numero" maxlength="10"
+               value="{{ form.get('fiscal_numero', '') }}" required>
+      </label>
+      <label for="fiscal-complemento">Complemento (opcional)
+        <input type="text" name="fiscal_complemento" id="fiscal-complemento" maxlength="50"
+               autocomplete="section-fiscal address-line2" value="{{ form.get('fiscal_complemento', '') }}">
+      </label>
+      <label for="fiscal-bairro">Bairro
+        <input type="text" name="fiscal_bairro" id="fiscal-bairro" maxlength="30"
+               value="{{ form.get('fiscal_bairro', '') }}" required>
+      </label>
+      <label for="fiscal-cidade">Cidade
+        <input type="text" name="fiscal_cidade" id="fiscal-cidade" maxlength="30"
+               autocomplete="section-fiscal address-level2" value="{{ form.get('fiscal_cidade', '') }}" required>
+      </label>
+      <label for="fiscal-uf">Estado (UF)
+        <input type="text" name="fiscal_uf" id="fiscal-uf" maxlength="2" minlength="2"
+               autocomplete="section-fiscal address-level1" value="{{ form.get('fiscal_uf', '') }}" required>
+      </label>
+      <label for="fiscal-situacao-ie">Inscrição estadual da empresa
+        <select name="fiscal_situacao_ie" id="fiscal-situacao-ie" required>
+          <option value="">Selecione a situação</option>
+          {% for valor, rotulo in [('contribuinte', 'Possui inscrição estadual'), ('isento', 'Isenta de inscrição estadual'), ('nao_contribuinte', 'Não é contribuinte de ICMS'), ('desconhecida', 'Não sei informar')] %}
+          <option value="{{ valor }}" {{ 'selected' if form.get('fiscal_situacao_ie') == valor }}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label for="fiscal-ie" data-fiscal-ie-campo>Inscrição estadual (IE)
+        <input type="text" name="fiscal_ie" id="fiscal-ie" maxlength="18"
+               value="{{ form.get('fiscal_ie', '') }}" aria-describedby="fiscal-ie-ajuda">
+      </label>
+    </div>
+    <p class="small" id="fiscal-ie-ajuda" data-fiscal-ie-aviso>
+      A consulta pode não trazer a inscrição estadual. Informe a IE ou selecione a situação correta;
+      se não souber, escolha “Não sei informar” para conferência pela equipe.
+      A inscrição estadual informada manualmente também será conferida pela equipe antes da emissão.
+    </p>
+    <label class="aceite fiscal-confirmacao" for="fiscal-confirmado">
+      <input type="checkbox" name="fiscal_confirmado" id="fiscal-confirmado" value="1" required
+             {{ 'checked' if form.get('fiscal_confirmado') == '1' }}>
+      Conferi o CNPJ e os dados fiscais da empresa acima.
+    </label>
+  </fieldset>
+</section>

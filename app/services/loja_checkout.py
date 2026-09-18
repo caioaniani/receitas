@@ -658,6 +658,9 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     telefone, telefone_erro = _normalizar_telefone_checkout(
         form.get('telefone'))
     cpf = _so_digitos(form.get('cpf') or '')
+    from app.services import checkout_fiscal
+    fiscal_snapshot, fiscal_erros = checkout_fiscal.validar(form, cpf)
+    erros.extend(fiscal_erros)
     modo = (form.get('modo_entrega') or '').strip()
     cartinha = (form.get('cartinha') or '').strip() or None
     # Cartinha tem limite (23/06/2026, decisão do dono — clientes empolgavam).
@@ -770,11 +773,16 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
         # dono); a linha `endereco_entrega` acima segue mostrando a loja pra
         # operacao. Reusa os MESMOS campos do form (o checkout mostra o bloco
         # de endereco na retirada tambem).
-        logradouro = (form.get('logradouro') or '').strip()
-        numero = (form.get('numero') or '').strip()
-        bairro = (form.get('bairro') or '').strip()
-        cidade = (form.get('cidade') or '').strip()
-        uf = (form.get('uf') or '').strip().upper()[:2]
+        fiscal_retirada = fiscal_snapshot['dados'] if fiscal_snapshot else None
+        dados_retirada = ({**fiscal_retirada, 'logradouro': fiscal_retirada['endereco']}
+                          if fiscal_retirada else form)
+        if fiscal_retirada:
+            endereco_cep = fiscal_retirada['cep']
+        logradouro = (dados_retirada.get('logradouro') or '').strip()
+        numero = (dados_retirada.get('numero') or '').strip()
+        bairro = (dados_retirada.get('bairro') or '').strip()
+        cidade = (dados_retirada.get('cidade') or '').strip()
+        uf = (dados_retirada.get('uf') or '').strip().upper()[:2]
         # Exige o CONJUNTO que a SEFAZ pede (bairro/UF inclusos): no caminho
         # feliz vêm READONLY do CEP; exigir aqui fecha a armadilha do
         # fail-open (CEP fora do ar / CEP sem rua) — sem isso o pedido pago
@@ -786,7 +794,7 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
             erros.append('Informe o logradouro (rua/avenida) para a nota fiscal.')
         if not numero:
             erros.append('Informe o número do endereço para a nota fiscal.')
-        elif not numero.isdigit():
+        elif not fiscal_retirada and not numero.isdigit():
             # Mesma regra da entrega (dono 09/08/2026): numero so digitos.
             erros.append('O número do endereço deve conter apenas números '
                          '(apto/bloco vão no campo complemento).')
@@ -798,7 +806,7 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
             erros.append('Informe o estado (UF) para a nota fiscal.')
         end_logradouro = logradouro or None
         end_numero = numero or None
-        end_complemento = (form.get('complemento') or '').strip() or None
+        end_complemento = (dados_retirada.get('complemento') or '').strip() or None
         end_bairro = bairro or None
         end_cidade = cidade or None
         end_uf = uf or None
@@ -1046,6 +1054,8 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     db.session.flush()
     from app.services.fiscal_online import congelar_documento
     congelar_documento(pedido, cpf)
+    if fiscal_snapshot:
+        checkout_fiscal.salvar(pedido, fiscal_snapshot)
     for it in itens:
         poi = PedidoOnlineItem(
             kind=it['kind'],

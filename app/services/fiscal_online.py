@@ -81,6 +81,10 @@ def consultar(pedido, *, forcar=False):
     row = congelar_documento(pedido, documento(pedido))
     if len(row.documento) != 14 or (row.confirmado_em and not forcar):
         return row
+    # Preserva o que o comprador conferiu, inclusive pendências de declaração.
+    # Apenas uma consulta explícita do owner pode substituir esse snapshot.
+    if not forcar and row.origem in ('checkout_consulta', 'checkout_declarado'):
+        return row
     if not forcar and row.consultado_em:
         from datetime import timedelta
         if not row.erro or row.consultado_em > agora() - timedelta(minutes=15):
@@ -88,9 +92,18 @@ def consultar(pedido, *, forcar=False):
     if forcar:
         row.confirmado_em = None
         row.confirmado_por_id = None
+    do_checkout = row.origem in ('checkout_consulta', 'checkout_declarado')
     contato_res = tiny.buscar_contato_por_documento(row.documento)
     contato = contato_res.get('contato') or {}
-    publico = cnpj.consultar(row.documento)
+    consulta_checkout = None
+    if do_checkout:
+        from app.services import consulta_empresa
+        consulta_checkout = consulta_empresa.consultar(row.documento)
+        dados_checkout = consulta_checkout.get('dados') or {}
+        publico = {**dados_checkout, 'razao_social': dados_checkout.get('nome'),
+                   'logradouro': dados_checkout.get('endereco')}
+    else:
+        publico = cnpj.consultar(row.documento)
     dados = {}
     origem = []
     if contato:
@@ -100,19 +113,24 @@ def consultar(pedido, *, forcar=False):
     if not publico.get('erro') and publico.get('razao_social'):
         dados.update(_endereco_publico(publico))
         dados['nome'] = publico['razao_social']
-        origem.append('cnpj')
+        origem.append(consulta_checkout['origem'] if consulta_checkout else 'cnpj')
+    ie_publica = bool(consulta_checkout and
+                      dados_checkout.get('situacao_ie') == 'contribuinte' and
+                      digitos(dados_checkout.get('ie')))
+    if ie_publica:
+        dados['ie'] = digitos(dados_checkout['ie'])
     row.dados = dados
     row.origem = '+'.join(origem) or 'pendente'
     ie = str(dados.get('ie') or '').strip()
     row.situacao_ie = ('isento' if ie.upper() == 'ISENTO' else
                        'contribuinte' if digitos(ie) else None)
-    if ie and contato.get('uf', '').upper() != dados.get('uf', '').upper():
+    if ie and not ie_publica and contato.get('uf', '').upper() != dados.get('uf', '').upper():
         row.situacao_ie = None  # IE é estadual; não transporta inscrição entre UFs.
     row.consultado_em = agora()
     faltando = pendencias(row)
     row.erro = ('Confira os dados fiscais: ' + ', '.join(faltando) + '.'
                 if faltando else None)
-    if contato_res.get('erro'):
+    if contato_res.get('erro') and not ie_publica:
         row.erro = (row.erro or '') + ' Consulta ao cadastro Tiny indisponível; tente consultar novamente.'
     db.session.flush()
     return row
@@ -127,7 +145,8 @@ def payload_cliente(pedido):
     faltando = pendencias(row)
     if faltando or row.erro:
         return None, row.erro or ('Confira os dados fiscais: ' + ', '.join(faltando) + '.')
-    cliente = dict(row.dados)
+    cliente = {campo: row.dados[campo] for campo in ('nome', 'codigo', 'ie', *ENDERECO)
+               if campo in row.dados}
     cliente.update(tipo_pessoa='J', cpf_cnpj=row.documento, atualizar_cliente='N',
                    email=pedido.email_cliente, fone=pedido.telefone_cliente or '')
     cliente['ie'] = ('ISENTO' if row.situacao_ie == 'isento' else

@@ -7,6 +7,7 @@ from app.models.catalogo import *  # noqa: F401, F403
 from app.models.checklist import *  # noqa: F401, F403
 from app.models.cobrancas_automacao import *  # noqa: F401, F403
 from app.models.config import *  # noqa: F401, F403
+from app.models.consulta_empresa import *  # noqa: F401, F403
 from app.models.entregas import *  # noqa: F401, F403
 from app.models.espera_atendimento import *  # noqa: F401, F403
 from app.models.estoque import *  # noqa: F401, F403
