@@ -1,0 +1,46 @@
+{% if fiscal and fiscal.documento|length == 14 %}
+<section class="card mb-3">
+  <div class="card-header fw-bold">Dados fiscais da empresa</div>
+  <div class="card-body">
+    <p>CNPJ: <strong>{{ fiscal.documento }}</strong>. O endereço fiscal é separado do endereço de entrega.</p>
+    {% if fiscal.erro %}<div class="alert alert-warning">{{ fiscal.erro }}</div>{% endif %}
+    {% if current_user.is_owner and fiscal.editavel %}
+    {% if p.tiny_nota_fiscal_id %}<p class="text-warning-emphasis">Já existe um rascunho no Tiny. Salvar aqui não altera essa nota: corrija o rascunho no Tiny e confira os mesmos dados abaixo antes de tentar autorizar.</p>{% endif %}
+    <form method="POST" action="{{ url_for('main.loja_online_cadastro_fiscal', codigo=p.codigo) }}" class="mb-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
+      <input type="hidden" name="acao" value="consultar">
+      <button class="btn btn-outline-primary btn-sm">Buscar dados pelo CNPJ</button>
+    </form>
+    <form method="POST" action="{{ url_for('main.loja_online_cadastro_fiscal', codigo=p.codigo) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
+      <div class="row g-2">
+        {% for chave, rotulo, limite in [('nome','Razão social',150), ('endereco','Logradouro fiscal',200), ('numero','Número (ou SN)',20), ('complemento','Complemento',100), ('bairro','Bairro',100), ('cidade','Cidade',100), ('uf','UF',2), ('cep','CEP',8)] %}
+        <div class="col-md-{{ 12 if chave in ['nome','endereco'] else 6 }}">
+          <label for="fiscal-{{ chave }}" class="form-label">{{ rotulo }}</label>
+          <input id="fiscal-{{ chave }}" name="{{ chave }}" class="form-control" maxlength="{{ limite }}"
+                 value="{{ fiscal.dados.get(chave, '') }}" {% if chave != 'complemento' %}required{% endif %}>
+        </div>
+        {% endfor %}
+        <div class="col-md-6">
+          <label for="fiscal-situacao" class="form-label">Inscrição estadual</label>
+          <select id="fiscal-situacao" name="situacao_ie" class="form-select" required>
+            <option value="">Selecione após conferir</option>
+            {% for valor, rotulo in [('contribuinte','Contribuinte — possui IE'), ('isento','Contribuinte isento'), ('nao_contribuinte','Não contribuinte')] %}
+            <option value="{{ valor }}" {% if fiscal.situacao_ie == valor %}selected{% endif %}>{{ rotulo }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6"><label for="fiscal-ie" class="form-label">Número da IE, quando houver</label>
+          <input id="fiscal-ie" name="ie" class="form-control" maxlength="18" value="{{ fiscal.dados.get('ie', '') }}"></div>
+      </div>
+      <div class="form-check my-3"><input id="fiscal-conferido" name="conferido" value="1" type="checkbox" class="form-check-input" required>
+        <label for="fiscal-conferido" class="form-check-label">Conferi os dados fiscais e a condição de contribuinte no cadastro do Tiny.</label></div>
+      <button class="btn btn-primary btn-sm">Salvar dados fiscais</button>
+    </form>
+    {% else %}
+      {% if fiscal.dados %}<p>{{ fiscal.dados.get('nome', '') }}<br>{{ fiscal.dados.get('endereco', '') }}, {{ fiscal.dados.get('numero', '') }} — {{ fiscal.dados.get('cidade', '') }}/{{ fiscal.dados.get('uf', '') }}</p>{% endif %}
+      <p class="mb-0">{% if not fiscal.editavel %}A nota já foi criada. Uma correção deve ser conferida na nota existente no Tiny.{% else %}O dono pode conferir os dados fiscais neste pedido.{% endif %}</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}

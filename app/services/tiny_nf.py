@@ -324,8 +324,8 @@ def _payload_cliente(pedido):
     ('endereco/bairro/cidade em branco'). O endereco vem do snapshot do
     pedido (entrega). Retirada nao coleta endereco -> campos vazios (NF de
     pedido de retirada exigiria coletar o endereco do cliente a parte)."""
-    cli = getattr(pedido, 'cliente', None)
-    doc = _so_digitos(getattr(cli, 'cpf', '') if cli else '')
+    from app.services.fiscal_online import documento
+    doc = documento(pedido)
     return {
         'nome': pedido.nome_cliente,
         # O campo `cpf` do Cliente guarda CPF (11 dígitos) ou CNPJ (14) —
@@ -386,7 +386,7 @@ def _payload_itens(pedido):
     return out, faltando
 
 
-def _nota_payload(pedido, itens):
+def _nota_payload(pedido, itens, cliente=None):
     """Monta a NF pro `nota.fiscal.incluir` com o cabeçalho fiscal EXPLÍCITO:
     tipo de saída, natureza de operação e série.
 
@@ -396,19 +396,27 @@ def _nota_payload(pedido, itens):
     respeita. NCM/CFOP/CST continuam vindo do cadastro do produto via SKU."""
     from flask import current_app
     cfg = current_app.config
-    return {
+    payload = {
         'tipo': 'S',  # saída (venda)
         'natureza_operacao': cfg.get('NF_NATUREZA_OPERACAO',
                                      'Venda de mercadorias'),
         'serie': str(cfg.get('NF_SERIE', '1')),
         'data_emissao': agora().strftime('%d/%m/%Y'),
-        'cliente': _payload_cliente(pedido),
+        'cliente': cliente if cliente is not None else _payload_cliente(pedido),
         'itens': itens,
         'valor_frete': float(pedido.frete_valor or 0),
         # Modalidade do frete — obrigatório no Tiny. Letra, não número
         # ("0" vira vazio no PHP do Tiny). 'R' = por conta do emitente.
         'frete_por_conta': str(cfg.get('NF_FRETE_POR_CONTA', 'R')),
     }
+    if cliente is not None and pedido.modo_entrega != 'retirada':
+        payload['endereco_entrega'] = {
+            'tipo_pessoa': 'J', 'cpf_cnpj': cliente['cpf_cnpj'],
+            'nome_destinatario': pedido.nome_destinatario or pedido.nome_cliente,
+            **{campo: getattr(pedido, 'endereco_' + ('logradouro' if campo == 'endereco' else campo)) or ''
+               for campo in ('endereco', 'numero', 'complemento', 'bairro', 'cep', 'cidade', 'uf')},
+        }
+    return payload
 
 
 def _sincronizar_situacao(pedido):
@@ -429,15 +437,25 @@ def _sincronizar_situacao(pedido):
     # `status` (numérico). Vamos varrer tudo pra ser robustos.
     sigs = ' '.join(
         str(nf.get(k) or '').strip().lower()
-        for k in ('situacao', 'situacao_descricao', 'status',
+        for k in ('situacao', 'descricao_situacao', 'situacao_descricao', 'status',
                   'status_nfe', 'status_processamento')
     )
     if not sigs.strip():
         logger.info('tiny obter NF %s: sem situacao (campos=%s)',
                     pedido.tiny_nota_fiscal_id, list(nf.keys())[:20])
         return None
-    autorizada = ('autoriz' in sigs) or ('emitida' in sigs)
-    rejeitada = ('rejeit' in sigs) or ('denegad' in sigs)
+    # Situação da NOTA (não status_processamento): 6=Autorizada, 2=Emitida
+    # ainda não prova autorização. Texto como "não autorizada" não é sucesso.
+    textos = {str(nf.get(k) or '').strip().lower() for k in
+              ('situacao', 'descricao_situacao', 'situacao_descricao', 'status_nfe')}
+    autorizada = str(nf.get('situacao')) in ('6', '7') or bool(
+        textos & {'autorizada', 'autorizado', 'autorizada na sefaz', 'autorizado o uso da nf-e',
+                  'emitida danfe'})
+    rejeitada = str(nf.get('situacao')) in ('5', '10') or any(
+        t.startswith(('rejeit', 'denegad')) for t in textos)
+    if rejeitada or str(nf.get('situacao')) == '3' or any(
+            t.startswith(('não autoriz', 'nao autoriz', 'cancelad')) for t in textos):
+        autorizada = False
     if not (autorizada or rejeitada):
         logger.info('tiny obter NF %s: situacao desconhecida (sigs=%r, '
                     'campos=%s)', pedido.tiny_nota_fiscal_id, sigs[:120],
@@ -509,6 +527,8 @@ def emitir_nf_generico(alvo, montar_payload, recriar=False, *, inclusao_segura=F
                     'Confira a nota no Tiny antes de tentar criar outra; o sistema não repetirá a inclusão.'}
         payload, erro = montar_payload()
         if erro:
+            if inclusao_segura:
+                db.session.commit()  # conserva consulta fiscal e pendência para o owner
             return {'ok': False, 'msg': erro}
         if inclusao_segura:
             # Persiste ANTES da rede: queda do worker/resposta perdida não
@@ -545,6 +565,11 @@ def emitir_nf_generico(alvo, montar_payload, recriar=False, *, inclusao_segura=F
         if not pode_emitir(alvo) or (reembolso and reembolso.status in ('solicitado', 'confirmado')):
             return {'ok': False, 'msg': 'Pedido cancelado ou em reembolso. '
                     'O rascunho foi preservado no Tiny, sem solicitar autorização.'}
+        from app.services.fiscal_online import conferir_rascunho
+        erro_fiscal = conferir_rascunho(alvo)
+        if erro_fiscal:
+            db.session.commit()
+            return {'ok': False, 'msg': erro_fiscal}
     emitir = tiny.emitir_nota_fiscal(alvo.tiny_nota_fiscal_id)
     alvo.nf_status = emitir.get('status') or 'enviada'
     if emitir.get('ok'):
@@ -704,12 +729,16 @@ def _emitir_nf_pedido(pedido, user_id=None, recriar=False):
         return {'ok': False, 'msg': 'Pedido não está pago ou foi cancelado — não emite NF.'}
 
     def _montar():
+        from app.services import fiscal_online
+        cliente, erro = fiscal_online.payload_cliente(pedido)
+        if erro:
+            return None, erro
         # Trava fail-closed: endereço do destinatário incompleto NÃO vai à
         # SEFAZ em branco (retirada nascia sem endereço estruturado — dono
         # 20/07/2026). O checkout de retirada agora coleta o endereço; esta
         # guarda protege qualquer pedido antigo/edge que ainda esteja sem.
         end_faltando = _endereco_destinatario_incompleto(pedido)
-        if end_faltando:
+        if end_faltando and cliente is None:
             return None, ('Endereço do destinatário incompleto ('
                           + ', '.join(end_faltando)
                           + ') — a NF não foi enviada à SEFAZ. Complete o '
@@ -718,15 +747,19 @@ def _emitir_nf_pedido(pedido, user_id=None, recriar=False):
         if faltando:
             return None, ('Itens sem SKU mapeado no Tiny: '
                           + ', '.join(faltando))
-        return _nota_payload(pedido, itens), None
+        return _nota_payload(pedido, itens, cliente=cliente), None
 
     return emitir_nf_generico(pedido, _montar, recriar=recriar, inclusao_segura=True)
 
 
 def link_danfe(pedido):
-    """URL pro DANFE em PDF (válida por tempo limitado no Tiny)."""
+    """DANFE autorizado; vale para bot, área do cliente e administração."""
     if not pedido.tiny_nota_fiscal_id:
         return None
+    if not pedido.nf_emitida_em:
+        situacao = _sincronizar_situacao(pedido)
+        if not situacao or not situacao['autorizada']:
+            return None
     return tiny.obter_link_nota_fiscal(pedido.tiny_nota_fiscal_id)
 
 

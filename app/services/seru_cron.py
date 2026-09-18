@@ -293,7 +293,7 @@ def _run_vigia_abandono(app):
     from app.services import chatbot_vigia, chatwoot
 
     with app.app_context():
-        if not chatbot_vigia.disponivel() or not chatwoot.bot_disponivel():
+        if not (chatwoot.disponivel() or chatwoot.bot_disponivel()):
             return
         uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
         is_pg = 'postgresql' in uri
@@ -306,6 +306,16 @@ def _run_vigia_abandono(app):
                 if not got:
                     return
             try:
+                # Espera humana é determinística: funciona mesmo sem LLM/token do bot.
+                if str(app.config.get('CHATBOT_VIGIA_ESPERA',
+                                      os.environ.get('CHATBOT_VIGIA_ESPERA', '1'))) != '0':
+                    try:
+                        min_espera = int(app.config.get('CHATBOT_VIGIA_ESPERA_MIN', 10) or 10)
+                        chatbot_vigia.alertar_clientes_esperando_humano(min_minutos=min_espera)
+                    except Exception:
+                        logger.exception('vigia espera-humano ciclo falhou')
+                if not chatbot_vigia.disponivel() or not chatwoot.bot_disponivel():
+                    return
                 min_minutos = int(app.config.get('CHATBOT_VIGIA_ABANDONO_MIN', 15) or 15)
                 max_minutos = int(app.config.get(
                     'CHATBOT_VIGIA_ABANDONO_MAX_MIN', 720) or 720)
@@ -336,21 +346,6 @@ def _run_vigia_abandono(app):
                         logger.exception('vigia abandono falhou conv=%s', conv_id)
                     # Marca como avisado mesmo se o vigia decidiu silenciar — anti-spam.
                     chatbot_vigia._avisados_abandono.add(conv_id)
-                # Detector C (12/06/2026, conv #198): cliente esperando
-                # ATENDENTE em conversa `open` — invisivel pro bot (que
-                # ignora open por design) e pro detector de abandono
-                # (que so olha pending). Deterministico, dedupe proprio,
-                # mesmo ciclo/lock. Desligar: CHATBOT_VIGIA_ESPERA=0.
-                if str(app.config.get('CHATBOT_VIGIA_ESPERA',
-                                      os.environ.get('CHATBOT_VIGIA_ESPERA',
-                                                     '1'))) != '0':
-                    try:
-                        min_espera = int(app.config.get(
-                            'CHATBOT_VIGIA_ESPERA_MIN', 10) or 10)
-                        chatbot_vigia.alertar_clientes_esperando_humano(
-                            min_minutos=min_espera)
-                    except Exception:
-                        logger.exception('vigia espera-humano ciclo falhou')
             except Exception:
                 logger.exception('vigia abandono ciclo falhou')
             finally:

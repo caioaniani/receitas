@@ -963,7 +963,8 @@ def _executar_tool(nome, inp, *, telefone_contato=None,
         if nome == 'buscar_nota_fiscal':
             return bot_tools.buscar_nota_fiscal(
                 inp.get('cpf') or '',
-                inp.get('numero_pedido') or inp.get('numero') or '')
+                inp.get('numero_pedido') or inp.get('numero') or '',
+                conv_id=conversa_id)
         if nome == 'registrar_lead_b2b':
             return bot_tools.registrar_lead_b2b(
                 inp.get('nome') or '',
@@ -1320,6 +1321,9 @@ def responder(historico, *, telefone_contato=None,
                                   telefone_contato=telefone_contato,
                                   conversa_id=conversa_id)
             tools_usadas.append(b.name)
+            if b.name == 'buscar_nota_fiscal' and isinstance(out, dict) and out.get('precisa_humano'):
+                return _resp_handoff(out['mensagem'], 'pendência fiscal exige atendimento',
+                                     tools_usadas=tools_usadas)
             if b.name == 'consultar_produtos':
                 produto_falhou = bool(isinstance(out, dict) and out.get('erro'))
             resultados.append({

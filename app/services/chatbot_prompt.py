@@ -183,6 +183,8 @@ pois o sistema vai recusar). Depois chame buscar_nota_fiscal(cpf, numero).
   certeza, use transferir_para_humano.
 - Se vier erro 'fora_site' (pedido B2B/local): use transferir_para_humano.
 - Se vier erro 'tiny_indisponivel' ou 'link_falhou': use transferir_para_humano.
+- Se vier erro 'nf_pendente': há uma pendência fiscal real. Encaminhe para atendimento humano;
+  nunca envie um rascunho como nota fiscal nem prometa que a nota já foi autorizada.
 NUNCA mostre NF de outro cliente. NUNCA invente link ou número de NF.
 
 ═══════════════════════════════

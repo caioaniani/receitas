@@ -213,7 +213,7 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
     rb = resultado_bot or {}
 
     # ── DETECTOR DETERMINISTICO: HANDOFF PREGUIÇOSO EM VENDA ──────────
-    # Pedido do dono 16/06/2026 (auditor reportou caso Ale, venda perdida):
+    # Pedido do dono 16/06/2026 (auditor reportou caso de venda perdida):
     # quando o bot transfere SEM ter chamado tool de busca/resolucao E a
     # conversa tem sinais claros de COMPRA EM CURSO, alerta IMEDIATO
     # (banner + WhatsApp), nao espera o resumo diario. Determinístico
@@ -257,7 +257,7 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
     try:
         # Sinal pro caso HANDOFF PREGUICOSO do prompt: lista das tools
         # que o bot usou neste turno. Vazia + handoff + cliente comprando
-        # = ALTA (caso real 12/06/2026, conv #198).
+        # = ALTA (caso real 12/06/2026, conversa em atendimento).
         tools_usadas = rb.get('tools_usadas')
         if tools_usadas is None:
             tools_txt = '(desconhecido — versao antiga do bot)'
@@ -394,7 +394,7 @@ def _processar_veredicto(veredicto, nome_contato, conv_id):
 
 # ── Detector deterministico: handoff preguicoso em VENDA ─────────────
 #
-# Auditor reportou caso real 16/06/2026 (Ale, venda perdida): bot transferiu
+# Auditor reportou caso real 16/06/2026 (venda perdida): bot transferiu
 # sem chamar nenhuma tool, no meio de uma compra. Esse padrao tem 3 sinais
 # combinados (todos precisam bater):
 #   1. acao=handoff
@@ -419,8 +419,7 @@ _SINAIS_COMPRA = re.compile(
 # Reclamacao = handoff humano e correto (nao alerta como preguicoso).
 _SINAIS_RECLAMACAO = re.compile(
     r'('
-    # 26/07/2026 (caso Gabriela, conv 918): o cliente escreveu "as visitas
-    # estavam esperando e nao chegava nunca" + "eu acabei cancelando" e
+    # 26/07/2026 (caso de atraso na entrega): o cliente escreveu "a entrega nunca chegou" + "eu acabei cancelando" e
     # NENHUMA alternativa casava — 'chegou' nao cobre 'chegava/chegaram' e
     # 'cancelar meu pedido' nao cobre 'cancelei/cancelando'. Sem casar aqui,
     # uma reclamacao de venda PERDIDA era classificada como fechamento banal.
@@ -839,7 +838,7 @@ def _sem_emoji_enfeite(t):
     """Remove emojis/símbolos DECORATIVOS do texto ("Obrigada ✨" → "Obrigada").
 
     A whitelist de emoji no _FECHAMENTO_RE já falhou 2x (criação e o ✨ da
-    conv 1697, 18/08/2026: alerta de 'esperando atendente' à 01:25 + msg de
+    conversa em atendimento, 18/08/2026: alerta de 'esperando atendente' à 01:25 + msg de
     contenção pro cliente que só tinha agradecido). Emoji desconhecido agora
     é tratado como enfeite GENERICAMENTE; só os negativos (raiva/choro)
     ficam no texto, porque mudam o sentido."""
@@ -895,57 +894,61 @@ TEXTO_CONTENCAO_ESPERA = (
     'Obrigado pela paciência!')
 
 
-def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
+def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
                                        max_por_ciclo=5):
-    """Detector C (12/06/2026, conv #198): cliente manda mensagem em
+    """Detector C (12/06/2026, conversa em atendimento): cliente manda mensagem em
     conversa `open` (humano e dono da conversa) e NINGUEM responde.
 
     O bot ignora `open` por design (humano assumiu); o detector de
     abandono so olha `pending`. Resultado: cliente esperando atendente
-    era INVISIVEL pra todos os vigias — a Mariana mandou 'Olá' as 17:42
+    era INVISIVEL pra todos os vigias — uma cliente mandou 'Olá'
     e ficou no vacuo.
 
-    Deterministico (sem Haiku): conversa open + ultima mensagem e do
-    CLIENTE + parada entre min e max minutos = fato, nao julgamento.
-    Dedupe persistente em VigiaVeredito ('[ESPERA_HUMANO'), mesmo padrao
-    do abandono. Alerta o dono via Z-API."""
-    from app.services import chatwoot, zapi
+    Estado durável por conversa. Automação não encerra espera; aviso ao dono
+    repete em 15 minutos. Caso grave respondido segue a cada hora até resolved.
+    Sem limite de idade por padrão. Cron serializa ciclos pelo lock 7737."""
+    from datetime import datetime, timedelta
+
+    from app.extensions import db
+    from app.services import atendimento_pendente, chatwoot, zapi
+    from app.utils import agora
 
     numero = _numero_destino()
     if not numero:
         return {'pulou': 'sem numero destino'}
 
-    paradas = chatwoot.listar_conversas_paradas(
-        min_minutos=min_minutos, status='open')
-    avaliadas = enviadas = 0
+    paradas = atendimento_pendente.candidatos()
+    prontas = []
     for c in paradas:
+        if not c.get('id') or (max_minutos is not None and c.get('minutos_paradas', 0) > max_minutos):
+            continue
+        historico = chatwoot.buscar_historico(c['id'], incluir_autoria=True)
+        if not historico:
+            continue
+        espera = atendimento_pendente.preparar(c, historico, min_minutos=min_minutos)
+        if espera and (not espera.proximo_aviso_em or espera.proximo_aviso_em <= agora()):
+            prontas.append((c, historico, espera))
+    # A primeira cobrança de um caso antigo vem antes de repetições já atendidas
+    # nesta rodada. Sem isso, 16 casos com teto 5/ciclo deixam o último sem aviso.
+    # A API já traz os casos novos por espera decrescente. Preserva essa ordem,
+    # antecipando os graves, e só depois atende as repetições por vencimento.
+    prontas.sort(key=lambda item: (item[2].proximo_aviso_em is not None,
+                                  not item[2].grave if item[2].proximo_aviso_em is None else False,
+                                  item[2].proximo_aviso_em or datetime.min))
+    avaliadas = enviadas = 0
+    for c, historico, espera in prontas:
         if enviadas >= max_por_ciclo:
             break
         conv_id = c.get('id')
-        minutos = c.get('minutos_paradas', 0)
-        if not conv_id or minutos > max_minutos:
-            continue
         if _ja_avisado_espera_humano(conv_id):
             continue
-        historico = chatwoot.buscar_historico(conv_id)
-        if not historico:
-            continue
-        # So alerta se quem falou por ultimo foi o CLIENTE (esperando).
-        # Ultima do atendente = atendimento em andamento, nao alertar.
-        if historico[-1].get('role') != 'user':
-            continue
-        # "Ok"/"obrigada"/"valeu" = encerramento, cliente nao espera resposta.
-        if _e_fechamento(historico[-1].get('content')):
-            continue
-        # Marcacao em story do IG nao e cliente esperando (dono, 06/07/2026).
-        if _e_mencao_story(historico[-1].get('content')):
-            continue
         avaliadas += 1
-        ultima = (historico[-1].get('content') or '')[:120]
+        minutos = max(0, int((agora() - espera.inicio_em).total_seconds() / 60))
+        ultima = (espera.mensagem or '')[:120]
         nome = c.get('nome_contato') or '(sem nome)'
         # Chave do CONTATO (telefone ou identifier do IG, so \w): o dedupe
-        # por conversa nao basta — caso Lissa 19/08/2026: a MESMA cliente
-        # em DUAS conversas do Chatwoot (1723 e 1730) recebeu a contencao
+        # por conversa nao basta — caso de contato duplicado: a MESMA cliente
+        # em DUAS conversas do Chatwoot (duas conversas distintas) recebeu a contencao
         # em cada uma, e no Instagram as duas caem na MESMA thread =
         # mensagem duplicada na tela dela.
         import re as _re
@@ -961,6 +964,13 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
                'O bot nao responde conversas que ja foram assumidas por '
                'humano — alguem da equipe precisa olhar.'
                + (f'\n\n{link}' if link else ''))
+        if espera.estado == 'em_atendimento':
+            msg = (f'*Caso grave ainda aberto — acompanhar até resolver*\n'
+                   f'Cliente: {nome} (conversa #{conv_id})\n'
+                   f'Assunto: {ultima}\nJá houve resposta humana, mas a conversa continua aberta.'
+                   + (f'\n\n{link}' if link else ''))
+        else:
+            msg += '\n\nVou lembrar novamente em 15 minutos enquanto não houver resposta humana.'
         # CLAIM-FIRST (20/08/2026): o registro É o dedupe, então ele fica
         # COMMITADO antes do envio. O que isso cobre de verdade: o processo
         # morrer ENTRE o envio e a gravação (deploy no meio do ciclo), que
@@ -974,6 +984,9 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
             logger.warning('espera-humano: claim falhou conv=%s — pula '
                            'este ciclo (retenta no proximo)', conv_id)
             continue
+        espera.proximo_aviso_em = agora() + timedelta(
+            minutes=60 if espera.estado == 'em_atendimento' else 15)
+        db.session.commit()
         try:
             envio = zapi.enviar_texto(numero, msg)
         except Exception:  # noqa: BLE001
@@ -987,6 +1000,8 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
             # segue mesmo assim — ele espera há N minutos e não tem nada a
             # ver com o canal do dono estar fora (achado de revisão 20/08).
             _desfazer_claim_veredito(claim)
+            espera.proximo_aviso_em = agora()
+            db.session.commit()
         # CONTENÇÃO ao CLIENTE (dono 09/08/2026, Dia dos Pais: 12 clientes
         # esperando 10-14min em conversa open enquanto a equipe entregava —
         # inclusive VENDA esperando): junto com o alerta ao dono, o cliente
@@ -998,8 +1013,9 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
         # do Spotify: env nova só chega ao app.config se declarada no
         # config.py; kill-switch de vigia lê os.environ como os demais).
         import os as _os
-        if _os.environ.get('ESPERA_HUMANO_CONTENCAO', '1') != '0':
-            # Anti-duplicidade em DUAS camadas (caso Lissa, 19/08/2026):
+        if (espera.estado == 'aguardando' and not espera.contencao_em
+                and _os.environ.get('ESPERA_HUMANO_CONTENCAO', '1') != '0'):
+            # Anti-duplicidade em DUAS camadas (contato duplicado):
             # (a) o texto ja esta NESTA conversa (re-alerta pos-12h nao
             # re-manda o mesmo aviso pro cliente); (b) o MESMO CONTATO ja
             # recebeu contencao em OUTRA conversa nas ultimas 12h — no IG
@@ -1013,7 +1029,10 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
                             '(duplicaria pro contato)', conv_id)
             else:
                 try:
-                    chatwoot.enviar_mensagem(conv_id, TEXTO_CONTENCAO_ESPERA)
+                    resultado_contencao = chatwoot.enviar_mensagem(conv_id, TEXTO_CONTENCAO_ESPERA)
+                    if resultado_contencao and resultado_contencao.get('ok'):
+                        espera.contencao_em = agora()
+                        db.session.commit()
                 except Exception:  # noqa: BLE001
                     logger.exception('espera-humano: contenção falhou '
                                      'conv=%s', conv_id)
@@ -1024,9 +1043,8 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
     return {'avaliadas': avaliadas, 'enviadas': enviadas}
 
 
-def _ja_avisado_espera_humano(conv_id, horas=12):
-    """Dedupe persistente (mesmo padrao do abandono). 12h: se o cliente
-    seguir esperando no dia seguinte, vale re-alertar."""
+def _ja_avisado_espera_humano(conv_id, horas=0.25):
+    """Claim persistente de 15min; o estado do incidente decide a próxima cobrança."""
     try:
         from datetime import timedelta
 
@@ -1047,7 +1065,7 @@ def _contencao_recente_para_contato(chave, conv_id, horas=12):
     r"""True se ESTE contato (chave \w de telefone/identifier) ja recebeu a
     contencao nas ultimas N horas em QUALQUER conversa — no Instagram, mais
     de uma conversa Chatwoot desagua na mesma thread do cliente (caso
-    Lissa 19/08/2026). Chave vazia = sem como cruzar, nao bloqueia (as
+    de contato duplicado). Chave vazia = sem como cruzar, nao bloqueia (as
     guardas por conversa seguem valendo). Erro = True (na duvida, nao
     repete texto enlatado pro cliente)."""
     if not chave:

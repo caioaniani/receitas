@@ -996,12 +996,22 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
 
     # ── Cria/reusa cliente (guest por email) ───────────────────────────
     cliente = Cliente.query.filter(
-        db.func.lower(Cliente.email) == email.lower()).first()
+        db.func.lower(Cliente.email) == email.lower()).with_for_update().first()
     if not cliente:
         cliente = Cliente(nome=nome, email=email, telefone=telefone, cpf=cpf,
                           origem='site')
         db.session.add(cliente)
     else:
+        # Antes de trocar o documento compartilhado, preserva o dos pedidos
+        # legados que ainda não possuem snapshot. Não reescreve snapshots existentes.
+        from app.models import FiscalPedidoOnline
+        from app.services.fiscal_online import congelar_documento
+        if cpf and cpf != cliente.cpf:
+            anteriores = PedidoOnline.query.outerjoin(
+                FiscalPedidoOnline, FiscalPedidoOnline.pedido_id == PedidoOnline.id).filter(
+                PedidoOnline.cliente_id == cliente.id, FiscalPedidoOnline.pedido_id.is_(None)).all()
+            for anterior in anteriores:
+                congelar_documento(anterior, cliente.cpf)
         # Atualiza dados de contato com o que o cliente acabou de informar.
         cliente.nome = nome or cliente.nome
         cliente.telefone = telefone or cliente.telefone
@@ -1034,6 +1044,8 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     )
     db.session.add(pedido)
     db.session.flush()
+    from app.services.fiscal_online import congelar_documento
+    congelar_documento(pedido, cpf)
     for it in itens:
         poi = PedidoOnlineItem(
             kind=it['kind'],

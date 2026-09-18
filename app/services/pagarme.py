@@ -168,8 +168,8 @@ def _payload_customer(pedido):
         'email': (pedido.email_cliente or '').strip(),
         'type': 'individual',
     }
-    cli = getattr(pedido, 'cliente', None)
-    doc = _so_digitos(getattr(cli, 'cpf', '') if cli else '')
+    from app.services.fiscal_online import documento
+    doc = documento(pedido)
     # Documento: SÓ manda se o TAMANHO for de CPF (11) ou CNPJ (14). Tamanho
     # errado (cliente digitou faltando/sobrando dígito) é OMITIDO, nunca
     # enviado sujo — mesma defesa do telefone (`_telefone_br`).

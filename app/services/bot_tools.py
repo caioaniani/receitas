@@ -479,8 +479,8 @@ def _nf_pedido_online(cpf_digits, numero):
     p = PedidoOnline.query.filter_by(codigo=numero).first()
     if not p:
         return None
-    cpf_pedido = ''.join(
-        c for c in ((p.cliente.cpf if p.cliente else '') or '') if c.isdigit())
+    from app.services.fiscal_online import documento
+    cpf_pedido = documento(p) if p.cliente_id else ''
     if not cpf_pedido or cpf_pedido != cpf_digits:
         # Não confirma que o pedido existe — mesma resposta de "não bateu".
         return ('nao_encontrado', 'cpf nao bate (pedido online)',
@@ -488,6 +488,21 @@ def _nf_pedido_online(cpf_digits, numero):
                  'mensagem': 'Não encontrei pedido com esse CPF e número. '
                              'Confere os dados, por favor.'})
     if not p.tiny_nota_fiscal_id:
+        from datetime import timedelta
+
+        from app.extensions import db
+        from app.models import TarefaFiscalPedido
+        from app.services import fiscal_online, loja_fiscal
+        from app.utils import agora
+        tarefa = db.session.get(TarefaFiscalPedido, p.id)
+        fiscal = fiscal_online.registro(p)
+        horario = loja_fiscal.horario_emissao(p)
+        if (p.status == 'entregue' or (tarefa and tarefa.erro) or (fiscal and fiscal.erro)
+                or (loja_fiscal.pode_emitir(p) and horario and agora() > horario + timedelta(minutes=10))):
+            return ('sem_nf', f'pedido online {numero}: emissão fiscal pendente de atendimento',
+                    {'erro': 'nf_pendente', 'precisa_humano': True,
+                     'mensagem': 'A nota deste pedido está pendente. Vou encaminhar para a equipe '
+                                 'conferir e resolver a emissão.'})
         return ('sem_nf', f'pedido online {numero} sem NF (status={p.status})',
                 {'erro': 'sem_nf_ainda', 'situacao': p.status,
                  'mensagem': 'Achei seu pedido, mas a nota ainda não foi '
@@ -495,6 +510,11 @@ def _nf_pedido_online(cpf_digits, numero):
                              'ou você pode pedir depois.'})
     from app.services import tiny_nf
     link = tiny_nf.link_danfe(p)
+    if not link and not p.nf_emitida_em:
+        return ('sem_nf', f'pedido online {numero}: NF sem autorização confirmada',
+                {'erro': 'nf_pendente', 'precisa_humano': True,
+                 'mensagem': 'A autorização desta nota fiscal ainda não foi confirmada. '
+                             'Vou encaminhar para a equipe conferir e resolver.'})
     if not link:
         return ('erro', f'link_danfe falhou (pedido online {numero})',
                 {'erro': 'link_falhou',
@@ -556,6 +576,14 @@ def buscar_nota_fiscal(cpf, numero_pedido, *, conv_id=None, canal=None):
     if online is not None:
         resultado, detalhe, payload = online
         _log(resultado, detalhe)
+        if payload.get('precisa_humano') and conv_id:
+            from app.services import chatbot_vigia
+            chatbot_vigia._registrar(
+                {'veredicto': {'alerta': True, 'gravidade': 'alta',
+                               'motivo': 'Nota fiscal pendente exige atendimento humano'}},
+                conv_id, '', f'Pedido {numero}: nota fiscal pendente',
+                resultado_bot={'acao': 'handoff', 'motivo': 'pendência fiscal',
+                               'tools_usadas': ['buscar_nota_fiscal']})
         return payload
 
     # 2. Fallback Tiny (pedido do site antigo/VNDA, por CPF+numero).
@@ -707,9 +735,8 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
                 break
     if not autorizado:
         cpf_d = ''.join(c for c in (cpf_cliente or '') if c.isdigit())
-        cpf_pedido = ''.join(
-            c for c in ((p.cliente.cpf if p.cliente else '') or '')
-            if c.isdigit())
+        from app.services.fiscal_online import documento
+        cpf_pedido = documento(p) if p.cliente_id else ''
         if cpf_d and cpf_pedido and cpf_d == cpf_pedido:
             autorizado = True
     if not autorizado:

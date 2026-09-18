@@ -218,7 +218,18 @@ def definir_status(conversation_id, status, tentativas=3):
     return {'ok': False, 'erro': ultimo_erro}
 
 
-def buscar_historico(conversation_id, limite=20):
+def _mensagem_humana(m):
+    sender = m.get('sender') or {}
+    atributos = {**(m.get('additional_attributes') or {}), **(m.get('content_attributes') or {})}
+    automatico = (atributos.get('automation_rule_id') or atributos.get('campaign_id')
+                  or m.get('automation_rule_id') or m.get('campaign_id'))
+    return bool(m.get('message_type') in ('outgoing', 1) and not m.get('private')
+                and not automatico and str(m.get('status', '')).lower() != 'failed'
+                and (str(m.get('sender_type') or sender.get('type') or '').lower() == 'user'
+                     or atributos.get('external_echo')))
+
+
+def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False):
     """Mensagens recentes da conversa, em ordem cronologica, mapeadas pra
     [{'role': 'user'|'assistant', 'content': str, 'imagens'?: [url]}] (pro
     Claude). Cliente = user (incoming), bot/atendente = assistant (outgoing).
@@ -253,6 +264,32 @@ def buscar_historico(conversation_id, limite=20):
     msgs = data.get('payload') if isinstance(data, dict) else data
     if not isinstance(msgs, list):
         return []
+    if incluir_autoria:
+        # Notas internas e automações podem ocupar a página inteira. Procura
+        # uma fronteira real (cliente/humano), em vez de concluir silêncio.
+        lote = msgs
+        for _ in range(20):
+            if any(not m.get('private') and (m.get('message_type') in ('incoming', 0)
+                                           or _mensagem_humana(m)) for m in lote):
+                break
+            ids = [m.get('id') for m in lote if isinstance(m.get('id'), int)]
+            if not ids:
+                break
+            try:
+                r = requests.get(url, headers=headers, params={'before': min(ids)}, timeout=10)
+                r.raise_for_status()
+                anterior = r.json()
+                lote = anterior.get('payload') if isinstance(anterior, dict) else anterior
+                if not isinstance(lote, list) or not lote:
+                    break
+                existentes = {m.get('id') for m in msgs}
+                lote = [m for m in lote if m.get('id') not in existentes]
+                if not lote:
+                    break
+                msgs = lote + msgs
+            except (requests.RequestException, ValueError):
+                logger.exception('chatwoot: histórico incompleto conv=%s', conversation_id)
+                return []
     msgs = sorted(msgs, key=lambda m: m.get('created_at') or 0)
 
     hist = []
@@ -263,6 +300,8 @@ def buscar_historico(conversation_id, limite=20):
         mt = m.get('message_type')
         imagens = [a.get('data_url') for a in (m.get('attachments') or [])
                    if a.get('file_type') == 'image' and a.get('data_url')]
+        if incluir_autoria and not content and m.get('attachments'):
+            content = '[Mensagem com anexo]'
         if not content and not imagens:
             continue
         # `created_at` (epoch UTC) entra como campo EXTRA — callers antigos
@@ -282,7 +321,25 @@ def buscar_historico(conversation_id, limite=20):
                 continue  # imagem do bot/atendente nao precisa ir pro Claude
             hist.append({'role': 'assistant', 'content': content,
                          'created_at': ts})
-    return hist[-limite:]
+        if incluir_autoria and mt in ('incoming', 0, 'outgoing', 1) and hist:
+            hist[-1]['humano'] = _mensagem_humana(m)
+            hist[-1]['message_id'] = m.get('id')
+    return hist if incluir_autoria else hist[-limite:]
+
+
+def consultar_conversa(conversation_id):
+    """Leitura pontual para encerrar acompanhamento só após status confirmado."""
+    headers = _headers() if disponivel() else _bot_headers() if bot_disponivel() else None
+    if headers is None:
+        return None
+    try:
+        r = requests.get(f'{_base()}/conversations/{conversation_id}', headers=headers, timeout=10)
+        r.raise_for_status()
+        dados = r.json()
+        return dados if isinstance(dados, dict) and dados.get('status') else None
+    except (requests.RequestException, ValueError):
+        logger.exception('chatwoot consultar_conversa falhou conv=%s', conversation_id)
+        return None
 
 
 def baixar_imagem(url):
@@ -634,8 +691,21 @@ def listar_conversas_paradas(min_minutos=15, limite=50, status='pending', *, est
             raise ChatwootConsultaError("Atendimento não configurado")
         return []
     try:
-        r = _consultar_conversas(headers, {'status': status, 'page': 1})
-        data = r.json() if r.text else {}
+        payload = []
+        vistos = set()
+        for pagina in range(1, 201):
+            r = _consultar_conversas(headers, {'status': status, 'page': pagina})
+            data = r.json() if r.text else {}
+            lote = (data.get('data') or {}).get('payload') if isinstance(data, dict) else data
+            if not isinstance(lote, list):
+                raise ChatwootConsultaError('Resposta inválida do atendimento')
+            novos = [c for c in lote if isinstance(c, dict) and c.get('id') not in vistos]
+            payload.extend(novos)
+            vistos.update(c.get('id') for c in novos)
+            if status != 'open' or not novos or len(lote) < 25:
+                break
+        else:
+            logger.warning('chatwoot: consulta de conversas abertas atingiu 200 páginas')
     except ChatwootConsultaError:
         if estrito:
             raise
@@ -645,10 +715,6 @@ def listar_conversas_paradas(min_minutos=15, limite=50, status='pending', *, est
         if estrito:
             raise ChatwootConsultaError('Resposta inválida do atendimento') from exc
         return []
-
-    payload = (data.get('data') or {}).get('payload') if isinstance(data, dict) else None
-    if not isinstance(payload, list):
-        payload = data if isinstance(data, list) else []
 
     import time as _time
     agora_epoch = _time.time()
@@ -679,7 +745,7 @@ def listar_conversas_paradas(min_minutos=15, limite=50, status='pending', *, est
             'minutos_paradas': int(minutos),
         })
     paradas.sort(key=lambda p: -p['minutos_paradas'])
-    return paradas[:limite]
+    return paradas if limite is None else paradas[:limite]
 
 
 def listar_conversas(status='open', limite=40, *, estrito=False):

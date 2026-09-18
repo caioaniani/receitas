@@ -205,6 +205,51 @@ def _so_digitos(s):
     return ''.join(c for c in (s or '') if c.isdigit())
 
 
+def buscar_contato_por_documento(documento):
+    """Pesquisa cadastro INTERNO por documento exato; duplicatas não são escolhidas."""
+    doc = _so_digitos(documento)
+    if len(doc) not in (11, 14):
+        return {'erro': 'Documento inválido.'}
+    encontrados = {}
+    pagina = 1
+    while pagina <= 20:
+        retorno = _get('contatos.pesquisa.php', params={
+            'pesquisa': '', 'cpf_cnpj': doc, 'situacao': 'Ativo', 'pagina': str(pagina)},
+            retornar_erro=True)
+        if not retorno:
+            return {'erro': 'Não foi possível consultar os clientes no Tiny.'}
+        if str(retorno.get('codigo_erro')) == '20':
+            break  # Consulta sem registros, código documentado pelo Tiny.
+        if str(retorno.get('status', '')).lower() not in ('ok', '1'):
+            return {'erro': 'Não foi possível consultar os clientes no Tiny.'}
+        linhas = retorno.get('contatos') or []
+        if not isinstance(linhas, list):
+            return {'erro': 'Resposta inválida do cadastro Tiny.'}
+        for linha in linhas:
+            contato = linha.get('contato') if isinstance(linha, dict) else None
+            if isinstance(contato, dict) and _so_digitos(contato.get('cpf_cnpj')) == doc:
+                if contato.get('id'):
+                    encontrados[str(contato['id'])] = contato
+        try:
+            paginas = int(retorno.get('numero_paginas') or 1)
+        except (ValueError, TypeError):
+            return {'erro': 'Paginação inválida do cadastro Tiny.'}
+        if pagina >= paginas:
+            break
+        pagina += 1
+    else:
+        return {'erro': 'Consulta de clientes excedeu o limite; confira duplicatas no Tiny.'}
+    if len(encontrados) > 1:
+        return {'erro': 'Há mais de um cadastro com este documento no Tiny; confira as duplicatas.'}
+    if not encontrados:
+        return {'contato': None}
+    retorno = _get('contato.obter.php', params={'id': next(iter(encontrados))})
+    contato = (retorno or {}).get('contato')
+    if not isinstance(contato, dict) or _so_digitos(contato.get('cpf_cnpj')) != doc:
+        return {'erro': 'Não foi possível conferir o documento do cadastro Tiny.'}
+    return {'contato': contato}
+
+
 def buscar_pedido_por_cpf_e_numero(cpf, numero, diag=None):
     """Procura UM pedido especifico no Tiny pela intersecao CPF + numero.
     E o caminho seguro pra o bot — sem CPF, nao retorna nada de outro cliente.

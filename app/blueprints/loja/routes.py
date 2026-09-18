@@ -660,6 +660,7 @@ def exportar_dados():
     from flask import jsonify
 
     from app.models import EnderecoCliente, PedidoOnline
+    from app.services import fiscal_online
     cli = loja_auth.cliente_atual()
     ends = EnderecoCliente.query.filter_by(cliente_id=cli.id).all()
     pedidos = PedidoOnline.query.filter_by(cliente_id=cli.id).all()
@@ -685,6 +686,7 @@ def exportar_dados():
              'modo_entrega': p.modo_entrega,
              'endereco_entrega': p.endereco_entrega,
              'cartinha': p.cartinha,
+             'dados_fiscais': fiscal_online.contexto(p),
              'itens': [{'nome': i.nome, 'quantidade': i.quantidade,
                         'preco_unitario': float(i.preco_unitario)}
                        for i in p.itens]}
@@ -705,7 +707,7 @@ def excluir_conta():
     pode sumir), mas tiramos as PII (nome/email/telefone/CPF). Endereços
     salvos vão embora junto."""
     from app.extensions import db
-    from app.models import Cliente, EnderecoCliente, PedidoOnline
+    from app.models import Cliente, EnderecoCliente, FiscalPedidoOnline, PedidoOnline
     confirma = (request.form.get('confirmar') or '').strip().upper()
     if confirma != 'EXCLUIR':
         from flask import flash
@@ -714,6 +716,13 @@ def excluir_conta():
     cli = loja_auth.cliente_atual()
     # Anonimiza os pedidos (mantém histórico fiscal)
     rotulo = f'[Conta excluída #{cli.id}]'
+    # Mesmo tratamento dos dados pessoais antigos. NF autorizada permanece no ERP;
+    # não conserva uma nova credencial de acesso aos pedidos de conta excluída.
+    ids = [p.id for p in PedidoOnline.query.filter_by(cliente_id=cli.id).all()]
+    if ids:
+        FiscalPedidoOnline.query.filter(FiscalPedidoOnline.pedido_id.in_(ids)).update(
+            {'documento': '', 'dados': {}, 'erro': 'Conta excluída; dados fiscais locais removidos.'},
+            synchronize_session=False)
     PedidoOnline.query.filter_by(cliente_id=cli.id).update({
         'nome_cliente': rotulo, 'email_cliente': '',
         'telefone_cliente': '',

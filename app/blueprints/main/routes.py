@@ -5871,7 +5871,7 @@ def _detalhe_redirect(codigo):
 def loja_online_pedido_detalhe(codigo):
     from app.models import PagamentoExternoOnline, PedidoOnline
     from app.models.kits_cafe import ReembolsoKit, TarefaFiscalKit
-    from app.services import loja_checkout, loja_fiscal, loja_pagamento, pagamento_externo
+    from app.services import fiscal_online, loja_checkout, loja_fiscal, loja_pagamento, pagamento_externo
     from app.services.compra_kits import grupo_do_pedido, principal_do_pedido, valor_cobranca
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
     # Pedido corrigido após a NF (quantidade reduzida): versão de estoque > 0.
@@ -5880,6 +5880,7 @@ def loja_online_pedido_detalhe(codigo):
     estoque_reduzido = loja_pagamento._versao_estoque_atual(p) > 0
     return render_template('admin/loja_online_pedido_detalhe.html',
                            p=p, labels=_STATUS_PEDIDO_ONLINE_LABEL,
+                           fiscal=fiscal_online.contexto(p),
                            lojas=loja_checkout.lojas_retirada(),
                            modos=_MODOS_ENTREGA,
                            estoque_reduzido=estoque_reduzido,
@@ -6400,6 +6401,39 @@ def loja_online_tiny_importar():
               f'conferir, {res.get("sem_match", 0)} sem correspondência '
               f'({res.get("total", 0)} linhas).', 'success')
     return redirect(url_for('main.loja_online_tiny_skus'))
+
+
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/cadastro-fiscal', methods=['POST'])
+@owner_required
+def loja_online_cadastro_fiscal(codigo):
+    from app.models import PedidoOnline
+    from app.services import fiscal_online, loja_fiscal, tiny_nf
+
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    with tiny_nf._trava_nf_kit(p.id) as adquirido:
+        if not adquirido:
+            flash('A nota fiscal está sendo processada. Aguarde.', 'warning')
+            return _detalhe_redirect(codigo)
+        db.session.refresh(p)
+        if not fiscal_online.contexto(p)['editavel']:
+            flash('A NF já foi criada. Confira os dados e corrija a nota existente no Tiny.', 'warning')
+            return _detalhe_redirect(codigo)
+        if len(fiscal_online.documento(p)) != 14:
+            flash('Este pedido não possui CNPJ.', 'warning')
+            return _detalhe_redirect(codigo)
+        if request.form.get('acao') == 'consultar':
+            row = fiscal_online.consultar(p, forcar=True)
+            erro = row.erro
+        else:
+            erro = fiscal_online.salvar_conferencia(p, request.form, current_user.id)
+        if not erro and loja_fiscal.pode_emitir(p):
+            tarefa = loja_fiscal.agendar(p)
+            tarefa.erro = None
+            tarefa.proxima_tentativa_em = loja_fiscal.horario_emissao(p) or agora()
+        db.session.commit()
+        flash(erro or 'Cadastro fiscal salvo. A emissão seguirá o horário programado.',
+              'warning' if erro else 'success')
+    return _detalhe_redirect(codigo)
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/emitir-nf', methods=['POST'])
