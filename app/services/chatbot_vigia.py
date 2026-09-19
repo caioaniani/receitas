@@ -1023,12 +1023,30 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
         acc = (cfg.get('CHATWOOT_ACCOUNT_ID') or '').strip()
         link = (f'{base_cw}/app/accounts/{acc}/conversations/{conv_id}'
                 if base_cw and acc else '')
-        msg = (f'🙋 *Cliente esperando ATENDENTE* ha {minutos}min\n'
-               f'Cliente: {nome} (conversa #{conv_id})\n\n'
-               f'Última mensagem: "{ultima}"\n\n'
-               'O bot nao responde conversas que ja foram assumidas por '
-               'humano — alguem da equipe precisa olhar.'
-               + (f'\n\n{link}' if link else ''))
+        # Status REAL da conversa: a listagem do Chatwoot so traz `open`;
+        # a candidata vinda da tabela EsperaAtendimento (incidente grave)
+        # pode estar `pending`/`snoozed` = o BOT ainda responde e ninguem
+        # humano assumiu. Caso Jessica 19/09/2026: o texto dizia "esperando
+        # ATENDENTE ha 4min ... assumida por humano" numa conversa pending
+        # que o bot tinha respondido 50s antes — os 4min eram a idade do
+        # ALTA (falso) do vigia. Texto e motivo passam a dizer a verdade.
+        status_conv = (c.get('status') or 'open')
+        bot_no_turno = status_conv != 'open'
+        if bot_no_turno and espera.estado == 'aguardando':
+            msg = (f'⚠️ *Caso grave apontado pelo Vigia* ha {minutos}min — '
+                   f'conversa ainda com o BOT (status {status_conv})\n'
+                   f'Cliente: {nome} (conversa #{conv_id})\n\n'
+                   f'Última mensagem: "{ultima}"\n\n'
+                   'Ninguem da equipe assumiu; o bot segue respondendo. '
+                   'Abra a conversa se o caso pedir humano.'
+                   + (f'\n\n{link}' if link else ''))
+        else:
+            msg = (f'🙋 *Cliente esperando ATENDENTE* ha {minutos}min\n'
+                   f'Cliente: {nome} (conversa #{conv_id})\n\n'
+                   f'Última mensagem: "{ultima}"\n\n'
+                   'O bot nao responde conversas que ja foram assumidas por '
+                   'humano — alguem da equipe precisa olhar.'
+                   + (f'\n\n{link}' if link else ''))
         if espera.estado == 'em_atendimento':
             tipo = 'Caso grave' if espera.grave else 'Atendimento'
             msg = (f'*{tipo} ainda aberto — acompanhar até resolver*\n'
