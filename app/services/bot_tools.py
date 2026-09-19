@@ -829,10 +829,12 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
                             'dúvida persistir, transfira pra equipe. '
                             'Ao CONFIRMAR um pedido pago, repita '
                             'endereco_entrega (com endereco_complemento) e '
-                            'nome_destinatario e pergunte se confere. Se o '
-                            'cliente responder com endereço, número, apto ou '
-                            'nome DIFERENTE, é CORREÇÃO do pedido: NÃO cote '
-                            'frete, transfira com os dados novos no motivo.'),
+                            'nome_destinatario e pergunte se confere (em '
+                            'RETIRADA, endereco_entrega é a LOJA de retirada '
+                            '— repita a loja). Se o cliente responder com '
+                            'endereço, número, apto ou nome DIFERENTE, é '
+                            'CORREÇÃO do pedido: NÃO cote frete, transfira '
+                            'com os dados novos no motivo.'),
     }
 
 
