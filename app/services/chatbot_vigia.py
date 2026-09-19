@@ -275,7 +275,8 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
     # auditar — e o vigia e o MAIOR volume de IA do sistema (roda em TODA
     # resposta, com Sonnet). Fechamento trivial nao gasta modelo. Handoff
     # nunca cai aqui (sempre avalia).
-    ultima_cliente = next((m.get('content') or ''
+    from app.services.chatbot import texto_da_mensagem
+    ultima_cliente = next((texto_da_mensagem(m)
                            for m in reversed(historico or [])
                            if (m or {}).get('role') == 'user'), '')
     if rb.get('acao') != 'handoff' and _e_fechamento(ultima_cliente):
