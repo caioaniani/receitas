@@ -300,6 +300,134 @@ def test_caso_grave_em_conversa_pending_nao_diz_esperando_atendente(app):
         assert 'c:5511987654321]' in row.mensagem_cliente
 
 
+def _incidente_grave(app, conv_id, minutos=4):
+    """ALTA do vigia + incidente na tabela (o que o caso Jéssica produziu)."""
+    from app.extensions import db
+    from app.models import VigiaVeredito
+    from app.services import atendimento_pendente
+    from app.utils import agora
+    alta = VigiaVeredito(criado_em=agora() - timedelta(minutes=minutos),
+                         conv_id=str(conv_id), cliente='Alguém',
+                         mensagem_cliente='x', bot_acao='responder',
+                         alerta=True, gravidade='alta', motivo_vigia='m')
+    db.session.add(alta)
+    db.session.commit()
+    atendimento_pendente.registrar_alerta(alta)
+    return alta
+
+
+def _rodar_espera(app, conv, historico, status, telefone='+5511987654321',
+                  listagem_open=None):
+    """Roda o cron do espera-humano com a conversa `conv` vinda da TABELA
+    (status real via consultar_conversa) e devolve (retorno, msg, contenção)."""
+    from app.services import chatbot_vigia
+    with patch('app.services.chatbot_vigia._numero_destino',
+               return_value='5511999990000'), \
+            patch('app.services.chatwoot.listar_conversas_paradas',
+                  return_value=list(listagem_open or [])), \
+            patch('app.services.chatwoot.consultar_conversa',
+                  return_value={'id': conv, 'status': status,
+                                'meta': {'sender': {'phone_number': telefone}}}), \
+            patch('app.services.chatwoot.buscar_historico',
+                  return_value=historico), \
+            patch('app.services.chatwoot.enviar_mensagem',
+                  return_value={'ok': True}) as contencao, \
+            patch('app.services.zapi.enviar_texto',
+                  return_value={'ok': True}) as envia:
+        r = chatbot_vigia.alertar_clientes_esperando_humano(min_minutos=10)
+    msg = envia.call_args[0][1] if envia.call_args else ''
+    return r, msg, contencao
+
+
+def test_conversa_snoozed_diz_adiada_e_nao_bot_respondendo(app):
+    """Revisão 19/09/2026: snoozed = ninguém responde (o bot só atende
+    pending) — o texto não pode dizer "o bot segue respondendo"."""
+    from app.models import VigiaVeredito
+    with app.app_context():
+        _incidente_grave(app, 4243)
+        hist = [{'role': 'user', 'content': 'Alguém me responde?',
+                 'humano': False, 'created_at': time.time() - 300}]
+        r, msg, contencao = _rodar_espera(app, 4243, hist, 'snoozed')
+        assert r['enviadas'] == 1
+        assert 'ADIADA (snoozed)' in msg
+        assert 'bot segue respondendo' not in msg
+        assert 'esperando ATENDENTE' not in msg
+        contencao.assert_not_called()
+        row = VigiaVeredito.query.filter(
+            VigiaVeredito.conv_id == '4243',
+            VigiaVeredito.mensagem_cliente.like('[ESPERA_HUMANO%')).one()
+        assert 'snoozed' in row.motivo_vigia
+        assert 'bot ainda respondendo' not in row.motivo_vigia
+
+
+def test_conversa_pending_sem_alta_nao_diz_caso_grave(app):
+    """Espera nascida em conversa OPEN (sem ALTA) que um humano devolveu
+    ao bot ("Devolvida pro bot" → pending): não existe caso grave nenhum,
+    o texto não pode inventar um."""
+    from app.extensions import db
+    from app.models import EsperaAtendimento, VigiaVeredito
+    from app.utils import agora
+    with app.app_context():
+        db.session.add(EsperaAtendimento(
+            conversa_id='4244', inicio_em=agora() - timedelta(minutes=20),
+            nome='Bia', mensagem='Olá?', grave=False, estado='aguardando'))
+        db.session.commit()
+        hist = [{'role': 'user', 'content': 'Olá?', 'humano': False,
+                 'created_at': time.time() - 1200}]
+        r, msg, contencao = _rodar_espera(app, 4244, hist, 'pending')
+        assert r['enviadas'] == 1
+        assert 'devolvida ao BOT' in msg
+        assert 'Caso grave' not in msg
+        assert 'esperando ATENDENTE' not in msg
+        contencao.assert_not_called()
+        row = VigiaVeredito.query.filter(
+            VigiaVeredito.conv_id == '4244',
+            VigiaVeredito.mensagem_cliente.like('[ESPERA_HUMANO%')).one()
+        assert 'devolvida ao bot' in row.motivo_vigia
+        assert 'caso grave' not in row.motivo_vigia
+
+
+def test_alerta_em_pending_nao_cala_contencao_em_conversa_open_do_contato(app):
+    """Revisão 19/09/2026: o registro em conversa pending sai com a chave
+    do contato mas SEM contenção (bot no turno). Uma conversa OPEN do mesmo
+    contato 12h depois ainda tem que receber a contenção — o dedupe por
+    contato só conta contenção de fato enviada."""
+    from app.services import chatbot_vigia
+    with app.app_context():
+        _incidente_grave(app, 4245)
+        hist_a = [{'role': 'user', 'content': 'print', 'humano': False,
+                   'created_at': time.time() - 300}]
+        r, msg, contencao = _rodar_espera(app, 4245, hist_a, 'pending',
+                                          telefone='+5511977776666')
+        assert r['enviadas'] == 1
+        contencao.assert_not_called()
+        # Mesmo contato, OUTRA conversa, agora OPEN e esperando humano
+        chave = '5511977776666'
+        assert chatbot_vigia._contencao_recente_para_contato(chave, 4246) is False
+        listagem = [{'id': 4246, 'nome_contato': 'Mesma pessoa',
+                     'telefone': '+5511977776666', 'minutos_paradas': 25}]
+        hist_b = [{'role': 'assistant', 'content': 'um atendente vai te ajudar'},
+                  {'role': 'user', 'content': 'Olá'}]
+        with patch('app.services.chatbot_vigia._numero_destino',
+                   return_value='5511999990000'), \
+                patch('app.services.chatwoot.listar_conversas_paradas',
+                      return_value=listagem), \
+                patch('app.services.chatwoot.consultar_conversa',
+                      return_value={'id': 4245, 'status': 'resolved'}), \
+                patch('app.services.chatwoot.buscar_historico',
+                      return_value=hist_b), \
+                patch('app.services.chatwoot.enviar_mensagem',
+                      return_value={'ok': True}) as contencao_b, \
+                patch('app.services.zapi.enviar_texto',
+                      return_value={'ok': True}):
+            r2 = chatbot_vigia.alertar_clientes_esperando_humano()
+        assert r2['enviadas'] == 1
+        contencao_b.assert_called_once()
+        # E, agora que a contenção SAIU em 4246, uma terceira conversa do
+        # mesmo contato é suprimida (contrato do IG multi-thread intacto)
+        assert chatbot_vigia._contencao_recente_para_contato(chave, 4247) is True
+
+
 def test_candidata_da_tabela_carrega_status_e_telefone(app):
     from app.extensions import db
     from app.models import VigiaVeredito
