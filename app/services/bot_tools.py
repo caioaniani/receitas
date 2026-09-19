@@ -792,6 +792,16 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
         'data_entrega': (p.data_entrega.strftime('%d/%m/%Y')
                          if p.data_entrega else None),
         'periodo': p.janela_entrega or None,
+        # DESTINO da entrega (caso Jessica 19/09/2026): o bot confirmava
+        # "esta tudo certo" sem nunca ver o endereco gravado — o pedido
+        # express tinha "Rua X, 72" e a cliente mandou "200, ap 72" logo
+        # depois; sem o endereco na mao o bot tratou como cotacao nova. Sai
+        # so AUTORIZADO (mesmo gate da cartinha); `endereco_entrega` na
+        # retirada e a linha legivel da loja (contrato do checkout).
+        'modo_entrega': p.modo_entrega,
+        'endereco_entrega': (p.endereco_entrega or '').strip() or None,
+        'endereco_complemento': (p.endereco_complemento or '').strip() or None,
+        'nome_destinatario': (p.nome_destinatario or '').strip() or None,
         'itens': [{'nome': i.nome, 'qtd': i.quantidade,
                    'preco_unit': float(i.preco_unitario or 0)}
                   for i in p.itens],
