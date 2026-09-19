@@ -826,7 +826,13 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
                             'recebeu mas o status é entregue: mande o '
                             'link_comprovante (foto da entrega na porta) e '
                             'peça pra conferir com porteiro/família; se a '
-                            'dúvida persistir, transfira pra equipe.'),
+                            'dúvida persistir, transfira pra equipe. '
+                            'Ao CONFIRMAR um pedido pago, repita '
+                            'endereco_entrega (com endereco_complemento) e '
+                            'nome_destinatario e pergunte se confere. Se o '
+                            'cliente responder com endereço, número, apto ou '
+                            'nome DIFERENTE, é CORREÇÃO do pedido: NÃO cote '
+                            'frete, transfira com os dados novos no motivo.'),
     }
 
 
