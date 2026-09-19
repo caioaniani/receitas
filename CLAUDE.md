@@ -4270,11 +4270,18 @@ todos corrigidos com ordem do dono ("Liberado"); testes em
   assumida por humano" com o bot respondendo (4min = idade do ALTA falso).
   Design da cobrança até resolver (commits bea8b472/f84fdfd0/9c6e55ee de
   17-18/09) MANTIDO; agora a candidata da tabela carrega `status` e
-  `telefone` (chave `c:` do marcador deixou de sair vazia), o texto em
-  pending vira "Caso grave apontado pelo Vigia há Nmin — conversa ainda com
-  o BOT", o motivo persistido diz o status real e a contenção ao cliente
-  nem é tentada fora de open (a672c66b já a barrava no gateway — esse
-  commit NÃO foi a causa, ao contrário).
+  `telefone` (chave `c:` do marcador deixou de sair vazia), o texto e o
+  motivo persistido seguem o ESTADO REAL (revisão 19/09): pending + ALTA =
+  "Caso grave apontado pelo Vigia há Nmin — conversa ainda com o BOT";
+  snoozed = "Conversa ADIADA — ninguém responde (nem o bot)"; pending SEM
+  ALTA (humano clicou "Devolvida pro bot") = "Conversa devolvida ao BOT";
+  open = o texto original. A contenção ao cliente nem é tentada fora de
+  open (a672c66b já a barrava no gateway — esse commit NÃO foi a causa, ao
+  contrário). ARMADILHA fechada na revisão: o marcador `c:<chave>` prova
+  que o DONO foi avisado, não que o cliente recebeu contenção —
+  `_contencao_recente_para_contato` agora cruza com
+  `EsperaAtendimento.contencao_em`; sem isso um ALTA em conversa pending
+  calava a contenção numa conversa open do mesmo contato por 12h.
 - **Auditor**: `casos_alta` traz `conv_id` + `conversas_com_alta` (turnos da
   mesma conversa = 1 caso) e `funil_site.pagos_detalhe` (código + hora do
   pagamento, cap `_MAX_PAGOS_DETALHE=20`); os dois prompts exigem pagamento
