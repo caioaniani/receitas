@@ -803,10 +803,13 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
 
     # Conversa que e so marcacao de story do IG: nao ha cliente esperando
     # nem venda em risco — nao gasta modelo nem alerta (dono, 06/07/2026).
+    # Fonte unica `texto_da_mensagem`: turno so-imagem conta como a ultima
+    # fala (nao se pula pra um texto anterior que pode ser a mencao).
+    from app.services.chatbot import texto_da_mensagem
     ultima_user = next((m for m in reversed(historico or [])
-                        if m.get('role') == 'user'
-                        and (m.get('content') or '').strip()), None)
-    if ultima_user and _e_mencao_story(ultima_user.get('content')):
+                        if m.get('role') == 'user' and texto_da_mensagem(m)),
+                       None)
+    if ultima_user and _e_mencao_story(texto_da_mensagem(ultima_user)):
         return {'pulou': 'mencao de story do Instagram'}
 
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
