@@ -478,10 +478,15 @@ def test_auditor_por_hora_e_funil_site(app):
         ini = _dt.combine(d, _dt.min.time())
         dados = _coletar_periodo(ini, ini + timedelta(days=1))
         assert dados['por_hora'] == {'10h': 2, '14h': 1}
-        assert dados['funil_site'] == {'pedidos_criados': 3,
-                                       'pedidos_pagos': 2,
-                                       'pedidos_cancelados': 1,
-                                       'faturamento_pago': 80.0}
+        funil = dict(dados['funil_site'])
+        # Detalhe dos pagos (hora + codigo) — caso Jessica 19/09/2026.
+        detalhe = funil.pop('pagos_detalhe')
+        assert [d['pago_em'] for d in detalhe] == ['14:00', '14:00']
+        assert sorted(d['valor'] for d in detalhe) == [30.0, 50.0]
+        assert funil == {'pedidos_criados': 3,
+                         'pedidos_pagos': 2,
+                         'pedidos_cancelados': 1,
+                         'faturamento_pago': 80.0}
         VigiaVeredito.query.delete()
         PedidoOnline.query.delete()
         db.session.commit()
