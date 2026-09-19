@@ -420,7 +420,7 @@ def _texto_handoff_com_horario(texto):
     return aviso + base
 
 
-def _resp_encerrar(motivo, tools_usadas=None):
+def _resp_encerrar(motivo, tools_usadas=None, tools_resumo=None):
     """Constroi o dict de encerramento: SEM texto, status=resolved no Chatwoot.
     Cliente nao recebe mensagem — caller (crm/routes.py) muda o status da conversa."""
     out = {
@@ -430,6 +430,8 @@ def _resp_encerrar(motivo, tools_usadas=None):
     }
     if tools_usadas is not None:
         out['tools_usadas'] = list(tools_usadas)
+    if tools_resumo is not None:
+        out['tools_resumo'] = list(tools_resumo)
     return out
 
 
