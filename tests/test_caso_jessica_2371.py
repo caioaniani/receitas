@@ -597,3 +597,112 @@ def test_prompts_do_auditor_explicam_conv_id_e_pagamento_posterior():
         assert 'pagos_detalhe_omitidos' in p
         assert 'POSTERIOR' in p
         assert 'venda fechada pelo bot' in p
+    assert 'EXCLUÍDO' in PROMPT_AUDITOR_RESUMO       # pedido explícito de atendente
+
+
+# ── 6. Segunda rodada (dono 19/09: "Tirar e fazer o restante") ────────────
+
+@pytest.mark.parametrize('mensagem, motivo, esperado', [
+    ('Gostaria de falar com atendente?', None, True),        # conv 2380
+    (None, 'cliente pediu atendente', True),
+    (None, 'cliente solicitou falar com uma pessoa', True),
+    (None, 'cliente insistiu em atendimento humano', True),
+    (None, 'cliente não quer atendente, quer cancelar', False),
+    (None, 'dúvida de frete para Moema', False),
+    (None, 'corrigir endereço do pedido X', False),
+    ('quanto custa a cesta?', 'cliente reclamou do atraso', False),
+])
+def test_pediu_humano_pela_fala_ou_pelo_motivo(mensagem, motivo, esperado):
+    from app.services.chatbot import pediu_humano
+    assert pediu_humano(mensagem, motivo) is esperado
+
+
+def test_pedido_explicito_de_atendente_nao_e_handoff_preguicoso():
+    """Dono 19/09/2026 ("Tirar"): "preguiçoso 1/2" do resumo era a conversa
+    2380 — cliente escreveu "Gostaria de falar com atendente?" e o bot
+    transferiu sem consultar nada. Não há o que consultar."""
+    from app.services.chatbot_vigia import handoff_foi_preguicoso
+    assert handoff_foi_preguicoso([], motivo='cliente pediu atendente') is False
+    assert handoff_foi_preguicoso(
+        [], mensagem_cliente='Gostaria de falar com atendente?') is False
+    # A regra base segue intacta
+    assert handoff_foi_preguicoso([]) is True
+    assert handoff_foi_preguicoso([], motivo='cliente quer cesta') is True
+    assert handoff_foi_preguicoso(None, motivo='cliente pediu atendente') is False
+
+
+def test_auditor_nao_conta_pedido_de_atendente_como_preguicoso(app):
+    from datetime import datetime as _dt
+
+    from app.extensions import db
+    from app.models import VigiaVeredito
+    from app.services.chatbot_auditor import _coletar_periodo
+    from app.utils import hoje
+    with app.app_context():
+        base = _dt.combine(hoje(), _dt.min.time())
+        db.session.add(VigiaVeredito(
+            criado_em=base.replace(hour=13, minute=22), conv_id='2380',
+            cliente='Cliente A', mensagem_cliente='Gostaria de falar com atendente?',
+            bot_acao='handoff', bot_motivo='cliente pediu atendente',
+            alerta=False, tools_usadas='[]'))
+        db.session.add(VigiaVeredito(
+            criado_em=base.replace(hour=14, minute=5), conv_id='2390',
+            cliente='Cliente B', mensagem_cliente='o que vem na cesta?',
+            bot_acao='handoff', bot_motivo='não soube responder',
+            alerta=False, tools_usadas='[]'))
+        db.session.commit()
+        dados = _coletar_periodo(base, base + timedelta(days=1))
+        assert dados['handoffs'] == 2
+        assert dados['handoffs_preguicosos'] == 1
+        assert dados['conversas_preguicosas'] == 1
+
+
+def test_resumo_tool_omite_texto_livre_de_erro():
+    """Só o CÓDIGO do erro vai pro vigia; str(exc) com SQL/parâmetro fica
+    de fora (achado da revisão)."""
+    from app.services.chatbot import _resumo_tool
+    assert 'nao_encontrado' in _resumo_tool('consultar_frete', {'erro': 'nao_encontrado'})
+    assert 'fora_area' in _resumo_tool('consultar_frete', {'erro': 'fora_area'})
+    cru = _resumo_tool('consultar_frete', {
+        'erro': "(psycopg2.OperationalError) SELECT * FROM x WHERE tel='5511987654321'"})
+    assert '5511987654321' not in cru
+    assert 'detalhe omitido' in cru
+    assert 'autorizacao_necessaria' not in _resumo_tool(
+        'consultar_pedido', {'erro': "boom with spaces"})
+
+
+def test_consultar_pedido_diz_quem_autorizou(app):
+    """Destinatário de presente autoriza pelo telefone dele; a tool passa a
+    dizer `autorizado_como` pra correção pedida por quem RECEBE chegar à
+    equipe com esse rótulo."""
+    from app.extensions import db
+    from app.models import PedidoOnline
+    from app.services import bot_tools
+    with app.app_context():
+        p = PedidoOnline(codigo='TESTEJESS2', status='pago',
+                         nome_cliente='COMPRADOR', telefone_cliente='11977776666',
+                         email_cliente='c@example.com', modo_entrega='agendada',
+                         endereco_entrega='Rua X, 10', nome_destinatario='Ângela',
+                         telefone_destinatario='11955554444',
+                         subtotal=100, frete_valor=10, valor_total=110)
+        db.session.add(p)
+        db.session.commit()
+        r = bot_tools.consultar_pedido('TESTEJESS2', telefone_contato='+55 11 97777-6666')
+        assert r['autorizado_como'] == 'comprador'
+        r2 = bot_tools.consultar_pedido('TESTEJESS2', telefone_contato='11955554444')
+        assert r2['autorizado_como'] == 'destinatario'
+        assert 'autorizado_como' in r2['como_apresentar']
+        neg = bot_tools.consultar_pedido('TESTEJESS2', telefone_contato='11900000000')
+        assert neg.get('erro') == 'autorizacao_necessaria'
+        assert 'autorizado_como' not in neg
+
+
+def test_fechamento_aceita_elogio_puro():
+    """"Amamosss 🥰" em conversa open (conv 2375, 19/09) virou "cliente
+    esperando atendente há 13min" — elogio puro é fechamento."""
+    from app.services.chatbot_vigia import _e_fechamento
+    assert _e_fechamento('Amamosss 🥰') is True
+    assert _e_fechamento('Amei!') is True
+    assert _e_fechamento('Adoramos, obrigada') is True
+    assert _e_fechamento('Amei, quero mais 2') is False
+    assert _e_fechamento('Amanhã') is False
