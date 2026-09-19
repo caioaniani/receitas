@@ -440,5 +440,6 @@ def test_prompts_do_auditor_explicam_conv_id_e_pagamento_posterior():
     for p in (PROMPT_AUDITOR, PROMPT_AUDITOR_RESUMO):
         assert 'conversas_com_alta' in p
         assert 'pagos_detalhe' in p
+        assert 'pagos_detalhe_omitidos' in p
         assert 'POSTERIOR' in p
         assert 'venda fechada pelo bot' in p
