@@ -628,10 +628,15 @@ def avaliar(historico, *, conv_id=None, nome_contato='', resultado_bot=None):
     res = _avaliar_interno(historico, conv_id=conv_id,
                             nome_contato=nome_contato,
                             resultado_bot=resultado_bot)
+    # Mesma regra do store/prompt: turno so com imagem registra
+    # "[imagem enviada]" — antes gravava a mensagem de TEXTO anterior como
+    # se fosse a que gerou o veredito (caso Jessica 19/09/2026: o veredito
+    # 7245 saiu com a fala das 09:41 e ninguem entendia o alerta).
+    from app.services.chatbot import texto_da_mensagem
     ultima_msg = ''
     for m in reversed(historico or []):
-        if m.get('role') == 'user' and (m.get('content') or '').strip():
-            ultima_msg = m['content'].strip()
+        if m.get('role') == 'user' and texto_da_mensagem(m):
+            ultima_msg = texto_da_mensagem(m)
             break
     try:
         _registrar(res, conv_id, nome_contato, ultima_msg,
