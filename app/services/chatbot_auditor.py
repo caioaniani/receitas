@@ -25,6 +25,9 @@ MAX_TOKENS = 1200
 # dia normal tem <20 pedidos pagos; data especial (Dia dos Pais ~100) nao
 # pode inflar o prompt do auditor.
 _MAX_PAGOS_DETALHE = 20
+# Carimbo de hora nos dados do auditor (pagos, casos ALTA, handoffs) — com
+# a DATA, porque a janela pendente das 07:00 vai de ontem 19h ate hoje.
+_FMT_HORA = '%d/%m %H:%M'
 
 PROMPT_AUDITOR = """Você é o Auditor do bot de atendimento da O Pão (padaria artesanal).
 Sua função é olhar os dados agregados do dia (ou periodo) e devolver:
@@ -211,11 +214,16 @@ def _funil_site(inicio, fim):
         # unico pedido pago da janela na unica conversa ALTA e escrever
         # "fechou venda no final (R$430)" — o pagamento (09:49) PRECEDEU a
         # conversa flagada. Com a hora, o prompt exige pagamento POSTERIOR.
+        # Fica com os MAIS RECENTES (sao os unicos que podem ser posteriores
+        # a uma conversa) e diz quantos ficaram de fora; a hora leva a data
+        # porque a janela pendente das 07:00 cruza a meia-noite.
+        ordenados = sorted(pagos, key=lambda x: x.pago_em)
+        omitidos = max(0, len(ordenados) - _MAX_PAGOS_DETALHE)
         pagos_detalhe = [{
             'codigo': p.codigo,
-            'pago_em': p.pago_em.strftime('%H:%M'),
+            'pago_em': p.pago_em.strftime(_FMT_HORA),
             'valor': float(round(p.valor_total or 0, 2)),
-        } for p in sorted(pagos, key=lambda x: x.pago_em)[:_MAX_PAGOS_DETALHE]]
+        } for p in ordenados[omitidos:]]
         return {
             'pedidos_criados': len(pedidos),
             'pedidos_pagos': len(pagos),
@@ -223,6 +231,7 @@ def _funil_site(inicio, fim):
                 1 for p in pedidos if p.status == 'cancelado'),
             'faturamento_pago': float(round(faturamento, 2)),
             'pagos_detalhe': pagos_detalhe,
+            'pagos_detalhe_omitidos': omitidos,
         }
     except Exception:  # noqa: BLE001
         logger.exception('auditor: funil do site falhou')
