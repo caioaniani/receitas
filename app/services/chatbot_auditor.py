@@ -242,7 +242,7 @@ def _funil_site(inicio, fim):
 # So numeros agregados — as amostras/motivos de ontem nao interessam.
 _CHAVES_COMPARATIVO = ('conversas_unicas', 'handoffs', 'contencao_pct',
                        'handoffs_preguicosos', 'gravidade_alta',
-                       'gravidade_media', 'funil_site')
+                       'conversas_com_alta', 'gravidade_media', 'funil_site')
 
 
 def _resumo_comparativo(dados):
@@ -255,7 +255,8 @@ def _resumo_comparativo(dados):
     # pedido de ONTEM so inflaria o prompt.
     if isinstance(out.get('funil_site'), dict):
         out['funil_site'] = {k: v for k, v in out['funil_site'].items()
-                             if k != 'pagos_detalhe'}
+                             if k not in ('pagos_detalhe',
+                                          'pagos_detalhe_omitidos')}
     return out
 
 
