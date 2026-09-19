@@ -329,17 +329,36 @@ _HANDOFF_EXCECAO = re.compile(
     # LEGITIMO (chatbot_vigia._SINAIS_RECLAMACAO) — o enforcement divergia.
     r'|\batras(o|os|ou|ado|ada|ando)\b'
     r'|\b(rappi|ifood|99\s*food|marketplace)\b'
-    # CORRECAO de endereco/destinatario de pedido JA PAGO (caso Jessica
-    # 19/09/2026: express de 1h gravado com "Rua X, 72", cliente mandou
-    # "200, ap 72" + "vizinha Angela" logo apos o bot confirmar o pedido e
-    # o bot cotou frete). O pedido foi consultado no turno ANTERIOR; exigir
-    # nova consulta so atrasaria a correcao. Padrao ESTREITO de proposito:
-    # verbo de mudanca + alvo (endereco/destinatario/apto/numero/quem
-    # recebe) — "cliente perguntou o endereco da loja" NAO casa.
-    r'|\b(corrig|alter|mud|troc|ajust)\w*\s+(?:\w+\s+){0,3}?'
-    r'(endere[cç]o|destinat[aá]ri|apartamento|apto\b|n[uú]mero|'
-    r'quem (?:vai )?receb)'
     r')')
+
+# CORRECAO de endereco/destinatario de pedido JA PAGO (caso Jessica
+# 19/09/2026: express de 1h gravado com "Rua X, 72", cliente mandou
+# "200, ap 72" + "vizinha Angela" logo apos o bot confirmar o pedido e o
+# bot cotou frete). O pedido foi consultado no turno ANTERIOR; exigir nova
+# consulta so atrasaria a correcao. DUAS condicoes, as duas no motivo:
+# (1) verbo de mudanca (formas conjugadas explicitas — `alter\w*` engolia
+#     "alternativa") + alvo de ENTREGA (endereco / destinatario / apto /
+#     numero DA CASA / quem recebe); `numero` solto casava "numero de paes",
+#     "numero do telefone/cartao" — achado da revisao de 19/09/2026;
+# (2) ANCORA no pedido: a palavra "pedido" ou um codigo de 8 caracteres com
+#     digito (E49C374A). Sem a ancora, "cliente mudou de endereco e quer
+#     saber o frete" (venda em curso — o enforcement existe pra isso) virava
+#     excecao e o handoff preguicoso de frete voltava. A descricao da tool
+#     ja induz o formato "corrigir endereco do pedido <numero>: <dados>".
+_CORRECAO_ENTREGA = re.compile(
+    r'(?i)\b(corrig\w*|corre[cç][aã]o|'
+    r'alter(?:a|ar|ou|e|em|ando|a[cç][aã]o)|'
+    r'mud(?:a|ar|ou|e|em|ando|an[cç]a)|'
+    r'troc(?:a|ar|ou|e|em|ando)|'
+    r'ajust(?:a|ar|ou|e|em|ando)|'
+    r'atualiz(?:a|ar|ou|e|em|ando|a[cç][aã]o)|'
+    r'edit(?:a|ar|ou|e|em|ando)|'
+    r'modific(?:a|ar|ou|e|em|ando|a[cç][aã]o))\b'
+    r'\s+(?:\w+\s+){0,3}?'
+    r'(endere[cç]o|destinat[aá]ri|apartamento|apto\b|'
+    r'n[uú]mero d[aoe] (?:casa|endere[cç]o|pr[eé]dio|rua)|'
+    r'quem (?:vai )?receb)')
+_ANCORA_PEDIDO = re.compile(r'(?i)\bpedido\b|\b(?=[A-Z0-9]*\d)[A-Z0-9]{8}\b')
 
 
 def _handoff_excecao(inp):
@@ -349,7 +368,10 @@ def _handoff_excecao(inp):
     cliente e quase sempre contem "um atendente vai continuar", o que
     casaria a excecao 'atendente' e anularia o enforcement inteiro."""
     texto = ' '.join(str(inp.get(k) or '') for k in ('motivo', 'resumo'))
-    return bool(_HANDOFF_EXCECAO.search(texto))
+    if _HANDOFF_EXCECAO.search(texto):
+        return True
+    return bool(_CORRECAO_ENTREGA.search(texto)
+                and _ANCORA_PEDIDO.search(texto))
 
 
 # Frases-padrao do system prompt que NUNCA deveriam aparecer literais na
