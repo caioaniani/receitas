@@ -4308,6 +4308,31 @@ todos corrigidos com ordem do dono ("Liberado"); testes em
   mesma fonte da listagem), caminho VNDA sem as chaves novas (VNDA
   aposentado), destinatário-autorizado pedindo correção (vai pro humano
   decidir, nada muda sozinho).
+- SEGUNDA RODADA (dono 19/09 à noite, "Tirar e fazer o restante"): o
+  resumo das 19h ainda listava o falso positivo porque o auditor lê os
+  VEREDITOS gravados (os 3 ALTA de 09:50-09:51, anteriores ao fix) e nunca
+  reavalia a conversa — sai da janela no dia seguinte. Feito: (1) **pedido
+  EXPLÍCITO de atendente não conta como handoff preguiçoso** —
+  `chatbot.pediu_humano(mensagem_cliente, motivo)` (fala do cliente via
+  `_quer_humano` OU motivo do bot via `_MOTIVO_PEDIU_HUMANO`, "cliente
+  pediu atendente") é a fonte única; `handoff_foi_preguicoso(..., motivo=,
+  mensagem_cliente=)` a aplica e o auditor passa `bot_motivo`/
+  `mensagem_cliente` (o detector do vigia já excluía; o auditor contava —
+  caso conv 2380 "Gostaria de falar com atendente?" = o "preguiçoso 1/2").
+  Alergia/reclamação/atraso SEGUEM contando: o dono pediu só o pedido de
+  humano; alargar pra toda `_HANDOFF_EXCECAO` é decisão dele. (2)
+  `_resumo_tool` só repassa CÓDIGO de erro (`_erro_curto`: slug de até 40
+  chars); texto livre vira "detalhe omitido". (3) `consultar_pedido`
+  devolve `autorizado_como` (comprador/destinatario/cpf) e o
+  `como_apresentar` manda dizer no motivo quando quem pede correção é quem
+  RECEBE. (4) `_CORRECAO_ENTREGA` aceita alvo ANTES do verbo ("quem vai
+  receber mudou"), janela de 3 palavras nas duas ordens. (5) o leitor de
+  story do `avaliar_abandono` usa `texto_da_mensagem`. (6) `_FECHAMENTO_
+  TOKEN` ganhou amei/amamos/adorei (conv 2375 "Amamosss 🥰" em conversa
+  open virou alerta de espera de 13min) — ancorado, "Amei, quero mais 2"
+  não é fechamento. NÃO feito, de propósito: caminho VNDA do
+  consultar_pedido (aposentado). Testes: seção 6 de
+  `tests/test_caso_jessica_2371.py`.
 - LIÇÃO DE PROCESSO (repete a de 26/07): relatório do auditor NÃO é
   diagnóstico — puxar a conversa real e o pedido antes de qualquer conclusão;
   "duas visões discordando" (vigia × 7248 "sem erro real" × humano 09:59) era
