@@ -36,8 +36,17 @@ def candidatos():
         elif atual.get('status') in ('open', 'pending', 'snoozed'):
             if row.estado == 'respondido':
                 row.estado = 'em_atendimento'
+            # `status` e `telefone` acompanham a candidata (caso Jessica
+            # 19/09/2026): sem o status, o alerta dizia "esperando ATENDENTE
+            # em conversa open" numa conversa PENDING que o bot atendia; sem
+            # o telefone, a chave de contato saia vazia ("c:") e o dedupe de
+            # contencao por contato ficava cego neste caminho.
+            sender = ((atual.get('meta') or {}).get('sender') or {})
             conversas.append({'id': row.conversa_id, 'nome_contato': row.nome,
-                              'minutos_paradas': int((agora() - row.inicio_em).total_seconds() / 60)})
+                              'minutos_paradas': int((agora() - row.inicio_em).total_seconds() / 60),
+                              'status': atual.get('status'),
+                              'telefone': (sender.get('phone_number')
+                                           or sender.get('identifier') or '')})
     db.session.commit()
     return conversas
 
