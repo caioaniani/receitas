@@ -1183,13 +1183,20 @@ def _contencao_recente_para_contato(chave, conv_id, horas=12):
 
 
 def _registrar_espera_humano(conv_id, nome, minutos, ultima_msg, enviado,
-                             contato_chave=''):
+                             contato_chave='', status_conv='open'):
     """Grava o veredito de espera-humano e devolve o ID da linha (None se
     falhou). O ID é o CLAIM: quem chamou envia depois e confirma/desfaz —
-    ver `alertar_clientes_esperando_humano`."""
+    ver `alertar_clientes_esperando_humano`. `status_conv` = status REAL da
+    conversa no Chatwoot: o motivo persistido nao pode dizer "open" numa
+    conversa pending (caso Jessica 19/09/2026)."""
     try:
         from app.extensions import db
         from app.models import VigiaVeredito
+        if (status_conv or 'open') == 'open':
+            motivo = 'cliente esperando atendente em conversa open'
+        else:
+            motivo = (f'caso grave sem atendimento humano (conversa '
+                      f'{status_conv} — bot ainda respondendo)')
         row = VigiaVeredito(
             conv_id=str(conv_id),
             cliente=(nome or '')[:200] or None,
@@ -1198,7 +1205,7 @@ def _registrar_espera_humano(conv_id, nome, minutos, ultima_msg, enviado,
             bot_acao='espera_humano',
             alerta=True,
             gravidade='alta',
-            motivo_vigia='cliente esperando atendente em conversa open',
+            motivo_vigia=motivo,
             enviado_whatsapp=bool(enviado),
         )
         db.session.add(row)
