@@ -4282,13 +4282,32 @@ todos corrigidos com ordem do dono ("Liberado"); testes em
   `_contencao_recente_para_contato` agora cruza com
   `EsperaAtendimento.contencao_em`; sem isso um ALTA em conversa pending
   calava a contenção numa conversa open do mesmo contato por 12h.
-- **Auditor**: `casos_alta` traz `conv_id` + `conversas_com_alta` (turnos da
-  mesma conversa = 1 caso) e `funil_site.pagos_detalhe` (código + hora do
-  pagamento, cap `_MAX_PAGOS_DETALHE=20`); os dois prompts exigem pagamento
-  POSTERIOR à conversa + sinal explícito pra ligar venda a conversa. O
-  "R$430" veio da janela 09-12h (único pago = E49C374A, pago ANTES da
-  confusão) colado na única conversa ALTA. `_resumo_comparativo` não leva
-  `pagos_detalhe` (tendência, não lista).
+- **Auditor**: `casos_alta` traz `conv_id` + `hora` + `conversas_com_alta`
+  (turnos da mesma conversa = 1 caso; a hora existe porque "pagamento
+  POSTERIOR" precisa de um instante pra comparar) e `funil_site.
+  pagos_detalhe` (código + `dd/mm HH:MM` do pagamento — com DATA porque a
+  janela pendente das 07:00 cruza a meia-noite; cap `_MAX_PAGOS_DETALHE=20`
+  fica com os MAIS RECENTES e `pagos_detalhe_omitidos` diz quantos saíram —
+  lista truncada em silêncio parecia completa); os dois prompts exigem
+  pagamento POSTERIOR à conversa + sinal explícito pra ligar venda a
+  conversa. O "R$430" veio da janela 09-12h (único pago = E49C374A, pago
+  ANTES da confusão) colado na única conversa ALTA. `_resumo_comparativo`
+  não leva `pagos_detalhe` (tendência, não lista) e LEVA
+  `conversas_com_alta` (senão "vs ontem" compararia turnos).
+- REVISÃO (workflow de refutadores, 19/09): 2 achados confirmados por
+  execução (regex larga; "correção" sem casar) e 22 sem refutador (limite
+  de sessão). Triagem do orquestrador: aplicados os 6 acima + `avaliar_
+  abandono` e o short-circuit do vigia na fonte única `texto_da_mensagem`,
+  regra de POSSE do vigia restrita a pedido que o RESULTADO DAS FERRAMENTAS
+  diz localizado/autorizado, prompt "equipe vai cuidar do ajuste" sem
+  prometer que dá tempo, REGRA #0 com referência cruzada, `como_apresentar`
+  cobre RETIRADA. DESCARTADOS com motivo: "instrução duplicada no
+  PROMPT_AUDITOR" (os dois blocos estão em prompts DIFERENTES), erro cru
+  da tool no `_resumo_tool` (mesmo texto que o bot já vê; 80 chars, só
+  pro vigia), `meta.sender` "não verificável" (é o JSON cru do Chatwoot,
+  mesma fonte da listagem), caminho VNDA sem as chaves novas (VNDA
+  aposentado), destinatário-autorizado pedindo correção (vai pro humano
+  decidir, nada muda sozinho).
 - LIÇÃO DE PROCESSO (repete a de 26/07): relatório do auditor NÃO é
   diagnóstico — puxar a conversa real e o pedido antes de qualquer conclusão;
   "duas visões discordando" (vigia × 7248 "sem erro real" × humano 09:59) era
