@@ -108,8 +108,10 @@ def test_texto_da_mensagem_e_fonte_unica_do_store_e_do_vigia(app):
     assert chatbot.texto_da_mensagem({'content': ' oi ', 'imagens': [IMG]}) == 'oi'
     assert chatbot.texto_da_mensagem({'content': ''}) == ''
     assert chatbot.texto_da_mensagem(None) == ''
-    linhas = chatbot_vigia._formatar_historico(HIST_IMAGEM).splitlines()
-    assert linhas[2] == 'CLIENTE: [imagem enviada]'
+    texto = chatbot_vigia._formatar_historico(HIST_IMAGEM)
+    assert 'CLIENTE: [imagem enviada]' in texto
+    assert (texto.index('BOT: Temos') < texto.index('CLIENTE: [imagem enviada]')
+            < texto.index('BOT: Encontrei'))
 
 
 def test_prompt_vigia_tem_regra_de_posse_do_pedido_e_de_imagem():
