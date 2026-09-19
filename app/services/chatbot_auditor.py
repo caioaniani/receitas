@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 
 MODELO = 'claude-sonnet-5'
 MAX_TOKENS = 1200
+# Teto do detalhe pedido-a-pedido no `funil_site` (hora + codigo dos pagos):
+# dia normal tem <20 pedidos pagos; data especial (Dia dos Pais ~100) nao
+# pode inflar o prompt do auditor.
+_MAX_PAGOS_DETALHE = 20
 
 PROMPT_AUDITOR = """Você é o Auditor do bot de atendimento da O Pão (padaria artesanal).
 Sua função é olhar os dados agregados do dia (ou periodo) e devolver:
@@ -46,6 +50,15 @@ factualmente o que houve e a sugestão, sem extrapolar padrão.
 
 Horário de pico: só afirme com base no histograma `por_hora` dos dados —
 sem ele (ausente/vazio), não fale de pico.
+
+CONTAGEM DE CASOS ALTA: o vigia gera UM veredito POR TURNO — vários itens de
+`casos_alta` com o MESMO `conv_id` são a MESMA conversa (turnos seguidos),
+conte como 1 caso e use `conversas_com_alta`. Nunca escreva "N vezes" somando
+turnos da mesma conversa.
+VENDA × CONVERSA: `funil_site.pagos_detalhe` traz hora e código de cada
+pedido pago. Só relacione um pedido pago a uma conversa se o pagamento for
+POSTERIOR à conversa E houver sinal explícito (código citado). Pagamento
+anterior à conversa NÃO é "venda fechada pelo bot".
 
 Seja DIRETO e CURTO. Linguagem coloquial brasileira, sem corporativês. NUNCA invente número.
 
@@ -86,8 +99,14 @@ DADOS que você recebe (use-os, não invente):
 - `por_hora`: histograma REAL de eventos por hora — cite horário de pico SÓ
   a partir dele; se ausente/vazio, não fale de pico.
 - `funil_site`: pedidos do site no período (criados/pagos/cancelados +
-  faturamento pago) — cruze com as conversas quando fizer sentido (ex:
-  muita conversa e pouco pedido pago = atrito em algum ponto).
+  faturamento pago + `pagos_detalhe` com hora e código de cada pago) — cruze
+  com as conversas quando fizer sentido (ex: muita conversa e pouco pedido
+  pago = atrito em algum ponto). Só relacione um pedido pago a UMA conversa
+  se o pagamento for POSTERIOR à conversa E houver sinal explícito (código
+  citado); pagamento anterior à conversa NÃO é "venda fechada pelo bot".
+- `casos_alta` traz `conv_id`: vários ALTA com o MESMO conv_id são a MESMA
+  conversa (um veredito por turno) — conte como 1 caso e use
+  `conversas_com_alta`; nunca escreva "N vezes" somando turnos.
 - `comparativo_dia_anterior`: os mesmos números de ontem — cite tendência
   (melhorou/piorou) em 1 frase quando a diferença for relevante; sem essa
   chave, não compare com dia nenhum.
@@ -187,12 +206,23 @@ def _funil_site(inicio, fim):
                    .all())
         pagos = [p for p in pedidos if p.pago_em is not None]
         faturamento = sum((p.valor_total or 0) for p in pagos)
+        # Detalhe dos PAGOS com hora e codigo (caso Jessica 19/09/2026): o
+        # funil so agregado + "cruze com as conversas" fez o Sonnet colar o
+        # unico pedido pago da janela na unica conversa ALTA e escrever
+        # "fechou venda no final (R$430)" — o pagamento (09:49) PRECEDEU a
+        # conversa flagada. Com a hora, o prompt exige pagamento POSTERIOR.
+        pagos_detalhe = [{
+            'codigo': p.codigo,
+            'pago_em': p.pago_em.strftime('%H:%M'),
+            'valor': float(round(p.valor_total or 0, 2)),
+        } for p in sorted(pagos, key=lambda x: x.pago_em)[:_MAX_PAGOS_DETALHE]]
         return {
             'pedidos_criados': len(pedidos),
             'pedidos_pagos': len(pagos),
             'pedidos_cancelados': sum(
                 1 for p in pedidos if p.status == 'cancelado'),
             'faturamento_pago': float(round(faturamento, 2)),
+            'pagos_detalhe': pagos_detalhe,
         }
     except Exception:  # noqa: BLE001
         logger.exception('auditor: funil do site falhou')
@@ -211,7 +241,13 @@ def _resumo_comparativo(dados):
     (melhorou/piorou vs ontem) sem receber o relatorio inteiro de novo."""
     if not dados:
         return None
-    return {k: dados.get(k) for k in _CHAVES_COMPARATIVO}
+    out = {k: dados.get(k) for k in _CHAVES_COMPARATIVO}
+    # O comparativo e tendencia (numeros), nao lista: o detalhe pedido a
+    # pedido de ONTEM so inflaria o prompt.
+    if isinstance(out.get('funil_site'), dict):
+        out['funil_site'] = {k: v for k, v in out['funil_site'].items()
+                             if k != 'pagos_detalhe'}
+    return out
 
 
 def _coletar_periodo(inicio, fim):
@@ -272,12 +308,17 @@ def _coletar_periodo(inicio, fim):
                                      'cliente': v.cliente or '',
                                      'tools': _tools_de(v)})
 
-    # Casos de alta (raros, mas todos)
+    # Casos de alta (raros, mas todos). `conv_id` em cada um + contagem de
+    # CONVERSAS distintas: o vigia gera um veredito por turno, entao 3 ALTAs
+    # da mesma conversa sao UM caso, nao "3 vezes" (relatorio do caso
+    # Jessica 19/09/2026 disse "confundiu 3 vezes" pra 1 falso positivo).
     casos_alta = [{
+        'conv_id': v.conv_id or '',
         'cliente': v.cliente or '', 'msg': (v.mensagem_cliente or '')[:200],
         'motivo': (v.motivo_vigia or '')[:200],
         'tools': _tools_de(v),
     } for v in alta]
+    conv_com_alta = len({v.conv_id for v in alta if v.conv_id})
 
     # Histograma real por hora — o prompt sempre pediu "horario de pico"
     # mas ate 02/07/2026 o Sonnet nao recebia timestamp nenhum (inventava
@@ -294,6 +335,7 @@ def _coletar_periodo(inicio, fim):
         'contencao_pct': contencao_pct,
         'preguicosos_pct': preguicosos_pct,
         'gravidade_alta': len(alta),
+        'conversas_com_alta': conv_com_alta,
         'gravidade_media': len(media),
         'top_motivos_handoff': motivos_handoff,
         'top_motivos_vigia': motivos_vigia,
