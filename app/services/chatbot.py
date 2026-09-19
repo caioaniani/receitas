@@ -1346,11 +1346,13 @@ def responder(historico, *, telefone_contato=None,
                                   or 'Já te passo para um atendente.')
                     return _resp_handoff(texto_base,
                                          inp.get('motivo') or 'handoff',
-                                         tools_usadas=tools_usadas)
+                                         tools_usadas=tools_usadas,
+                                         tools_resumo=tools_resumo)
                 if b.name == 'encerrar_conversa':
                     tools_usadas.append('encerrar_conversa')
                     return _resp_encerrar('encerramento por agradecimento',
-                                           tools_usadas=tools_usadas)
+                                           tools_usadas=tools_usadas,
+                                           tools_resumo=tools_resumo)
 
         # Executa as ferramentas e devolve os resultados pro Claude.
         messages.append({'role': 'assistant', 'content': resp.content})
