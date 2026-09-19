@@ -102,6 +102,26 @@ def test_veredito_registra_marcador_de_imagem_como_mensagem_do_cliente(app):
         assert row.mensagem_cliente == '[imagem enviada]'
 
 
+def test_vigia_abandono_registra_marcador_de_imagem(app):
+    """`avaliar_abandono` usa a mesma fonte única: última mensagem só-imagem
+    registra '[imagem enviada]', não o texto de um turno anterior."""
+    from app.services import chatbot_vigia
+    capturado = {}
+
+    def fake_registrar(res, conv_id, nome, msg, **kw):
+        capturado['msg'] = msg
+
+    with patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'x'}), \
+            patch('app.services.chatbot_vigia._chamar_modelo_abandono',
+                  return_value={'alerta': False, 'gravidade': None}), \
+            patch('app.services.chatbot_vigia._registrar',
+                  side_effect=fake_registrar):
+        app.config['CHATBOT_VIGIA'] = '1'
+        chatbot_vigia.avaliar_abandono(HIST_IMAGEM[:3], conv_id=2371,
+                                       minutos_sem_resposta=30)
+    assert capturado['msg'].endswith('[imagem enviada]')
+
+
 def test_texto_da_mensagem_e_fonte_unica_do_store_e_do_vigia(app):
     from app.services import chatbot, chatbot_vigia
     assert chatbot.texto_da_mensagem({'content': '', 'imagens': [IMG]}) == '[imagem enviada]'
