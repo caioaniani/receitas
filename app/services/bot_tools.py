@@ -804,6 +804,7 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
         # so AUTORIZADO (mesmo gate da cartinha); `endereco_entrega` na
         # retirada e a linha legivel da loja (contrato do checkout).
         'modo_entrega': p.modo_entrega,
+        'autorizado_como': autorizado_como,
         'endereco_entrega': (p.endereco_entrega or '').strip() or None,
         'endereco_complemento': (p.endereco_complemento or '').strip() or None,
         'nome_destinatario': (p.nome_destinatario or '').strip() or None,
