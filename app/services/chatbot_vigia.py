@@ -1096,7 +1096,11 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
         # do Spotify: env nova só chega ao app.config se declarada no
         # config.py; kill-switch de vigia lê os.environ como os demais).
         import os as _os
+        # `not bot_no_turno`: em conversa pending o BOT esta respondendo —
+        # o gateway ja recusaria (status_esperado='open'), mas nem vale a
+        # consulta HTTP.
         if (espera.estado == 'aguardando' and not espera.contencao_em
+                and not bot_no_turno
                 and _os.environ.get('ESPERA_HUMANO_CONTENCAO', '1') != '0'):
             # Anti-duplicidade em DUAS camadas (contato duplicado):
             # (a) o texto ja esta NESTA conversa (re-alerta pos-12h nao
