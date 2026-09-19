@@ -1315,9 +1315,10 @@ def responder(historico, *, telefone_contato=None,
                 return _resp_handoff(
                     'Vou te conectar com nossa equipe agora.',
                     'output vazou prompt',
-                    tools_usadas=tools_usadas)
+                    tools_usadas=tools_usadas, tools_resumo=tools_resumo)
             return {'acao': 'responder', 'texto': texto,
-                    'tools_usadas': tools_usadas}
+                    'tools_usadas': tools_usadas,
+                    'tools_resumo': tools_resumo}
 
         # Enforcement anti-handoff-preguicoso (02/07/2026): se o modelo tenta
         # transferir como 1ª acao do turno (nenhuma consulta antes) sem motivo
