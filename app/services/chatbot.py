@@ -1266,7 +1266,8 @@ def responder(historico, *, telefone_contato=None,
                                '(evita preco inventado)')
                 return _resp_handoff(_FALLBACK_CATALOGO,
                                      'consultar_produtos falhou',
-                                     tools_usadas=tools_usadas)
+                                     tools_usadas=tools_usadas,
+                                     tools_resumo=tools_resumo)
             texto = '\n'.join(b.text for b in resp.content
                               if getattr(b, 'type', None) == 'text' and b.text).strip()
             if not texto:
