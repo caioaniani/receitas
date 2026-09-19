@@ -1205,6 +1205,10 @@ def responder(historico, *, telefone_contato=None,
     # consultar o catalogo — caso real 12/06/2026, conv #198: cliente
     # perguntou de cesta+entrega e o bot fez handoff com zero consulta).
     tools_usadas = []
+    # Resumo curto (sem PII) do RESULTADO de cada tool, pro vigia saber o
+    # que o bot viu de fato (ex.: pedido AUTORIZADO pelo telefone do canal)
+    # — so o nome da tool nao bastava (caso Jessica 19/09/2026).
+    tools_resumo = []
     # Enforcement anti-handoff-preguicoso: a 1ª tentativa de transferir SEM
     # nenhuma consulta antes (e sem motivo de excecao) e RECUSADA em codigo
     # uma unica vez — o modelo recebe um tool_result mandando consultar.
