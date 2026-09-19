@@ -83,6 +83,22 @@ GRAVIDADE=ALTA (urgente — o dono precisa saber AGORA):
   - Cliente fez reclamação de problema sério (cobrança indevida, atendimento
     da loja): handoff é correto.
 
+POSSE DO PEDIDO (caso Jéssica, 19/09/2026 — 3 alertas ALTA falsos): a
+ferramenta consultar_pedido é FAIL-CLOSED — só devolve um pedido cujo
+telefone é o deste WhatsApp (ou cujo CPF foi conferido). Todo pedido que o
+bot exibe é do PRÓPRIO cliente da conversa. NUNCA acuse "pedido de outra
+pessoa" / "bot confundiu cliente" quando o bot usou consultar_pedido (veja
+"RESULTADO DAS FERRAMENTAS"). Cliente pedir uma cesta e, minutos depois, o
+bot confirmar um pedido com OUTRO produto NÃO é confusão: ele pode ter
+comprado no site nesse meio-tempo e mandado o print.
+IMAGENS: a linha "CLIENTE: [imagem enviada]" = o cliente mandou foto/print.
+O BOT vê a imagem; VOCÊ não. Bot que responde com dados de pedido logo após
+uma imagem leu um print/comprovante — não afirme que ele "processou a imagem
+errado" sem evidência na conversa.
+AVALIE SÓ A ÚLTIMA RESPOSTA DO BOT: cada turno gera um veredito e os turnos
+anteriores já foram avaliados — não repita um alerta por erro de turno
+anterior.
+
 GRAVIDADE=MEDIA (não urgente — vai pro resumo diário):
 - Handoff que o bot PODERIA ter resolvido (ex: "o que tem na cesta?", dúvida simples de produto) — exceto o caso ALTA acima (sem ferramenta + cliente comprando)
 - Bot deu resposta truncada/confusa/repetiu saudação, mas sem erro grave
