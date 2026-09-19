@@ -615,6 +615,26 @@ def contexto_do_contato(contato_key, *, excluir_conv=None):
     return msgs
 
 
+# Marcador canonico de mensagem SO com imagem (sem texto). FONTE UNICA: o
+# store, o prompt do vigia e o registro do veredito precisam enxergar a
+# MESMA coisa. Caso Jessica (conv 2371, 19/09/2026): o vigia descartava a
+# mensagem de content '' e via duas falas do bot seguidas ("cliente pediu
+# cesta -> bot 'encontrei seu pedido'") — acusou "pedido de outra pessoa"
+# 3x num pedido que era da propria cliente (ela tinha mandado o print).
+MARCADOR_IMAGEM = '[imagem enviada]'
+
+
+def texto_da_mensagem(m):
+    """Texto visivel de uma mensagem do historico: o content, ou o marcador
+    de imagem quando so ha anexo. '' quando nao ha nada. Usar em TODO
+    consumidor que serializa o historico pra texto (store, vigia)."""
+    m = m or {}
+    c = (m.get('content') or '').strip()
+    if not c and m.get('imagens'):
+        return MARCADOR_IMAGEM
+    return c
+
+
 def salvar_historico(conv_id, historico, resposta, *, handoff=False,
                      contato_key=None):
     """Persiste o turno no nosso banco: o historico efetivo (que JA inclui a
