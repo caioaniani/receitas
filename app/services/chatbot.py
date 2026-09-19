@@ -1240,7 +1240,8 @@ def responder(historico, *, telefone_contato=None,
         except Exception as exc:  # noqa: BLE001
             logger.exception('chatbot: erro Anthropic')
             return _resp_handoff(_FALLBACK, f'erro anthropic: {exc}',
-                                 tools_usadas=tools_usadas)
+                                 tools_usadas=tools_usadas,
+                                 tools_resumo=tools_resumo)
 
         from app.services import uso_ia
         uso_ia.registrar('bot_atendimento', MODELO, getattr(resp, 'usage', None))
