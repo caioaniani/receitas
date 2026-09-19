@@ -1393,9 +1393,11 @@ def responder(historico, *, telefone_contato=None,
                                   telefone_contato=telefone_contato,
                                   conversa_id=conversa_id)
             tools_usadas.append(b.name)
+            tools_resumo.append(_resumo_tool(b.name, out))
             if b.name == 'buscar_nota_fiscal' and isinstance(out, dict) and out.get('precisa_humano'):
                 return _resp_handoff(out['mensagem'], 'pendência fiscal exige atendimento',
-                                     tools_usadas=tools_usadas)
+                                     tools_usadas=tools_usadas,
+                                     tools_resumo=tools_resumo)
             if b.name == 'consultar_produtos':
                 produto_falhou = bool(isinstance(out, dict) and out.get('erro'))
             resultados.append({
