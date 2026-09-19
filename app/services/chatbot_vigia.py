@@ -1084,7 +1084,8 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
         # cobre isso é app/services/instancia.py.)
         claim = _registrar_espera_humano(conv_id, nome, minutos, ultima,
                                          False, contato_chave=chave_contato,
-                                         status_conv=status_conv)
+                                         status_conv=status_conv,
+                                         grave=bool(espera.grave))
         if claim is None:
             logger.warning('espera-humano: claim falhou conv=%s — pula '
                            'este ciclo (retenta no proximo)', conv_id)
