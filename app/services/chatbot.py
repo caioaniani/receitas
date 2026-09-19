@@ -1298,11 +1298,13 @@ def responder(historico, *, telefone_contato=None,
                     # Camada 1, que so nao pegou porque `_e_fechamento` e
                     # ancorado nas duas pontas e nao tolera texto extra.
                     return _resp_encerrar('resposta vazia em fechamento',
-                                          tools_usadas=tools_usadas)
+                                          tools_usadas=tools_usadas,
+                                          tools_resumo=tools_resumo)
                 # (c) O bot tinha PERGUNTA pendente e o modelo emudeceu: o
                 # cliente nunca pode ficar no vacuo (regra P1, 02/07/2026).
                 return _resp_handoff(FALLBACK_TEXTO, 'resposta vazia',
-                                     tools_usadas=tools_usadas)
+                                     tools_usadas=tools_usadas,
+                                     tools_resumo=tools_resumo)
             # Camada 3 anti-injection: filtro de saida. Se o bot regurgita
             # o canario ou frase-padrao do system prompt, o jailbreak
             # passou pelas camadas anteriores — recusa a resposta. NUNCA
