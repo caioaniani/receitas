@@ -4248,9 +4248,18 @@ todos corrigidos com ordem do dono ("Liberado"); testes em
   explícita na regra ⚡ e no bloco ANTES DE TRANSFERIR, `consultar_pedido`
   devolve `modo_entrega`/`endereco_entrega`/`endereco_complemento`/
   `nome_destinatario` (só AUTORIZADO, mesmo gate da cartinha) e manda
-  REPETIR o destino ao confirmar; `_HANDOFF_EXCECAO` aceita motivo com
-  verbo de mudança + endereço/destinatário/apto/número (padrão ESTREITO —
-  "perguntou o endereço da loja" não casa; teste parametrizado trava).
+  REPETIR o destino ao confirmar; a exceção do enforcement anti-handoff-
+  preguiçoso (`chatbot._handoff_excecao`) exige DUAS condições no motivo:
+  `_CORRECAO_ENTREGA` (verbo de mudança em forma conjugada explícita +
+  endereço/destinatário/apto/número DA CASA/quem recebe) E `_ANCORA_PEDIDO`
+  (palavra "pedido" ou código de 8 caracteres com dígito). A revisão de
+  19/09 provou que a 1ª versão (`corrig|alter|mud|troc|ajust\w*` + alvo,
+  com `número` solto) casava "cliente mudou de endereço e quer saber o
+  frete" e "alterar o número de pães" — reabria o handoff preguiçoso de
+  FRETE que o enforcement existe pra barrar. "Perguntou o endereço da
+  loja" e motivo de frete sem pedido NÃO casam; alvo ANTES do verbo ("quem
+  vai receber mudou") não casa (aceito: custa uma recusa). Teste
+  parametrizado trava positivos e negativos.
   Endereço de pedido pago se corrige em `main.loja_online_pedido_editar`
   (gerente). Desfecho físico da entrega do caso não é verificável daqui.
 - **Espera-humano mentia em conversa pending**: todo ALTA cria
