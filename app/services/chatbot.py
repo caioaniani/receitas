@@ -957,6 +957,31 @@ def disponivel():
                 or current_app.config.get('ANTHROPIC_API_KEY'))
 
 
+def _resumo_tool(nome, out):
+    """Resumo CURTO e sem PII do resultado de uma tool, pro VIGIA — que nao
+    recebe os tool_results, so os nomes. Caso Jessica (conv 2371,
+    19/09/2026): o vigia via so 'consultar_pedido' e nao tinha como saber
+    que o pedido exibido era da PROPRIA cliente (a tool e fail-closed por
+    telefone do canal/CPF — bot_tools._consultar_pedido_online); acusou
+    'pedido de outra pessoa' 3x e o alerta foi pro WhatsApp do dono."""
+    d = out if isinstance(out, dict) else {}
+    if nome == 'consultar_pedido':
+        if d.get('numero'):
+            return (f'consultar_pedido: pedido {d["numero"]} localizado e '
+                    f'AUTORIZADO (telefone deste canal ou CPF conferido) — '
+                    f'status {d.get("status") or "?"}')
+        if d.get('pedidos_recentes'):
+            return (f'consultar_pedido: {len(d["pedidos_recentes"])} pedidos '
+                    'recentes deste telefone (lista pro cliente escolher)')
+        if d.get('erro') == 'autorizacao_necessaria':
+            return ('consultar_pedido: pedido existe mas NAO autorizado '
+                    '(bot pediu CPF)')
+        return f'consultar_pedido: {str(d.get("erro") or "sem resultado")[:80]}'
+    if d.get('erro'):
+        return f'{nome}: erro ({str(d["erro"])[:80]})'
+    return f'{nome}: ok'
+
+
 def _executar_tool(nome, inp, *, telefone_contato=None,
                    conversa_id=None):
     """Executa a tool. `telefone_contato` (canonico, vindo do canal — ex:
