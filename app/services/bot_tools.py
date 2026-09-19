@@ -840,7 +840,11 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
                             '— repita a loja). Se o cliente responder com '
                             'endereço, número, apto ou nome DIFERENTE, é '
                             'CORREÇÃO do pedido: NÃO cote frete, transfira '
-                            'com os dados novos no motivo.'),
+                            'com os dados novos no motivo. Se '
+                            'autorizado_como = destinatario, quem fala é '
+                            'quem RECEBE (não quem comprou): diga isso no '
+                            'motivo da transferência — a equipe decide com '
+                            'o comprador.'),
     }
 
 
