@@ -384,10 +384,55 @@ def test_auditor_conta_conversas_com_alta_e_traz_hora_dos_pagos(app):
         assert dados['gravidade_alta'] == 3
         assert dados['conversas_com_alta'] == 1
         assert {c['conv_id'] for c in dados['casos_alta']} == {'2371'}
+        # Cada caso ALTA leva a HORA (com data — a janela das 07:00 cruza a
+        # meia-noite): sem ela a regra "pagamento POSTERIOR" não tinha com
+        # o que comparar.
+        assert [c['hora'] for c in dados['casos_alta']] == [
+            f'{d:%d/%m} 09:50', f'{d:%d/%m} 09:50', f'{d:%d/%m} 09:51']
         assert dados['funil_site']['pagos_detalhe'] == [
-            {'codigo': 'E49C374A', 'pago_em': '09:49', 'valor': 430.0}]
-        # O comparativo (tendência) não carrega a lista de ontem
-        assert 'pagos_detalhe' not in _resumo_comparativo(dados)['funil_site']
+            {'codigo': 'E49C374A', 'pago_em': f'{d:%d/%m} 09:49',
+             'valor': 430.0}]
+        assert dados['funil_site']['pagos_detalhe_omitidos'] == 0
+        # O comparativo (tendência) não carrega a lista de ontem, mas leva
+        # a contagem de CONVERSAS com ALTA (senão "vs ontem" compararia
+        # turnos).
+        comp = _resumo_comparativo(dados)
+        assert 'pagos_detalhe' not in comp['funil_site']
+        assert 'pagos_detalhe_omitidos' not in comp['funil_site']
+        assert comp['conversas_com_alta'] == 1
+
+
+def test_pagos_detalhe_trunca_mantendo_os_mais_recentes_e_avisa(app):
+    """Data especial (~100 pagos): o teto fica com os ÚLTIMOS pagamentos —
+    os únicos que podem ser POSTERIORES a uma conversa — e diz quantos
+    ficaram de fora (a lista não pode parecer completa)."""
+    from datetime import datetime as _dt
+    from decimal import Decimal
+
+    from app.extensions import db
+    from app.models import PedidoOnline
+    from app.services.chatbot_auditor import _MAX_PAGOS_DETALHE, _funil_site
+    from app.utils import hoje
+    with app.app_context():
+        d = hoje()
+        base = _dt.combine(d, _dt.min.time())
+        n = _MAX_PAGOS_DETALHE + 2
+        for i in range(n):
+            db.session.add(PedidoOnline(
+                codigo=f'C{i:07d}', nome_cliente='X', email_cliente='x@x.com',
+                modo_entrega='retirada', status='pago',
+                valor_total=Decimal('10.00'),
+                criado_em=base.replace(hour=8) + timedelta(minutes=i),
+                pago_em=base.replace(hour=8) + timedelta(minutes=i)))
+        db.session.commit()
+        funil = _funil_site(base, base + timedelta(days=1))
+        assert funil['pedidos_pagos'] == n
+        assert funil['pagos_detalhe_omitidos'] == 2
+        assert len(funil['pagos_detalhe']) == _MAX_PAGOS_DETALHE
+        # Os dois mais ANTIGOS saem; o mais recente fica
+        codigos = [p['codigo'] for p in funil['pagos_detalhe']]
+        assert 'C0000000' not in codigos and 'C0000001' not in codigos
+        assert codigos[-1] == f'C{n - 1:07d}'
 
 
 def test_prompts_do_auditor_explicam_conv_id_e_pagamento_posterior():
