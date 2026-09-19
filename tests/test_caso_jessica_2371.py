@@ -175,9 +175,11 @@ def test_responder_devolve_tools_resumo_em_todo_retorno_pos_tool():
 
 def test_prompt_bot_tem_correcao_pos_confirmacao():
     from app.services.chatbot_prompt import PROMPT
-    idx = PROMPT.find('CORREÇÃO PÓS-CONFIRMAÇÃO')
+    # O cabeçalho da seção (a REGRA #0 faz referência cruzada antes dela)
+    idx = PROMPT.find('CORREÇÃO PÓS-CONFIRMAÇÃO (caso Jéssica')
     assert idx > 0
-    bloco = PROMPT[idx:idx + 1200]
+    assert PROMPT.find('CORREÇÃO PÓS-CONFIRMAÇÃO') < idx   # referência na REGRA #0
+    bloco = PROMPT[idx:idx + 1300]
     assert 'NÃO chame consultar_frete' in bloco
     assert 'transferir_para_humano' in bloco
     assert 'corrigir endereço/destinatário do pedido' in bloco
