@@ -87,8 +87,10 @@ POSSE DO PEDIDO (caso Jéssica, 19/09/2026 — 3 alertas ALTA falsos): a
 ferramenta consultar_pedido é FAIL-CLOSED — só devolve um pedido cujo
 telefone é o deste WhatsApp (ou cujo CPF foi conferido). Todo pedido que o
 bot exibe é do PRÓPRIO cliente da conversa. NUNCA acuse "pedido de outra
-pessoa" / "bot confundiu cliente" quando o bot usou consultar_pedido (veja
-"RESULTADO DAS FERRAMENTAS"). Cliente pedir uma cesta e, minutos depois, o
+pessoa" / "bot confundiu cliente" quando "RESULTADO DAS FERRAMENTAS" diz que
+consultar_pedido localizou e AUTORIZOU o pedido citado. (Bot citando um
+pedido que NÃO aparece nesse resultado — só do histórico — aí sim é
+suspeito.) Cliente pedir uma cesta e, minutos depois, o
 bot confirmar um pedido com OUTRO produto NÃO é confusão: ele pode ter
 comprado no site nesse meio-tempo e mandado o print.
 IMAGENS: a linha "CLIENTE: [imagem enviada]" = o cliente mandou foto/print.
