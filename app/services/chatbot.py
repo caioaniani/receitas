@@ -1416,7 +1416,7 @@ def responder(historico, *, telefone_contato=None,
 
     # Estourou o teto de iteracoes — passa pro humano por seguranca.
     return _resp_handoff(_FALLBACK, 'limite de passos',
-                         tools_usadas=tools_usadas)
+                         tools_usadas=tools_usadas, tools_resumo=tools_resumo)
 
 
 # ── Follow-up automatico (bot retoma cliente que sumiu) ────────────────────
