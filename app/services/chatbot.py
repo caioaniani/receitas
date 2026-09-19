@@ -237,6 +237,31 @@ def _quer_humano(texto):
     return any(p.search(t) for p in _HUMANO_PATTERNS)
 
 
+# Motivo que o BOT escreve ao transferir porque o cliente PEDIU humano
+# ("cliente pediu atendente", "solicitou falar com uma pessoa"). E a
+# terceira pessoa do `_quer_humano` (que le a FALA do cliente). Usado pela
+# metrica de handoff preguicoso (dono 19/09/2026: "Tirar" — pedido
+# explicito de atendente nao tem o que consultar antes de transferir).
+_MOTIVO_PEDIU_HUMANO = re.compile(
+    r'(?i)\b(pediu|pede|pedindo|solicit\w+|quer|queria|exig\w+|insist\w+|'
+    r'prefer\w+)\b[^.;]{0,40}?'
+    r'\b(atendente|humano|pessoa|algu[eé]m da equipe|operador)\b'
+    r'|\b(atendente|humano)\b[^.;]{0,30}?\b(pediu|solicitad\w+|a pedido)\b')
+
+
+def pediu_humano(mensagem_cliente=None, motivo=None):
+    """True se o cliente pediu humano EXPLICITAMENTE — pela fala dele
+    (`_quer_humano`) ou pelo motivo que o bot registrou no handoff. Fonte
+    unica pro detector do vigia e pra metrica do auditor: as duas leituras
+    divergiam (o vigia ja excluia, o auditor contava como preguicoso)."""
+    if _quer_humano(mensagem_cliente):
+        return True
+    m = (motivo or '').strip()
+    if not m or _HUMANO_NEGACAO.search(m):
+        return False
+    return bool(_MOTIVO_PEDIU_HUMANO.search(m))
+
+
 def _solicita_troca(historico):
     """Detecta pedido de troca/substituicao que o bot nao pode negociar.
 
