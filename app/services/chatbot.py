@@ -658,9 +658,7 @@ def salvar_historico(conv_id, historico, resposta, *, handoff=False,
         role = m.get('role')
         if role not in ('user', 'assistant'):
             continue
-        c = (m.get('content') or '').strip()
-        if not c and m.get('imagens'):
-            c = '[imagem enviada]'
+        c = texto_da_mensagem(m)
         if c:
             entrada = {'role': role, 'content': c}
             if m.get('handoff_em'):        # preserva marcador de turnos velhos
