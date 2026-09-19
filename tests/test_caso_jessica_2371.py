@@ -174,13 +174,32 @@ def test_prompt_bot_tem_correcao_pos_confirmacao():
 @pytest.mark.parametrize('motivo, esperado', [
     ('corrigir endereço do pedido E49C374A: Rua Gaspar Lourenço 200 ap 72, '
      'destinatária Ângela', True),
-    ('alterar destinatário da entrega para a vizinha', True),
+    ('Correção de endereço do pedido E49C374A: número 200, ap 72', True),
+    ('alterar destinatário do pedido para a vizinha', True),
     ('mudar o número da casa no pedido pago', True),
     ('cliente quer trocar o apto do pedido', True),
+    ('atualizar endereço da entrega, pedido 1A2B3C4D', True),
+    # Só o código (sem a palavra "pedido") também ancora
+    ('editar endereço de 1A2B3C4D: Rua Nova 10', True),
     ('cliente perguntou o endereço da loja', False),       # sem verbo de mudança
+    ('endereco de entrega: pedido E49C374A', False),       # idem
     ('número do pedido não localizado', False),
     ('cesta para 10 pessoas', False),
     ('duvida de frete para Moema', False),
+    # Revisão 19/09/2026: venda EM CURSO (frete) nunca é exceção — o
+    # enforcement anti-handoff-preguiçoso existe justamente pra isso.
+    ('cliente mudou de endereço e quer saber o frete novo', False),
+    ('cliente quer corrigir o endereço para calcular o frete', False),
+    ('ajustar endereço para cotação de frete', False),
+    ('cliente trocou de endereço, cotar frete de novo', False),
+    ('dúvida de frete: cliente mudou o número da casa', False),
+    # `número` solto casava telefone/cartão/quantidade
+    ('cliente quer alterar o número de pães da cesta do pedido', False),
+    ('cliente quer trocar o número do telefone de contato do pedido', False),
+    ('cliente quer alterar o número do cartão', False),
+    # `alter\w*` engolia "alternativa"
+    ('alternativa de endereço para retirada do pedido', False),
+    ('mudar quantidade e endereço de e-mail', False),
 ])
 def test_handoff_excecao_correcao_de_endereco_e_estreita(motivo, esperado):
     from app.services.chatbot import _handoff_excecao
