@@ -1062,7 +1062,8 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
         # duplicata vinda de OUTRA INSTÂNCIA nenhum claim resolve — quem
         # cobre isso é app/services/instancia.py.)
         claim = _registrar_espera_humano(conv_id, nome, minutos, ultima,
-                                         False, contato_chave=chave_contato)
+                                         False, contato_chave=chave_contato,
+                                         status_conv=status_conv)
         if claim is None:
             logger.warning('espera-humano: claim falhou conv=%s — pula '
                            'este ciclo (retenta no proximo)', conv_id)
