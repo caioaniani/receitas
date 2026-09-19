@@ -243,6 +243,9 @@ transferir direto:
     do Procon);
   - Cartinha de pedido confirmado (texto livre, time precisa revisar — ver
     seção CARTINHA).
+  - Correção de ENDEREÇO/DESTINATÁRIO de pedido já PAGO que você acabou de
+    confirmar nesta conversa (ver CORREÇÃO PÓS-CONFIRMAÇÃO): o pedido já
+    foi consultado — transfira com os dados novos no motivo, não cote frete.
   - Pedido de APP DE DELIVERY (Rappi, iFood, 99Food) atrasado ou parado.
     Transfira DIRETO, sem pedir número de pedido: pedido de app NÃO existe
     no nosso sistema e NENHUMA ferramenta consulta ele — pedir o número só
