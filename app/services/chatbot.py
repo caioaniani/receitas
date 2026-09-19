@@ -370,19 +370,25 @@ _HANDOFF_EXCECAO = re.compile(
 #     saber o frete" (venda em curso — o enforcement existe pra isso) virava
 #     excecao e o handoff preguicoso de frete voltava. A descricao da tool
 #     ja induz o formato "corrigir endereco do pedido <numero>: <dados>".
-_CORRECAO_ENTREGA = re.compile(
-    r'(?i)\b(corrig\w*|corre[cç][aã]o|'
+_VERBO_MUDANCA = (
+    r'(corrig\w*|corre[cç][aã]o|'
     r'alter(?:a|ar|ou|e|em|ando|a[cç][aã]o)|'
     r'mud(?:a|ar|ou|e|em|ando|an[cç]a)|'
     r'troc(?:a|ar|ou|e|em|ando)|'
     r'ajust(?:a|ar|ou|e|em|ando)|'
     r'atualiz(?:a|ar|ou|e|em|ando|a[cç][aã]o)|'
     r'edit(?:a|ar|ou|e|em|ando)|'
-    r'modific(?:a|ar|ou|e|em|ando|a[cç][aã]o))\b'
-    r'\s+(?:\w+\s+){0,3}?'
-    r'(endere[cç]o|destinat[aá]ri|apartamento|apto\b|'
+    r'modific(?:a|ar|ou|e|em|ando|a[cç][aã]o))')
+_ALVO_ENTREGA = (
+    r'(endere[cç]o|destinat[aá]ri\w*|apartamento|apto\b|'
     r'n[uú]mero d[aoe] (?:casa|endere[cç]o|pr[eé]dio|rua)|'
-    r'quem (?:vai )?receb)')
+    r'quem (?:vai )?receb\w*)')
+# Verbo ANTES do alvo ("corrigir endereço") ou alvo ANTES do verbo ("quem
+# vai receber mudou", "endereço do pedido está errado, trocar") — a 1ª
+# versao so aceitava a primeira ordem (revisao 19/09/2026).
+_CORRECAO_ENTREGA = re.compile(
+    r'(?i)\b' + _VERBO_MUDANCA + r'\b\s+(?:\w+\s+){0,3}?' + _ALVO_ENTREGA
+    + r'|\b' + _ALVO_ENTREGA + r'\s+(?:\w+\s+){0,3}?\b' + _VERBO_MUDANCA + r'\b')
 _ANCORA_PEDIDO = re.compile(r'(?i)\bpedido\b|\b(?=[A-Z0-9]*\d)[A-Z0-9]{8}\b')
 
 
