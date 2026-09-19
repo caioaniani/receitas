@@ -1032,14 +1032,35 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
         # ALTA (falso) do vigia. Texto e motivo passam a dizer a verdade.
         status_conv = (c.get('status') or 'open')
         bot_no_turno = status_conv != 'open'
+        # Revisao 19/09/2026: o texto depende do ESTADO REAL, nao so de
+        # "nao e open" — snoozed = ninguem responde (nem o bot, que so
+        # atende pending); pending SEM ALTA = humano devolveu a conversa ao
+        # bot ("Devolvida pro bot" no painel) e nao ha caso grave nenhum.
         if bot_no_turno and espera.estado == 'aguardando':
-            msg = (f'⚠️ *Caso grave apontado pelo Vigia* ha {minutos}min — '
-                   f'conversa ainda com o BOT (status {status_conv})\n'
-                   f'Cliente: {nome} (conversa #{conv_id})\n\n'
-                   f'Última mensagem: "{ultima}"\n\n'
-                   'Ninguem da equipe assumiu; o bot segue respondendo. '
-                   'Abra a conversa se o caso pedir humano.'
-                   + (f'\n\n{link}' if link else ''))
+            if status_conv == 'snoozed':
+                msg = (f'⏸️ *Conversa ADIADA (snoozed)* ha {minutos}min\n'
+                       f'Cliente: {nome} (conversa #{conv_id})\n\n'
+                       f'Última mensagem: "{ultima}"\n\n'
+                       'Alguem da equipe adiou a conversa — ninguem esta '
+                       'respondendo (nem o bot). Reabra se o caso pedir '
+                       'resposta.'
+                       + (f'\n\n{link}' if link else ''))
+            elif espera.grave:
+                msg = (f'⚠️ *Caso grave apontado pelo Vigia* ha {minutos}min — '
+                       f'conversa ainda com o BOT (status {status_conv})\n'
+                       f'Cliente: {nome} (conversa #{conv_id})\n\n'
+                       f'Última mensagem: "{ultima}"\n\n'
+                       'Ninguem da equipe assumiu; o bot segue respondendo. '
+                       'Abra a conversa se o caso pedir humano.'
+                       + (f'\n\n{link}' if link else ''))
+            else:
+                msg = (f'🤖 *Conversa devolvida ao BOT* (status {status_conv}) '
+                       f'— cliente em espera ha {minutos}min\n'
+                       f'Cliente: {nome} (conversa #{conv_id})\n\n'
+                       f'Última mensagem: "{ultima}"\n\n'
+                       'Sem alerta do Vigia; o bot responde. Marque como '
+                       'resolvida se nao houver mais o que fazer.'
+                       + (f'\n\n{link}' if link else ''))
         else:
             msg = (f'🙋 *Cliente esperando ATENDENTE* ha {minutos}min\n'
                    f'Cliente: {nome} (conversa #{conv_id})\n\n'
