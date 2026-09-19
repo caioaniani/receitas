@@ -163,15 +163,32 @@ def _resumo_catalogo_site(limite=120):
 
 
 def _formatar_historico(historico):
+    # `texto_da_mensagem` (fonte unica com o store): mensagem SO com imagem
+    # vira "[imagem enviada]" em vez de SUMIR. Caso Jessica (conv 2371,
+    # 19/09/2026): o turno do print era descartado e o vigia via "cliente
+    # pediu cesta -> BOT ofereceu -> BOT 'encontrei seu pedido'" (duas falas
+    # do bot seguidas) — acusou "pedido de outra pessoa" num pedido da
+    # propria cliente. Import lazy: chatbot.py e chatbot_vigia.py se
+    # importam mutuamente dentro de funcoes.
+    from app.services.chatbot import texto_da_mensagem
     linhas = []
     for m in (historico or [])[-12:]:
         role = m.get('role')
-        content = (m.get('content') or '').strip()
+        content = texto_da_mensagem(m)
         if not content:
             continue
         prefixo = 'CLIENTE' if role == 'user' else 'BOT'
         linhas.append(f'{prefixo}: {content}')
     return '\n'.join(linhas)
+
+
+def _imagens_do_turno(historico):
+    """Quantas imagens a ULTIMA mensagem do cliente carrega (a atual — o
+    webhook so anexa `imagens` na msg do turno). 0 quando nao ha."""
+    for m in reversed(historico or []):
+        if (m or {}).get('role') == 'user':
+            return len(m.get('imagens') or [])
+    return 0
 
 
 def _chamar_modelo(api_key, contexto):
