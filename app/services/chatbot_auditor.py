@@ -58,10 +58,11 @@ CONTAGEM DE CASOS ALTA: o vigia gera UM veredito POR TURNO — vários itens de
 `casos_alta` com o MESMO `conv_id` são a MESMA conversa (turnos seguidos),
 conte como 1 caso e use `conversas_com_alta`. Nunca escreva "N vezes" somando
 turnos da mesma conversa.
-VENDA × CONVERSA: `funil_site.pagos_detalhe` traz hora e código de cada
-pedido pago. Só relacione um pedido pago a uma conversa se o pagamento for
-POSTERIOR à conversa E houver sinal explícito (código citado). Pagamento
-anterior à conversa NÃO é "venda fechada pelo bot".
+VENDA × CONVERSA: `funil_site.pagos_detalhe` traz hora e código dos pedidos
+pagos mais recentes (`pagos_detalhe_omitidos` > 0 = a lista está truncada,
+faltam os mais antigos). Só relacione um pedido pago a uma conversa se o
+pagamento for POSTERIOR à `hora` do caso E houver sinal explícito (código
+citado). Pagamento anterior à conversa NÃO é "venda fechada pelo bot".
 
 Seja DIRETO e CURTO. Linguagem coloquial brasileira, sem corporativês. NUNCA invente número.
 
