@@ -726,20 +726,25 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
     p = PedidoOnline.query.filter_by(codigo=code).first()
     if not p:
         return None
-    autorizado = False
+    # `autorizado_como` diz QUEM esta falando (revisao 19/09/2026): o
+    # destinatario de um presente tambem autoriza pelo telefone dele, e uma
+    # correcao de endereco pedida por quem RECEBE precisa chegar a equipe
+    # com esse rotulo — nada muda sozinho, o humano decide.
+    autorizado_como = None
     tel_contato = telefone_chave(telefone_contato or '')
     if tel_contato:
-        for tel in (p.telefone_cliente, p.telefone_destinatario):
+        for rotulo, tel in (('comprador', p.telefone_cliente),
+                            ('destinatario', p.telefone_destinatario)):
             if tel and telefone_chave(tel) == tel_contato:
-                autorizado = True
+                autorizado_como = rotulo
                 break
-    if not autorizado:
+    if not autorizado_como:
         cpf_d = ''.join(c for c in (cpf_cliente or '') if c.isdigit())
         from app.services.fiscal_online import documento
         cpf_pedido = documento(p) if p.cliente_id else ''
         if cpf_d and cpf_pedido and cpf_d == cpf_pedido:
-            autorizado = True
-    if not autorizado:
+            autorizado_como = 'cpf'
+    if not autorizado_como:
         return {'erro': 'autorizacao_necessaria',
                 'instrucao': _AUTORIZACAO_INSTRUCAO}
     # Valores DETALHADOS e rotulados (auditor 06/07/2026): o bot mostrava
