@@ -103,10 +103,11 @@ DADOS que você recebe (use-os, não invente):
 - `por_hora`: histograma REAL de eventos por hora — cite horário de pico SÓ
   a partir dele; se ausente/vazio, não fale de pico.
 - `funil_site`: pedidos do site no período (criados/pagos/cancelados +
-  faturamento pago + `pagos_detalhe` com hora e código de cada pago) — cruze
-  com as conversas quando fizer sentido (ex: muita conversa e pouco pedido
-  pago = atrito em algum ponto). Só relacione um pedido pago a UMA conversa
-  se o pagamento for POSTERIOR à conversa E houver sinal explícito (código
+  faturamento pago + `pagos_detalhe` com hora e código dos pagos mais
+  recentes; `pagos_detalhe_omitidos` > 0 = lista truncada) — cruze com as
+  conversas quando fizer sentido (ex: muita conversa e pouco pedido pago =
+  atrito em algum ponto). Só relacione um pedido pago a UMA conversa se o
+  pagamento for POSTERIOR à `hora` do caso E houver sinal explícito (código
   citado); pagamento anterior à conversa NÃO é "venda fechada pelo bot".
 - `casos_alta` traz `conv_id`: vários ALTA com o MESMO conv_id são a MESMA
   conversa (um veredito por turno) — conte como 1 caso e use
