@@ -495,7 +495,7 @@ def _chamar_com_retry_sobrecarga(client, **kwargs):
         return client.messages.create(**kwargs)
 
 
-def _resp_handoff(texto, motivo, tools_usadas=None):
+def _resp_handoff(texto, motivo, tools_usadas=None, tools_resumo=None):
     """Constroi o dict de handoff aplicando o aviso de fora-horario no texto.
     Centraliza pra TODOS os caminhos de handoff (fallback de erro, tool,
     teto de iteracoes) usarem a mesma garantia — sem isso, fallbacks que
@@ -507,6 +507,8 @@ def _resp_handoff(texto, motivo, tools_usadas=None):
     }
     if tools_usadas is not None:
         out['tools_usadas'] = tools_usadas
+    if tools_resumo is not None:
+        out['tools_resumo'] = list(tools_resumo)
     return out
 
 # Quantas mensagens guardar no nosso store por conversa (cap). O Claude ja
