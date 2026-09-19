@@ -282,13 +282,26 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
             tools_txt = ', '.join(tools_usadas)
         else:
             tools_txt = 'NENHUMA'
+        # Resumo do RESULTADO das tools (chatbot._resumo_tool) + sinal de
+        # imagem no turno. Sem isso o vigia so via o nome 'consultar_pedido'
+        # e nao tinha como saber que o pedido exibido era da propria
+        # cliente, nem que o bot tinha acabado de LER um print (caso
+        # Jessica 19/09/2026 — 3 ALTAs falsos, WhatsApp ao dono).
+        resumo_tools = [str(x) for x in (rb.get('tools_resumo') or []) if x]
+        resumo_txt = '; '.join(resumo_tools) if resumo_tools else '(nenhum)'
+        n_imgs = _imagens_do_turno(historico)
+        imgs_txt = (f'o cliente enviou {n_imgs} imagem(ns) — o BOT viu o '
+                    f'conteúdo (print/comprovante/foto); VOCÊ não vê'
+                    if n_imgs else 'nenhuma')
         contexto = (
             f'Cliente: {nome_contato or "(sem nome)"}\n'
             f'Conversation ID: {conv_id or "?"}\n\n'
             f'CONVERSA (últimas mensagens):\n{_formatar_historico(historico)}\n\n'
             f'ÚLTIMA AÇÃO DO BOT: {rb.get("acao", "?")} - '
             f'{rb.get("motivo", "")}\n'
-            f'FERRAMENTAS USADAS PELO BOT NESTE TURNO: {tools_txt}\n\n'
+            f'FERRAMENTAS USADAS PELO BOT NESTE TURNO: {tools_txt}\n'
+            f'RESULTADO DAS FERRAMENTAS (resumo): {resumo_txt}\n'
+            f'IMAGENS NESTE TURNO: {imgs_txt}\n\n'
             f'CATALOGO DO SITE (mesma fonte que o bot usa — '
             f'CONTRADIGA o bot SO se ele disser esgotado pra item '
             f'marcado DISPONIVEL aqui; "INDISPONIVEL para entrega em: '
