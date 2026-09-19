@@ -1290,7 +1290,8 @@ def responder(historico, *, telefone_contato=None,
                     # "Ja te passo para um atendente." acidental).
                     return _resp_handoff(_TEXTO_VAZIO_RECLAMACAO,
                                          'resposta vazia (reclamacao)',
-                                         tools_usadas=tools_usadas)
+                                         tools_usadas=tools_usadas,
+                                         tools_resumo=tools_resumo)
                 if not _bot_aguarda_resposta(historico):
                     # (b) Fechamento sem pendencia: o SILENCIO e a decisao do
                     # dono (16/06/2026, reforcada 21/07) — mesma saida da
