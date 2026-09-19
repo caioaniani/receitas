@@ -4206,6 +4206,78 @@ grupo "Fix 3"):
   tempo real e papel do vigia); amostra < 10 conversas nao manchete
   porcentagem, usa numeros absolutos.
 
+## Caso Jéssica (conv 2371, 19/09/2026) — vigia cego a imagem + correção de endereço pós-compra
+
+Relatório do auditor: "bot confundiu pedido dela com o de outra pessoa 3
+vezes — mas fechou venda no final (R$430)". Investigação com a conversa
+real (sondas `vigia-vereditos?conversa=`, `chatwoot-thread`, `pedidos-site`)
+e 5 investigadores + refutadores no código: o enquadramento estava ERRADO.
+O pedido E49C374A era da própria cliente (criado 09:48, pago 09:49, print
+enviado 09:49:51; `consultar_pedido` é fail-closed por telefone do canal —
+`bot_tools._consultar_pedido_online`). O erro real do bot foi outro e o
+alerta de espera-humano foi cascata do falso positivo. Quatro defeitos,
+todos corrigidos com ordem do dono ("Liberado"); testes em
+`tests/test_caso_jessica_2371.py` (23 casos):
+
+- **Vigia descartava turno só-imagem**: a msg do print entra no histórico
+  vivo como `content ''` + `imagens` (crm/routes.py) e `_formatar_historico`
+  pulava content vazio — o vigia via "cliente pediu cesta → BOT ofereceu →
+  BOT 'encontrei seu pedido'" (duas falas do bot seguidas) e o veredito
+  gravava a fala de TEXTO anterior como `mensagem_cliente`. Fonte única
+  agora: `chatbot.texto_da_mensagem` / `MARCADOR_IMAGEM` ("[imagem
+  enviada]") usada no store, no prompt do vigia e no registro do veredito.
+  REGRA: todo consumidor que serializa histórico pra texto usa o helper.
+- **Vigia só recebia o NOME das tools**: `responder` agora devolve
+  `tools_resumo` (`chatbot._resumo_tool`, curto e SEM PII — ex.
+  "consultar_pedido: pedido X localizado e AUTORIZADO (telefone deste canal
+  ou CPF) — status pago") em TODO retorno pós-tool (há teste contando
+  `tools_usadas=` × `tools_resumo=`), e o contexto do vigia ganhou
+  "RESULTADO DAS FERRAMENTAS" + "IMAGENS NESTE TURNO". `PROMPT_VIGIA` ganhou
+  POSSE DO PEDIDO (nunca acusar "pedido de outra pessoa" quando o bot usou
+  consultar_pedido), IMAGENS (o bot vê, o vigia não) e AVALIE SÓ A ÚLTIMA
+  RESPOSTA (um veredito por turno — 3 ALTAs da mesma conversa eram o mesmo
+  fato).
+- **Correção de endereço tratada como cotação de frete**: o express de 1h
+  estava gravado "Rua Gaspar Lourenço, 72" (a cliente pôs o apto no campo
+  número); 7 s após a confirmação ela mandou "200. Ap 72" e "é para minha
+  vizinha Ângela" e o bot, pela regra ⚡ de frete (`chatbot_prompt.py`,
+  "qualquer pista de localização → consultar_frete"), cotou R$30 e ofereceu
+  uma segunda cesta — a correção nunca chegou à equipe. Fixes: bloco
+  CORREÇÃO PÓS-CONFIRMAÇÃO no prompt (endereço/nome logo após confirmar
+  pedido pago = correção → NÃO cotar, transferir com os dados), exceção
+  explícita na regra ⚡ e no bloco ANTES DE TRANSFERIR, `consultar_pedido`
+  devolve `modo_entrega`/`endereco_entrega`/`endereco_complemento`/
+  `nome_destinatario` (só AUTORIZADO, mesmo gate da cartinha) e manda
+  REPETIR o destino ao confirmar; `_HANDOFF_EXCECAO` aceita motivo com
+  verbo de mudança + endereço/destinatário/apto/número (padrão ESTREITO —
+  "perguntou o endereço da loja" não casa; teste parametrizado trava).
+  Endereço de pedido pago se corrige em `main.loja_online_pedido_editar`
+  (gerente). Desfecho físico da entrega do caso não é verificável daqui.
+- **Espera-humano mentia em conversa pending**: todo ALTA cria
+  `EsperaAtendimento` (`atendimento_pendente.registrar_alerta`, chamado por
+  `chatbot_vigia._registrar`) com `inicio_em` = hora do veredito;
+  `candidatos()` inclui pending/snoozed e resposta do Agent Bot não conta
+  como atendimento — o WhatsApp dizia "esperando ATENDENTE há 4min ...
+  assumida por humano" com o bot respondendo (4min = idade do ALTA falso).
+  Design da cobrança até resolver (commits bea8b472/f84fdfd0/9c6e55ee de
+  17-18/09) MANTIDO; agora a candidata da tabela carrega `status` e
+  `telefone` (chave `c:` do marcador deixou de sair vazia), o texto em
+  pending vira "Caso grave apontado pelo Vigia há Nmin — conversa ainda com
+  o BOT", o motivo persistido diz o status real e a contenção ao cliente
+  nem é tentada fora de open (a672c66b já a barrava no gateway — esse
+  commit NÃO foi a causa, ao contrário).
+- **Auditor**: `casos_alta` traz `conv_id` + `conversas_com_alta` (turnos da
+  mesma conversa = 1 caso) e `funil_site.pagos_detalhe` (código + hora do
+  pagamento, cap `_MAX_PAGOS_DETALHE=20`); os dois prompts exigem pagamento
+  POSTERIOR à conversa + sinal explícito pra ligar venda a conversa. O
+  "R$430" veio da janela 09-12h (único pago = E49C374A, pago ANTES da
+  confusão) colado na única conversa ALTA. `_resumo_comparativo` não leva
+  `pagos_detalhe` (tendência, não lista).
+- LIÇÃO DE PROCESSO (repete a de 26/07): relatório do auditor NÃO é
+  diagnóstico — puxar a conversa real e o pedido antes de qualquer conclusão;
+  "duas visões discordando" (vigia × 7248 "sem erro real" × humano 09:59) era
+  a pista.
+
 ## Contas a Pagar (NF/boleto via Slack → IA → Dropbox → banco)
 
 Feature de 2026-05-23. Funcionarios postam foto de NF/boleto em canais Slack de
