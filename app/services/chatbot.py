@@ -329,6 +329,16 @@ _HANDOFF_EXCECAO = re.compile(
     # LEGITIMO (chatbot_vigia._SINAIS_RECLAMACAO) — o enforcement divergia.
     r'|\batras(o|os|ou|ado|ada|ando)\b'
     r'|\b(rappi|ifood|99\s*food|marketplace)\b'
+    # CORRECAO de endereco/destinatario de pedido JA PAGO (caso Jessica
+    # 19/09/2026: express de 1h gravado com "Rua X, 72", cliente mandou
+    # "200, ap 72" + "vizinha Angela" logo apos o bot confirmar o pedido e
+    # o bot cotou frete). O pedido foi consultado no turno ANTERIOR; exigir
+    # nova consulta so atrasaria a correcao. Padrao ESTREITO de proposito:
+    # verbo de mudanca + alvo (endereco/destinatario/apto/numero/quem
+    # recebe) — "cliente perguntou o endereco da loja" NAO casa.
+    r'|\b(corrig|alter|mud|troc|ajust)\w*\s+(?:\w+\s+){0,3}?'
+    r'(endere[cç]o|destinat[aá]ri|apartamento|apto\b|n[uú]mero|'
+    r'quem (?:vai )?receb)'
     r')')
 
 
