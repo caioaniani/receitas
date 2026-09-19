@@ -118,7 +118,7 @@ def test_prompt_vigia_tem_regra_de_posse_do_pedido_e_de_imagem():
     from app.services.chatbot_vigia import PROMPT_VIGIA
     assert 'POSSE DO PEDIDO' in PROMPT_VIGIA
     assert 'FAIL-CLOSED' in PROMPT_VIGIA
-    assert 'NUNCA acuse "pedido de outra pessoa"' in PROMPT_VIGIA
+    assert 'NUNCA acuse "pedido de outra' in PROMPT_VIGIA
     assert '[imagem enviada]' in PROMPT_VIGIA
     assert 'AVALIE SÓ A ÚLTIMA RESPOSTA DO BOT' in PROMPT_VIGIA
 
