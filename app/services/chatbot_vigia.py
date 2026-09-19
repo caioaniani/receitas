@@ -817,10 +817,13 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
                 conv_id, minutos_sem_resposta, veredicto)
 
     # Registra no historico em memoria mesmo nao alertando (visivel no diag).
+    # Mesma fonte unica do `avaliar`: turno so-imagem registra
+    # '[imagem enviada]' em vez do texto de um turno anterior.
+    from app.services.chatbot import texto_da_mensagem
     ultima_msg = ''
     for m in reversed(historico or []):
-        if m.get('role') == 'user' and (m.get('content') or '').strip():
-            ultima_msg = m['content'].strip()
+        if m.get('role') == 'user' and texto_da_mensagem(m):
+            ultima_msg = texto_da_mensagem(m)
             break
     res = {'veredicto': veredicto, 'silencio': not veredicto.get('alerta')}
 
