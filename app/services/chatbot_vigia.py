@@ -910,6 +910,11 @@ _FECHAMENTO_TOKEN = (
     r'(ok(ay)?|t[aá]|bom|certo|joia|j[oó]ia|blz|beleza|valeu|vlw|'
     r'obrigad[oa]?|obg|brigad[oa]?|grat[oa]|perfeito|show|[oó]timo|maravilha|'
     r'combinado|fechado|isso|mesmo|sim|entendi|top|legal|muito|demais|'
+    # "Amamosss 🥰" / "Amei!" / "Adoramos" depois da entrega (conv 2375,
+    # 19/09/2026): elogio puro em conversa open virou "cliente esperando
+    # atendente ha 13min" no WhatsApp do dono. Ancorado nas duas pontas,
+    # "Amei, quero mais 2" continua NAO sendo fechamento.
+    r'am(?:ei|amos+|ou|aram)|ador(?:ei|amos+|ou|aram)|'
     r'👍|🙏|❤️|💛|🥰|😊|👏|🙌)'
 )
 _FECHAMENTO_RE = re.compile(
