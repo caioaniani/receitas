@@ -1186,17 +1186,32 @@ def _contencao_recente_para_contato(chave, conv_id, horas=12):
     try:
         from datetime import timedelta
 
-        from app.models import VigiaVeredito
+        from app.models import EsperaAtendimento, VigiaVeredito
         from app.utils import agora
         corte = agora() - timedelta(hours=horas)
         # Exclui a PROPRIA conversa: o registro desta rodada e gravado
         # ANTES da contencao — sem o filtro, o guard ve o proprio registro
         # e suprime ate o primeiro envio.
-        return (VigiaVeredito.query
-                .filter(VigiaVeredito.criado_em >= corte,
-                        VigiaVeredito.conv_id != str(conv_id),
-                        VigiaVeredito.mensagem_cliente.like(
-                            f'[ESPERA_HUMANO%c:{chave}]%'))
+        outras = [r[0] for r in (
+            VigiaVeredito.query
+            .with_entities(VigiaVeredito.conv_id)
+            .filter(VigiaVeredito.criado_em >= corte,
+                    VigiaVeredito.conv_id != str(conv_id),
+                    VigiaVeredito.mensagem_cliente.like(
+                        f'[ESPERA_HUMANO%c:{chave}]%'))
+            .distinct().all())]
+        if not outras:
+            return False
+        # O marcador prova que o DONO foi avisado, nao que o CLIENTE recebeu
+        # a contencao: em conversa pending/snoozed o registro sai com a
+        # chave e a contencao e pulada (bot no turno). Conta so conversa
+        # cuja contencao FOI enviada (`contencao_em`) — senao um ALTA em
+        # conversa pending calava a contencao numa conversa open do mesmo
+        # contato 12h depois (achado da revisao de 19/09/2026).
+        return (EsperaAtendimento.query
+                .filter(EsperaAtendimento.conversa_id.in_(outras),
+                        EsperaAtendimento.contencao_em.isnot(None),
+                        EsperaAtendimento.contencao_em >= corte)
                 .first()) is not None
     except Exception:  # noqa: BLE001
         logger.exception('espera-humano: dedupe por contato falhou '
