@@ -1040,10 +1040,23 @@ def _resumo_tool(nome, out):
         if d.get('erro') == 'autorizacao_necessaria':
             return ('consultar_pedido: pedido existe mas NAO autorizado '
                     '(bot pediu CPF)')
-        return f'consultar_pedido: {str(d.get("erro") or "sem resultado")[:80]}'
+        return f'consultar_pedido: {_erro_curto(d.get("erro")) or "sem resultado"}'
     if d.get('erro'):
-        return f'{nome}: erro ({str(d["erro"])[:80]})'
+        return f'{nome}: erro ({_erro_curto(d["erro"])})'
     return f'{nome}: ok'
+
+
+def _erro_curto(erro):
+    """So o CODIGO do erro vai pro vigia ('nao_encontrado', 'fora_area',
+    'autorizacao_necessaria'). Texto livre (str(exc) de `_executar_tool`,
+    que pode carregar SQL/parametros/endereco) vira 'detalhe omitido' —
+    achado da revisao de 19/09/2026."""
+    s = str(erro or '').strip()
+    if not s:
+        return ''
+    if re.fullmatch(r'[\w\-.:]{1,40}', s):
+        return s
+    return 'detalhe omitido'
 
 
 def _executar_tool(nome, inp, *, telefone_contato=None,
