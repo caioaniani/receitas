@@ -167,6 +167,11 @@ def _eh_conversa_real(v):
     return True
 
 
+def _hora(v):
+    """Carimbo 'dd/mm HH:MM' do veredito (BRT do criado_em); '' sem data."""
+    return v.criado_em.strftime(_FMT_HORA) if v.criado_em else ''
+
+
 def _tools_de(v):
     """Devolve a lista de tools persistida no veredito. None = registro SEM
     o dado (bot antigo / coluna vazia / JSON corrompido) — diferente de []
@@ -316,16 +321,20 @@ def _coletar_periodo(inicio, fim):
         if msg:
             amostras_handoff.append({'msg': msg, 'motivo': motivo,
                                      'cliente': v.cliente or '',
+                                     'hora': _hora(v),
                                      'tools': _tools_de(v)})
 
     # Casos de alta (raros, mas todos). `conv_id` em cada um + contagem de
     # CONVERSAS distintas: o vigia gera um veredito por turno, entao 3 ALTAs
     # da mesma conversa sao UM caso, nao "3 vezes" (relatorio do caso
     # Jessica 19/09/2026 disse "confundiu 3 vezes" pra 1 falso positivo).
+    # `hora` do veredito: sem ela a regra "pagamento POSTERIOR a conversa"
+    # nao tinha com o que comparar (achado da revisao de 19/09/2026).
     casos_alta = [{
         'conv_id': v.conv_id or '',
         'cliente': v.cliente or '', 'msg': (v.mensagem_cliente or '')[:200],
         'motivo': (v.motivo_vigia or '')[:200],
+        'hora': _hora(v),
         'tools': _tools_de(v),
     } for v in alta]
     conv_com_alta = len({v.conv_id for v in alta if v.conv_id})
