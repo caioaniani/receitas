@@ -364,7 +364,8 @@ def _alerta_alta_recente(conv_id, horas=_DEDUP_ALTA_HORAS):
         return False
 
 
-def handoff_foi_preguicoso(tools_usadas, conv_id=None):
+def handoff_foi_preguicoso(tools_usadas, conv_id=None, *, motivo=None,
+                           mensagem_cliente=None):
     """Regra UNICA de 'handoff preguicoso': transferiu sem ter chamado
     NENHUMA tool de leitura antes. Compartilhada entre o detector do vigia
     e o agregador do auditor. `tools_usadas` None (bot antigo) = False.
@@ -372,9 +373,23 @@ def handoff_foi_preguicoso(tools_usadas, conv_id=None):
     07/07/2026 (achado do dono no resumo do auditor): a lista e POR TURNO —
     bot que consultou o pedido num turno e transferiu no SEGUINTE saia como
     "preguicoso" com lista vazia. Com `conv_id`, olhamos tambem as tools dos
-    turnos recentes (2h) da MESMA conversa antes de acusar."""
+    turnos recentes (2h) da MESMA conversa antes de acusar.
+
+    19/09/2026 (dono, resumo do dia "preguicoso 1/2" = conv 2380 "Gostaria
+    de falar com atendente?"): pedido EXPLICITO de humano — pela fala do
+    cliente (`mensagem_cliente`) ou pelo motivo que o bot registrou
+    (`motivo`, ex. "cliente pediu atendente") — NAO e preguica: nao ha o que
+    consultar. O detector do vigia ja excluia isso; o auditor contava.
+    Fonte unica: `chatbot.pediu_humano`."""
     if tools_usadas is None:
         return False
+    if motivo or mensagem_cliente:
+        try:
+            from app.services.chatbot import pediu_humano
+            if pediu_humano(mensagem_cliente, motivo):
+                return False
+        except Exception:  # noqa: BLE001
+            logger.exception('vigia: pediu_humano falhou (segue a regra base)')
 
     def _tem_leitura(lst):
         return any(t for t in (lst or [])
