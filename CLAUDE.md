@@ -4314,24 +4314,40 @@ todos corrigidos com ordem do dono ("Liberado"); testes em
   reavalia a conversa — sai da janela no dia seguinte. Feito: (1) **pedido
   EXPLÍCITO de atendente não conta como handoff preguiçoso** —
   `chatbot.pediu_humano(mensagem_cliente, motivo)` (fala do cliente via
-  `_quer_humano` OU motivo do bot via `_MOTIVO_PEDIU_HUMANO`, "cliente
-  pediu atendente") é a fonte única; `handoff_foi_preguicoso(..., motivo=,
-  mensagem_cliente=)` a aplica e o auditor passa `bot_motivo`/
-  `mensagem_cliente` (o detector do vigia já excluía; o auditor contava —
-  caso conv 2380 "Gostaria de falar com atendente?" = o "preguiçoso 1/2").
+  `_quer_humano` OU motivo do bot via `_MOTIVO_PEDIU_HUMANO`) é a fonte
+  única DO AUDITOR: `handoff_foi_preguicoso(..., motivo=, mensagem_
+  cliente=)` a aplica e `_eh_handoff_preguicoso` passa `bot_motivo`/
+  `mensagem_cliente` (caso conv 2380 "Gostaria de falar com atendente?" =
+  o "preguiçoso 1/2"). `_MOTIVO_PEDIU_HUMANO` espelha `_HUMANO_PATTERNS`
+  na 3ª pessoa (verbo de pedido + OBJETO humano direto, ou "falar/
+  conversar com ..."; 'pessoa'/'alguém' só nessa construção; negação
+  ESCOPADA ao trecho) — a 1ª versão (verbo + 40 chars + substantivo solto)
+  casava "quer cesta para 1 pessoa" e tirava da métrica o handoff de venda
+  que ela existe pra expor (revisão). **O detector determinístico do vigia
+  (`_e_handoff_preguicoso_em_compra`, ALTA "venda em risco") NÃO lê o
+  motivo do bot** — só a fala do cliente o desarma; o modelo que
+  transferiu sem consultar não pode calar quem o vigia (revisão, alta).
   Alergia/reclamação/atraso SEGUEM contando: o dono pediu só o pedido de
   humano; alargar pra toda `_HANDOFF_EXCECAO` é decisão dele. (2)
-  `_resumo_tool` só repassa CÓDIGO de erro (`_erro_curto`: slug de até 40
-  chars); texto livre vira "detalhe omitido". (3) `consultar_pedido`
-  devolve `autorizado_como` (comprador/destinatario/cpf) e o
-  `como_apresentar` manda dizer no motivo quando quem pede correção é quem
-  RECEBE. (4) `_CORRECAO_ENTREGA` aceita alvo ANTES do verbo ("quem vai
-  receber mudou"), janela de 3 palavras nas duas ordens. (5) o leitor de
-  story do `avaliar_abandono` usa `texto_da_mensagem`. (6) `_FECHAMENTO_
-  TOKEN` ganhou amei/amamos/adorei (conv 2375 "Amamosss 🥰" em conversa
-  open virou alerta de espera de 13min) — ancorado, "Amei, quero mais 2"
-  não é fechamento. NÃO feito, de propósito: caminho VNDA do
-  consultar_pedido (aposentado). Testes: seção 6 de
+  `_resumo_tool` só repassa CÓDIGO de erro (`_erro_curto`: até 40 chars
+  SEM dígito/aspas/parêntese — 'nenhum item válido' passa, telefone e
+  str(exc) viram "detalhe omitido"). (3) `consultar_pedido` devolve
+  `autorizado_como` (comprador/destinatario/cpf) e o `como_apresentar`
+  manda dizer no motivo quando quem pede correção é quem RECEBE. (4)
+  `_CORRECAO_ENTREGA` aceita alvo ANTES do verbo só em forma TERMINAL
+  (`_VERBO_TERMINAL`: "quem vai receber mudou", "endereço está errado";
+  "destinatária quer alterar a quantidade" NÃO casa), `_ANCORA_PEDIDO` por
+  código exige letra E dígito (CEP não ancora) e `_SINAL_VENDA_EM_CURSO`
+  (frete/cotar/cotação/orçamento/novo pedido/carrinho) desliga a exceção
+  mesmo com "pedido" no motivo. (5) o leitor de story do
+  `avaliar_abandono` usa `texto_da_mensagem`. (6) elogio puro
+  (`_ELOGIO_ALT` amei/amamos/adorei) vale como fechamento SÓ com
+  `_e_fechamento(texto, elogio=True)`, usado em `atendimento_pendente.
+  preparar` (conv 2375 "Amamosss 🥰" em conversa open virou alerta de
+  espera de 13min); o BOT e o short-circuit do vigia seguem no conjunto
+  base — "Amei!" depois de foto+preço é sinal de compra e a Camada 1
+  encerraria em silêncio (achado da revisão). NÃO feito, de propósito:
+  caminho VNDA do consultar_pedido (aposentado). Testes: seção 6 de
   `tests/test_caso_jessica_2371.py`.
 - LIÇÃO DE PROCESSO (repete a de 26/07): relatório do auditor NÃO é
   diagnóstico — puxar a conversa real e o pedido antes de qualquer conclusão;
