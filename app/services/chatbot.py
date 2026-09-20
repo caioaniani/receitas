@@ -347,7 +347,8 @@ _HIT_VONTADE = re.compile(r'(?i)' + _NEG_VONTADE + r'\b')
 # negado / infinitivo): "nao me passa pra atendente", "nao falar com atendente"
 _HIT_IMPERATIVO = re.compile(
     r'(?i)(?:me\s+)?(?:transfere|transfira|transferir|passa|passe|passar|'
-    r'encaminha|encaminhe|encaminhar|chama|chamar|chame|manda|mande|mandar)\b'
+    r'encaminha|encaminhe|encaminhar|chama|chamar|chame|manda|mande|mandar|'
+    r'liga|ligue|liguem|ligar|retorna|retorne|retornem|retornar)\b'
     r'|(?:falar|conversar)\s+com\b')
 _PONTUACAO_ORACAO = re.compile(r'[,;.!?\n]')
 
