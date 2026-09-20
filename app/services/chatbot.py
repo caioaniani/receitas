@@ -218,12 +218,48 @@ _HUMANO_PATTERNS = [
     re.compile(
         r'(?i)\b(atendente\s+humano|atendimento\s+humano|'
         r'(pessoa|gente|humano|atendente)\s+de\s+verdade|humano\s+real)\b'),
+    # Formas que o cliente usa DE FATO e que ficavam fora (dono 20/09/2026,
+    # "Pode seguir" — fechando a assimetria vigia x auditor da 2ª rodada):
+    # "atendente, por favor" / "por favor, um atendente" / "atendente pfv"
+    re.compile(
+        r'(?i)\b(atendente|humano|operador)\b[\s,!.]*'
+        r'(por\s+favor|pfv|pf|por\s+gentileza)\b'
+        r'|\b(por\s+favor|pfv|por\s+gentileza)\b[\s,!.]*'
+        r'(um[a]?\s+|o\s+|a\s+)?(atendente|humano|operador)\b'),
+    # "cade o atendente?" / "tem atendente ai?" / "tem humano?" (a forma nua
+    # so no FIM da mensagem — "tem atendente aos domingos?" e pergunta de
+    # horario, nao pedido)
+    re.compile(
+        r'(?i)\bcad[eê]\s+(o|a|um|uma|algum|alguma)?\s*'
+        r'(atendente|humano|operador)\b'
+        r'|\btem\s+(algum|alguma|um|uma)?\s*(atendente|humano|operador)\s+'
+        r'(a[ií]|dispon[ií]vel|online|agora)\b'
+        r'|\btem\s+(algum|alguma|um|uma)?\s*(atendente|humano|operador)'
+        r'\s*[?!.]*\s*$'),
+    # "quero/preciso (de) uma pessoa" — SEM objeto de venda na sequencia
+    # ("pessoa juridica", "uma pessoa para receber" ficam fora)
+    re.compile(
+        r'(?i)\b(quero|queria|preciso|prefiro|gostaria)\s+(de\s+)?'
+        r'(um[a]?\s+)?pessoa\b'
+        r'(?!\s+(jur[ií]dica|f[ií]sica|para\s+receber|pra\s+receber|'
+        r'que\s+receb\w*|especial))'),
+    # "alguem humano/de verdade" e "nao quero (falar com) robo/bot"
+    re.compile(
+        r'(?i)\balgu[eé]m\s+(humano|de\s+verdade|real)\b'
+        r'|\bn[aã]o\s+quero\s+((falar|conversar)\s+com\s+)?'
+        r'(o\s+|um\s+|a\s+|uma\s+)?'
+        r'(rob[oô]|bot|m[aá]quina|intelig[eê]ncia\s+artificial)\b'),
 ]
 
-# Guarda de negacao: "nao quero/preciso falar com atendente" — deixa o Claude
-# tratar a nuance em vez de transferir errado.
-_HUMANO_NEGACAO = re.compile(
-    r'(?i)\bn[aã]o\s+(quero|queria|precis\w*|quer|gostaria|gostei)\b')
+# Guarda de negacao ESCOPADA ao trecho casado: "nao quero falar com
+# atendente, me ajuda" veta; "nao quero mais esperar, me passa pra um
+# atendente" NAO veta (a negacao global de antes calava esse pedido real —
+# refutacao 19/09 + dono 20/09/2026). Mesma regra do `pediu_humano`.
+_HUMANO_NEGACAO = re.compile(r'(?i)\bn[aã]o\s+(?:\w+\s+)?$')
+
+
+def _negado_antes(texto, inicio):
+    return bool(_HUMANO_NEGACAO.search(texto[max(0, inicio - 16):inicio]))
 
 
 def _quer_humano(texto):
@@ -232,9 +268,11 @@ def _quer_humano(texto):
     t = (texto or '').strip()
     if len(t) < 4:
         return False
-    if _HUMANO_NEGACAO.search(t):
-        return False
-    return any(p.search(t) for p in _HUMANO_PATTERNS)
+    for p in _HUMANO_PATTERNS:
+        for hit in p.finditer(t):
+            if not _negado_antes(t, hit.start()):
+                return True
+    return False
 
 
 # Motivo que o BOT escreve ao transferir porque o cliente PEDIU humano
