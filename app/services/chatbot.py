@@ -835,10 +835,15 @@ def _handoff_excecao(inp):
     texto = ' '.join(str(inp.get(k) or '') for k in ('motivo', 'resumo'))
     if _HANDOFF_EXCECAO.search(texto):
         return True
-    if _TERCEIRO_ENTREGA.search(texto) and _PROBLEMA_ENTREGA_EM_CURSO.search(texto):
+    # pedido de LIGACAO no motivo ("cliente pediu ligacao", "ligacao
+    # solicitada pelo cliente") — pela MESMA regra do auditor, nunca por
+    # "ligacao" solta ("faz ligacao antes de entregar?" e pergunta de venda)
+    if pediu_humano(None, texto):
         return True
     if _SINAL_VENDA_EM_CURSO.search(texto):
         return False
+    if motivo_terceiro_na_entrega(texto):
+        return True
     return bool(_CORRECAO_ENTREGA.search(texto)
                 and _ANCORA_PEDIDO.search(texto))
 
