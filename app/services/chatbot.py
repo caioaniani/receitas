@@ -553,9 +553,10 @@ _MOTIVO_PEDIU_HUMANO = re.compile(
     r'|' + _VERBO_PEDIDO_HUMANO +
     r'(?:para\s+|pra\s+)?(?:ser\s+)?atendid[oa]s?\s+por\s+'
     r'(?:um[a]?\s+|o\s+|a\s+)?(?:pessoa|algu[eé]m|gente|' + _HUMANO_ALT + r')\b'
-    # voz passiva: "atendente solicitado pelo cliente"
-    r'|\b(?:atendente|humano|atendimento\s+humano|operador)\s+'
-    r'(?:solicitad|pedid|requisitad|exigid)\w*\s+pel[oa]\s+cliente\b'
+    # voz passiva: "atendente solicitado pelo cliente" / "ligacao solicitada
+    # pelo cliente"
+    r'|\b(?:atendente|humano|atendimento\s+humano|operador|liga[çc][aã]o|'
+    r'telefonema)\s+(?:solicitad|pedid|requisitad|exigid)\w*\s+pel[oa]\s+cliente\b'
     # formas nominais
     r'|\bpedido\s+de\s+(?:um\s+)?(?:atendente|humano|atendimento\s+humano)\b'
     r'|\ba\s+pedido\s+d[oa]\s+cliente\b'
