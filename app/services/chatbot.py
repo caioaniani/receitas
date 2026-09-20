@@ -441,7 +441,10 @@ _VERBO_TERMINAL = (
 _CORRECAO_ENTREGA = re.compile(
     r'(?i)\b' + _VERBO_MUDANCA + r'\b\s+(?:\w+\s+){0,3}?' + _ALVO_ENTREGA
     + r'|\b' + _ALVO_ENTREGA + r'\s+(?:\w+\s+){0,3}?\b' + _VERBO_TERMINAL
-    + r'\b(?!\s+(?:[oa]s?|um[a]?|de|d[oa]s?|pel[oa]s?|por|para)\b)')
+    # objeto na sequencia ("troca A cesta", "trocou POR outra", "mudou DE
+    # ideia") nao e correcao; "mudou PARA <valor novo>" E — so "para outra"
+    # fica barrado (refutacao 19/09/2026, 2ª rodada)
+    + r'\b(?!\s+(?:[oa]s?|um[a]?|de|d[oa]s?|pel[oa]s?|por|para\s+outr[oa]s?)\b)')
 # Codigo de pedido = 8 caracteres com LETRA e DIGITO (E49C374A); so digitos
 # (CEP 05688020) nao ancora.
 _ANCORA_PEDIDO = re.compile(
