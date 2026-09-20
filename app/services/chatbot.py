@@ -1081,7 +1081,10 @@ def _erro_curto(erro):
     s = str(erro or '').strip()
     if not s:
         return ''
-    if re.fullmatch(r'[\w\-.:]{1,40}', s):
+    # Codigo snake_case OU frase curta SEM digito/aspas/parentese/sinal
+    # ('nenhum item válido', 'sem receitas cadastradas' sao codigos
+    # legitimos das tools); SQL, telefone, endereco e str(exc) ficam fora.
+    if re.fullmatch(r"[^\d'\"()=\[\]{}<>]{1,40}", s):
         return s
     return 'detalhe omitido'
 
