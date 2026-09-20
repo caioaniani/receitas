@@ -512,6 +512,12 @@ _SINAIS_RECLAMACAO = re.compile(
     r'\breembolso|\breclamar|\breclama[cç][aã]o|\bcancelar (meu )?pedido|'
     r'\bdevolver|\btrocar|\bt[aá] estragado|\bt[aá] quebrado|\bp[eé]ssim\w*|'
     r'\bfalar com (gerente|dono|respons[aá]vel)|'
+    # Terceiro na ENTREGA (caso conv 2409, 20/09/2026): entregador/portaria
+    # com a cesta na porta e ninguem atendendo — handoff humano e correto,
+    # nunca "venda em risco".
+    r'\bentregador\w*|\bmotoboy|\blalamove|\bportaria|\bporteir\w*|'
+    r'\bdeix(ou|aram|ei|ada|ado) na (porta|portaria|entrada)|'
+    r'\bvou (voltar (pra|para) )?devolver|\bningu[eé]m (atende|atendeu|responde)|'
     # Qualidade/tamanho do produto JÁ recebido (caso 23/06/2026: croissant
     # "tão pequenininho", "todos estão assim?") — reclamação pós-venda, o
     # handoff humano é CORRETO, não "venda perdida".
