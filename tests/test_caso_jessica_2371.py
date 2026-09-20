@@ -629,6 +629,26 @@ def test_prompts_do_auditor_explicam_conv_id_e_pagamento_posterior():
     (None, 'cliente pediu um vendedor', True),
     (None, 'pedido de atendente humano', True),
     (None, 'transferência a pedido do cliente', True),
+    # 3ª pessoa do "me transfere/passa pra um atendente" + passiva (refutação
+    # 19/09/2026, 2ª rodada: motivos que o bot escreve DE FATO e que a
+    # regra anterior — objeto humano DIRETO — deixava passar como preguiça)
+    (None, 'atendente solicitado pelo cliente', True),
+    (None, 'cliente pediu transferência para atendente', True),
+    (None, 'cliente pediu para ser transferido para um atendente', True),
+    (None, 'cliente pediu ajuda de um atendente', True),
+    (None, 'cliente pediu para passar para um atendente', True),
+    (None, 'cliente pediu para ser atendido por uma pessoa', True),
+    (None, 'cliente quer ser transferido para um humano', True),
+    (None, 'cliente solicitou transferência para atendente humano', True),
+    (None, 'cliente pediu para encaminhar para a equipe', True),
+    # ... e o destino tem que ser HUMANO: transferir/passar PEDIDO não é
+    (None, 'cliente pediu para passar o pedido para outra loja', False),
+    (None, 'cliente quer transferir o pedido para outra data', False),
+    (None, 'cliente quer transferir o valor para outra pessoa', False),
+    (None, 'cliente quer passar a cesta para o vizinho', False),
+    (None, 'cliente pediu ajuda de um amigo para escolher', False),
+    (None, 'cliente foi atendido por um atendente ontem e quer o frete', False),
+    (None, 'cliente não quer ser transferido para um atendente', False),
     # Negação ESCOPADA: veta só quando nega o próprio pedido de humano
     (None, 'cliente não quer atendente, quer cancelar', False),
     (None, 'cliente não quer falar com robô, pediu atendente', True),
