@@ -271,16 +271,16 @@ _MOTIVO_PEDIU_HUMANO = re.compile(
     # — "pediu para passar o pedido para outra loja" e "transferir o pedido
     # para outra data" nao casam (refutacao 19/09/2026, 2ª rodada).
     r'|' + _VERBO_PEDIDO_HUMANO +
-    r'\s+(?:para\s+|pra\s+)?(?:ser\s+)?'
+    r'(?:para\s+|pra\s+)?(?:ser\s+)?'
     r'(?:transferi\w+|transfer[êe]ncia|passar|encaminh\w+|encaminhamento)'
     r'\s+(?:para|pra|pro|a|ao)\s+(?:um[a]?\s+|o\s+|a\s+)?'
     r'(?:pessoa|algu[eé]m|gente|equipe|setor|' + _HUMANO_ALT + r')\b'
     # "pediu ajuda de um atendente" / "pediu para ser atendido por uma pessoa"
     r'|' + _VERBO_PEDIDO_HUMANO +
-    r'\s+(?:para\s+|pra\s+|de\s+)?ajuda\s+d[eo]\s+(?:um[a]?\s+)?'
+    r'(?:para\s+|pra\s+|de\s+)?ajuda\s+d[eo]\s+(?:um[a]?\s+)?'
     r'(?:' + _HUMANO_ALT + r')\b'
     r'|' + _VERBO_PEDIDO_HUMANO +
-    r'\s+(?:para\s+|pra\s+)?(?:ser\s+)?atendid[oa]s?\s+por\s+'
+    r'(?:para\s+|pra\s+)?(?:ser\s+)?atendid[oa]s?\s+por\s+'
     r'(?:um[a]?\s+|o\s+|a\s+)?(?:pessoa|algu[eé]m|gente|' + _HUMANO_ALT + r')\b'
     # voz passiva: "atendente solicitado pelo cliente"
     r'|\b(?:atendente|humano|atendimento\s+humano|operador)\s+'
