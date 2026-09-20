@@ -1562,6 +1562,13 @@ def responder(historico, *, telefone_contato=None,
     if _quer_humano(texto_user):
         logger.info('chatbot: pedido explicito de humano -> handoff forcado '
                     'msg=%r', texto_user[:120])
+        # Pedido de LIGACAO (caso conv 2409, 20/09/2026): o bot nao liga —
+        # a equipe liga. O texto promete o contato, nao um chat.
+        if _pede_ligacao(texto_user):
+            return _resp_handoff(
+                'Claro! Já estou te passando pra um atendente da equipe, '
+                'que vai entrar em contato com você.',
+                'cliente pediu ligação', tools_usadas=[])
         return _resp_handoff(
             'Claro! Já estou te passando pra um atendente. Só um instante.',
             'cliente pediu atendente', tools_usadas=[])
