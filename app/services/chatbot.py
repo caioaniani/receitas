@@ -267,31 +267,79 @@ _HUMANO_PATTERNS = [
 # o entregador da Lalamove escreveu "Me liga por favor" e o bot respondeu
 # "quer que eu passe pra equipe?" em vez de passar; ninguem da padaria
 # soube da cesta deixada na entrada do predio). O bot nao liga — quem liga
-# e a equipe, entao a resposta certa e o handoff. ANCORADO no fim, como os
-# demais: "voces ligam antes de entregar?" e "pode me ligar quando sair pra
-# entrega?" sao pergunta/preferencia de venda (o "quando"/"antes" entre o
-# verbo e o fim barra o casamento), nao pedido de contato agora.
-_CAUDA_CORTESIA = (r'(?:\s+(?:aqui|agora|urgente|depois|hoje|j[aá]))?'
-                   r'[\s,!.]*(?:por\s+favor|pfv|pf|por\s+gentileza|urgente|'
-                   r'agora)?\s*[?!.]*\s*$')
+# e a equipe, entao a resposta certa e o handoff. ANCORADO nas DUAS pontas:
+# no fim (cauda de cortesia) E no comeco da oracao (`_ABERTURA_LIGACAO` —
+# so saudacao/cortesia/sujeito de 2ª pessoa antes do verbo). Sem a ponta
+# do comeco, a refutacao de 20/09/2026 provou que a 3ª pessoa do indicativo
+# tem a MESMA forma do imperativo ("o entregador me liga?", "o motoboy liga
+# pra mim?") e que a condicao vem TOPICALIZADA no WhatsApp ("quando chegar
+# me liga", "qualquer coisa me liga", "se o entregador nao achar o predio me
+# liga") — tudo pergunta/preferencia de VENDA virando handoff forcado antes
+# do modelo. Quando a condicao vem com virgula ("qualquer coisa, me liga"),
+# a oracao do hit fica so com abertura e e a oracao ANTERIOR que carrega a
+# condicao (`_CONDICAO_ENTREGA`). Custo aceito: "se puder me liga" e
+# "quando puder me liga" ficam com o modelo (falso negativo so devolve a
+# decisao ao modelo, que tem a regra no prompt).
+_CAUDA_CORTESIA = (
+    r'(?:\s+(?:aqui|a[ií]|agora|urgente|depois|hoje|j[aá]))?'
+    # numero informado: "me liga no 11 99999-9999" / "no meu numero"
+    r'(?:\s+(?:no|nesse|neste)\s+(?:(?:meu\s+)?n[uú]mero|\+?\d[\d\s().-]{6,}))?'
+    r'[\s,!.]*(?:por\s+favor|pfv|pf|por\s+gentileza|urgente|agora)?'
+    r'(?:\s+(?:aqui|a[ií]|agora|urgente|hoje|j[aá]))?\s*[?!.]*\s*$')
 _LIGACAO_PATTERNS = [
-    # "(pode) me liga(r) (por favor)" / "me retorna"
+    # "(pode) me liga(r) (por favor)" / "me telefona" / "me retorna" — SEM
+    # "ligam" ("voces me ligam?" e pergunta de processo)
     re.compile(
         r'(?i)\b(?:(?:pode|podem|poderia|poderiam|consegue|conseguem|'
         r'd[aá]\s+(?:pra|para))\s+)?me\s+'
-        r'(?:liga|ligue|liguem|ligar|ligarem|retorna|retorne|retornem|retornar)\b'
-        + _CAUDA_CORTESIA),
+        r'(?:liga|ligue|liguem|ligar|ligarem|telefona|telefonem|telefonar|'
+        r'retorna|retorne|retornem|retornar)\b' + _CAUDA_CORTESIA),
     # "liga pra mim"
     re.compile(
         r'(?i)\b(?:liga|ligue|liguem|ligar|retorna|retorne|retornem|retornar)'
         r'\s+(?:pra|para)\s+mim\b' + _CAUDA_CORTESIA),
+    # "liga ai" / "liga aqui" (a giria "se liga ai!" cai na abertura)
+    re.compile(
+        r'(?i)(?<!\bse\s)\b(?:liga|ligue|liguem)\s+(?:a[ií]|aqui)\b'
+        + _CAUDA_CORTESIA),
+    # "liga no meu numero"
+    re.compile(
+        r'(?i)\b(?:liga|ligue|liguem|ligar)\s+(?:no|nesse|neste)\s+'
+        r'(?:meu\s+)?n[uú]mero\b' + _CAUDA_CORTESIA),
     # "quero uma ligacao" / "preciso falar por telefone"
     re.compile(
         r'(?i)\b(?:quero|queria|preciso|prefiro|gostaria)\s+(?:de\s+)?'
         r'(?:uma\s+|um\s+)?(?:liga[çc][aã]o|telefonema|'
         r'falar\s+(?:por|no|pelo)\s+telefone)\b' + _CAUDA_CORTESIA),
+    # "pode entrar em contato (comigo)?" / "entra em contato comigo" — SO
+    # com modal ou com "comigo": "vou entrar em contato", "a gente entra em
+    # contato" e "depois entro em contato" sao FECHAMENTO do cliente
+    re.compile(
+        r'(?i)\b(?:(?:pode|podem|poderia|poderiam|consegue|conseguem|'
+        r'd[aá]\s+(?:pra|para))\s+entrar\s+em\s+contato(?:\s+comigo)?|'
+        r'(?:entra|entre|entrem)\s+em\s+contato\s+comigo)\b' + _CAUDA_CORTESIA),
+    # "me da um retorno"
+    re.compile(
+        r'(?i)\b(?:(?:pode|podem|poderia|poderiam)\s+)?me\s+'
+        r'(?:d[aá]|d[eê]|deem|dar|d[aã]o)\s+um\s+retorno\b' + _CAUDA_CORTESIA),
 ]
-_HUMANO_PATTERNS.extend(_LIGACAO_PATTERNS)
+# O que pode existir na oracao ANTES do hit de ligacao: saudacao, cortesia,
+# sujeito de 2ª pessoa ou impessoal. Qualquer outra coisa ("o entregador",
+# "quando chegar", "a moca disse que ia", "nao e pra") descarta o hit.
+_ABERTURA_LIGACAO = re.compile(
+    r'(?i)^\s*(?:(?:oi|ol[aá]|al[oô]|opa|ok|okay|beleza|blz|ent[aã]o|sim|'
+    r'claro|obrigad[oa]|bom\s+dia|boa\s+tarde|boa\s+noite|tudo\s+bem|'
+    r'por\s+favor|pfv|pf|por\s+gentileza|urgente|eu|vc|voc[eê]s?|vcs|voces|'
+    r'a[ií]|e\s+a[ií]|algu[eé]m|ser[aá]\s+que|tem\s+como|d[aá]\s+(?:pra|para)|'
+    r'n[aã]o|preciso\s+que|quero\s+que|queria\s+que|gostaria\s+que|gente|'
+    r'pessoal|amig[oa]|mo[çc][oa])[\s,!.]*)*$')
+# Condicao/preferencia na oracao ANTERIOR ("qualquer coisa, me liga",
+# "ao chegar, me liga por favor"): nao e pedido de contato agora.
+_CONDICAO_ENTREGA = re.compile(
+    r'(?i)\b(?:quando|assim\s+que|logo\s+que|depois\s+(?:que|de)|antes\s+de|'
+    r'ao\s+(?:chegar|sair|entregar)|chegando|se|caso|'
+    r'qualquer\s+(?:coisa|d[uú]vida|problema|imprevisto)|de\s+prefer[eê]ncia|'
+    r'na\s+hora|no\s+dia|em\s+caso\s+de)\b')
 
 # Guarda de negacao ESCOPADA a ORACAO (o texto desde a ultima pontuacao
 # antes do trecho casado). Tres formas vetam:
