@@ -690,6 +690,27 @@ def test_pediu_humano_pela_fala_ou_pelo_motivo(mensagem, motivo, esperado):
     assert pediu_humano(mensagem, motivo) is esperado
 
 
+def test_resumo_tool_diz_fora_da_area_no_frete():
+    """`frete.consultar_frete` fora do raio devolve ok=True + fora_area=True
+    (não é erro no contrato). Sem o ramo, o vigia lia 'consultar_frete: ok'
+    e podia acusar o bot que respondeu, certo, "não entregamos aí" (achado
+    sem voto da 2ª rodada de refutação, triado pelo orquestrador)."""
+    from app.services.chatbot import _resumo_tool
+    r = _resumo_tool('consultar_frete',
+                     {'ok': True, 'fora_area': True, 'distancia_km': 31.4,
+                      'endereco': 'Rua Tal, 10, Campinas'})
+    assert 'FORA da area' in r
+    assert '31.4 km' in r
+    assert 'Campinas' not in r                     # endereço não vai pro vigia
+    assert _resumo_tool('consultar_frete', {'ok': True, 'fora_area': True}) \
+        == 'consultar_frete: endereco localizado mas FORA da area de entrega'
+    assert _resumo_tool('consultar_frete',
+                        {'ok': True, 'fora_area': False, 'valor': 15.0}) \
+        == 'consultar_frete: ok'
+    assert _resumo_tool('consultar_frete', {'ok': False, 'erro': 'nao_encontrado'}) \
+        == 'consultar_frete: erro (nao_encontrado)'
+
+
 def test_detector_de_venda_em_risco_ignora_motivo_escrito_pelo_bot():
     """O detector determinístico do vigia (ALTA + WhatsApp na hora) NÃO pode
     ser calado pelo motivo que o próprio modelo escreveu na tool — só a
