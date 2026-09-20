@@ -1041,7 +1041,8 @@ def test_vigia_ao_vivo_segue_sem_ler_o_motivo_mas_ouve_o_cliente(app):
         assert _e_handoff_preguicoso_em_compra(compra, rb) is True
         for fala in ('Atendente por favor', 'Cadê o atendente?',
                      'nao quero mais esperar, me passa pra um atendente',
-                     'não consigo falar com atendente'):
+                     'não consigo falar com atendente',
+                     'não tem atendente aí?', 'Atendente por favor 🙏'):
             hist = compra + [{'role': 'user', 'content': fala}]
             assert _e_handoff_preguicoso_em_compra(
                 hist, {'acao': 'handoff', 'tools_usadas': []}) is False, fala
