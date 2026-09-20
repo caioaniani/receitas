@@ -749,12 +749,34 @@ def test_consultar_pedido_diz_quem_autorizou(app):
         assert 'autorizado_como' not in neg
 
 
-def test_fechamento_aceita_elogio_puro():
+def test_fechamento_aceita_elogio_puro_so_no_espera_humano():
     """"Amamosss 🥰" em conversa open (conv 2375, 19/09) virou "cliente
-    esperando atendente há 13min" — elogio puro é fechamento."""
+    esperando atendente há 13min" — elogio puro é fechamento pro
+    espera-humano (`elogio=True`). Pro BOT não: "Amei!" depois de foto+preço
+    é sinal de compra e a Camada 1 encerraria em silêncio."""
     from app.services.chatbot_vigia import _e_fechamento
-    assert _e_fechamento('Amamosss 🥰') is True
-    assert _e_fechamento('Amei!') is True
-    assert _e_fechamento('Adoramos, obrigada') is True
-    assert _e_fechamento('Amei, quero mais 2') is False
-    assert _e_fechamento('Amanhã') is False
+    for t in ('Amamosss 🥰', 'Amei!', 'Adoramos, obrigada'):
+        assert _e_fechamento(t, elogio=True) is True
+        assert _e_fechamento(t) is False           # bot / vigia: não encerra
+    for t in ('Amei, quero mais 2', 'Amanhã', 'Adorou?'):
+        assert _e_fechamento(t, elogio=True) is False
+    assert _e_fechamento('Obrigada!') is True      # base intacta
+
+
+def test_elogio_puro_nao_vira_espera_humana(app):
+    """Cenário real da conv 2375: humano respondeu, cliente mandou
+    "Amamosss 🥰" há 13 min — `preparar` não abre incidente."""
+    from app.services import atendimento_pendente
+    with app.app_context():
+        t = time.time()
+        historico = [
+            {'role': 'assistant', 'content': 'Entregue! Bom apetite', 'humano': True,
+             'created_at': t - 900},
+            {'role': 'user', 'content': 'Amamosss 🥰', 'created_at': t - 780},
+        ]
+        conversa = {'id': '2375', 'nome_contato': 'Bia', 'minutos_paradas': 13}
+        assert atendimento_pendente.preparar(conversa, historico, min_minutos=10) is None
+        # Mensagem que NÃO é fechamento segue abrindo a espera
+        historico[-1] = {'role': 'user', 'content': 'E o troco?', 'created_at': t - 780}
+        row = atendimento_pendente.preparar(conversa, historico, min_minutos=10)
+        assert row is not None and row.estado == 'aguardando'
