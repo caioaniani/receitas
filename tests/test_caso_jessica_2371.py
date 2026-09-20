@@ -207,6 +207,10 @@ def test_prompt_bot_tem_correcao_pos_confirmacao():
     ('cliente informou que quem vai receber mudou: pedido E49C374A', True),
     ('destinatário trocou, pedido 1A2B3C4D: agora é a Ângela', True),
     ('endereço do pedido F4A34D91 está errado, cliente pede para corrigir', True),
+    # "endereço DE ENTREGA" com 5 tokens até o verbo terminal (refutação
+    # 19/09/2026, 2ª rodada: o alvo era só "endereço" e a janela de 3
+    # palavras não alcançava)
+    ('endereço de entrega do pedido F4A34D91 está errado', True),
     ('destinatária quer alterar a quantidade de pães do pedido E49C374A', False),
     ('quem vai receber quer trocar o sabor da cesta, pedido 1A2B3C4D', False),
     ('destinatária troca a cesta por outra, pedido 1A2B3C4D', False),
