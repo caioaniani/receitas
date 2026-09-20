@@ -936,6 +936,53 @@ def test_elogio_puro_nao_vira_espera_humana(app):
     ('quanto custa a cesta brunch? quero comprar', False),
     ('não precisa de atendente, só quero o preço', False),
     ('não gostei do atendente, quero falar com outro', False),
+    # 2ª refutação (20/09): "não" NU antes do hit vetava a PERGUNTA
+    # NEGATIVA, que é pedido — e matava o padrão "tem atendente aí?"
+    ('não me passa pra um atendente?', True),
+    ('não chama um atendente?', True),
+    ('não transfere pra um atendente?', True),
+    ('nao passa pra um atendente nao?', True),
+    ('não tem atendente aí?', True),
+    ('não tem atendente?', True),
+    ('não tem um humano aí?', True),
+    ('não tem atendente aí não?', True),
+    ('gostaria de saber se não tem atendente aí?', True),
+    ('Não, me passa pra atendente, por favor', True),
+    ('estou sem conseguir falar com atendente', True),
+    # 2ª refutação: cauda de emoji/reticências não derrota a âncora
+    ('Atendente por favor 🙏', True),
+    ('Atendente, por favor!! 🙏🙏', True),
+    ('atendente pfv 🙏🏻', True),
+    ('por favor um atendente 🙏', True),
+    ('tem atendente? 🙏', True),
+    ('Preciso de uma pessoa 🙏', True),
+    ('Atendente por favor…', True),
+    ('não me passa pra um atendente? 🙏', True),
+    ('atendente pf, quanto custa o croissant? 🙏', False),
+    ('tem atendente aos domingos? 🙏', False),
+    ('Boa tarde atendente, por favor pode me mandar o cardápio? 🙏', False),
+    ('🙏', False),
+    # 2ª refutação: recusa com vontade que a ponte/lista não cobria
+    ('Não quero de forma alguma falar com atendente', False),
+    ('Não quero e nem preciso de atendente, só me diz o preço', False),
+    ('Não quero necessariamente falar com um atendente, só saber se entregam hoje', False),
+    ('não estou querendo falar com atendente', False),
+    ('nao to querendo falar com atendente, só me diz o preço', False),
+    ('Não faço questão de atendente humano, pode ser você mesmo', False),
+    ('Não gosto de falar com atendente, prefiro resolver por aqui', False),
+    ('Não vou querer falar com atendente, obrigada', False),
+    ('Não é necessário falar com atendente, só queria confirmar o horário', False),
+    ('Prefiro não ter que falar com atendente', False),
+    ('Nem quero falar com atendente, só quero o preço da cesta', False),
+    ('Dá pra fazer o pedido sem falar com atendente?', False),
+    ('Consigo pagar por aqui sem precisar falar com atendente?', False),
+    ('Quero comprar sem falar com atendente, só pelo link', False),
+    # imperativo negado SEM interrogação = recusa; o vocativo não re-dispara
+    # sobre o mesmo "atendente" já vetado
+    ('Não me passa pra atendente, por favor', False),
+    ('Não me transfere pra atendente, por favor', False),
+    ('Só quero o cardápio, sem passar pra atendente, por favor', False),
+    ('não me passa pra um atendente não', False),
 ])
 def test_quer_humano_formas_reais_e_negacao_escopada(texto, esperado):
     from app.services.chatbot import _quer_humano
