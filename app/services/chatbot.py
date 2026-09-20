@@ -396,7 +396,8 @@ _HIT_VONTADE = re.compile(r'(?i)' + _NEG_VONTADE + r'\b')
 _HIT_IMPERATIVO = re.compile(
     r'(?i)(?:me\s+)?(?:transfere|transfira|transferir|passa|passe|passar|'
     r'encaminha|encaminhe|encaminhar|chama|chamar|chame|manda|mande|mandar|'
-    r'liga|ligue|liguem|ligar|retorna|retorne|retornem|retornar)\b'
+    r'liga|ligue|liguem|ligar|retorna|retorne|retornem|retornar|telefon\w+|'
+    r'entr\w+\s+em\s+contato|d[aáeê]\w*\s+um\s+retorno)\b'
     r'|(?:falar|conversar)\s+com\b')
 _PONTUACAO_ORACAO = re.compile(r'[,;.!?\n]')
 
