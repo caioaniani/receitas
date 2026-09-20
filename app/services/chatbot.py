@@ -423,7 +423,7 @@ _VERBO_MUDANCA = (
     r'edit(?:a|ar|ou|e|em|ando)|'
     r'modific(?:a|ar|ou|e|em|ando|a[cç][aã]o))')
 _ALVO_ENTREGA = (
-    r'(endere[cç]o|destinat[aá]ri\w*|apartamento|apto\b|'
+    r'(endere[cç]o(?:\s+d[ae]\s+entrega)?|destinat[aá]ri\w*|apartamento|apto\b|'
     r'n[uú]mero d[aoe] (?:casa|endere[cç]o|pr[eé]dio|rua)|'
     r'quem (?:vai )?receb\w*)')
 # Verbo ANTES do alvo ("corrigir endereço") ou alvo ANTES do verbo, mas ai
