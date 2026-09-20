@@ -307,7 +307,11 @@ _HUMANO_NEGACAO = re.compile(
     r'|\b' + _NEG_VONTADE + r'\s+' + _NEGADOR + r'\s+(?:' + _NEG_PONTE + r'\s+)*'
     r'|\bsem\s+(?:(?:precisar|ter)\s+(?:de\s+|que\s+)?)?'
     r')$')
-_NEG_NUA = re.compile(r'(?i)\b' + _NEGADOR + r'\s+$')
+# "nao" nu admite copula/existencial entre ele e o hit ("nao e alergia",
+# "nao houve atraso", "cliente nao tem alergia" — motivo em 3ª pessoa)
+_NEG_NUA = re.compile(
+    r'(?i)\b' + _NEGADOR +
+    r'\s+(?:(?:[eé]|foi|era|h[aá]|houve|teve|tem|se\s+trata\s+de)\s+)?$')
 _HIT_VONTADE = re.compile(r'(?i)' + _NEG_VONTADE + r'\b')
 # inicio de hit que, apos "nao" nu e SEM interrogacao, e recusa (imperativo
 # negado / infinitivo): "nao me passa pra atendente", "nao falar com atendente"
