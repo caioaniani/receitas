@@ -132,7 +132,9 @@ def preparar(conversa, historico, *, min_minutos=10):
             db.session.commit()
         return row if row and row.estado == 'em_atendimento' else None
     texto = ultima.get('content') or ''
-    if _e_mencao_story(texto) or _e_fechamento(texto):
+    # `elogio=True`: "Amamosss 🥰" depois da entrega não é cliente esperando
+    # (conv 2375, 19/09/2026). Só aqui — o bot não encerra num elogio.
+    if _e_mencao_story(texto) or _e_fechamento(texto, elogio=True):
         return row if _acompanhar_ate_resolver(row, base, min_minutos) else None
     inicio = _instante(ultima, base - timedelta(minutes=conversa.get('minutos_paradas', 0)))
     if row and row.resolvido_em and inicio <= row.resolvido_em:
