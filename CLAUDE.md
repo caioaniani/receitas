@@ -4319,11 +4319,17 @@ todos corrigidos com ordem do dono ("Liberado"); testes em
   cliente=)` a aplica e `_eh_handoff_preguicoso` passa `bot_motivo`/
   `mensagem_cliente` (caso conv 2380 "Gostaria de falar com atendente?" =
   o "preguiçoso 1/2"). `_MOTIVO_PEDIU_HUMANO` espelha `_HUMANO_PATTERNS`
-  na 3ª pessoa (verbo de pedido + OBJETO humano direto, ou "falar/
-  conversar com ..."; 'pessoa'/'alguém' só nessa construção; negação
-  ESCOPADA ao trecho) — a 1ª versão (verbo + 40 chars + substantivo solto)
-  casava "quer cesta para 1 pessoa" e tirava da métrica o handoff de venda
-  que ela existe pra expor (revisão). **O detector determinístico do vigia
+  na 3ª pessoa (verbo de pedido [+ advérbio] + OBJETO humano direto, ou
+  "falar/conversar com ...", ou "pediu (para ser) transferido/passar/
+  encaminhado PARA um atendente/pessoa/equipe", "pediu ajuda de um
+  atendente", "pediu para ser atendido por uma pessoa" e a passiva
+  "atendente solicitado pelo cliente"; 'pessoa'/'alguém' só nessas
+  construções; negação ESCOPADA ao trecho) — a 1ª versão (verbo + 40
+  chars + substantivo solto) casava "quer cesta para 1 pessoa" e tirava da
+  métrica o handoff de venda que ela existe pra expor (revisão); a 2ª
+  (objeto direto só) regredia em "pediu transferência para atendente"
+  (refutação, confirmada por execução contra c3343f31). O destino humano
+  é obrigatório: "passar o pedido para outra loja" não casa. **O detector determinístico do vigia
   (`_e_handoff_preguicoso_em_compra`, ALTA "venda em risco") NÃO lê o
   motivo do bot** — só a fala do cliente o desarma; o modelo que
   transferiu sem consultar não pode calar quem o vigia (revisão, alta).
