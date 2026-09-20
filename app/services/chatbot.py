@@ -402,19 +402,31 @@ def _algum_hit_nao_negado(texto, hits, *, nua_veta):
     return False
 
 
-def _quer_humano(texto):
-    """True quando o cliente PEDE explicitamente um humano. Usado pra forcar
-    handoff de forma deterministica, sem depender do Claude chamar a tool."""
+def _texto_para_deteccao(texto):
     t = (texto or '').strip()
     # cauda de emoji/reticencias ("Atendente por favor 🙏") nao pode derrotar
     # as ancoras de fim de mensagem; '?', '!' e '.' ficam (a interrogacao
     # decide o "nao" nu) — refutacao 20/09/2026
-    t = re.sub(r'[^\w?!.]+$', '', t)
+    return re.sub(r'[^\w?!.]+$', '', t)
+
+
+def _quer_humano(texto, patterns=None):
+    """True quando o cliente PEDE explicitamente um humano (ou uma ligacao —
+    `_LIGACAO_PATTERNS`, que fazem parte de `_HUMANO_PATTERNS`). Usado pra
+    forcar handoff de forma deterministica, sem depender do Claude chamar a
+    tool. `patterns` restringe a familia avaliada (`_pede_ligacao`)."""
+    t = _texto_para_deteccao(texto)
     if len(t) < 4:
         return False
     hits = [(m.start(), m.end())
-            for p in _HUMANO_PATTERNS for m in p.finditer(t)]
+            for p in (patterns or _HUMANO_PATTERNS) for m in p.finditer(t)]
     return _algum_hit_nao_negado(t, hits, nua_veta=False)
+
+
+def _pede_ligacao(texto):
+    """True quando o pedido de humano e um pedido de LIGACAO ("me liga por
+    favor") — muda o texto e o motivo do handoff forcado."""
+    return _quer_humano(texto, patterns=_LIGACAO_PATTERNS)
 
 
 # Motivo que o BOT escreve ao transferir porque o cliente PEDIU humano
