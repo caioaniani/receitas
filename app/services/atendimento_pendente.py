@@ -103,7 +103,8 @@ def preparar(conversa, historico, *, min_minutos=10):
                  and TEXTO_CONTENCAO_ESPERA[:40] not in (m.get('content') or ''))]
     if grave or _acompanhar_ate_resolver(row, base, min_minutos):
         efetivas = [m for m in efetivas if m.get('role') != 'user'
-                    or not (_e_fechamento(m.get('content')) or _e_mencao_story(m.get('content')))]
+                    or not (_e_fechamento(m.get('content'), elogio=True)
+                            or _e_mencao_story(m.get('content')))]
     if not efetivas:
         if row is None and grave:
             row = EsperaAtendimento(conversa_id=conv_id, inicio_em=grave.criado_em,
