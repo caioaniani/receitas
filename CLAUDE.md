@@ -4427,6 +4427,57 @@ todos corrigidos com ordem do dono ("Liberado"); testes em
   "duas visões discordando" (vigia × 7248 "sem erro real" × humano 09:59) era
   a pista.
 
+## Caso entregador (conv 2409, 20/09/2026) — "Não foi passado para nenhum atendente"
+
+Domingo 17:46: contato "Ale" (telefone fora de qualquer pedido) escreve "Me
+liga por favor", "Preciso de suporte só uma entrega", "É uma entrega de uma
+cesta da Lalamove", manda FOTO da cesta na entrada do prédio e "Devido à
+comunicação vou voltar para devolver os", depois um áudio. Quase certamente
+o ENTREGADOR (candidato: B276C19B, único express do dia, Quarta Parada, apto
+902 — não confirmado daqui). O bot respondeu "quer que eu passe pra equipe?"
+em vez de passar, consultou pedidos pelo telefone (vazio, entregador não é
+cliente) e pediu o número do pedido TRÊS vezes; o vigia deu MÉDIA (sem
+WhatsApp) aos dois turnos críticos e leu "Me liga por favor" como
+cumprimento. O dono só soube pelo detector de ABANDONO às 18:15 e pela
+cobrança de espera-humano (18:20/18:40/19:00) — a conversa ficou no bot.
+Sondas usadas: `vigia-vereditos?conversa=`, `chatwoot-thread?conv=`,
+`pedidos-site?dias=`. Três correções (dono: "Não foi passado para nenhum
+atendente"):
+
+- **Pedido de LIGAÇÃO = pedido de humano** (`chatbot._LIGACAO_PATTERNS`,
+  parte de `_HUMANO_PATTERNS`; `_pede_ligacao`): "me liga (por favor)",
+  "pode(m)/poderia me ligar?", "liga pra mim", "me retorna", "quero uma
+  ligação", "preciso falar por telefone" — ANCORADOS no fim com cauda de
+  cortesia (`_CAUDA_CORTESIA`): "vocês ligam antes de entregar?", "pode me
+  ligar quando sair pra entrega?", "me liga quando chegar" e "qual o
+  telefone da loja?" NÃO disparam. O handoff forçado sai com texto próprio
+  ("atendente da equipe, que vai entrar em contato") e motivo "cliente
+  pediu ligação"; `_MOTIVO_PEDIU_HUMANO` (auditor) e `_HANDOFF_EXCECAO`
+  (enforcement) reconhecem ligação/telefonema; `_HIT_IMPERATIVO` ganhou
+  liga/ligue/ligar/retorna (o "não" nu veta "não me liga, prefiro por
+  aqui"). Prompt: a exceção 1 de ANTES DE TRANSFERIR cobre ligação e
+  proíbe o "quer que eu passe?".
+- **TERCEIRO NA ENTREGA** (bullet novo em ANTES DE TRANSFERIR): entregador/
+  portaria/vizinho não tem número de pedido e o telefone não está em pedido
+  nenhum — pedir o número NO MÁXIMO uma vez e transferir com o relato no
+  motivo. Enforcement: `_handoff_excecao` libera motivo que casa
+  `_TERCEIRO_ENTREGA` (entregador/motoboy/motorista/portaria/porteiro/
+  zelador/vizinho/lalamove/síndico) E `_PROBLEMA_ENTREGA_EM_CURSO`
+  (ninguém atende, deixou na porta, vai devolver, parado, errado...) — as
+  DUAS partes, senão "cliente perguntou se o motoboy liga antes" furaria o
+  enforcement de venda.
+- **Vigia**: PROMPT_VIGIA ganhou dois bullets ALTA ("ENTREGA EM CURSO COM
+  PROBLEMA e o bot NÃO transferiu"; "Cliente pediu LIGAÇÃO e o bot NÃO
+  transferiu — não é cumprimento") e `_SINAIS_RECLAMACAO` reconhece
+  entregador/motoboy/lalamove/portaria, "deixou na porta/portaria/entrada",
+  "vou (voltar pra) devolver" e "ninguém atende" — handoff com tools=[]
+  nesses casos é correto, nunca "venda em risco".
+- NÃO feito (limitações conhecidas): áudio segue sem transcrição (o
+  entregador explicou tudo num áudio que o bot não ouve); quem atende no
+  domingo à noite é operação, não software — a cobrança de espera-humano
+  já avisa o dono até alguém assumir. Testes:
+  `tests/test_caso_entregador_2409.py`.
+
 ## Contas a Pagar (NF/boleto via Slack → IA → Dropbox → banco)
 
 Feature de 2026-05-23. Funcionarios postam foto de NF/boleto em canais Slack de
