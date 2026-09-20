@@ -385,8 +385,15 @@ def handoff_foi_preguicoso(tools_usadas, conv_id=None, *, motivo=None,
         return False
     if motivo or mensagem_cliente:
         try:
-            from app.services.chatbot import pediu_humano
+            from app.services.chatbot import motivo_excecao_legitima, pediu_humano
             if pediu_humano(mensagem_cliente, motivo):
+                return False
+            # Dono 20/09/2026 ("Pode seguir"): alergia/reclamacao/atraso/
+            # cancelamento no MOTIVO tambem nao e preguica — o enforcement
+            # dispensa consulta nesses casos e o vigia ja os chama de
+            # "handoff correto". So chega aqui pelo AUDITOR (o detector ao
+            # vivo nao passa `motivo=`, ver _e_handoff_preguicoso_em_compra).
+            if motivo_excecao_legitima(motivo):
                 return False
         except Exception:  # noqa: BLE001
             logger.exception('vigia: pediu_humano falhou (segue a regra base)')
