@@ -211,6 +211,17 @@ def test_prompt_bot_tem_correcao_pos_confirmacao():
     # 19/09/2026, 2ª rodada: o alvo era só "endereço" e a janela de 3
     # palavras não alcançava)
     ('endereço de entrega do pedido F4A34D91 está errado', True),
+    # "mudou PARA <valor novo>" é a forma natural da correção (achado sem
+    # voto da 2ª rodada, triado pelo orquestrador); "para outra" segue fora
+    ('endereço do pedido E49C374A mudou para Rua Gaspar Lourenço 200 ap 72', True),
+    ('destinatário do pedido E49C374A mudou para a vizinha Ângela', True),
+    ('quem vai receber mudou para a vizinha Ângela, pedido E49C374A', True),
+    ('destinatária mudou para outra cesta, pedido 1A2B3C4D', False),
+    ('destinatária mudou de ideia sobre o pedido 1A2B3C4D', False),
+    # complemento/bairro são alvos que o prompt e o consultar_pedido citam
+    ('corrigir complemento do pedido E49C374A: ap 72 bloco B', True),
+    ('corrigir bairro do pedido E49C374A: Brooklin', True),
+    ('cliente mudou de bairro e quer saber o frete', False),
     ('destinatária quer alterar a quantidade de pães do pedido E49C374A', False),
     ('quem vai receber quer trocar o sabor da cesta, pedido 1A2B3C4D', False),
     ('destinatária troca a cesta por outra, pedido 1A2B3C4D', False),
