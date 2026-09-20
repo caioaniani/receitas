@@ -714,29 +714,63 @@ _HANDOFF_EXCECAO = re.compile(
     # LEGITIMO (chatbot_vigia._SINAIS_RECLAMACAO) — o enforcement divergia.
     r'|\batras(o|os|ou|ado|ada|ando)\b'
     r'|\b(rappi|ifood|99\s*food|marketplace)\b'
-    # pedido de LIGACAO (caso conv 2409, 20/09/2026): "cliente pediu
-    # ligacao" e contato humano pedido — nao ha o que consultar antes.
-    r'|\b(liga[çc][aã]o|telefonema)\b'
     r')')
 
 # TERCEIRO NA ENTREGA (caso conv 2409, 20/09/2026): o ENTREGADOR da Lalamove
 # mandou foto da cesta na entrada do predio e "vou voltar para devolver"; o
 # telefone dele nao esta em pedido nenhum, entao consultar_pedido volta
 # vazio e o modelo ficou pedindo numero de pedido tres vezes. Motivo que
-# cita quem esta na entrega (entregador/portaria/vizinho) E um problema em
-# curso (ninguem atende, deixou na porta, vai devolver) transfere sem
-# consulta previa. As DUAS partes sao obrigatorias: "cliente perguntou se o
-# motoboy liga antes" (sem problema) e "problema com a cesta" (sem
-# terceiro) seguem exigindo consulta — e o enforcement que barra o handoff
-# preguicoso de VENDA.
+# cita quem esta na entrega (entregador/portaria/vizinho) E um problema EM
+# CURSO (ninguem atende, deixou na porta, vai devolver) transfere sem
+# consulta previa — nas TRES camadas (enforcement, auditor e vigia), por
+# `motivo_terceiro_na_entrega`. As DUAS partes sao obrigatorias e o problema
+# tem que estar EM CURSO, nunca em hipotese: a 1ª versao (refutacao
+# 20/09/2026) casava "deixar" no infinitivo, "ninguem"/"esperando"/"voltar"/
+# "errado" soltos e "na portaria" como localizacao, e "cliente perguntou se
+# o motoboy pode deixar na portaria" — a pergunta de entrega mais comum do
+# canal — furava o enforcement de VENDA que ele existe pra barrar.
 _TERCEIRO_ENTREGA = re.compile(
     r'(?i)\b(entregador\w*|motoboy|motorista|portaria|porteir\w*|zelador\w*|'
     r'vizinh[oa]s?|lalamove|s[ií]ndic[oa])\b')
 _PROBLEMA_ENTREGA_EM_CURSO = re.compile(
-    r'(?i)\b(problema|parad[oa]|esperando|aguardando|devolv\w+|'
-    r'deix(ou|aram|ada|ado|ar)\b|ningu[eé]m|n[aã]o\s+(atend\w+|consegu\w+|'
-    r'recebe\w*|responde\w*|abr\w+|encontr\w+)|sem\s+contato|na\s+porta|'
-    r'na\s+entrada|na\s+portaria|recusad[oa]|voltar|errad[oa])\b')
+    r'(?i)\b(?:'
+    r'(?<!tem\s)(?<!sem\s)(?<!algum\s)(?<!nenhum\s)problema\b|'
+    r'ningu[eé]m\b|'
+    r'n[aã]o\s+(?:atend\w+|consegu\w+|recebe\w*|responde\w*|abr\w+|encontr\w+|'
+    r'quis\s+receber|aparec\w+|localiz\w+)|'
+    r'sem\s+contato|devolv\w+|'
+    r'(?:vai|vou|foi|quer|est[aá])\s+voltar\b|'
+    r'deix(?:ou|aram|ei|ada|ado)\b|(?:vai|vou|foi)\s+deixar\b|'
+    r'(?:cesta|pacote|encomenda|pedido|entrega|mercadoria|produto)\s+'
+    r'(?:\w+\s+){0,2}?(?:na|no)\s+(?:porta|portaria|entrada|recep[çc][aã]o)\b|'
+    r'(?:parad[oa]|esperando|aguardando)\s+'
+    r'(?:na|no|em\s+frente|l[aá]|aqui|h[aá]|desde|faz|o\s+cliente|a\s+cliente)\b|'
+    r'recusad[oa]|(?:cesta|pacote|encomenda|pedido)\s+errad[oa]|'
+    r'endere[cç]o\s+(?:est[aá]|t[aá])\s+errad[oa]|'
+    # "entregador (da Lalamove) precisa de suporte" — terceiro como SUJEITO
+    r'(?:entregador\w*|motoboy|motorista|porteir\w*|portaria|zelador\w*)\s+'
+    r'(?:da\s+lalamove\s+)?(?:precisa|precisam|pede|pediu|solicita|solicitou)'
+    r'\s+(?:de\s+)?suporte\b'
+    r')')
+# Hipotese/pergunta de processo ("se ninguem atender", "pode deixar na
+# portaria?") NAO e problema em curso.
+_HIPOTESE_ENTREGA = re.compile(
+    r'(?i)\b(?:se|caso|quando)\s+(?:ningu[eé]m|n[aã]o)\b|\bpode(?:m|ria|riam)?\s+deixar\b')
+
+
+def motivo_terceiro_na_entrega(motivo):
+    """True se o motivo do handoff descreve um TERCEIRO na entrega
+    (entregador/portaria/vizinho) com problema EM CURSO. Fonte unica das tres
+    camadas: enforcement (`_handoff_excecao`), metrica do auditor
+    (`motivo_excecao_legitima`) — o vigia ao vivo le a FALA do cliente, nao
+    o motivo. Venda em curso no motivo veta (o enforcement existe pra isso)."""
+    t = (motivo or '').strip()
+    if not t or _SINAL_VENDA_EM_CURSO.search(t) or _HIPOTESE_ENTREGA.search(t):
+        return False
+    if not _TERCEIRO_ENTREGA.search(t):
+        return False
+    hits = [(h.start(), h.end()) for h in _PROBLEMA_ENTREGA_EM_CURSO.finditer(t)]
+    return _algum_hit_nao_negado(t, hits, nua_veta=True)
 
 # CORRECAO de endereco/destinatario de pedido JA PAGO (caso Jessica
 # 19/09/2026: express de 1h gravado com "Rua X, 72", cliente mandou
