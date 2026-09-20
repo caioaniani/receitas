@@ -339,8 +339,46 @@ def pediu_humano(mensagem_cliente=None, motivo=None):
     if not m:
         return False
     for hit in _MOTIVO_PEDIU_HUMANO.finditer(m):
-        antes = m[max(0, hit.start() - 16):hit.start()]
-        if re.search(r'(?i)\bn[aã]o\s+(?:\w+\s+)?$', antes):
+        if _negado_antes(m, hit.start()):
+            continue
+        return True
+    return False
+
+
+# Motivos de handoff que o ENFORCEMENT ja trata como legitimos sem consulta
+# previa (`_HANDOFF_EXCECAO`) e que o vigia ja classifica como "handoff
+# correto" (`_SINAIS_RECLAMACAO`): alergia, reclamacao/atraso/entrega
+# parada, marketplace, estorno/reembolso/cancelamento. Dono 20/09/2026
+# ("Pode seguir"): a metrica "handoff preguicoso" do AUDITOR deixa de contar
+# esses casos — duas visoes discordando (vigia "correto" x auditor
+# "preguicoso") era a pista. E MAIS ESTREITO que `_HANDOFF_EXCECAO` de
+# proposito: 'humano|atendente|pessoa' soltos ficam fora (esses passam pelo
+# `pediu_humano`, que exige a construcao de pedido — "cesta para 1 pessoa"
+# nao pode sair da metrica).
+_MOTIVO_EXCECAO_LEGITIMA = re.compile(
+    r'(?i)\b(?:al[eé]rg\w*|intoler[aâ]nc\w*|'
+    r'reclama\w*|'
+    r'atras(?:o|os|ou|ado|ada|ando)|'
+    r'entrega\s+(?:n[aã]o\s+chegou|parada|atrasada)|'
+    r'n[aã]o\s+(?:recebeu|chegou)|nunca\s+chegou|'
+    r'(?:veio|chegou|recebeu)\s+(?:errad[oa]|quebrad[oa]|estragad[oa]|'
+    r'diferente|faltando|amassad[oa])|'
+    r'queimad[oa]s?|estragad[oa]s?|mofad[oa]s?|azed[oa]s?|murch[oa]s?|'
+    r'pedido\s+errado|'
+    r'rappi|ifood|99\s*food|marketplace|'
+    r'estorno|reembolso|cancelamento|cancelar\s+(?:o\s+|um\s+)?pedido)\b')
+
+
+def motivo_excecao_legitima(motivo):
+    """True se o motivo registrado pelo bot no handoff e uma excecao que o
+    enforcement dispensa de consulta previa (alergia, reclamacao, atraso,
+    marketplace, estorno/reembolso/cancelamento). So pra METRICA do auditor —
+    o detector ao vivo do vigia nunca le o motivo do bot."""
+    m = (motivo or '').strip()
+    if not m:
+        return False
+    for hit in _MOTIVO_EXCECAO_LEGITIMA.finditer(m):
+        if _negado_antes(m, hit.start()):
             continue
         return True
     return False
