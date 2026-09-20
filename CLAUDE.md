@@ -4334,18 +4334,32 @@ todos corrigidos com ordem do dono ("Liberado"); testes em
   motivo do bot** — só a fala do cliente o desarma; o modelo que
   transferiu sem consultar não pode calar quem o vigia (revisão, alta).
   Alergia/reclamação/atraso SEGUEM contando: o dono pediu só o pedido de
-  humano; alargar pra toda `_HANDOFF_EXCECAO` é decisão dele. (2)
-  `_resumo_tool` só repassa CÓDIGO de erro (`_erro_curto`: até 40 chars
-  SEM dígito/aspas/parêntese — 'nenhum item válido' passa, telefone e
-  str(exc) viram "detalhe omitido"). (3) `consultar_pedido` devolve
-  `autorizado_como` (comprador/destinatario/cpf) e o `como_apresentar`
-  manda dizer no motivo quando quem pede correção é quem RECEBE. (4)
-  `_CORRECAO_ENTREGA` aceita alvo ANTES do verbo só em forma TERMINAL
-  (`_VERBO_TERMINAL`: "quem vai receber mudou", "endereço está errado";
-  "destinatária quer alterar a quantidade" NÃO casa), `_ANCORA_PEDIDO` por
-  código exige letra E dígito (CEP não ancora) e `_SINAL_VENDA_EM_CURSO`
-  (frete/cotar/cotação/orçamento/novo pedido/carrinho) desliga a exceção
-  mesmo com "pedido" no motivo. (5) o leitor de story do
+  humano; alargar pra toda `_HANDOFF_EXCECAO` é decisão dele. CUSTO
+  ACEITO dessa assimetria: fala do cliente que `_quer_humano` não cobre
+  ("Atendente por favor", "Cadê o atendente?") com o modelo transferindo
+  sem consultar vira ALTA "venda em risco" no vigia e "legítimo" no
+  auditor — alargar `_quer_humano` muda o handoff FORÇADO do bot, decisão
+  separada. (2) `_resumo_tool` só repassa CÓDIGO de erro (`_erro_curto`:
+  até 40 chars SEM dígito/aspas/parêntese — 'nenhum item válido' passa,
+  telefone e str(exc) viram "detalhe omitido") e diz "FORA da area de
+  entrega (N km)" quando `consultar_frete` devolve `fora_area=True` (não é
+  erro no contrato do `frete.consultar_frete`; sem o ramo o vigia lia "ok"
+  e podia acusar o bot que negou entrega, certo). (3) `consultar_pedido`
+  devolve `autorizado_como` (comprador/destinatario/cpf) e o
+  `como_apresentar` manda dizer no motivo quando quem pede correção é quem
+  RECEBE. (4) `_CORRECAO_ENTREGA` aceita alvo ANTES do verbo só em forma
+  TERMINAL (`_VERBO_TERMINAL`: "quem vai receber mudou", "endereço está
+  errado", "endereço mudou PARA Rua X 200" — "mudou para outra cesta",
+  "mudou de ideia", "troca a cesta" NÃO casam; "destinatária quer alterar
+  a quantidade" NÃO casa), `_ALVO_ENTREGA` cobre "endereço (de entrega)",
+  destinatário, apto/apartamento, complemento, bairro, bloco, número DA
+  CASA e quem recebe; `_ANCORA_PEDIDO` por código exige letra E dígito
+  (CEP não ancora) e `_SINAL_VENDA_EM_CURSO` (frete/cotar/cotação/
+  orçamento/novo pedido/carrinho) desliga a exceção mesmo com "pedido" e
+  código no motivo — veto TOTAL de propósito (a refutação tentou derrubar
+  e não derrubou): "corrigir endereço do pedido X, frete express já pago"
+  custa UMA recusa e o handoff sai na insistência; venda em curso é o que
+  o enforcement existe pra barrar. (5) o leitor de story do
   `avaliar_abandono` usa `texto_da_mensagem`. (6) elogio puro
   (`_ELOGIO_ALT` amei/amamos/adorei) vale como fechamento SÓ com
   `_e_fechamento(texto, elogio=True)`, usado em `atendimento_pendente.
