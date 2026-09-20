@@ -964,7 +964,7 @@ def _sem_emoji_enfeite(t):
     return ' '.join(''.join(out).split())
 
 
-def _e_fechamento(texto):
+def _e_fechamento(texto, elogio=False):
     """True pra mensagens curtas de encerramento/agradecimento — cliente não
     aguarda resposta, não deve disparar 'esperando atendente'.
 
@@ -972,14 +972,16 @@ def _e_fechamento(texto):
     tipo "🙏") e o texto sem emojis de enfeite (cobre "Obrigada ✨" e
     qualquer emoji futuro fora da whitelist). Mensagem só de emoji
     desconhecido NÃO vira fechamento (o strip esvazia e a 2ª passada exige
-    texto)."""
+    texto). `elogio=True` aceita também "Amei"/"Adoramos" — só pro
+    espera-humano; o bot nunca encerra em silêncio num elogio."""
     t = (texto or '').strip()
     if not t or len(t) > 30:
         return False
-    if _FECHAMENTO_RE.match(t):
+    regex = _FECHAMENTO_RE_ELOGIO if elogio else _FECHAMENTO_RE
+    if regex.match(t):
         return True
     limpo = _sem_emoji_enfeite(t)
-    return bool(limpo) and limpo != t and bool(_FECHAMENTO_RE.match(limpo))
+    return bool(limpo) and limpo != t and bool(regex.match(limpo))
 
 
 def _e_mencao_story(texto):
