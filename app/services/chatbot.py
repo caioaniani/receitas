@@ -1127,7 +1127,7 @@ def _resumo_tool(nome, out):
 
 
 def _erro_curto(erro):
-    """So o CODIGO do erro vai pro vigia ('nao_encontrado', 'fora_area',
+    """So o CODIGO do erro vai pro vigia ('nao_encontrado', 'endereco_vazio',
     'autorizacao_necessaria'). Texto livre (str(exc) de `_executar_tool`,
     que pode carregar SQL/parametros/endereco) vira 'detalhe omitido' —
     achado da revisao de 19/09/2026."""
