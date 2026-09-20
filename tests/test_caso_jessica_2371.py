@@ -715,7 +715,12 @@ def test_resumo_tool_omite_texto_livre_de_erro():
     assert '5511987654321' not in cru
     assert 'detalhe omitido' in cru
     assert 'autorizacao_necessaria' not in _resumo_tool(
-        'consultar_pedido', {'erro': "boom with spaces"})
+        'consultar_pedido', {'erro': "boom(with) parens=1"})
+    # Código legítimo com espaço passa; dígito puro (telefone) não
+    assert 'nenhum item válido' in _resumo_tool('gerar_link_carrinho',
+                                                {'erro': 'nenhum item válido'})
+    assert '5511987654321' not in _resumo_tool('x', {'erro': '5511987654321'})
+    assert 'detalhe omitido' in _resumo_tool('x', {'erro': 'Rua-X:10'})
 
 
 def test_consultar_pedido_diz_quem_autorizou(app):
