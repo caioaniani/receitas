@@ -4335,16 +4335,32 @@ todos corrigidos com ordem do dono ("Liberado"); testes em
   transferiu sem consultar não pode calar quem o vigia (revisão, alta).
   **TERCEIRA RODADA (dono 20/09/2026, "Pode seguir")**: (a) `_quer_humano`
   (handoff FORÇADO do bot + desarme do detector do vigia) cobre as formas
-  reais que ficavam fora — "Atendente por favor", "atendente pfv", "Cadê
-  o atendente?", "tem atendente aí?" / "tem atendente?" (a forma nua só no
-  FIM da mensagem: "tem atendente aos domingos?" é pergunta de horário),
-  "quero/preciso (de) uma pessoa" sem objeto de venda ("pessoa jurídica",
-  "pessoa para receber" ficam fora), "alguém humano/de verdade", "não
-  quero (falar com) robô/bot"; e a NEGAÇÃO virou ESCOPADA ao trecho
-  casado (`_negado_antes`, 16 chars antes do hit) — a global de antes
-  calava "nao quero mais esperar, me passa pra um atendente". "tem alguém
-  aí?" e "alguém pode me ajudar?" seguem FORA de propósito (nudge/abertura
-  comum, forçar handoff aí seria pior). (b) A métrica "handoff preguiçoso"
+  reais que ficavam fora — "Atendente por favor" / "atendente pfv" / "por
+  favor um atendente (urgente)" SÓ COMO MENSAGEM INTEIRA (âncora no fim:
+  a refutação de 20/09 provou que sem ela o VOCATIVO "Boa tarde atendente,
+  por favor pode me mandar o cardápio?" e "por favor, o atendente que me
+  atendeu ontem foi ótimo" viravam handoff forçado ANTES do modelo —
+  regressão alta, corrigida no mesmo dia), "Cadê o atendente?", "tem
+  atendente aí?" / "tem atendente?" (a forma nua só no FIM da mensagem:
+  "tem atendente aos domingos?" é pergunta de horário), "quero/preciso
+  (de) uma pessoa" por LISTA BRANCA (fim da mensagem ou complemento de
+  ATENDIMENTO: "pra falar/conversar/me atender/ajudar", "de verdade", "da
+  equipe" — a lista negra da 1ª versão deixava passar a logística da
+  entrega e do presente: "preciso de uma pessoa em casa para receber?",
+  "quero uma pessoa muito especial receber essa cesta"), "alguém humano/de
+  verdade", "não quero (falar com) robô/bot". A NEGAÇÃO é ESCOPADA À
+  ORAÇÃO (texto desde a última pontuação antes do hit) e SÓ com VERBO DE
+  VONTADE + palavras-ponte (`_negado_antes`, `_NEG_VONTADE`/`_NEG_PONTE`):
+  "não quero (de jeito nenhum) falar com atendente (humano)" veta; "nao
+  quero mais esperar, me passa pra um atendente" e "não quero esperar mais
+  me passa pra um atendente" NÃO vetam; "não consigo/posso/estou
+  conseguindo falar com atendente" é PEDIDO, não recusa (a 1ª versão —
+  janela de 16 chars + 1 palavra — errava nos dois sentidos; refutação
+  20/09). "tem alguém aí?" e "alguém pode me ajudar?" seguem FORA de
+  propósito (nudge/abertura comum, forçar handoff aí seria pior). REGRA:
+  padrão novo em `_HUMANO_PATTERNS` nasce ANCORADO ou com lista branca de
+  complemento, e testado com a frase DENTRO de uma pergunta de venda, não
+  só como mensagem inteira. (b) A métrica "handoff preguiçoso"
   do AUDITOR também deixa de contar alergia/intolerância, reclamação,
   atraso/entrega parada, marketplace e estorno/reembolso/cancelamento no
   MOTIVO do bot (`chatbot.motivo_excecao_legitima`, aplicado em
