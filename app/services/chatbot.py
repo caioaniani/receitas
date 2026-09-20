@@ -404,13 +404,27 @@ _ALVO_ENTREGA = (
     r'(endere[cç]o|destinat[aá]ri\w*|apartamento|apto\b|'
     r'n[uú]mero d[aoe] (?:casa|endere[cç]o|pr[eé]dio|rua)|'
     r'quem (?:vai )?receb\w*)')
-# Verbo ANTES do alvo ("corrigir endereço") ou alvo ANTES do verbo ("quem
-# vai receber mudou", "endereço do pedido está errado, trocar") — a 1ª
-# versao so aceitava a primeira ordem (revisao 19/09/2026).
+# Verbo ANTES do alvo ("corrigir endereço") ou alvo ANTES do verbo, mas ai
+# so em forma TERMINAL ("quem vai receber mudou", "endereço do pedido está
+# errado") sem objeto na sequencia — "destinatária quer alterar a
+# quantidade de pães" NAO e correcao de entrega (revisao 19/09/2026, 2ª
+# rodada: o ramo alvo-primeiro com verbo livre reabria a excecao).
+_VERBO_TERMINAL = (
+    r'(?:mud(?:ou|a|aram)|troc(?:ou|a|aram)|alter(?:ou|a|aram)|'
+    r'est[aá]\s+errad[oa]|(?:foi|est[aá])\s+(?:corrigid|alterad|trocad)[oa])')
 _CORRECAO_ENTREGA = re.compile(
     r'(?i)\b' + _VERBO_MUDANCA + r'\b\s+(?:\w+\s+){0,3}?' + _ALVO_ENTREGA
-    + r'|\b' + _ALVO_ENTREGA + r'\s+(?:\w+\s+){0,3}?\b' + _VERBO_MUDANCA + r'\b')
-_ANCORA_PEDIDO = re.compile(r'(?i)\bpedido\b|\b(?=[A-Z0-9]*\d)[A-Z0-9]{8}\b')
+    + r'|\b' + _ALVO_ENTREGA + r'\s+(?:\w+\s+){0,3}?\b' + _VERBO_TERMINAL
+    + r'\b(?!\s+(?:[oa]s?|um[a]?|de|d[oa]s?|pel[oa]s?|por|para)\b)')
+# Codigo de pedido = 8 caracteres com LETRA e DIGITO (E49C374A); so digitos
+# (CEP 05688020) nao ancora.
+_ANCORA_PEDIDO = re.compile(
+    r'(?i)\bpedido\b|\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{8}\b')
+# Venda EM CURSO no motivo: a palavra "pedido" nao ancora correcao quando o
+# bot esta cotando/fechando — e o handoff preguicoso de frete de sempre.
+_SINAL_VENDA_EM_CURSO = re.compile(
+    r'(?i)\b(frete|cotar|cota[çc][aã]o|or[çc]amento|novo pedido|'
+    r'fechar o pedido|carrinho)\b')
 
 
 def _handoff_excecao(inp):
