@@ -514,8 +514,23 @@ _SINAIS_RECLAMACAO = re.compile(
     r'\bfalar com (gerente|dono|respons[aá]vel)|'
     # Terceiro na ENTREGA (caso conv 2409, 20/09/2026): entregador/portaria
     # com a cesta na porta e ninguem atendendo — handoff humano e correto,
-    # nunca "venda em risco".
-    r'\bentregador\w*|\bmotoboy|\blalamove|\bportaria|\bporteir\w*|'
+    # nunca "venda em risco". ANCORADO a auto-identificacao ("sou o
+    # entregador"), a "entrega de X da Lalamove" ou a um PROBLEMA na mesma
+    # oracao: o substantivo solto (1ª versao) casava "o motoboy entrega ate
+    # que horas?", "pode deixar na portaria?" e ate o elogio "o motoboy foi
+    # super educado" — calava o ALTA de venda em risco e mandava pedido de
+    # desculpas + fila humana num fechamento (refutacao 20/09/2026).
+    r'\b(sou|somos|aqui [eé]|[eé] [oa]) ([oa]|um|uma|d[oa])?\s*'
+    r'(entregador\w*|motoboy|motorista|porteir\w*|zelador\w*)\b|'
+    r'\bentrega d[eao] (uma?\s+|\d+\s+)?\w+ d[ao] lalamove\b|'
+    r'\b(entregador\w*|motoboy|motorista|lalamove|portaria|porteir\w*|zelador\w*)\b'
+    r'[^.!?\n]{0,80}\b(ningu[eé]m|n[aã]o (atend\w+|consegu\w+|receb\w+|respond\w+|'
+    r'abr\w+|ach\w+|encontr\w+)|devolver|parad[oa]|esperando|aguardando|suporte|'
+    r'cancel\w+|foi embora)\b|'
+    r'\b(ningu[eé]m|n[aã]o (atend\w+|consegu\w+|receb\w+|respond\w+|abr\w+|ach\w+|'
+    r'encontr\w+)|devolver|parad[oa]|esperando|aguardando|suporte|cancel\w+|'
+    r'foi embora)\b[^.!?\n]{0,80}'
+    r'\b(entregador\w*|motoboy|motorista|lalamove|portaria|porteir\w*|zelador\w*)\b|'
     r'\bdeix(ou|aram|ei|ada|ado) na (porta|portaria|entrada)|'
     r'\bvou (voltar (pra|para) )?devolver|\bningu[eé]m (atende|atendeu|responde)|'
     # Qualidade/tamanho do produto JÁ recebido (caso 23/06/2026: croissant
