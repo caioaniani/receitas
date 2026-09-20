@@ -412,10 +412,23 @@ def _oracao_antes(texto, inicio):
     return antes
 
 
-def _oracao_interrogativa(texto, fim):
-    """True se a oracao que contem o hit termina em '?' (primeira pontuacao
-    a partir do fim do hit)."""
-    m = _PONTUACAO_ORACAO.search(texto, fim)
+def _oracao_anterior(texto, inicio):
+    """Oracao IMEDIATAMENTE anterior a que contem `inicio` (texto entre a
+    penultima e a ultima pontuacao antes do hit); '' se nao ha."""
+    antes = texto[:inicio]
+    pos = list(_PONTUACAO_ORACAO.finditer(antes))
+    if not pos:
+        return ''
+    ini = pos[-2].end() if len(pos) >= 2 else 0
+    return antes[ini:pos[-1].start()]
+
+
+def _oracao_interrogativa(texto, inicio):
+    """True se a oracao que contem o hit termina em '?' — primeira pontuacao
+    a partir do INICIO do hit (as caudas ancoradas engolem o '?' no proprio
+    hit; buscar a partir do fim deixava "nao me liga?" sem interrogacao —
+    refutacao 20/09/2026)."""
+    m = _PONTUACAO_ORACAO.search(texto, inicio)
     return bool(m) and m.group(0) == '?'
 
 
@@ -431,7 +444,7 @@ def _negado_antes(texto, inicio, fim=None, *, nua_veta=True):
     if _HIT_VONTADE.match(trecho):
         return True
     if _HIT_IMPERATIVO.match(trecho):
-        return not _oracao_interrogativa(texto, fim if fim is not None else inicio)
+        return not _oracao_interrogativa(texto, inicio)
     return False
 
 
