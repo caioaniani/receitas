@@ -472,23 +472,40 @@ def _texto_para_deteccao(texto):
     return re.sub(r'[^\w?!.]+$', '', t)
 
 
-def _quer_humano(texto, patterns=None):
-    """True quando o cliente PEDE explicitamente um humano (ou uma ligacao —
-    `_LIGACAO_PATTERNS`, que fazem parte de `_HUMANO_PATTERNS`). Usado pra
-    forcar handoff de forma deterministica, sem depender do Claude chamar a
-    tool. `patterns` restringe a familia avaliada (`_pede_ligacao`)."""
+def _hits_ligacao(t):
+    """Hits de `_LIGACAO_PATTERNS` que ABREM a oracao (so abertura antes do
+    verbo) e cuja oracao anterior nao e condicao/preferencia."""
+    out = []
+    for p in _LIGACAO_PATTERNS:
+        for m in p.finditer(t):
+            if not _ABERTURA_LIGACAO.match(_oracao_antes(t, m.start())):
+                continue
+            if _CONDICAO_ENTREGA.search(_oracao_anterior(t, m.start())):
+                continue
+            out.append((m.start(), m.end()))
+    return out
+
+
+def _quer_humano(texto):
+    """True quando o cliente PEDE explicitamente um humano — atendente
+    (`_HUMANO_PATTERNS`) ou uma ligacao (`_hits_ligacao`). Usado pra forcar
+    handoff de forma deterministica, sem depender do Claude chamar a tool."""
     t = _texto_para_deteccao(texto)
     if len(t) < 4:
         return False
     hits = [(m.start(), m.end())
-            for p in (patterns or _HUMANO_PATTERNS) for m in p.finditer(t)]
+            for p in _HUMANO_PATTERNS for m in p.finditer(t)]
+    hits += _hits_ligacao(t)
     return _algum_hit_nao_negado(t, hits, nua_veta=False)
 
 
 def _pede_ligacao(texto):
     """True quando o pedido de humano e um pedido de LIGACAO ("me liga por
     favor") — muda o texto e o motivo do handoff forcado."""
-    return _quer_humano(texto, patterns=_LIGACAO_PATTERNS)
+    t = _texto_para_deteccao(texto)
+    if len(t) < 4:
+        return False
+    return _algum_hit_nao_negado(t, _hits_ligacao(t), nua_veta=False)
 
 
 # Motivo que o BOT escreve ao transferir porque o cliente PEDIU humano
