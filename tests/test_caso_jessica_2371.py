@@ -652,6 +652,13 @@ def test_prompts_do_auditor_explicam_conv_id_e_pagamento_posterior():
     (None, 'cliente quer ser transferido para um humano', True),
     (None, 'cliente solicitou transferência para atendente humano', True),
     (None, 'cliente pediu para encaminhar para a equipe', True),
+    # Advérbio entre verbo e objeto — inclusive o eco literal da exceção do
+    # prompt ("Cliente PEDIU explicitamente humano")
+    (None, 'cliente pediu explicitamente humano', True),
+    (None, 'Cliente PEDIU explicitamente humano', True),
+    (None, 'cliente pediu explicitamente um atendente humano', True),
+    (None, 'cliente precisa urgentemente de atendente', True),
+    (None, 'cliente pede simplesmente para passar o pedido para outra loja', False),
     # ... e o destino tem que ser HUMANO: transferir/passar PEDIDO não é
     (None, 'cliente pediu para passar o pedido para outra loja', False),
     (None, 'cliente quer transferir o pedido para outra data', False),
