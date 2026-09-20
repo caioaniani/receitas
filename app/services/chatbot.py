@@ -634,7 +634,29 @@ _HANDOFF_EXCECAO = re.compile(
     # LEGITIMO (chatbot_vigia._SINAIS_RECLAMACAO) — o enforcement divergia.
     r'|\batras(o|os|ou|ado|ada|ando)\b'
     r'|\b(rappi|ifood|99\s*food|marketplace)\b'
+    # pedido de LIGACAO (caso conv 2409, 20/09/2026): "cliente pediu
+    # ligacao" e contato humano pedido — nao ha o que consultar antes.
+    r'|\b(liga[çc][aã]o|telefonema)\b'
     r')')
+
+# TERCEIRO NA ENTREGA (caso conv 2409, 20/09/2026): o ENTREGADOR da Lalamove
+# mandou foto da cesta na entrada do predio e "vou voltar para devolver"; o
+# telefone dele nao esta em pedido nenhum, entao consultar_pedido volta
+# vazio e o modelo ficou pedindo numero de pedido tres vezes. Motivo que
+# cita quem esta na entrega (entregador/portaria/vizinho) E um problema em
+# curso (ninguem atende, deixou na porta, vai devolver) transfere sem
+# consulta previa. As DUAS partes sao obrigatorias: "cliente perguntou se o
+# motoboy liga antes" (sem problema) e "problema com a cesta" (sem
+# terceiro) seguem exigindo consulta — e o enforcement que barra o handoff
+# preguicoso de VENDA.
+_TERCEIRO_ENTREGA = re.compile(
+    r'(?i)\b(entregador\w*|motoboy|motorista|portaria|porteir\w*|zelador\w*|'
+    r'vizinh[oa]s?|lalamove|s[ií]ndic[oa])\b')
+_PROBLEMA_ENTREGA_EM_CURSO = re.compile(
+    r'(?i)\b(problema|parad[oa]|esperando|aguardando|devolv\w+|'
+    r'deix(ou|aram|ada|ado|ar)\b|ningu[eé]m|n[aã]o\s+(atend\w+|consegu\w+|'
+    r'recebe\w*|responde\w*|abr\w+|encontr\w+)|sem\s+contato|na\s+porta|'
+    r'na\s+entrada|na\s+portaria|recusad[oa]|voltar|errad[oa])\b')
 
 # CORRECAO de endereco/destinatario de pedido JA PAGO (caso Jessica
 # 19/09/2026: express de 1h gravado com "Rua X, 72", cliente mandou
