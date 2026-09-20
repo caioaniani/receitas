@@ -4445,33 +4445,77 @@ Sondas usadas: `vigia-vereditos?conversa=`, `chatwoot-thread?conv=`,
 atendente"):
 
 - **Pedido de LIGAÇÃO = pedido de humano** (`chatbot._LIGACAO_PATTERNS`,
-  parte de `_HUMANO_PATTERNS`; `_pede_ligacao`): "me liga (por favor)",
-  "pode(m)/poderia me ligar?", "liga pra mim", "me retorna", "quero uma
-  ligação", "preciso falar por telefone" — ANCORADOS no fim com cauda de
-  cortesia (`_CAUDA_CORTESIA`): "vocês ligam antes de entregar?", "pode me
-  ligar quando sair pra entrega?", "me liga quando chegar" e "qual o
-  telefone da loja?" NÃO disparam. O handoff forçado sai com texto próprio
-  ("atendente da equipe, que vai entrar em contato") e motivo "cliente
-  pediu ligação"; `_MOTIVO_PEDIU_HUMANO` (auditor) e `_HANDOFF_EXCECAO`
-  (enforcement) reconhecem ligação/telefonema; `_HIT_IMPERATIVO` ganhou
-  liga/ligue/ligar/retorna (o "não" nu veta "não me liga, prefiro por
-  aqui"). Prompt: a exceção 1 de ANTES DE TRANSFERIR cobre ligação e
-  proíbe o "quer que eu passe?".
+  lista SEPARADA de `_HUMANO_PATTERNS`, somada em `_quer_humano` por
+  `_hits_ligacao`; `_pede_ligacao`): "me liga (por favor/aí/urgente)",
+  "pode(m)/poderia me ligar?", "liga pra mim", "liga aí", "me liga no
+  11 9…", "liga no meu número", "me retorna", "me telefona", "quero uma
+  ligação", "preciso falar por telefone", "pode entrar em contato (comigo)?",
+  "entra em contato comigo", "me dá um retorno". ANCORADOS nas DUAS
+  PONTAS: cauda de cortesia no fim (`_CAUDA_CORTESIA`) E, na oração do
+  hit, só ABERTURA antes do verbo (`_ABERTURA_LIGACAO`: saudação,
+  cortesia, "vc/você/alguém/será que/dá pra/não"); a oração ANTERIOR não
+  pode ser condição/preferência (`_CONDICAO_ENTREGA`: quando, assim que,
+  ao chegar, se, caso, qualquer coisa, de preferência, na hora, no dia).
+  Sem a ponta do começo, a 2ª refutação de 20/09 provou o erro CARO: a 3ª
+  pessoa do indicativo tem a forma do imperativo ("o entregador me liga?",
+  "o motoboy liga pra mim?", "vocês me ligam?") e a condição vem
+  TOPICALIZADA no WhatsApp ("quando chegar me liga", "qualquer coisa, me
+  liga", "se o entregador não achar o prédio me liga", "não é pra me
+  ligar", "a moça disse que ia me ligar") — tudo frase de venda virando
+  handoff forçado antes do modelo. "vou entrar em contato" / "a gente
+  entra em contato" são FECHAMENTO (contato só com modal ou com "comigo");
+  "ligam" fica fora ("vocês me ligam?" é processo). Custo aceito: "se puder
+  me liga", "quando puder me liga", "entrem em contato, por favor" ficam
+  com o modelo. A pergunta negativa é pedido ("não me liga?" — o '?' é
+  lido a partir do INÍCIO do hit, `_oracao_interrogativa(texto, inicio)`,
+  porque a cauda ancorada engole o '?'); "não me liga, por favor" e "não
+  me liga não" são recusa (a 1ª versão do CLAUDE.md dizia que o "não" nu
+  vetava "não me liga, prefiro por aqui" — errado: essa frase nem casa, a
+  âncora `$` barra). O handoff forçado sai com texto próprio ("atendente
+  da equipe, que vai entrar em contato") e motivo "cliente pediu ligação";
+  `_MOTIVO_PEDIU_HUMANO` (auditor) reconhece ligação/telefonema inclusive
+  na passiva ("ligação solicitada pelo cliente"), e o enforcement
+  (`_handoff_excecao`) reconhece pela MESMA regra (`pediu_humano`), nunca
+  por "ligação" solta ("faz ligação antes de entregar?" é venda).
+  Prompt: a exceção 1 de ANTES DE TRANSFERIR cobre ligação e proíbe o
+  "quer que eu passe?". REGRA reforçada: padrão novo de fala do cliente
+  nasce ancorado nas DUAS pontas e é testado com sujeito de 3ª pessoa e
+  condição ANTES do verbo, não só depois.
 - **TERCEIRO NA ENTREGA** (bullet novo em ANTES DE TRANSFERIR): entregador/
   portaria/vizinho não tem número de pedido e o telefone não está em pedido
   nenhum — pedir o número NO MÁXIMO uma vez e transferir com o relato no
-  motivo. Enforcement: `_handoff_excecao` libera motivo que casa
+  motivo. FONTE ÚNICA `chatbot.motivo_terceiro_na_entrega` nas TRÊS
+  camadas (enforcement `_handoff_excecao`, métrica do auditor
+  `motivo_excecao_legitima`; o vigia ao vivo lê a fala, não o motivo):
   `_TERCEIRO_ENTREGA` (entregador/motoboy/motorista/portaria/porteiro/
   zelador/vizinho/lalamove/síndico) E `_PROBLEMA_ENTREGA_EM_CURSO`
-  (ninguém atende, deixou na porta, vai devolver, parado, errado...) — as
-  DUAS partes, senão "cliente perguntou se o motoboy liga antes" furaria o
-  enforcement de venda.
+  (problema não precedido de tem/sem/algum/nenhum, ninguém, não atende/
+  consegue/recebe/quis receber, deixou/vai deixar, vai voltar, devolver,
+  "cesta na entrada/porta/portaria", parado/esperando NA porta, recusado,
+  "entregador precisa de suporte"), com veto de VENDA EM CURSO
+  (`_SINAL_VENDA_EM_CURSO`, avaliado ANTES) e de HIPÓTESE
+  (`_HIPOTESE_ENTREGA`: "se/quando ninguém…", "pode deixar"). A 1ª versão
+  casava "deixar" no infinitivo, "ninguém/esperando/voltar/errado" soltos e
+  "na portaria" como localização, e "cliente perguntou se o motoboy pode
+  deixar na portaria" — a pergunta de entrega mais comum do canal — furava
+  o enforcement de venda (2ª refutação 20/09). "entregador parado na
+  portaria, entrega express com frete pago" segue barrado (venda em curso
+  = uma recusa, handoff sai na insistência — mesma regra da correção de
+  endereço).
 - **Vigia**: PROMPT_VIGIA ganhou dois bullets ALTA ("ENTREGA EM CURSO COM
   PROBLEMA e o bot NÃO transferiu"; "Cliente pediu LIGAÇÃO e o bot NÃO
-  transferiu — não é cumprimento") e `_SINAIS_RECLAMACAO` reconhece
-  entregador/motoboy/lalamove/portaria, "deixou na porta/portaria/entrada",
-  "vou (voltar pra) devolver" e "ninguém atende" — handoff com tools=[]
-  nesses casos é correto, nunca "venda em risco".
+  transferiu — não é cumprimento") e `_SINAIS_RECLAMACAO` reconhece o
+  terceiro ANCORADO: auto-identificação ("sou o entregador"), "entrega de
+  uma cesta da Lalamove" e entregador/motoboy/lalamove/portaria/porteiro
+  com PROBLEMA na mesma oração (ninguém, não atende/achou, devolver,
+  parado, esperando, suporte, cancelou, foi embora), além de "deixou na
+  porta/portaria/entrada", "vou (voltar pra) devolver" e "ninguém atende".
+  O substantivo SOLTO da 1ª versão casava "o motoboy entrega até que
+  horas?", "pode deixar na portaria?" e o elogio "o motoboy foi super
+  educado" — calava o ALTA determinístico de venda em risco e mandava
+  pedido de desculpas + fila humana num fechamento (2ª refutação 20/09).
+  Handoff com tools=[] nos casos ancorados é correto, nunca "venda em
+  risco". Prompt do auditor lista ligação e terceiro entre as exclusões.
 - NÃO feito (limitações conhecidas): áudio segue sem transcrição (o
   entregador explicou tudo num áudio que o bot não ouve); quem atende no
   domingo à noite é operação, não software — a cobrança de espera-humano
