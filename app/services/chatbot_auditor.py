@@ -94,8 +94,9 @@ absolutos ("2 conversas, 1 handoff") e tom neutro.
 antes (so transferir_para_humano ou nada). E SINTOMA DE PROMPT FALHO,
 nao limite de capacidade — sempre vire `problema` no relatorio quando >=1,
 mas descrito FACTUALMENTE (1 caso é 1 caso, sem extrapolar padrão).
-Pedido EXPLÍCITO de atendente pelo cliente e handoff por alergia,
-reclamação, atraso de entrega, marketplace ou cancelamento/estorno já estão
+Pedido EXPLÍCITO de atendente ou de LIGAÇÃO pelo cliente e handoff por
+alergia, reclamação, atraso de entrega, marketplace, cancelamento/estorno ou
+TERCEIRO na entrega (entregador/portaria com problema em curso) já estão
 EXCLUÍDOS dessa conta (não há o que consultar) — não os cite como preguiça.
 
 TOM (regra do dono, 02/07/2026): você é o BALANÇO FRIO do fim do dia —
