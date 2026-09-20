@@ -479,7 +479,17 @@ _MOTIVO_PEDIU_HUMANO = re.compile(
     r'(?:solicitad|pedid|requisitad|exigid)\w*\s+pel[oa]\s+cliente\b'
     # formas nominais
     r'|\bpedido\s+de\s+(?:um\s+)?(?:atendente|humano|atendimento\s+humano)\b'
-    r'|\ba\s+pedido\s+d[oa]\s+cliente\b')
+    r'|\ba\s+pedido\s+d[oa]\s+cliente\b'
+    # pedido de LIGACAO (3ª pessoa de `_LIGACAO_PATTERNS`, caso conv 2409):
+    # "pediu ligacao", "pediu para ligar", "quer que a equipe ligue",
+    # "solicitou retorno por telefone"
+    r'|' + _VERBO_PEDIDO_HUMANO +
+    r'(?:uma\s+|um\s+)?(?:liga[çc][aã]o|telefonema|'
+    r'retorno\s+(?:por|pelo)\s+telefone|'
+    r'(?:para|pra)\s+(?:a\s+equipe\s+|algu[eé]m\s+|que\s+)?'
+    r'(?:ligar\w*|ligue\w*|liguem|retorn\w+)|'
+    r'que\s+(?:a\s+equipe\s+|algu[eé]m\s+)?(?:ligue\w*|liguem|retorne\w*))\b'
+    r'|\bpedido\s+de\s+(?:uma\s+)?(?:liga[çc][aã]o|telefonema)\b')
 
 
 def pediu_humano(mensagem_cliente=None, motivo=None):
