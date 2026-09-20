@@ -263,6 +263,36 @@ _HUMANO_PATTERNS = [
         r'(rob[oô]|bot|m[aá]quina|intelig[eê]ncia\s+artificial)\b'),
 ]
 
+# Pedido de LIGACAO = pedido de contato humano (caso conv 2409, 20/09/2026:
+# o entregador da Lalamove escreveu "Me liga por favor" e o bot respondeu
+# "quer que eu passe pra equipe?" em vez de passar; ninguem da padaria
+# soube da cesta deixada na entrada do predio). O bot nao liga — quem liga
+# e a equipe, entao a resposta certa e o handoff. ANCORADO no fim, como os
+# demais: "voces ligam antes de entregar?" e "pode me ligar quando sair pra
+# entrega?" sao pergunta/preferencia de venda (o "quando"/"antes" entre o
+# verbo e o fim barra o casamento), nao pedido de contato agora.
+_CAUDA_CORTESIA = (r'(?:\s+(?:aqui|agora|urgente|depois|hoje|j[aá]))?'
+                   r'[\s,!.]*(?:por\s+favor|pfv|pf|por\s+gentileza|urgente|'
+                   r'agora)?\s*[?!.]*\s*$')
+_LIGACAO_PATTERNS = [
+    # "(pode) me liga(r) (por favor)" / "me retorna"
+    re.compile(
+        r'(?i)\b(?:(?:pode|podem|poderia|poderiam|consegue|conseguem|'
+        r'd[aá]\s+(?:pra|para))\s+)?me\s+'
+        r'(?:liga|ligue|liguem|ligar|ligarem|retorna|retorne|retornem|retornar)\b'
+        + _CAUDA_CORTESIA),
+    # "liga pra mim"
+    re.compile(
+        r'(?i)\b(?:liga|ligue|liguem|ligar|retorna|retorne|retornem|retornar)'
+        r'\s+(?:pra|para)\s+mim\b' + _CAUDA_CORTESIA),
+    # "quero uma ligacao" / "preciso falar por telefone"
+    re.compile(
+        r'(?i)\b(?:quero|queria|preciso|prefiro|gostaria)\s+(?:de\s+)?'
+        r'(?:uma\s+|um\s+)?(?:liga[çc][aã]o|telefonema|'
+        r'falar\s+(?:por|no|pelo)\s+telefone)\b' + _CAUDA_CORTESIA),
+]
+_HUMANO_PATTERNS.extend(_LIGACAO_PATTERNS)
+
 # Guarda de negacao ESCOPADA a ORACAO (o texto desde a ultima pontuacao
 # antes do trecho casado). Tres formas vetam:
 #  (a) NEGADOR + VERBO DE VONTADE + palavras-ponte: "nao quero (de jeito
