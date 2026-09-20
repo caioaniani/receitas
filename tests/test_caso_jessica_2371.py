@@ -617,7 +617,28 @@ def test_prompts_do_auditor_explicam_conv_id_e_pagamento_posterior():
     (None, 'cliente pediu atendente', True),
     (None, 'cliente solicitou falar com uma pessoa', True),
     (None, 'cliente insistiu em atendimento humano', True),
+    (None, 'cliente deseja falar com atendente', True),
+    (None, 'cliente gostaria de falar com atendente', True),
+    (None, 'cliente precisa de atendente', True),
+    (None, 'cliente pediu para falar com o responsável', True),
+    (None, 'cliente quer falar com a equipe', True),
+    (None, 'cliente pediu um vendedor', True),
+    (None, 'pedido de atendente humano', True),
+    (None, 'transferência a pedido do cliente', True),
+    # Negação ESCOPADA: veta só quando nega o próprio pedido de humano
     (None, 'cliente não quer atendente, quer cancelar', False),
+    (None, 'cliente não quer falar com robô, pediu atendente', True),
+    (None, 'cliente nao quer esperar e pediu um atendente', True),
+    # Motivo de VENDA com 'pessoa'/'atendente' solto NÃO é pedido de humano
+    # (revisão 19/09: a 1ª regex casava tudo isso e tirava da métrica)
+    (None, 'cliente quer cesta para 1 pessoa, não soube montar', False),
+    (None, 'cliente quer presentear uma pessoa especial', False),
+    (None, 'cliente quer saber se alguém da equipe entrega em Moema', False),
+    (None, 'cliente quer nota fiscal para pessoa jurídica', False),
+    (None, 'cliente prefere retirar na loja com um atendente', False),
+    (None, 'cliente pediu para entregar para outra pessoa', False),
+    (None, 'cliente pediu sugestão de cesta para uma pessoa sem glúten', False),
+    (None, 'cliente insistiu que o pedido chegou errado, pessoa que recebeu reclamou', False),
     (None, 'dúvida de frete para Moema', False),
     (None, 'corrigir endereço do pedido X', False),
     ('quanto custa a cesta?', 'cliente reclamou do atraso', False),
@@ -625,6 +646,22 @@ def test_prompts_do_auditor_explicam_conv_id_e_pagamento_posterior():
 def test_pediu_humano_pela_fala_ou_pelo_motivo(mensagem, motivo, esperado):
     from app.services.chatbot import pediu_humano
     assert pediu_humano(mensagem, motivo) is esperado
+
+
+def test_detector_de_venda_em_risco_ignora_motivo_escrito_pelo_bot():
+    """O detector determinístico do vigia (ALTA + WhatsApp na hora) NÃO pode
+    ser calado pelo motivo que o próprio modelo escreveu na tool — só a
+    FALA do cliente pedindo humano o desarma (achado da revisão)."""
+    from app.services.chatbot_vigia import _e_handoff_preguicoso_em_compra
+    hist = [{'role': 'user', 'content': 'quanto custa a cesta brunch? quero comprar'}]
+    rb = {'acao': 'handoff', 'tools_usadas': [],
+          'motivo': 'cliente prefere falar com atendente sobre a cesta'}
+    assert _e_handoff_preguicoso_em_compra(hist, rb) is True
+    rb2 = dict(rb, motivo='cliente pediu atendente')
+    assert _e_handoff_preguicoso_em_compra(hist, rb2) is True
+    # A fala do CLIENTE continua desarmando o detector
+    hist_pediu = hist + [{'role': 'user', 'content': 'quero falar com atendente'}]
+    assert _e_handoff_preguicoso_em_compra(hist_pediu, rb) is False
 
 
 def test_pedido_explicito_de_atendente_nao_e_handoff_preguicoso():
