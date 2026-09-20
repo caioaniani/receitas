@@ -242,24 +242,45 @@ def _quer_humano(texto):
 # terceira pessoa do `_quer_humano` (que le a FALA do cliente). Usado pela
 # metrica de handoff preguicoso (dono 19/09/2026: "Tirar" — pedido
 # explicito de atendente nao tem o que consultar antes de transferir).
+# Espelha `_HUMANO_PATTERNS` na 3ª pessoa: verbo de pedido + OBJETO humano
+# direto (ou "falar/conversar com ..."). A 1ª versao (verbo + ate 40 chars +
+# substantivo solto) casava motivo de VENDA ("quer cesta para 1 pessoa",
+# "prefere retirar na loja com um atendente") e tirava da conta justamente
+# o handoff preguicoso que a metrica existe pra expor — revisao 19/09/2026.
+_HUMANO_ALT = (r'atendente|humano|operador|atendimento\s+humano|'
+               r'pessoa\s+de\s+verdade|respons[aá]vel|gerente|vendedor')
 _MOTIVO_PEDIU_HUMANO = re.compile(
-    r'(?i)\b(pediu|pede|pedindo|solicit\w+|quer|queria|exig\w+|insist\w+|'
-    r'prefer\w+)\b[^.;]{0,40}?'
-    r'\b(atendente|humano|pessoa|algu[eé]m da equipe|operador)\b'
-    r'|\b(atendente|humano)\b[^.;]{0,30}?\b(pediu|solicitad\w+|a pedido)\b')
+    r'(?i)'
+    r'\b(?:pediu|pede|pedindo|pediram|solicit\w+|quer|queria|querem|'
+    r'deseja\w*|gostaria|precisa\w*|exig\w+|insist\w+|prefer\w+)\b'
+    r'\s+(?:d[eo]\s+|para\s+|por\s+|pra\s+|em\s+)?'
+    r'(?:(?:falar|conversar)\s+com\s+)?(?:um[a]?\s+|o\s+|a\s+)?'
+    r'(?:' + _HUMANO_ALT + r')\b'
+    # a construcao de contato humano em qualquer posicao ("pediu para falar
+    # com alguem", "quer falar com a equipe") — 'pessoa'/'alguem' SO aqui
+    r'|\b(?:falar|conversar)\s+com\s+(?:um[a]?\s+|o\s+|a\s+)?'
+    r'(?:pessoa|algu[eé]m|gente|equipe|setor|' + _HUMANO_ALT + r')\b'
+    # formas nominais
+    r'|\bpedido\s+de\s+(?:um\s+)?(?:atendente|humano|atendimento\s+humano)\b'
+    r'|\ba\s+pedido\s+d[oa]\s+cliente\b')
 
 
 def pediu_humano(mensagem_cliente=None, motivo=None):
     """True se o cliente pediu humano EXPLICITAMENTE — pela fala dele
     (`_quer_humano`) ou pelo motivo que o bot registrou no handoff. Fonte
-    unica pro detector do vigia e pra metrica do auditor: as duas leituras
-    divergiam (o vigia ja excluia, o auditor contava como preguicoso)."""
+    unica pra metrica do auditor. A negacao e ESCOPADA ao trecho casado
+    ("nao quer atendente" veta; "nao quer esperar e pediu atendente" nao)."""
     if _quer_humano(mensagem_cliente):
         return True
     m = (motivo or '').strip()
-    if not m or _HUMANO_NEGACAO.search(m):
+    if not m:
         return False
-    return bool(_MOTIVO_PEDIU_HUMANO.search(m))
+    for hit in _MOTIVO_PEDIU_HUMANO.finditer(m):
+        antes = m[max(0, hit.start() - 16):hit.start()]
+        if re.search(r'(?i)\bn[aã]o\s+(?:\w+\s+)?$', antes):
+            continue
+        return True
+    return False
 
 
 def _solicita_troca(historico):
