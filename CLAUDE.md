@@ -4349,18 +4349,40 @@ todos corrigidos com ordem do dono ("Liberado"); testes em
   entrega e do presente: "preciso de uma pessoa em casa para receber?",
   "quero uma pessoa muito especial receber essa cesta"), "alguém humano/de
   verdade", "não quero (falar com) robô/bot". A NEGAÇÃO é ESCOPADA À
-  ORAÇÃO (texto desde a última pontuação antes do hit) e SÓ com VERBO DE
-  VONTADE + palavras-ponte (`_negado_antes`, `_NEG_VONTADE`/`_NEG_PONTE`):
-  "não quero (de jeito nenhum) falar com atendente (humano)" veta; "nao
-  quero mais esperar, me passa pra um atendente" e "não quero esperar mais
-  me passa pra um atendente" NÃO vetam; "não consigo/posso/estou
-  conseguindo falar com atendente" é PEDIDO, não recusa (a 1ª versão —
-  janela de 16 chars + 1 palavra — errava nos dois sentidos; refutação
-  20/09). "tem alguém aí?" e "alguém pode me ajudar?" seguem FORA de
-  propósito (nudge/abertura comum, forçar handoff aí seria pior). REGRA:
-  padrão novo em `_HUMANO_PATTERNS` nasce ANCORADO ou com lista branca de
-  complemento, e testado com a frase DENTRO de uma pergunta de venda, não
-  só como mensagem inteira. (b) A métrica "handoff preguiçoso"
+  ORAÇÃO (texto desde a última pontuação antes do hit) e veta em três
+  formas (`_negado_antes`, `_HUMANO_NEGACAO`): NEGADOR (não/nem/nunca/
+  jamais) + VERBO DE VONTADE + palavras-ponte — "não quero (de jeito
+  nenhum / de forma alguma / necessariamente) falar com atendente
+  (humano)", "não estou/tô querendo", "não vou querer", "não gosto de",
+  "não faço questão de", "não é necessário" (`_NEG_VONTADE` com auxiliar
+  opcional; `_NEG_PONTE` inclui forma/maneira/alguma/hipótese/e/-mente);
+  VONTADE + NEGADOR — "prefiro não ter que falar com atendente"; e "sem
+  (precisar / ter que)" colado ao hit — "comprar sem falar com atendente"
+  (SÓ nessa forma estreita: "estou sem conseguir falar com atendente" é
+  pedido). "nao quero mais esperar, me passa pra um atendente" e "não
+  quero esperar mais me passa pra um atendente" NÃO vetam; "não consigo/
+  posso/estou conseguindo falar com atendente" é PEDIDO, não recusa (a 1ª
+  versão — janela de 16 chars + 1 palavra — errava nos dois sentidos;
+  refutação 20/09). "NÃO" NU (sem verbo de vontade) colado ao hit, na
+  fala do cliente: veta só quando o hit começa por verbo de vontade ("não
+  quero atendente") ou é imperativo/infinitivo SEM interrogação ("não me
+  passa pra atendente, por favor" = recusa, e o vocativo NÃO re-dispara
+  sobre o mesmo "atendente" já vetado — `_algum_hit_nao_negado`); a
+  PERGUNTA NEGATIVA é pedido: "não me passa pra um atendente?", "não tem
+  atendente aí?", "não chama um atendente?" (a 2ª versão vetava tudo após
+  "não" e matou essas formas — 2ª refutação 20/09). No MOTIVO do bot (3ª
+  pessoa) o "não" nu segue vetando, inclusive com cópula ("não é
+  alergia", "não houve atraso"). Cauda de emoji/reticências é removida
+  antes das âncoras ("Atendente por favor 🙏" é pedido); "?" fica porque
+  decide o "não" nu. "tem alguém aí?" e "alguém pode me ajudar?" seguem
+  FORA de propósito (nudge/abertura comum, forçar handoff aí seria pior);
+  recusa PÓS-posicionada ("atendente humano não, obrigada") e rajada de
+  balões unida por "\n" também ficam FORA — refutadas: a guarda depois do
+  hit derrubaria "quero falar com atendente não com robô" e MULTILINE
+  reabriria o vocativo em dois balões. REGRA: padrão novo em
+  `_HUMANO_PATTERNS` nasce ANCORADO ou com lista branca de complemento, e
+  testado com a frase DENTRO de uma pergunta de venda, não só como
+  mensagem inteira. (b) A métrica "handoff preguiçoso"
   do AUDITOR também deixa de contar alergia/intolerância, reclamação,
   atraso/entrega parada, marketplace e estorno/reembolso/cancelamento no
   MOTIVO do bot (`chatbot.motivo_excecao_legitima`, aplicado em
