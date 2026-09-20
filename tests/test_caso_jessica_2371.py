@@ -872,7 +872,15 @@ def test_elogio_puro_nao_vira_espera_humana(app):
     ('nao quero bot, quero atendente', True),
     # Negação ESCOPADA: a global de antes calava este pedido real
     ('nao quero mais esperar, me passa pra um atendente', True),
+    ('não quero esperar mais me passa pra um atendente', True),
     ('não, quero atendente', True),
+    # "não" com verbo que NÃO é de vontade = pedido, não recusa (refutação
+    # 20/09: a janela de 16 chars vetava isso)
+    ('não consigo falar com atendente', True),
+    ('não consegui falar com atendente', True),
+    ('não posso falar com um atendente?', True),
+    ('não estou conseguindo falar com atendente', True),
+    ('quero uma pessoa de verdade', True),
     # Formas que já funcionavam (não regredir)
     ('quero falar com uma pessoa', True),
     ('me passa pra um atendente', True),
