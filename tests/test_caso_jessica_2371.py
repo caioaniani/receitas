@@ -203,10 +203,20 @@ def test_prompt_bot_tem_correcao_pos_confirmacao():
     ('atualizar endereço da entrega, pedido 1A2B3C4D', True),
     # Só o código (sem a palavra "pedido") também ancora
     ('editar endereço de 1A2B3C4D: Rua Nova 10', True),
-    # Alvo ANTES do verbo (2ª rodada da revisão, 19/09)
+    # Alvo ANTES do verbo, só em forma TERMINAL (2ª rodada da revisão, 19/09)
     ('cliente informou que quem vai receber mudou: pedido E49C374A', True),
     ('destinatário trocou, pedido 1A2B3C4D: agora é a Ângela', True),
+    ('endereço do pedido F4A34D91 está errado, cliente pede para corrigir', True),
+    ('destinatária quer alterar a quantidade de pães do pedido E49C374A', False),
+    ('quem vai receber quer trocar o sabor da cesta, pedido 1A2B3C4D', False),
+    ('destinatária troca a cesta por outra, pedido 1A2B3C4D', False),
+    # Venda em curso NUNCA é exceção, mesmo com "pedido" no motivo
     ('endereço mudou, cotar frete', False),                # sem âncora
+    ('endereço mudou, cotar frete do pedido', False),
+    ('quem vai receber mudou: quer cotar o frete do novo pedido', False),
+    ('cliente mudou de endereço e quer saber o frete do pedido novo', False),
+    # Âncora por código exige LETRA e DÍGITO (CEP não ancora)
+    ('trocar endereço 05688020 do cliente', False),
     ('cliente perguntou o endereço da loja', False),       # sem verbo de mudança
     ('endereco de entrega: pedido E49C374A', False),       # idem
     ('número do pedido não localizado', False),
