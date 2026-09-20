@@ -909,22 +909,32 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
 # vigia alertou como se alguém precisasse olhar).
 # Um "token" de encerramento; a mensagem pode ter vários em sequência
 # ("ok obrigada", "valeu mesmo", "tá bom show").
-_FECHAMENTO_TOKEN = (
-    r'(ok(ay)?|t[aá]|bom|certo|joia|j[oó]ia|blz|beleza|valeu|vlw|'
+_FECHAMENTO_ALT = (
+    r'ok(ay)?|t[aá]|bom|certo|joia|j[oó]ia|blz|beleza|valeu|vlw|'
     r'obrigad[oa]?|obg|brigad[oa]?|grat[oa]|perfeito|show|[oó]timo|maravilha|'
     r'combinado|fechado|isso|mesmo|sim|entendi|top|legal|muito|demais|'
-    # "Amamosss 🥰" / "Amei!" / "Adoramos" depois da entrega (conv 2375,
-    # 19/09/2026): elogio puro em conversa open virou "cliente esperando
-    # atendente ha 13min" no WhatsApp do dono. Ancorado nas duas pontas,
-    # "Amei, quero mais 2" continua NAO sendo fechamento.
-    r'am(?:ei|amos+|ou|aram)|ador(?:ei|amos+|ou|aram)|'
-    r'👍|🙏|❤️|💛|🥰|😊|👏|🙌)'
+    r'👍|🙏|❤️|💛|🥰|😊|👏|🙌'
 )
-_FECHAMENTO_RE = re.compile(
-    r'^' + _FECHAMENTO_TOKEN + r'([\s,!.]+' + _FECHAMENTO_TOKEN + r')*'
-    r'[\s!.,👍🙏❤️💛🥰😊👏🙌]*$',
-    re.IGNORECASE,
-)
+# ELOGIO puro ("Amamosss 🥰", "Amei!", "Adoramos") vale como fechamento SO
+# pro espera-humano (`elogio=True` em atendimento_pendente): conv 2375,
+# 19/09/2026 — cliente elogiou a entrega numa conversa open e o dono levou
+# "esperando atendente ha 13min". NAO entra no conjunto do BOT: "Amei!"
+# depois de foto+preco e sinal de COMPRA, e a Camada 1 do `responder`
+# encerraria a conversa em silencio (achado da revisao).
+_ELOGIO_ALT = r'am(?:ei|amos+|ou|aram)|ador(?:ei|amos+|ou|aram)'
+_FECHAMENTO_TOKEN = '(' + _FECHAMENTO_ALT + ')'
+
+
+def _re_fechamento(alt):
+    return re.compile(
+        r'^(' + alt + r')([\s,!.]+(' + alt + r'))*'
+        r'[\s!.,👍🙏❤️💛🥰😊👏🙌]*$',
+        re.IGNORECASE,
+    )
+
+
+_FECHAMENTO_RE = _re_fechamento(_FECHAMENTO_ALT)
+_FECHAMENTO_RE_ELOGIO = _re_fechamento(_FECHAMENTO_ALT + '|' + _ELOGIO_ALT)
 
 
 # Emojis NEGATIVOS nunca são enfeite: "obrigada 😡" não é fechamento
