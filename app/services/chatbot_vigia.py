@@ -516,9 +516,12 @@ def _e_handoff_preguicoso_em_compra(historico, resultado_bot, conv_id=None):
         return False
     if rb.get('tools_usadas') is None:
         return False  # versao antiga do bot — sem sinal confiavel
-    if not handoff_foi_preguicoso(rb.get('tools_usadas'), conv_id=conv_id,
-                                  motivo=rb.get('motivo')):
-        return False  # bot tentou algo (ou o cliente pediu humano) — legitimo
+    # SEM `motivo=` de proposito (revisao 19/09/2026): o motivo e texto que o
+    # PROPRIO modelo escreveu na tool — o detector deterministico de "venda
+    # em risco" nao pode ser calado por quem ele vigia. O pedido explicito
+    # de humano entra aqui so pela FALA DO CLIENTE (`_quer_humano` abaixo).
+    if not handoff_foi_preguicoso(rb.get('tools_usadas'), conv_id=conv_id):
+        return False  # bot tentou algo — handoff legitimo
 
     # Junta as ultimas msgs do cliente (texto, role=user)
     msgs_user = [m.get('content', '') for m in (historico or [])[-12:]
