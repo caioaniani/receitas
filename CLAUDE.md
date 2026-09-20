@@ -4333,13 +4333,28 @@ todos corrigidos com ordem do dono ("Liberado"); testes em
   (`_e_handoff_preguicoso_em_compra`, ALTA "venda em risco") NÃO lê o
   motivo do bot** — só a fala do cliente o desarma; o modelo que
   transferiu sem consultar não pode calar quem o vigia (revisão, alta).
-  Alergia/reclamação/atraso SEGUEM contando: o dono pediu só o pedido de
-  humano; alargar pra toda `_HANDOFF_EXCECAO` é decisão dele. CUSTO
-  ACEITO dessa assimetria: fala do cliente que `_quer_humano` não cobre
-  ("Atendente por favor", "Cadê o atendente?") com o modelo transferindo
-  sem consultar vira ALTA "venda em risco" no vigia e "legítimo" no
-  auditor — alargar `_quer_humano` muda o handoff FORÇADO do bot, decisão
-  separada. (2) `_resumo_tool` só repassa CÓDIGO de erro (`_erro_curto`:
+  **TERCEIRA RODADA (dono 20/09/2026, "Pode seguir")**: (a) `_quer_humano`
+  (handoff FORÇADO do bot + desarme do detector do vigia) cobre as formas
+  reais que ficavam fora — "Atendente por favor", "atendente pfv", "Cadê
+  o atendente?", "tem atendente aí?" / "tem atendente?" (a forma nua só no
+  FIM da mensagem: "tem atendente aos domingos?" é pergunta de horário),
+  "quero/preciso (de) uma pessoa" sem objeto de venda ("pessoa jurídica",
+  "pessoa para receber" ficam fora), "alguém humano/de verdade", "não
+  quero (falar com) robô/bot"; e a NEGAÇÃO virou ESCOPADA ao trecho
+  casado (`_negado_antes`, 16 chars antes do hit) — a global de antes
+  calava "nao quero mais esperar, me passa pra um atendente". "tem alguém
+  aí?" e "alguém pode me ajudar?" seguem FORA de propósito (nudge/abertura
+  comum, forçar handoff aí seria pior). (b) A métrica "handoff preguiçoso"
+  do AUDITOR também deixa de contar alergia/intolerância, reclamação,
+  atraso/entrega parada, marketplace e estorno/reembolso/cancelamento no
+  MOTIVO do bot (`chatbot.motivo_excecao_legitima`, aplicado em
+  `handoff_foi_preguicoso` só quando `motivo=` é passado — o detector ao
+  vivo do vigia segue sem ler o motivo). É MAIS ESTREITO que
+  `_HANDOFF_EXCECAO` de propósito: 'humano|atendente|pessoa' soltos NÃO
+  entram ("cesta para 1 pessoa", "retirar na loja com um atendente"
+  seguem preguiça). Motivo: vigia dizia "handoff correto" e auditor
+  "preguiçoso" pro MESMO evento — duas visões discordando. Prompt do
+  resumo diz o que está excluído. (2) `_resumo_tool` só repassa CÓDIGO de erro (`_erro_curto`:
   até 40 chars SEM dígito/aspas/parêntese — 'nenhum item válido' passa,
   telefone e str(exc) viram "detalhe omitido") e diz "FORA da area de
   entrega (N km)" quando `consultar_frete` devolve `fora_area=True` (não é
