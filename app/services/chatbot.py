@@ -264,45 +264,122 @@ _HUMANO_PATTERNS = [
 ]
 
 # Guarda de negacao ESCOPADA a ORACAO (o texto desde a ultima pontuacao
-# antes do trecho casado) e so com VERBO DE VONTADE: "nao quero (de jeito
-# nenhum) falar com atendente" veta; "nao quero mais esperar, me passa pra
-# um atendente" NAO veta (oracao nova apos a virgula); "nao consigo/posso/
-# estou conseguindo falar com atendente" NAO veta (e pedido, nao recusa).
-# A 1ª versao (janela de 16 chars + 1 palavra) deixava "nao quero falar
-# com atendente humano" virar handoff e vetava "nao consigo falar com
-# atendente" — refutacao 20/09/2026. Mesma regra pro `pediu_humano` e pro
-# `motivo_excecao_legitima` (la o "nao" costuma vir colado ao hit).
-_NEG_VONTADE = (r'(?:quero|queria|quer|querem|kero|precis\w*|gostaria|gostei|'
-                r'prefir\w*|prefer\w*|desej\w*|pediu|pede|solicit\w*|vou|vamos)')
-_NEG_PONTE = (r'(?:mesm[oa]|mais|nem|nunca|jamais|de|d[oa]s?|jeito|nenhum|'
-              r'nenhuma|falar|conversar|com|um|uma|[oa]s?|me|te|ser|que|por|'
-              r'pra|para|passar|transferir|ter|nada|ainda|agora|aqui|isso|disso)')
+# antes do trecho casado). Tres formas vetam:
+#  (a) NEGADOR + VERBO DE VONTADE + palavras-ponte: "nao quero (de jeito
+#      nenhum / de forma alguma / necessariamente) falar com atendente",
+#      "nao estou/to querendo...", "nao vou querer...", "nao gosto de...",
+#      "nao faco questao de...", "nem quero...";
+#  (b) VONTADE + NEGADOR: "prefiro nao ter que falar com atendente";
+#  (c) "sem (precisar / ter que)" colado ao hit: "comprar sem falar com
+#      atendente" — SO nessa forma estreita: "estou sem conseguir falar com
+#      atendente" e PEDIDO (mesma classe de "nao consigo").
+# "nao quero mais esperar, me passa pra um atendente" NAO veta (oracao nova
+# apos a virgula); "nao consigo/posso/estou conseguindo falar com atendente"
+# NAO veta (e pedido, nao recusa). A 1ª versao (janela de 16 chars + 1
+# palavra) deixava "nao quero falar com atendente humano" virar handoff e
+# vetava "nao consigo falar com atendente"; a 2ª deixava a ponte curta
+# ("de forma alguma", "e nem", "-mente") e nao conhecia "estou querendo" —
+# refutacoes de 20/09/2026.
+# "NAO" NU (sem verbo de vontade) colado ao hit: na FALA do cliente
+# (`_quer_humano`) so veta quando o proprio hit comeca por verbo de vontade
+# ("nao quero atendente") ou e imperativo/infinitivo SEM interrogacao ("nao
+# me passa pra atendente, por favor" = recusa). A pergunta negativa e PEDIDO
+# e nao veta: "nao me passa pra um atendente?", "nao tem atendente ai?" —
+# a 2ª versao vetava tudo que vinha apos "nao" e matou essas formas
+# (refutacao 20/09/2026). No MOTIVO escrito pelo bot (3ª pessoa,
+# `pediu_humano`/`motivo_excecao_legitima`) o "nao" nu segue vetando
+# ("cliente nao reclamou", "nao quer atendente").
+_NEG_VONTADE = (
+    r'(?:(?:vou|vamos|estou|est[aá]|t[ôo]|to|tava|estava|ando|and[oa])\s+)?'
+    r'(?:quero|querendo|querer|queria|quer|querem|kero|precis\w*|gostaria|'
+    r'gost\w*|prefir\w*|prefer\w*|desej\w*|pediu|pede|solicit\w*|vou|vamos|'
+    r'fa[çc]o\s+quest[aã]o|tenho\s+(?:interesse|necessidade)|'
+    r'[eé]\s+necess[aá]ri[oa])')
+_NEG_PONTE = (
+    r'(?:mesm[oa]|mais|nem|nunca|jamais|de|d[oa]s?|jeito|nenhum|nenhuma|'
+    r'forma|maneira|algum|alguma|hip[oó]tese|e|em|muito|\w+mente|'
+    r'falar|conversar|com|um|uma|[oa]s?|me|te|ser|que|por|pra|para|'
+    r'passar|transferir|ter|nada|ainda|agora|aqui|isso|disso)')
+_NEGADOR = r'(?:n[aã]o|nem|nunca|jamais)'
 _HUMANO_NEGACAO = re.compile(
-    r'(?i)\bn[aã]o\s+(?:' + _NEG_VONTADE + r'\s+(?:' + _NEG_PONTE + r'\s+)*)?$')
+    r'(?i)(?:'
+    r'\b' + _NEGADOR + r'\s+' + _NEG_VONTADE + r'\s+(?:' + _NEG_PONTE + r'\s+)*'
+    r'|\b' + _NEG_VONTADE + r'\s+' + _NEGADOR + r'\s+(?:' + _NEG_PONTE + r'\s+)*'
+    r'|\bsem\s+(?:(?:precisar|ter)\s+(?:de\s+|que\s+)?)?'
+    r')$')
+_NEG_NUA = re.compile(r'(?i)\b' + _NEGADOR + r'\s+$')
+_HIT_VONTADE = re.compile(r'(?i)' + _NEG_VONTADE + r'\b')
+# inicio de hit que, apos "nao" nu e SEM interrogacao, e recusa (imperativo
+# negado / infinitivo): "nao me passa pra atendente", "nao falar com atendente"
+_HIT_IMPERATIVO = re.compile(
+    r'(?i)(?:me\s+)?(?:transfere|transfira|transferir|passa|passe|passar|'
+    r'encaminha|encaminhe|encaminhar|chama|chamar|chame|manda|mande|mandar)\b'
+    r'|(?:falar|conversar)\s+com\b')
 _PONTUACAO_ORACAO = re.compile(r'[,;.!?\n]')
 
 
-def _negado_antes(texto, inicio):
+def _oracao_antes(texto, inicio):
     antes = texto[:inicio]
     ultimo = None
     for ultimo in _PONTUACAO_ORACAO.finditer(antes):
         pass
     if ultimo is not None:
         antes = antes[ultimo.end():]
-    return bool(_HUMANO_NEGACAO.search(antes))
+    return antes
+
+
+def _oracao_interrogativa(texto, fim):
+    """True se a oracao que contem o hit termina em '?' (primeira pontuacao
+    a partir do fim do hit)."""
+    m = _PONTUACAO_ORACAO.search(texto, fim)
+    return bool(m) and m.group(0) == '?'
+
+
+def _negado_antes(texto, inicio, fim=None, *, nua_veta=True):
+    antes = _oracao_antes(texto, inicio)
+    if _HUMANO_NEGACAO.search(antes):
+        return True
+    if not _NEG_NUA.search(antes):
+        return False
+    if nua_veta:
+        return True
+    trecho = texto[inicio:]
+    if _HIT_VONTADE.match(trecho):
+        return True
+    if _HIT_IMPERATIVO.match(trecho):
+        return not _oracao_interrogativa(texto, fim if fim is not None else inicio)
+    return False
+
+
+def _algum_hit_nao_negado(texto, hits, *, nua_veta):
+    """True se algum hit (inicio, fim) sobrevive a guarda de negacao. Hit
+    que SOBREPOE um hit vetado e ignorado: em "nao me passa pra atendente,
+    por favor" o padrao do vocativo re-dispararia sobre o MESMO "atendente"
+    que o imperativo negado acabou de vetar (refutacao 20/09/2026)."""
+    vetados = [h for h in hits
+               if _negado_antes(texto, h[0], h[1], nua_veta=nua_veta)]
+    for h in hits:
+        if h in vetados:
+            continue
+        if any(h[0] < v[1] and v[0] < h[1] for v in vetados):
+            continue
+        return True
+    return False
 
 
 def _quer_humano(texto):
     """True quando o cliente PEDE explicitamente um humano. Usado pra forcar
     handoff de forma deterministica, sem depender do Claude chamar a tool."""
     t = (texto or '').strip()
+    # cauda de emoji/reticencias ("Atendente por favor 🙏") nao pode derrotar
+    # as ancoras de fim de mensagem; '?', '!' e '.' ficam (a interrogacao
+    # decide o "nao" nu) — refutacao 20/09/2026
+    t = re.sub(r'[^\w?!.]+$', '', t)
     if len(t) < 4:
         return False
-    for p in _HUMANO_PATTERNS:
-        for hit in p.finditer(t):
-            if not _negado_antes(t, hit.start()):
-                return True
-    return False
+    hits = [(m.start(), m.end())
+            for p in _HUMANO_PATTERNS for m in p.finditer(t)]
+    return _algum_hit_nao_negado(t, hits, nua_veta=False)
 
 
 # Motivo que o BOT escreve ao transferir porque o cliente PEDIU humano
