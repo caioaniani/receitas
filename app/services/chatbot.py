@@ -436,6 +436,8 @@ def _handoff_excecao(inp):
     texto = ' '.join(str(inp.get(k) or '') for k in ('motivo', 'resumo'))
     if _HANDOFF_EXCECAO.search(texto):
         return True
+    if _SINAL_VENDA_EM_CURSO.search(texto):
+        return False
     return bool(_CORRECAO_ENTREGA.search(texto)
                 and _ANCORA_PEDIDO.search(texto))
 
