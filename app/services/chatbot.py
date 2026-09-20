@@ -249,10 +249,12 @@ def _quer_humano(texto):
 # o handoff preguicoso que a metrica existe pra expor — revisao 19/09/2026.
 _HUMANO_ALT = (r'atendente|humano|operador|atendimento\s+humano|'
                r'pessoa\s+de\s+verdade|respons[aá]vel|gerente|vendedor')
+_VERBO_PEDIDO_HUMANO = (
+    r'\b(?:pediu|pede|pedindo|pediram|solicit\w+|quer|queria|querem|'
+    r'deseja\w*|gostaria|precisa\w*|exig\w+|insist\w+|prefer\w+)\b')
 _MOTIVO_PEDIU_HUMANO = re.compile(
     r'(?i)'
-    r'\b(?:pediu|pede|pedindo|pediram|solicit\w+|quer|queria|querem|'
-    r'deseja\w*|gostaria|precisa\w*|exig\w+|insist\w+|prefer\w+)\b'
+    + _VERBO_PEDIDO_HUMANO +
     r'\s+(?:d[eo]\s+|para\s+|por\s+|pra\s+|em\s+)?'
     r'(?:(?:falar|conversar)\s+com\s+)?(?:um[a]?\s+|o\s+|a\s+)?'
     r'(?:' + _HUMANO_ALT + r')\b'
@@ -260,6 +262,26 @@ _MOTIVO_PEDIU_HUMANO = re.compile(
     # com alguem", "quer falar com a equipe") — 'pessoa'/'alguem' SO aqui
     r'|\b(?:falar|conversar)\s+com\s+(?:um[a]?\s+|o\s+|a\s+)?'
     r'(?:pessoa|algu[eé]m|gente|equipe|setor|' + _HUMANO_ALT + r')\b'
+    # 3ª pessoa do padrao "me transfere/passa/encaminha pra um atendente"
+    # (`_HUMANO_PATTERNS[2]`): "pediu (para ser) transferido/transferencia/
+    # passar/encaminhado PARA um atendente". O destino humano e obrigatorio
+    # — "pediu para passar o pedido para outra loja" e "transferir o pedido
+    # para outra data" nao casam (refutacao 19/09/2026, 2ª rodada).
+    r'|' + _VERBO_PEDIDO_HUMANO +
+    r'\s+(?:para\s+|pra\s+)?(?:ser\s+)?'
+    r'(?:transferi\w+|transfer[êe]ncia|passar|encaminh\w+|encaminhamento)'
+    r'\s+(?:para|pra|pro|a|ao)\s+(?:um[a]?\s+|o\s+|a\s+)?'
+    r'(?:pessoa|algu[eé]m|gente|equipe|setor|' + _HUMANO_ALT + r')\b'
+    # "pediu ajuda de um atendente" / "pediu para ser atendido por uma pessoa"
+    r'|' + _VERBO_PEDIDO_HUMANO +
+    r'\s+(?:para\s+|pra\s+|de\s+)?ajuda\s+d[eo]\s+(?:um[a]?\s+)?'
+    r'(?:' + _HUMANO_ALT + r')\b'
+    r'|' + _VERBO_PEDIDO_HUMANO +
+    r'\s+(?:para\s+|pra\s+)?(?:ser\s+)?atendid[oa]s?\s+por\s+'
+    r'(?:um[a]?\s+|o\s+|a\s+)?(?:pessoa|algu[eé]m|gente|' + _HUMANO_ALT + r')\b'
+    # voz passiva: "atendente solicitado pelo cliente"
+    r'|\b(?:atendente|humano|atendimento\s+humano|operador)\s+'
+    r'(?:solicitad|pedid|requisitad|exigid)\w*\s+pel[oa]\s+cliente\b'
     # formas nominais
     r'|\bpedido\s+de\s+(?:um\s+)?(?:atendente|humano|atendimento\s+humano)\b'
     r'|\ba\s+pedido\s+d[oa]\s+cliente\b')
