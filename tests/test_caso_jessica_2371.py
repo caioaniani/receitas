@@ -890,6 +890,40 @@ def test_elogio_puro_nao_vira_espera_humana(app):
     # NÃO dispara: negação do próprio pedido, menção de passagem, horário,
     # objeto de venda, nudge genérico
     ('não quero falar com atendente, me ajuda', False),
+    # Refutação 20/09 (alta): VOCATIVO de saudação seguido de pergunta de
+    # venda NÃO é pedido de humano — o padrão "atendente, por favor" só vale
+    # como mensagem inteira
+    ('Olá atendente, por favor gostaria de saber o valor da cesta brunch', False),
+    ('Boa tarde atendente, por favor pode me mandar o cardápio?', False),
+    ('Bom dia! Atendente, por gentileza, vocês entregam em Pinheiros?', False),
+    ('ATENDENTE, POR FAVOR, QUAL O HORARIO DE HOJE?', False),
+    ('atendente pf, quanto custa o croissant?', False),
+    ('Por favor, a atendente da loja disse que eu podia retirar amanhã, confirma?', False),
+    ('por favor, o atendente que me atendeu ontem foi ótimo, parabéns', False),
+    ('Foi erro humano, por favor desconsidere a mensagem anterior', False),
+    ('por favor, o atendente me disse que vem fatiado, confirma?', False),
+    # Refutação 20/09 (alta): "pessoa" da LOGÍSTICA de entrega/presente
+    ('Preciso de uma pessoa em casa para receber ou pode deixar na portaria?', False),
+    ('preciso de uma pessoa na portaria pra receber?', False),
+    ('preciso de uma pessoa que possa receber o pedido?', False),
+    ('quero uma pessoa pra retirar por mim, pode?', False),
+    ('gostaria de uma pessoa de confiança pra receber, tem problema?', False),
+    ('quero uma pessoa muito especial receber essa cesta de presente', False),
+    ('queria uma pessoa querida ganhar essa cesta, dá pra pôr cartinha?', False),
+    ('Boa tarde! Gostaria de encomendar 30 pães de queijo para sábado. '
+     'Preciso de uma pessoa em casa para receber?', False),
+    ('preciso de uma pessoa pra retirar meu pedido na loja', False),
+    # Refutação 20/09 (alta): RECUSA explícita com verbo de vontade, em
+    # qualquer distância dentro da oração
+    ('não quero falar com atendente humano', False),
+    ('não quero falar com uma pessoa de verdade', False),
+    ('não preciso de atendente humano', False),
+    ('não quero mesmo falar com atendente', False),
+    ('não quero de jeito nenhum falar com atendente', False),
+    ('não gostaria de falar com atendente, prefiro aqui', False),
+    ('não quero falar com atendente, por favor me ajuda', False),
+    ('não precisa de atendente, por favor só me diz o preço', False),
+    ('nao precisa passar pra atendente, por favor me manda o link', False),
     ('o atendente de ontem foi ótimo', False),
     ('vocês têm atendimento aos domingos?', False),
     ('tem atendente aos domingos?', False),
