@@ -1007,6 +1007,7 @@ def test_quer_humano_formas_reais_e_negacao_escopada(texto, esperado):
     ('cliente quer trocar a data de retirada', False),
     ('corrigir endereço do pedido X', False),
     ('cliente não reclamou, só quer o preço', False),      # negação escopada
+    ('não é alergia, cliente só quer saber os ingredientes', False),
     ('', False),
     (None, False),
 ])
