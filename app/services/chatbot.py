@@ -1115,6 +1115,14 @@ def _resumo_tool(nome, out):
         return f'consultar_pedido: {_erro_curto(d.get("erro")) or "sem resultado"}'
     if d.get('erro'):
         return f'{nome}: erro ({_erro_curto(d["erro"])})'
+    # Fora do raio NAO e erro no contrato do frete.consultar_frete ({'ok':
+    # True, 'fora_area': True}) — sem este ramo o vigia lia "ok" e podia
+    # acusar o bot que respondeu, certo, "nao entregamos ai" (achado da
+    # refutacao de 19/09/2026). A distancia nao e PII.
+    if nome == 'consultar_frete' and d.get('fora_area'):
+        km = d.get('distancia_km')
+        return ('consultar_frete: endereco localizado mas FORA da area de '
+                'entrega' + (f' ({km} km)' if km is not None else ''))
     return f'{nome}: ok'
 
 
