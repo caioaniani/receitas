@@ -481,11 +481,8 @@ def motivo_excecao_legitima(motivo):
     m = (motivo or '').strip()
     if not m:
         return False
-    for hit in _MOTIVO_EXCECAO_LEGITIMA.finditer(m):
-        if _negado_antes(m, hit.start()):
-            continue
-        return True
-    return False
+    hits = [(h.start(), h.end()) for h in _MOTIVO_EXCECAO_LEGITIMA.finditer(m)]
+    return _algum_hit_nao_negado(m, hits, nua_veta=True)
 
 
 def _solicita_troca(historico):
