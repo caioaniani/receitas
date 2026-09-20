@@ -843,3 +843,128 @@ def test_elogio_puro_nao_vira_espera_humana(app):
         historico[-1] = {'role': 'user', 'content': 'E o troco?', 'created_at': t - 780}
         row = atendimento_pendente.preparar(conversa, historico, min_minutos=10)
         assert row is not None and row.estado == 'aguardando'
+
+
+# ── 7. Terceira rodada (dono 20/09: "Pode seguir") ─────────────────────────
+# Fecha a assimetria vigia × auditor: formas reais de "quero atendente" que
+# `_quer_humano` não cobria viravam ALTA "venda em risco" no vigia enquanto
+# o auditor as tratava como legítimas; e alergia/reclamação/atraso/
+# cancelamento, que o enforcement dispensa de consulta e o vigia chama de
+# "handoff correto", contavam como preguiça no resumo do dia.
+
+@pytest.mark.parametrize('texto, esperado', [
+    ('Atendente por favor', True),
+    ('atendente, pfv', True),
+    ('por favor um atendente', True),
+    ('Cadê o atendente?', True),
+    ('cade o humano', True),
+    ('tem atendente aí?', True),
+    ('tem atendente?', True),
+    ('Tem algum atendente disponível?', True),
+    ('Preciso de uma pessoa', True),
+    ('Quero uma pessoa', True),
+    ('quero uma pessoa pra conversar', True),
+    ('alguém humano aí?', True),
+    ('não quero falar com robô', True),
+    ('nao quero bot, quero atendente', True),
+    # Negação ESCOPADA: a global de antes calava este pedido real
+    ('nao quero mais esperar, me passa pra um atendente', True),
+    ('não, quero atendente', True),
+    # Formas que já funcionavam (não regredir)
+    ('quero falar com uma pessoa', True),
+    ('me passa pra um atendente', True),
+    ('chama um humano por favor', True),
+    ('quero um atendente humano', True),
+    ('pode me transferir pra alguém?', True),
+    # NÃO dispara: negação do próprio pedido, menção de passagem, horário,
+    # objeto de venda, nudge genérico
+    ('não quero falar com atendente, me ajuda', False),
+    ('o atendente de ontem foi ótimo', False),
+    ('vocês têm atendimento aos domingos?', False),
+    ('tem atendente aos domingos?', False),
+    ('preciso de uma pessoa para receber o pedido', False),
+    ('quero uma pessoa que receba o pedido', False),
+    ('quero nota de pessoa jurídica', False),
+    ('quero presentear uma pessoa especial', False),
+    ('tem alguém aí?', False),
+    ('alguém pode me ajudar?', False),
+    ('quanto custa a cesta brunch? quero comprar', False),
+    ('não precisa de atendente, só quero o preço', False),
+    ('não gostei do atendente, quero falar com outro', False),
+])
+def test_quer_humano_formas_reais_e_negacao_escopada(texto, esperado):
+    from app.services.chatbot import _quer_humano
+    assert _quer_humano(texto) is esperado
+
+
+@pytest.mark.parametrize('motivo, esperado', [
+    ('cliente alérgica a castanhas', True),
+    ('intolerância a lactose', True),
+    ('cliente reclamou do atraso da entrega', True),
+    ('pedido do Rappi atrasado, motorista no balcão', True),
+    ('entrega não chegou', True),
+    ('pão veio queimado', True),
+    ('cliente quer cancelar o pedido', True),
+    ('pedido de reembolso', True),
+    # Venda/dúvida NUNCA sai da métrica por aqui (só pelo pediu_humano, que
+    # exige a construção de pedido de humano)
+    ('cliente quer cesta para 1 pessoa', False),
+    ('cliente prefere retirar na loja com um atendente', False),
+    ('dúvida de frete para Moema', False),
+    ('cliente perguntou se o pão vem fatiado', False),
+    ('cliente quer trocar a data de retirada', False),
+    ('corrigir endereço do pedido X', False),
+    ('cliente não reclamou, só quer o preço', False),      # negação escopada
+    ('', False),
+    (None, False),
+])
+def test_motivo_excecao_legitima(motivo, esperado):
+    from app.services.chatbot import motivo_excecao_legitima
+    assert motivo_excecao_legitima(motivo) is esperado
+
+
+def test_auditor_nao_conta_alergia_reclamacao_atraso_como_preguicoso(app):
+    """Regra única `handoff_foi_preguicoso` no caminho do AUDITOR (com
+    `motivo=`): exceção legítima = não é preguiça. Venda sem consulta segue
+    contando."""
+    from app.services.chatbot_vigia import handoff_foi_preguicoso
+    with app.app_context():
+        for m in ('cliente alérgica a castanhas',
+                  'cliente reclamou do atraso da entrega',
+                  'pedido do iFood não chegou',
+                  'cliente quer cancelar o pedido'):
+            assert handoff_foi_preguicoso([], motivo=m) is False, m
+        assert handoff_foi_preguicoso([], motivo='cliente quer cesta para 1 pessoa') is True
+        assert handoff_foi_preguicoso([], motivo='dúvida de frete') is True
+
+
+def test_vigia_ao_vivo_segue_sem_ler_o_motivo_mas_ouve_o_cliente(app):
+    """O detector de "venda em risco" não passa `motivo=` (o modelo não cala
+    quem o vigia); as formas novas de pedido de humano na FALA do cliente o
+    desarmam — é isso que fecha a assimetria com o auditor."""
+    from app.services.chatbot_vigia import _e_handoff_preguicoso_em_compra
+    with app.app_context():
+        compra = [{'role': 'user', 'content': 'quanto custa a cesta brunch? quero comprar'}]
+        rb = {'acao': 'handoff', 'tools_usadas': [], 'motivo': 'cliente alérgica'}
+        assert _e_handoff_preguicoso_em_compra(compra, rb) is True
+        for fala in ('Atendente por favor', 'Cadê o atendente?',
+                     'nao quero mais esperar, me passa pra um atendente'):
+            hist = compra + [{'role': 'user', 'content': fala}]
+            assert _e_handoff_preguicoso_em_compra(
+                hist, {'acao': 'handoff', 'tools_usadas': []}) is False, fala
+
+
+def test_bot_forca_handoff_nas_formas_novas(app):
+    """`responder` transfere ANTES do modelo pra "Atendente por favor" —
+    o Claude nem é chamado (mesmo contrato do teste de 23/06 em
+    test_chatbot.py)."""
+    from unittest.mock import patch
+
+    from app.services import chatbot
+    with app.app_context():
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        with patch('anthropic.Anthropic') as M:
+            r = chatbot.responder([{'role': 'user', 'content': 'Atendente por favor'}])
+        M.return_value.messages.create.assert_not_called()
+    assert r['acao'] == 'handoff'
+    assert r['motivo'] == 'cliente pediu atendente'
