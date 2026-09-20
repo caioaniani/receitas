@@ -220,12 +220,18 @@ _HUMANO_PATTERNS = [
         r'(pessoa|gente|humano|atendente)\s+de\s+verdade|humano\s+real)\b'),
     # Formas que o cliente usa DE FATO e que ficavam fora (dono 20/09/2026,
     # "Pode seguir" — fechando a assimetria vigia x auditor da 2ª rodada):
-    # "atendente, por favor" / "por favor, um atendente" / "atendente pfv"
+    # "atendente, por favor" / "por favor, um atendente" / "atendente pfv" —
+    # SO como mensagem inteira (ancora no fim): sem ela o VOCATIVO de
+    # saudacao ("Boa tarde atendente, por favor pode me mandar o cardapio?")
+    # e "por favor, o atendente que me atendeu ontem foi otimo" viravam
+    # handoff forcado ANTES do modelo (refutacao 20/09/2026, alta).
     re.compile(
         r'(?i)\b(atendente|humano|operador)\b[\s,!.]*'
-        r'(por\s+favor|pfv|pf|por\s+gentileza)\b'
+        r'(por\s+favor|pfv|pf|por\s+gentileza)'
+        r'(\s+(urgente|agora|aqui))?\s*[?!.]*\s*$'
         r'|\b(por\s+favor|pfv|por\s+gentileza)\b[\s,!.]*'
-        r'(um[a]?\s+|o\s+|a\s+)?(atendente|humano|operador)\b'),
+        r'(um[a]?\s+|o\s+|a\s+)?(atendente|humano|operador)'
+        r'(\s+(urgente|agora|humano|de\s+verdade))?\s*[?!.]*\s*$'),
     # "cade o atendente?" / "tem atendente ai?" / "tem humano?" (a forma nua
     # so no FIM da mensagem — "tem atendente aos domingos?" e pergunta de
     # horario, nao pedido)
@@ -236,13 +242,19 @@ _HUMANO_PATTERNS = [
         r'(a[ií]|dispon[ií]vel|online|agora)\b'
         r'|\btem\s+(algum|alguma|um|uma)?\s*(atendente|humano|operador)'
         r'\s*[?!.]*\s*$'),
-    # "quero/preciso (de) uma pessoa" — SEM objeto de venda na sequencia
-    # ("pessoa juridica", "uma pessoa para receber" ficam fora)
+    # "quero/preciso (de) uma pessoa" — LISTA BRANCA: fim da mensagem ou
+    # complemento de ATENDIMENTO ("pra falar/conversar/me atender/ajudar",
+    # "de verdade", "da equipe"). A lista negra anterior (juridica/para
+    # receber/especial) deixava passar a logistica da entrega e do presente
+    # ("preciso de uma pessoa em casa para receber?", "quero uma pessoa
+    # muito especial receber essa cesta") — refutacao 20/09/2026, alta.
     re.compile(
         r'(?i)\b(quero|queria|preciso|prefiro|gostaria)\s+(de\s+)?'
-        r'(um[a]?\s+)?pessoa\b'
-        r'(?!\s+(jur[ií]dica|f[ií]sica|para\s+receber|pra\s+receber|'
-        r'que\s+receb\w*|especial))'),
+        r'(um[a]?\s+)?pessoa'
+        r'(\s+(humana|de\s+verdade|real|mesmo|da\s+(equipe|loja)|'
+        r'(pra|para)\s+(me\s+)?(falar|conversar|atender|ajudar|responder)|'
+        r'que\s+me\s+(atenda|ajude|responda)))?'
+        r'\s*[?!.]*\s*$'),
     # "alguem humano/de verdade" e "nao quero (falar com) robo/bot"
     re.compile(
         r'(?i)\balgu[eé]m\s+(humano|de\s+verdade|real)\b'
@@ -251,15 +263,33 @@ _HUMANO_PATTERNS = [
         r'(rob[oô]|bot|m[aá]quina|intelig[eê]ncia\s+artificial)\b'),
 ]
 
-# Guarda de negacao ESCOPADA ao trecho casado: "nao quero falar com
-# atendente, me ajuda" veta; "nao quero mais esperar, me passa pra um
-# atendente" NAO veta (a negacao global de antes calava esse pedido real —
-# refutacao 19/09 + dono 20/09/2026). Mesma regra do `pediu_humano`.
-_HUMANO_NEGACAO = re.compile(r'(?i)\bn[aã]o\s+(?:\w+\s+)?$')
+# Guarda de negacao ESCOPADA a ORACAO (o texto desde a ultima pontuacao
+# antes do trecho casado) e so com VERBO DE VONTADE: "nao quero (de jeito
+# nenhum) falar com atendente" veta; "nao quero mais esperar, me passa pra
+# um atendente" NAO veta (oracao nova apos a virgula); "nao consigo/posso/
+# estou conseguindo falar com atendente" NAO veta (e pedido, nao recusa).
+# A 1ª versao (janela de 16 chars + 1 palavra) deixava "nao quero falar
+# com atendente humano" virar handoff e vetava "nao consigo falar com
+# atendente" — refutacao 20/09/2026. Mesma regra pro `pediu_humano` e pro
+# `motivo_excecao_legitima` (la o "nao" costuma vir colado ao hit).
+_NEG_VONTADE = (r'(?:quero|queria|quer|querem|kero|precis\w*|gostaria|gostei|'
+                r'prefir\w*|prefer\w*|desej\w*|pediu|pede|solicit\w*|vou|vamos)')
+_NEG_PONTE = (r'(?:mesm[oa]|mais|nem|nunca|jamais|de|d[oa]s?|jeito|nenhum|'
+              r'nenhuma|falar|conversar|com|um|uma|[oa]s?|me|te|ser|que|por|'
+              r'pra|para|passar|transferir|ter|nada|ainda|agora|aqui|isso|disso)')
+_HUMANO_NEGACAO = re.compile(
+    r'(?i)\bn[aã]o\s+(?:' + _NEG_VONTADE + r'\s+(?:' + _NEG_PONTE + r'\s+)*)?$')
+_PONTUACAO_ORACAO = re.compile(r'[,;.!?\n]')
 
 
 def _negado_antes(texto, inicio):
-    return bool(_HUMANO_NEGACAO.search(texto[max(0, inicio - 16):inicio]))
+    antes = texto[:inicio]
+    ultimo = None
+    for ultimo in _PONTUACAO_ORACAO.finditer(antes):
+        pass
+    if ultimo is not None:
+        antes = antes[ultimo.end():]
+    return bool(_HUMANO_NEGACAO.search(antes))
 
 
 def _quer_humano(texto):
