@@ -251,11 +251,14 @@ _HUMANO_ALT = (r'atendente|humano|operador|atendimento\s+humano|'
                r'pessoa\s+de\s+verdade|respons[aá]vel|gerente|vendedor')
 _VERBO_PEDIDO_HUMANO = (
     r'\b(?:pediu|pede|pedindo|pediram|solicit\w+|quer|queria|querem|'
-    r'deseja\w*|gostaria|precisa\w*|exig\w+|insist\w+|prefer\w+)\b')
+    r'deseja\w*|gostaria|precisa\w*|exig\w+|insist\w+|prefer\w+)\b'
+    # adverbio opcional: "pediu EXPLICITAMENTE humano" e o eco literal da
+    # excecao do prompt (chatbot_prompt "Cliente PEDIU explicitamente humano")
+    r'\s+(?:\w+mente\s+)?')
 _MOTIVO_PEDIU_HUMANO = re.compile(
     r'(?i)'
     + _VERBO_PEDIDO_HUMANO +
-    r'\s+(?:d[eo]\s+|para\s+|por\s+|pra\s+|em\s+)?'
+    r'(?:d[eo]\s+|para\s+|por\s+|pra\s+|em\s+)?'
     r'(?:(?:falar|conversar)\s+com\s+)?(?:um[a]?\s+|o\s+|a\s+)?'
     r'(?:' + _HUMANO_ALT + r')\b'
     # a construcao de contato humano em qualquer posicao ("pediu para falar
