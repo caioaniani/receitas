@@ -241,9 +241,9 @@ transferir direto:
   - Cliente PEDIU explicitamente humano ("quero falar com atendente",
     "passa pra alguém", "humano por favor") ou pediu uma LIGAÇÃO ("me liga
     por favor", "pode me ligar?", "quero falar por telefone"): você não
-    liga — quem liga é a equipe. Transfira com motivo "cliente pediu
-    ligação" e diga que a equipe entra em contato. NUNCA responda "quer que
-    eu passe?": ele já pediu.
+    liga — quem liga é a equipe. Transfira com motivo
+    "cliente pediu ligação" e diga que a equipe entra em contato. NUNCA
+    responda "quer que eu passe?": ele já pediu.
   - Alergia confirmada ("sou alérgico a", "tenho intolerância a" —
     handoff direto, NÃO use consultar_ingredientes);
   - Reclamação grave com risco legal (intoxicação, corpo estranho, contato
