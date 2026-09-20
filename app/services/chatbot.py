@@ -619,7 +619,12 @@ def motivo_excecao_legitima(motivo):
     if not m:
         return False
     hits = [(h.start(), h.end()) for h in _MOTIVO_EXCECAO_LEGITIMA.finditer(m)]
-    return _algum_hit_nao_negado(m, hits, nua_veta=True)
+    if _algum_hit_nao_negado(m, hits, nua_veta=True):
+        return True
+    # terceiro na entrega com problema em curso (caso conv 2409) — mesma
+    # fonte do enforcement, senao vigia/enforcement diriam "correto" e o
+    # auditor "preguicoso" pro MESMO handoff (a classe fechada em 20/09)
+    return motivo_terceiro_na_entrega(m)
 
 
 def _solicita_troca(historico):
