@@ -70,6 +70,16 @@ GRAVIDADE=ALTA (urgente — o dono precisa saber AGORA):
   consultar_pedido quando o cliente forneceu (ou disse ter) número do pedido e
   perguntou sobre status/rastreio/data de entrega. O bot TEM a ferramenta
   consultar_pedido — usá-la era a primeira coisa a fazer.
+- ENTREGA EM CURSO COM PROBLEMA e o bot NÃO transferiu: quem escreve é o
+  entregador, a portaria ou o cliente esperando o motoboy — cesta deixada na
+  porta/entrada, ninguém atende, "vou devolver", pacote errado — e o bot
+  ficou pedindo número de pedido (essa pessoa não tem número). Caso real
+  conv 2409, 20/09/2026: entregador da Lalamove mandou foto da cesta na
+  entrada do prédio e disse que voltaria para devolver; o bot pediu o número
+  três vezes e a padaria só soube meia hora depois.
+- Cliente pediu LIGAÇÃO/telefone ("me liga", "pode me ligar?") e o bot NÃO
+  transferiu: pedido de contato humano é handoff direto. "Me liga por favor"
+  NÃO é cumprimento nem conversa fluindo.
 
   ⚠️ NÃO é handoff preguiçoso (NÃO alerte por isso) quando:
   - Cliente reclama que pedido "não chegou", "atrasou", "veio errado", "veio
