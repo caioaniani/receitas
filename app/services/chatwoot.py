@@ -270,8 +270,11 @@ def remetente_humano(m):
     para o bot e 'contact' para o cliente. Automação/campanha nunca conta.
     Vale para o payload do webhook e para a listagem de mensagens (mesmo
     formato)."""
-    sender = m.get('sender') or {}
-    tipo = str(m.get('sender_type') or sender.get('type') or '').lower()
+    sender = m.get('sender') if isinstance(m, dict) else None
+    if not isinstance(sender, dict):
+        sender = {}
+    tipo = str((m.get('sender_type') if isinstance(m, dict) else None)
+               or sender.get('type') or '').lower()
     return tipo == 'user' and not _automatica(m)
 
 
