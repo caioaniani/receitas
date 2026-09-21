@@ -734,7 +734,7 @@ def bot_webhook():
                         if res_status.get('ok'):
                             logger.info('crm bot handoff conv=%s motivo=%s',
                                         conv_id, resultado.get('motivo'))
-                            if resultado['acao'] == 'handoff':
+                            if resultado['acao'] == 'handoff' or anotar_mesmo_calado:
                                 # O motivo (relato do terceiro, entrega
                                 # candidata pela rua) vai pra equipe como
                                 # NOTA PRIVADA — antes ficava so no log
