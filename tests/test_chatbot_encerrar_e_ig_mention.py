@@ -80,9 +80,23 @@ def test_crm_routes_resolve_conversa_quando_bot_encerra(app):
         'conversation': {'id': 777, 'status': 'pending'},
         'sender': {'name': 'Cliente'},
     }
-    with patch('app.services.chatbot.responder',
-                return_value={'acao': 'encerrar', 'texto': '',
-                              'motivo': 'encerramento'}) as resp, \
+    class _SyncThread:
+        # Roda o processamento DENTRO do bloco dos patches: a versao
+        # anterior (thread real + sleep(0.2) DEPOIS do `with`) era uma
+        # corrida — qualquer latencia extra antes do `responder` (ex.: a
+        # consulta de presenca humana, 20/09/2026) fazia a thread rodar
+        # com os patches ja desfeitos e bater na rede de verdade.
+        def __init__(self, target=None, daemon=None, **kw):
+            self._target = target
+
+        def start(self):
+            if self._target:
+                self._target()
+
+    with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatbot.responder',
+               return_value={'acao': 'encerrar', 'texto': '',
+                             'motivo': 'encerramento'}) as resp, \
          patch('app.services.chatbot.carregar_historico', return_value=None), \
          patch('app.services.chatwoot.buscar_historico', return_value=[]), \
          patch('app.services.chatbot.salvar_historico'), \
@@ -90,14 +104,7 @@ def test_crm_routes_resolve_conversa_quando_bot_encerra(app):
          patch('app.services.chatwoot.definir_status') as status, \
          patch('app.services.chatbot_vigia.disponivel', return_value=False):
         r = c.post('/crm/bot?k=seg', json=payload)
-        # webhook responde ack na hora; processamento eh em thread separada
-        # — o test_client da pra esperar o thread terminar com join, mas o
-        # padrao deste arquivo eh dar tempo pelo proximo step. Aqui vamos
-        # esperar via fim do thread implicito (join via Thread em coleta):
     assert r.status_code == 200
-    # da tempo pra o thread daemon rodar (chamadas mockadas, ~ms)
-    import time as _time
-    _time.sleep(0.2)
     resp.assert_called_once()
     enviar.assert_not_called()  # silêncio absoluto
     status.assert_called_with(777, 'resolved')
