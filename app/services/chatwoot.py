@@ -407,6 +407,16 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
         # leitura ou mudança de status cancela a intervenção automática.
         if any(m.get('humano') for m in hist):
             return []
+        # NOTA PRIVADA humana recente (dono 20/09/2026: "o bot não pode
+        # falar quando a gente fala no privado com a equipe"): a listagem
+        # crua já está na mão — custo zero, e não depende de o webhook da
+        # nota ter chegado. Persiste o marcador pra os outros caminhos.
+        from app.services import presenca_humana
+        nota = nota_privada_humana_em(msgs, horas=presenca_humana.PRESENCA_HUMANA_HORAS)
+        if nota:
+            presenca_humana.registrar_nota_privada(
+                conversation_id, nota.get('autor'), quando=nota.get('quando'))
+            return []
         atual = consultar_conversa(conversation_id)
         if not atual or atual.get('status') != 'pending':
             return []
