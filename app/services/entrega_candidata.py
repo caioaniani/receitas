@@ -201,7 +201,8 @@ def nota_de_handoff(resultado, historico):
             logger.exception('entrega_candidata: match por rua falhou')
             cands = []
         if len(cands) == 1:
-            linhas.append('Entrega candidata pela rua citada: ' + _linha_candidata(cands[0]))
+            linhas.append('Entrega candidata pela rua citada (conferir antes de agir): '
+                          + _linha_candidata(cands[0]))
         elif cands:
             linhas.append(f'{len(cands)} entregas na rua citada (conferir qual): '
                           + '; '.join(_linha_candidata(c) for c in cands))
