@@ -358,10 +358,13 @@ def _registrar_nota_privada(payload):
 def bot_webhook():
     """Webhook do Agent Bot do Chatwoot.
 
-    So processa mensagem NOVA do cliente (incoming) em conversa 'pending'
-    (turno do bot). Ignora mensagens do proprio bot/atendente (outgoing) —
-    evita loop infinito — e conversas ja 'open' (humano assumiu). Autentica
-    pelo segredo na URL (CHATWOOT_BOT_SECRET).
+    Processa mensagem NOVA do cliente (incoming) em conversa 'pending'
+    (turno do bot). Mensagem publica do proprio bot/atendente (outgoing) e
+    ignorada — evita loop infinito; NOTA PRIVADA de agente humano vira o
+    marcador "equipe presente" (`_registrar_nota_privada`); evento de
+    status resolved/pending encerra esse episodio. Conversa ja 'open'
+    (humano assumiu) e ignorada. Autentica pelo segredo na URL
+    (CHATWOOT_BOT_SECRET).
     """
     if not _bot_secret_ok(request.args.get('k')):
         return jsonify({'ok': False, 'erro': 'token inválido'}), 403
