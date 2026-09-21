@@ -4570,9 +4570,13 @@ bot não pode falar quando a gente fala no privado com a equipe"**.
   o modelo, guarda a fala do cliente no store, status open, vigia NÃO
   avalia (não há turno do bot); (3) resposta a áudio/anexo não suportado:
   não pede texto, abre; (4) follow-up (`followup_conversas_paradas`)
-  pula; (5) vassoura (`varrer_pendentes_sem_resposta`) abre e não
+  pula; (5) vassoura (`varrer_pendentes_sem_resposta`) consulta
+  `humano_presente(consultar_chatwoot=True)` ANTES do
+  `buscar_historico(somente_bot=True)` (o gate devolve [] com a nota na
+  listagem e o ramo ficava inalcançável — revisão 21/09; caso coberto:
+  webhook da nota perdido + bot morto + cliente esperando), abre e não
   responde; (6) contenção da espera humana (`chatbot_vigia`, bloco da
-  `TEXTO_CONTENCAO_ESPERA`) não sai — aqui com `consultar_chatwoot=True`
+  `TEXTO_CONTENCAO_ESPERA`) não sai — também com `consultar_chatwoot=True`
   (rede de segurança: 1 GET em `chatwoot.nota_privada_humana_recente`
   caso o webhook da nota não tenha chegado; o que achar é persistido).
   **A COBRANÇA ao dono continua até resolver** — só o texto ao contato é
