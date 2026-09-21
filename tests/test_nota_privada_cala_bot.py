@@ -782,6 +782,7 @@ def test_sonda_vigia_vereditos_expoe_presenca_humana(app):
     pres = r.get_json()['conversa']['presenca_humana']
     assert pres['autor'] == 'Caio Antinhani' and pres['notas'] == 1
     assert pres['nota_em'] and pres['aberta_em'] is None
+    assert pres['episodio_aberto'] is True and pres['humano_presente'] is True
     r2 = c.get('/api/claude/vigia-vereditos?conversa=1',
                headers={'Authorization': 'Bearer tok-sonda'})
     assert r2.get_json()['conversa']['presenca_humana'] is None
