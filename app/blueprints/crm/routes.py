@@ -676,6 +676,14 @@ def bot_webhook():
                         if res_status.get('ok'):
                             logger.info('crm bot handoff conv=%s motivo=%s',
                                         conv_id, resultado.get('motivo'))
+                            if resultado['acao'] == 'handoff':
+                                # O motivo (relato do terceiro, entrega
+                                # candidata pela rua) vai pra equipe como
+                                # NOTA PRIVADA — antes ficava so no log
+                                # (21/09/2026). Nunca ao contato.
+                                from app.services import entrega_candidata
+                                entrega_candidata.anotar_handoff(
+                                    conv_id, resultado, historico)
                         else:
                             # NUNCA silenciar: se o status nao mudou, a conversa
                             # fica presa no bot e o cliente espera. ERROR -> Sentry.
