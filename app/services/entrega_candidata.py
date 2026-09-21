@@ -218,8 +218,6 @@ def anotar_handoff(conv_id, resultado, historico):
     fala com o contato."""
     try:
         texto = nota_de_handoff(resultado, historico)
-        if not texto:
-            return {'ok': False, 'pulou': 'vazio'}
         from app.services import chatwoot
         res = chatwoot.enviar_nota_privada(conv_id, texto)
         if not res.get('ok'):
