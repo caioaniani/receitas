@@ -122,10 +122,17 @@
                     <div>NF: <code>{{ venda.tiny_nota_fiscal_id }}</code></div>
                     {% if venda.nf_status %}<div class="text-danger">Status: <strong>{{ venda.nf_status }}</strong></div>{% endif %}
                     <div class="alert alert-warning py-2 px-2 mt-2 mb-2">
-                        A autorização não foi confirmada. <strong>Reenviar</strong> consulta a SEFAZ
-                        e sincroniza <em>sem duplicar</em>. Só use <strong>Refazer do zero</strong>
-                        se a nota estiver realmente <em>rejeitada</em>.
+                        A autorização ainda não foi confirmada aqui. Se você corrigiu a nota
+                        diretamente no Tiny, use <strong>Atualizar situação do Tiny</strong>
+                        para consultar a mesma nota. Só use <strong>Refazer do zero</strong>
+                        se ela continuar <em>rejeitada</em> no Tiny.
                     </div>
+                    <form method="POST" action="{{ url_for('b2b.venda_sincronizar_nf', vid=venda.id) }}" class="mb-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                            <i class="bi bi-arrow-clockwise"></i> Atualizar situação do Tiny
+                        </button>
+                    </form>
                     {% if current_user.pode_emitir_nf_b2b() %}
                     <form method="POST" action="{{ url_for('b2b.venda_emitir_nf', vid=venda.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

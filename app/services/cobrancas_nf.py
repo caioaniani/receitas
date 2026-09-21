@@ -3,7 +3,7 @@ import hashlib
 import json
 
 from app.extensions import db
-from app.models import FaturaB2B, TentativaNFB2B
+from app.models import AppConfig, FaturaB2B, TentativaNFB2B, VendaB2B
 from app.services.cobrancas_trava import OperacaoEmAndamento, chave_documento, trava
 from app.utils import agora
 
@@ -32,6 +32,63 @@ def validar_assinatura(doc):
                          'Confira a nota e a venda antes de gerar ou enviar a cobrança.')
 
 
+def sincronizar(doc):
+    """Consulta a NF vinculada, inclusive paga/rejeitada, sem emitir nem cobrar."""
+    from flask import current_app
+
+    from app.services import tiny_nf
+
+    try:
+        with trava(chave_documento(doc)):
+            db.session.refresh(doc, with_for_update=True)
+            if not doc.tiny_nota_fiscal_id:
+                return {'ok': False, 'autorizada': False,
+                        'msg': 'Este documento ainda não tem uma NF vinculada ao Tiny.'}
+            situacao = tiny_nf._sincronizar_situacao(doc)
+            if not situacao:
+                return {'ok': False, 'autorizada': False,
+                        'msg': 'Não foi possível confirmar a situação da NF no Tiny. Tente atualizar novamente.'}
+            if situacao['autorizada']:
+                tentativa = db.session.get(TentativaNFB2B, chave_documento(doc))
+                if tentativa:
+                    tentativa.estado, tentativa.erro = 'concluida', None
+                    # A assinatura original continua protegendo alterações locais.
+                    db.session.commit()
+                return {'ok': True, 'autorizada': True,
+                        'msg': 'NF autorizada no Tiny. Situação atualizada no sistema.'}
+            return {'ok': True, 'autorizada': False,
+                    'msg': 'Consulta realizada: a autorização da NF ainda não foi confirmada no Tiny.'}
+    except OperacaoEmAndamento as exc:
+        db.session.rollback()
+        return {'ok': False, 'autorizada': False, 'msg': str(exc)}
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Falha ao consultar NF B2B %s', chave_documento(doc))
+        return {'ok': False, 'autorizada': False,
+                'msg': 'Não foi possível consultar a NF no Tiny. Tente atualizar novamente.'}
+
+
+def sincronizar_pendentes(limite=5):
+    """Lotes por modelo com cursor persistente: rejeições antigas não bloqueiam a fila.
+
+    Chamado sob a trava do worker. Só reconcilia a situação fiscal; pagamentos,
+    boletos, envios e erros financeiros seguem seu próprio fluxo de conferência.
+    """
+    for modelo, tipo in ((VendaB2B, 'venda'), (FaturaB2B, 'fatura')):
+        chave = f'b2b_nf_sync_cursor_{tipo}'
+        cursor = AppConfig.get_int(chave, 0)
+        pendentes = modelo.query.filter(
+            modelo.tiny_nota_fiscal_id.isnot(None), modelo.tiny_nota_fiscal_id != '',
+            modelo.nf_emitida_em.is_(None))
+        documentos = pendentes.filter(modelo.id > cursor).order_by(modelo.id).limit(limite).all()
+        if not documentos and cursor:
+            documentos = pendentes.order_by(modelo.id).limit(limite).all()
+        for doc in documentos:
+            sincronizar(doc)
+            AppConfig.set(chave, doc.id)
+            db.session.commit()
+
+
 def emitir(doc, montar_payload, usuario_id=None, recriar=False):
     from app.services import tiny_nf
     try:
@@ -49,7 +106,7 @@ def emitir(doc, montar_payload, usuario_id=None, recriar=False):
                 if situacao and situacao['autorizada']:
                     return {'ok': True, 'nota_fiscal_id': doc.tiny_nota_fiscal_id,
                             'msg': 'NF já autorizada no Tiny. Nenhuma nova nota foi criada.'}
-                if not situacao or not situacao['rejeitada'] or 'denegad' in situacao['situacao']:
+                if not situacao or not situacao['rejeitada'] or situacao.get('denegada'):
                     return {'ok': False, 'msg': 'Não foi confirmada uma rejeição que permita refazer. '
                             'A nota atual foi preservada; confira sua situação no Tiny.'}
             if tentativa and not doc.tiny_nota_fiscal_id and not recriar:

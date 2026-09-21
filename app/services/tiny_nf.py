@@ -421,17 +421,19 @@ def _nota_payload(pedido, itens, cliente=None):
 
 def _sincronizar_situacao(pedido):
     """Consulta a situação REAL da NF no Tiny (fonte de verdade) e atualiza
-    o pedido se já autorizou na SEFAZ. Devolve {autorizada, rejeitada,
+    o pedido se já autorizou na SEFAZ. Devolve {autorizada, rejeitada, denegada,
     situacao} ou None se não temos NF / Tiny não respondeu.
 
     Por que: o `nota.fiscal.emitir` é assíncrono e o `status_processamento`
     é ambíguo (em prod a 011428 voltou status '2' mesmo já AUTORIZADA na
     SEFAZ). A única fonte confiável é `nota.fiscal.obter`, que reflete o
-    que o Tiny tem armazenado. Texto, não número (mais robusto a mudança
-    de código)."""
+    que o Tiny tem armazenado, pelos códigos e descrições fiscais."""
     if not pedido.tiny_nota_fiscal_id:
         return None
     nf = tiny.obter_nota_fiscal(pedido.tiny_nota_fiscal_id) or {}
+    if nf.get('id') and str(nf['id']) != str(pedido.tiny_nota_fiscal_id):
+        logger.warning('tiny obter NF: resposta com ID diferente da nota solicitada')
+        return None
     # Tiny pode mandar a situação em campos/formatos diferentes:
     # `situacao` (texto curto), `situacao_descricao` (texto longo),
     # `status` (numérico). Vamos varrer tudo pra ser robustos.
@@ -446,6 +448,7 @@ def _sincronizar_situacao(pedido):
         return None
     fiscal = tiny.classificar_situacao_nota(nf)
     autorizada, rejeitada = fiscal['autorizada'], fiscal['rejeitada']
+    denegada = str(nf.get('situacao')) == '10' or 'denegad' in sigs
     if not (autorizada or rejeitada):
         logger.info('tiny obter NF %s: situacao desconhecida (sigs=%r, '
                     'campos=%s)', pedido.tiny_nota_fiscal_id, sigs[:120],
@@ -453,11 +456,14 @@ def _sincronizar_situacao(pedido):
     if autorizada and not pedido.nf_emitida_em:
         pedido.nf_status = 'autorizada'
         pedido.nf_emitida_em = agora()
+        if nf.get('numero') and hasattr(pedido, 'nf_numero'):
+            pedido.nf_numero = str(nf['numero'])[:50]
         db.session.commit()
     elif rejeitada and not pedido.nf_emitida_em:
         pedido.nf_status = sigs[:40]
         db.session.commit()
-    return {'autorizada': autorizada, 'rejeitada': rejeitada, 'situacao': sigs}
+    return {'autorizada': autorizada, 'rejeitada': rejeitada,
+            'denegada': denegada, 'situacao': sigs}
 
 
 def _set_nf_erro(alvo, texto):

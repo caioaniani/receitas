@@ -603,6 +603,20 @@ def fatura_cancelar(fid):
     return redirect(url_for('b2b.faturas'))
 
 
+@b2b_bp.route('/faturas/<int:fid>/sincronizar-nf', methods=['POST'])
+@login_required
+@admin_required
+def fatura_sincronizar_nf(fid):
+    """Atualiza a nota existente a partir do Tiny, sem emitir outra."""
+    from app.services.cobrancas_nf import sincronizar
+    fatura = FaturaB2B.query.get_or_404(fid)
+    res = sincronizar(fatura)
+    categoria = ('success' if res.get('autorizada') else
+                 'info' if res.get('ok') else 'warning')
+    flash(f'Fatura {fatura.codigo}: {res["msg"]}', categoria)
+    return redirect(url_for('b2b.fatura_detalhe', fid=fid))
+
+
 @b2b_bp.route('/faturas/<int:fid>/emitir-nf', methods=['POST'])
 @login_required
 def fatura_emitir_nf(fid):
@@ -1094,6 +1108,20 @@ def venda_excluir(vid):
 # ── NF-e via Tiny (06/07/2026) ──
 # Mesmo fluxo do site (loja online): botão manual, emissão pelo dono.
 # Enviar por e-mail (NF já emitida) pode ser feito por admin.
+
+@b2b_bp.route('/vendas/<int:vid>/sincronizar-nf', methods=['POST'])
+@login_required
+@admin_required
+def venda_sincronizar_nf(vid):
+    """Atualiza a nota existente a partir do Tiny, sem emitir outra."""
+    from app.services.cobrancas_nf import sincronizar
+    venda = VendaB2B.query.get_or_404(vid)
+    res = sincronizar(venda)
+    categoria = ('success' if res.get('autorizada') else
+                 'info' if res.get('ok') else 'warning')
+    flash(f'Venda #{vid}: {res["msg"]}', categoria)
+    return redirect(url_for('b2b.venda_detalhe', vid=vid))
+
 
 @b2b_bp.route('/vendas/<int:vid>/emitir-nf', methods=['POST'])
 @login_required

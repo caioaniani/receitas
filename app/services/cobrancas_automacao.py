@@ -241,6 +241,10 @@ def executar():
                     aviso = db.session.get(AvisoRemessa, aid)
                     aviso.estado, aviso.erro = 'incerto', str(exc)[:500]
                     db.session.commit()
+            # Rejeições também podem ser corrigidas diretamente no Tiny.
+            # Esta consulta independe da elegibilidade para cobrar (ex.: venda paga).
+            from app.services.cobrancas_nf import sincronizar_pendentes
+            sincronizar_pendentes()
             AppConfig.set('cobrancas_automacao_ultimo_ciclo', agora().isoformat())
             db.session.commit()
     except OperacaoEmAndamento:
