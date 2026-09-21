@@ -11,6 +11,7 @@ openpyxl==3.1.5
 gunicorn==23.0.0
 psycopg2-binary==2.9.10
 requests==2.32.3
+paramiko==5.0.0
 # 0.40.0 (11/2024) nao conhecia o param `thinking` — as 6 chamadas com
 # thinking={'type':'disabled'} da migracao Sonnet 5 (05/08/2026) estouravam
 # TypeError e vigia/auditor/followup/OCRs/planejamento ficaram mortos ~2

@@ -149,6 +149,9 @@
 
 
 {% macro financeiro(variant) %}
+{% if current_user.is_owner %}
+{{ _lnk(variant, url_for('fiserv.index'), 'Recebimentos Fiserv', request.path.startswith('/financeiro/fiserv'), title='Configure o acesso privado e acompanhe a coleta de arquivos', icon='bi-bank') }}
+{% endif %}
 {{ _lnk(variant, url_for('cobrancas.visao_geral'), 'Cobranças', request.path.startswith('/cobrancas'), title='A receber, NF + boleto, envios e pagamentos', icon='bi-receipt', primary=true) }}
 {{ _lnk(variant, url_for('contas_pagar.lista'), 'Contas a Pagar', request.path in ['/contas-pagar/', '/contas-pagar'], primary=true, title='Confira vencimentos e registre pagamentos', icon='bi-calendar-check') }}
 {{ _lnk(variant, url_for('contas_pagar.canais'), 'Canais do Slack', request.path.startswith('/contas-pagar/canais'), sub=true, title='Qual canal do Slack pertence a qual loja') }}

@@ -518,6 +518,14 @@ def iniciar(app):
         return
 
     _scheduler = BackgroundScheduler(daemon=True, timezone='America/Sao_Paulo')
+    # Recebimento privado: o serviço limita a uma coleta/hora; o minuto permite
+    # atender a primeira configuração e novas tentativas solicitadas pelo owner.
+    from app.services.fiserv_integracao import rodar_agendado as rodar_fiserv
+    _scheduler.add_job(
+        lambda: rodar_fiserv(app),
+        'cron', minute='*', id='fiserv-coleta',
+        max_instances=1, coalesce=True,
+    )
     _scheduler.add_job(
         lambda: _run_sync(app),
         'interval', minutes=15, id='seru-sync',

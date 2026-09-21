@@ -14,6 +14,7 @@ from app.models.estoque import *  # noqa: F401, F403
 from app.models.estoque_massa import *  # noqa: F401, F403
 from app.models.financeiro import *  # noqa: F401, F403
 from app.models.fiscal_online import *  # noqa: F401, F403
+from app.models.fiserv import *  # noqa: F401, F403
 from app.models.integracoes import *  # noqa: F401, F403
 from app.models.kits_cafe import *  # noqa: F401, F403
 from app.models.lista_compras import *  # noqa: F401, F403

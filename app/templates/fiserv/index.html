@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Recebimentos Fiserv{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+  <div><h1 class="h3 mb-1">Recebimentos Fiserv</h1>
+    <p class="text-muted mb-0">Receba automaticamente os arquivos de vendas e recebíveis das maquininhas.</p></div>
+  <a class="btn btn-outline-secondary" href="{{ url_for('fiserv.index') }}">Atualizar</a>
+</div>
+{% if not coleta_disponivel %}
+<div class="alert alert-warning">A coleta automática está desabilitada neste ambiente. O acesso pode ser preparado, mas os arquivos só serão recebidos na instância de produção autorizada.</div>
+{% endif %}
+<div class="card mb-4"><div class="card-body">
+  <h2 class="h5">Situação da conexão</h2>
+  {% if estado %}
+    {% set rotulos = {'aguardando': 'Aguardando primeira coleta', 'coletando': 'Coleta em andamento', 'conectado': 'Conectado', 'erro': 'Precisa de atenção', 'pausado': 'Pausado'} %}
+    <p><strong>{{ rotulos.get(estado.estado, 'Em preparação') }}</strong> · {{ 'Automático ativo' if estado.ativa else 'Automático ainda não ativo' }}</p>
+    {% if estado.mensagem %}<p>{{ estado.mensagem }}</p>{% endif %}
+    <dl class="row mb-3">
+      <dt class="col-sm-4">Última tentativa</dt><dd class="col-sm-8">{{ estado.ultima_tentativa.strftime('%d/%m/%Y às %H:%M') if estado.ultima_tentativa else 'Ainda não realizada' }}</dd>
+      <dt class="col-sm-4">Última coleta concluída</dt><dd class="col-sm-8">{{ estado.ultimo_sucesso.strftime('%d/%m/%Y às %H:%M') if estado.ultimo_sucesso else 'Ainda não realizada' }}</dd>
+    </dl>
+    <div class="d-flex flex-wrap gap-2">
+      <form method="post" action="{{ url_for('fiserv.solicitar_coleta') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-primary" {% if estado.solicitada or estado.estado == 'coletando' or not coleta_disponivel %}disabled{% endif %}>{{ 'Coleta solicitada' if estado.solicitada else 'Coletar e ativar automático' }}</button></form>
+      {% if estado.ativa or estado.solicitada %}<form method="post" action="{{ url_for('fiserv.pausar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-secondary">Pausar automático</button></form>{% endif %}
+    </div>
+  {% else %}<p class="mb-0">Configure o acesso abaixo para começar. Somente o owner pode acessar esta área.</p>{% endif %}
+</div></div>
+
+<div class="card mb-4"><div class="card-body">
+  <h2 class="h5">{{ 'Substituir acesso' if estado else 'Configurar recebimento automático' }}</h2>
+  <p class="text-muted">Preencha o acesso diretamente aqui. Os dados serão guardados com criptografia e não serão exibidos novamente. A coleta será feita a cada hora.</p>
+  {% if not chave_persistente %}<div class="alert alert-warning">O servidor precisa de uma chave permanente de proteção antes de receber as credenciais.</div>{% endif %}
+  {% if not proposta %}
+  <form method="post" action="{{ url_for('fiserv.consultar_servidor') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="form-label" for="host">Servidor informado pela Fiserv</label>
+    <select class="form-select mb-3" id="host" name="host">{% for host in hosts %}<option value="{{ host }}" {% if host == host_padrao %}selected{% endif %}>{{ host }}</option>{% endfor %}</select>
+    <button class="btn btn-outline-primary" {% if not chave_persistente %}disabled{% endif %}>Consultar identificação do servidor</button>
+  </form>
+  {% else %}
+  <form method="post" action="{{ url_for('fiserv.configurar') }}" enctype="multipart/form-data" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="confirmacao" value="{{ confirmacao }}">
+    <div class="border rounded p-3 mb-3">
+      <p class="mb-1"><strong>{{ proposta.host }}</strong></p>
+      <p class="small text-break mb-2">Identificação apresentada: <code>{{ proposta.fingerprint }}</code></p>
+      <p class="small">No primeiro acesso, confira essa identificação com a Fiserv por um canal conhecido. Esta consulta mostra a chave apresentada, mas não confirma sozinha a identidade do servidor.</p>
+      <div class="form-check"><input class="form-check-input" type="checkbox" id="servidor_confirmado" name="servidor_confirmado" value="1" required><label class="form-check-label" for="servidor_confirmado">Conferi a identificação do servidor com a Fiserv.</label></div>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-6"><label class="form-label" for="usuario">Usuário SFTP</label><input class="form-control" id="usuario" name="usuario" maxlength="256" autocomplete="off" required></div>
+      <div class="col-md-6"><label class="form-label" for="senha">Senha de acesso, se fornecida pela Fiserv</label><input class="form-control" type="password" id="senha" name="senha" maxlength="1024" autocomplete="new-password"></div>
+      <div class="col-md-6"><label class="form-label" for="chave">Arquivo de chave enviado pela Fiserv</label><input class="form-control" type="file" id="chave" name="chave" accept=".ppk,.pem,.key" required><div class="form-text">Selecione o arquivo de chave que você recebeu por e-mail.</div></div>
+      <div class="col-md-6"><label class="form-label" for="passphrase">Senha da chave, se houver</label><input class="form-control" type="password" id="passphrase" name="passphrase" maxlength="1024" autocomplete="new-password"><div class="form-text">Deixe em branco se a chave não tiver uma senha própria.</div></div>
+    </div>
+    <button class="btn btn-primary mt-3" {% if not chave_persistente %}disabled{% endif %}>Salvar e iniciar recebimento automático</button>
+  </form>
+  {% endif %}
+</div></div>
+
+<div class="card"><div class="card-body">
+  <h2 class="h5">Arquivos recebidos <span class="text-muted">({{ pagina.total }})</span></h2>
+  <p class="text-muted small">Os arquivos originais ficam disponíveis aqui para conferência. O recebimento não dá baixa em pedidos ou contas. O extrato bancário Sicredi é uma conexão separada.</p>
+  {% if pagina.items %}
+  <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Arquivo</th><th>Recebido em</th><th>Tamanho</th><th></th></tr></thead><tbody>
+  {% for arquivo in pagina.items %}<tr><td class="text-break">{{ arquivo.nome }}</td><td>{{ arquivo.recebido_em.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ (arquivo.tamanho / 1024)|round(1) }} KB</td><td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('fiserv.baixar', arquivo_id=arquivo.id) }}">Baixar</a></td></tr>{% endfor %}
+  </tbody></table></div>
+  <nav class="d-flex gap-2" aria-label="Páginas de arquivos">{% if pagina.has_prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fiserv.index', pagina=pagina.prev_num) }}">Anteriores</a>{% endif %}{% if pagina.has_next %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fiserv.index', pagina=pagina.next_num) }}">Próximos</a>{% endif %}</nav>
+  {% else %}<p class="mb-0">Ainda não há arquivos recebidos.</p>{% endif %}
+</div></div>
+{% endblock %}

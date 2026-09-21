@@ -1,0 +1,233 @@
+"""Configuração privada do owner; credenciais nunca retornam na resposta."""
+
+import base64
+import io
+import os
+import secrets
+
+from flask import (
+    abort,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
+from flask_login import current_user, login_required
+from itsdangerous import BadData, URLSafeTimedSerializer
+
+from app.blueprints.fiserv import fiserv_bp
+from app.decorators import owner_required
+from app.extensions import db, limiter
+from app.models.fiserv import ArquivoFiservRecebido, EventoFiserv, IntegracaoFiserv
+from app.services.fiserv_integracao import (
+    ColetaEmAndamento,
+    coleta_disponivel,
+    obter_chave_apresentada,
+    trava,
+)
+from app.services.fiserv_segredos import (
+    ErroSegredoFiserv,
+    carregar_chave,
+    cifrar_json,
+    decifrar_bytes,
+)
+from app.services.fiserv_sftp import HOST_PADRAO, HOSTS_PERMITIDOS, ConfigFiservSFTP, ErroFiservSFTP
+from app.utils import agora
+
+
+@fiserv_bp.before_request
+@login_required
+@owner_required
+def proteger_area():
+    import sentry_sdk
+    sentry_sdk.get_isolation_scope().set_tag('fiserv_privado', True)
+
+
+@fiserv_bp.after_request
+def proteger_resposta(response):
+    response.headers['Cache-Control'] = 'no-store, private'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
+def _assinador():
+    __tracebackhide__ = True
+    return URLSafeTimedSerializer(current_app.config['SECRET_KEY'], salt='fiserv-host-owner-v1')
+
+
+def _painel(proposta=None, confirmacao=None):
+    __tracebackhide__ = True
+    registro = db.session.get(IntegracaoFiserv, 1)
+    # Nunca enviar ORM da configuração ou ciphertext ao template.
+    estado = None if registro is None else {
+        'ativa': registro.ativa, 'estado': registro.estado,
+        'solicitada': registro.coleta_solicitada,
+        'ultima_tentativa': registro.ultima_tentativa_em,
+        'ultimo_sucesso': registro.ultimo_sucesso_em, 'mensagem': registro.mensagem,
+    }
+    pagina = ArquivoFiservRecebido.query.order_by(
+        ArquivoFiservRecebido.recebido_em.desc(), ArquivoFiservRecebido.id.desc(),
+    ).paginate(page=request.args.get('pagina', 1, type=int), per_page=20, error_out=False)
+    return render_template(
+        'fiserv/index.html', estado=estado, pagina=pagina,
+        hosts=sorted(HOSTS_PERMITIDOS), host_padrao=HOST_PADRAO,
+        proposta=proposta, confirmacao=confirmacao,
+        coleta_disponivel=coleta_disponivel(),
+        chave_persistente=bool(os.environ.get('SECRET_KEY')),
+    )
+
+
+@fiserv_bp.get('')
+def index():
+    return _painel()
+
+
+@fiserv_bp.post('/servidor')
+@limiter.limit('3 per minute')
+def consultar_servidor():
+    __tracebackhide__ = True
+    host = request.form.get('host', '')
+    if host not in HOSTS_PERMITIDOS:
+        abort(400)
+    try:
+        proposta = obter_chave_apresentada(host)
+        nonce = secrets.token_urlsafe(24)
+        session['fiserv_nonce'] = nonce
+        token = _assinador().dumps({**proposta, 'owner_id': current_user.id, 'nonce': nonce})
+        return _painel(proposta=proposta, confirmacao=token)
+    except ErroFiservSFTP:
+        flash('Não foi possível consultar o servidor da Fiserv. Tente novamente.', 'warning')
+        return redirect(url_for('fiserv.index'))
+
+
+@fiserv_bp.post('/configurar')
+@limiter.limit('5 per minute')
+def configurar():
+    __tracebackhide__ = True
+    if not os.environ.get('SECRET_KEY'):
+        flash('A chave permanente do servidor precisa ser configurada antes de salvar o acesso.', 'danger')
+        return redirect(url_for('fiserv.index'))
+    try:
+        proposta = _assinador().loads(request.form.get('confirmacao', ''), max_age=600)
+        if (proposta.get('owner_id') != current_user.id
+                or not session.get('fiserv_nonce')
+                or proposta.get('nonce') != session['fiserv_nonce']
+                or proposta.get('host') not in HOSTS_PERMITIDOS
+                or request.form.get('servidor_confirmado') != '1'):
+            raise ValueError
+        usuario = request.form.get('usuario', '').strip()
+        senha = request.form.get('senha', '') or None
+        passphrase = request.form.get('passphrase', '') or None
+        if (not usuario or len(usuario) > 256 or any(ord(c) < 32 for c in usuario)
+                or len(senha or '') > 1024 or len(passphrase or '') > 1024):
+            raise ValueError
+        upload = request.files.get('chave')
+        if upload is None:
+            raise ValueError
+        conteudo = upload.read(16 * 1024 + 1)
+        if not conteudo or len(conteudo) > 16 * 1024:
+            raise ValueError
+        chave = carregar_chave(conteudo, passphrase)
+        ConfigFiservSFTP(usuario=usuario, host=proposta['host'], chave_privada=chave,
+                        known_hosts_text=proposta['known_hosts_text'], senha=senha)
+        dados = {
+            'host': proposta['host'], 'usuario': usuario, 'senha': senha,
+            'passphrase': passphrase, 'chave_base64': base64.b64encode(conteudo).decode(),
+            'known_hosts_text': proposta['known_hosts_text'],
+        }
+        cifrado = cifrar_json(dados)
+        with trava():
+            registro = db.session.get(IntegracaoFiserv, 1)
+            if registro is None:
+                registro = IntegracaoFiserv(id=1, versao=1)
+                db.session.add(registro)
+            else:
+                registro.versao += 1
+            registro.acesso_cifrado = cifrado
+            registro.atualizado_em = agora()
+            registro.atualizado_por_id = current_user.id
+            registro.ativa = False
+            registro.coleta_solicitada = True
+            registro.estado = 'aguardando'
+            registro.mensagem = 'Aguardando a primeira coleta para confirmar o acesso.'
+            registro.ultima_tentativa_em = None
+            registro.ultimo_sucesso_em = None
+            db.session.add(EventoFiserv(acao='acesso_configurado', usuario_id=current_user.id))
+            db.session.commit()
+        session.pop('fiserv_nonce', None)
+        flash('Acesso salvo de forma protegida. A primeira coleta será iniciada automaticamente.', 'success')
+    except ColetaEmAndamento:
+        db.session.rollback()
+        flash('Há uma coleta em andamento. Aguarde e salve novamente.', 'warning')
+    except BadData:
+        flash('A confirmação do servidor expirou. Consulte o servidor novamente antes de salvar.', 'warning')
+    except ErroSegredoFiserv as exc:
+        db.session.rollback()
+        # ErroSegredoFiserv contém somente mensagens fixas, nunca entrada privada.
+        flash(str(exc), 'warning')
+    except (ValueError, ErroFiservSFTP):
+        db.session.rollback()
+        flash('Confira os campos, a confirmação do servidor e o arquivo da chave. Nenhum acesso foi alterado.', 'warning')
+    return redirect(url_for('fiserv.index'))
+
+
+@fiserv_bp.post('/coletar')
+@limiter.limit('3 per minute')
+def solicitar_coleta():
+    __tracebackhide__ = True
+    try:
+        with trava():
+            registro = db.session.get(IntegracaoFiserv, 1)
+            if registro is None:
+                abort(404)
+            registro.coleta_solicitada = True
+            registro.estado = 'aguardando'
+            registro.mensagem = 'Nova coleta solicitada pelo owner.'
+            db.session.add(EventoFiserv(acao='coleta_solicitada', usuario_id=current_user.id))
+            db.session.commit()
+        flash('Coleta solicitada. Atualize esta tela em alguns minutos.', 'success')
+    except ColetaEmAndamento:
+        flash('Já existe uma coleta em andamento.', 'info')
+    return redirect(url_for('fiserv.index'))
+
+
+@fiserv_bp.post('/pausar')
+def pausar():
+    __tracebackhide__ = True
+    try:
+        with trava():
+            registro = db.session.get(IntegracaoFiserv, 1)
+            if registro is None:
+                abort(404)
+            registro.ativa = False
+            registro.coleta_solicitada = False
+            registro.estado = 'pausado'
+            registro.mensagem = 'Coleta automática pausada pelo owner.'
+            db.session.add(EventoFiserv(acao='coleta_pausada', usuario_id=current_user.id))
+            db.session.commit()
+        flash('Coleta automática pausada.', 'info')
+    except ColetaEmAndamento:
+        flash('A coleta atual ainda está em andamento. Aguarde e pause novamente.', 'warning')
+    return redirect(url_for('fiserv.index'))
+
+
+@fiserv_bp.get('/arquivos/<int:arquivo_id>')
+def baixar(arquivo_id):
+    __tracebackhide__ = True
+    arquivo = db.session.get(ArquivoFiservRecebido, arquivo_id)
+    if arquivo is None:
+        abort(404)
+    try:
+        conteudo = decifrar_bytes(arquivo.conteudo_cifrado)
+    except ErroSegredoFiserv:
+        flash('Não foi possível abrir o arquivo com a chave atual do servidor.', 'danger')
+        return redirect(url_for('fiserv.index'))
+    db.session.add(EventoFiserv(acao='arquivo_baixado', usuario_id=current_user.id))
+    db.session.commit()
+    return send_file(io.BytesIO(conteudo), mimetype='application/octet-stream',
+                     as_attachment=True, download_name=arquivo.nome, max_age=0)

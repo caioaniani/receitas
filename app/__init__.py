@@ -6,6 +6,7 @@ from flask_wtf.csrf import CSRFError
 
 from app.extensions import csrf, db, limiter, login_manager, migrate
 from app.migrations_legacy import _migrate
+from app.services.fiserv_privacidade import caminho_privado
 from app.utils import agora as agora_brt
 from config import Config
 
@@ -23,12 +24,16 @@ def _init_sentry():
         import sentry_sdk
         from sentry_sdk.integrations.flask import FlaskIntegration
         from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+        from app.services.fiserv_privacidade import filtrar_evento
         sentry_sdk.init(
             dsn=dsn,
             integrations=[FlaskIntegration(), SqlalchemyIntegration()],
             traces_sample_rate=float(os.environ.get('SENTRY_TRACES', '0.05')),
             send_default_pii=False,
             environment=os.environ.get('SENTRY_ENV', 'production'),
+            before_send=filtrar_evento,
+            before_send_transaction=filtrar_evento,
         )
     except ImportError:
         logger.warning('sentry-sdk nao instalada — `pip install sentry-sdk[flask]`')
@@ -58,6 +63,13 @@ def create_app(config_class=None):
     if not os.environ.get('SECRET_KEY'):
         # Em prod o config.py ja levanta RuntimeError. Aqui so avisa em dev.
         logger.warning('SECRET_KEY nao definida — sessoes expiram a cada restart.')
+
+    @app.before_request
+    def limitar_configuracao_fiserv():
+        # Antes do CSRF ler multipart: formulário de acesso não aceita anexos grandes.
+        if caminho_privado(request.path):
+            request.max_content_length = 96 * 1024
+            request.max_form_parts = 20
 
     db.init_app(app)
     csrf.init_app(app)
@@ -536,7 +548,8 @@ def create_app(config_class=None):
             response.headers['X-Robots-Tag'] = 'noindex, nofollow'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
-        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers['Referrer-Policy'] = (
+            'no-referrer' if caminho_privado(request.path) else 'strict-origin-when-cross-origin')
         if hasattr(g, 'request_id'):
             response.headers['X-Request-ID'] = g.request_id
         response.headers['Content-Security-Policy'] = (
@@ -941,6 +954,8 @@ def create_app(config_class=None):
     app.register_blueprint(contas_pagar_bp)
     from app.blueprints.cobrancas import cobrancas_bp
     app.register_blueprint(cobrancas_bp, url_prefix='/cobrancas')
+    from app.blueprints.fiserv import fiserv_bp
+    app.register_blueprint(fiserv_bp)
     from app.blueprints.lista_compras import lista_compras_bp
     app.register_blueprint(lista_compras_bp)
     from app.blueprints.notificacoes import notificacoes_bp
