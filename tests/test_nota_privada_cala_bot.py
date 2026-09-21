@@ -644,6 +644,130 @@ def test_enviar_nota_privada_apaga_se_o_chatwoot_nao_honrou_private(app):
     log.error.assert_called_once()
 
 
+# ── 7b. Segunda rodada da revisão (21/09) ──
+
+def test_evento_pending_atrasado_nao_encerra_nota_recente(app):
+    """Evento de status entregue DEPOIS de uma nota de segundos atrás é o
+    `pending` antigo chegando fora de ordem — não encerra."""
+    from app.services import presenca_humana as ph
+    app.config['CHATWOOT_BOT_SECRET'] = 'seg'
+    c = app.test_client()
+    with app.app_context():
+        _marcar()      # agora
+        r = c.post('/crm/bot?k=seg', json={'event': 'conversation_status_changed',
+                                          'id': 7, 'status': 'pending'})
+        assert r.get_json()['episodio'] == 'sem-episodio'
+        assert ph.humano_presente('7')
+        # o botão do painel (gesto explícito) não tem tolerância
+        assert ph.encerrar('7', 'painel') is True
+        assert not ph.humano_presente('7')
+
+
+def test_encerrar_sem_linha_cria_encerrado_e_nota_antiga_relida_nao_reabre(app):
+    """Webhook da nota perdido + "Devolvida pro bot": a releitura da API
+    (vassoura/contenção) acha a nota antiga e NÃO pode reabrir."""
+    from app.services import presenca_humana as ph
+    with app.app_context():
+        assert ph.encerrar('9', 'painel:pending') is False
+        nota_em, aberto = ph.estado('9')
+        assert nota_em is not None and not aberto
+        antiga = {'quando': nota_em - timedelta(minutes=3), 'autor': 'Caio'}
+        with patch('app.services.chatwoot.nota_privada_humana_recente', return_value=antiga):
+            assert not ph.humano_presente('9', consultar_chatwoot=True)
+        nova = {'quando': nota_em + timedelta(minutes=3), 'autor': 'Ana'}
+        with patch('app.services.chatwoot.nota_privada_humana_recente', return_value=nova):
+            assert ph.humano_presente('9', consultar_chatwoot=True)
+
+
+def test_nota_em_conversa_resolvida_nao_conta(app):
+    from app.services import presenca_humana as ph
+    app.config['CHATWOOT_BOT_SECRET'] = 'seg'
+    c = app.test_client()
+    with app.app_context(), patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.definir_status') as st:
+        r = c.post('/crm/bot?k=seg', json=_nota(conv_status='resolved'))
+        assert r.get_json()['ignorado'] == 'nota-em-resolvida'
+        assert not ph.humano_presente('7')
+    st.assert_not_called()
+
+
+def test_webhook_usa_created_at_da_nota_e_reentrega_nao_conta(app):
+    import time
+
+    from app.models import PresencaHumanaConversa
+    from app.services import chatwoot
+    app.config['CHATWOOT_BOT_SECRET'] = 'seg'
+    c = app.test_client()
+    ts = time.time() - 120
+    payload = _nota(conv_status='open', created_at=ts)
+    with app.app_context(), patch('threading.Thread', _SyncThread):
+        c.post('/crm/bot?k=seg', json=payload)
+        c.post('/crm/bot?k=seg', json=payload)          # reentrega do Chatwoot
+        row = app.extensions['sqlalchemy'].session.get(PresencaHumanaConversa, '7')
+        assert row.notas == 1
+        assert row.nota_em == chatwoot.epoch_para_brt(ts)
+
+
+def test_banco_falhando_com_nota_na_mao_e_presenca(app):
+    """Sinal encontrado na API/listagem + escrita falhando = presença (o
+    erro nunca libera a fala automática)."""
+    from app.services import chatwoot
+    from app.services import presenca_humana as ph
+    na_api = {'quando': agora() - timedelta(minutes=5), 'autor': 'Caio'}
+    fake = MagicMock(status_code=200, text='x')
+    fake.json.return_value = {'payload': _listagem()}
+    with app.app_context(), \
+         patch('app.services.presenca_humana.Session', side_effect=RuntimeError('pool')):
+        with patch('app.services.chatwoot.nota_privada_humana_recente', return_value=na_api):
+            assert ph.humano_presente('12', consultar_chatwoot=True)
+        _cfg_chatwoot(app)
+        with patch('app.services.chatwoot.requests.get', return_value=fake), \
+             patch('app.services.chatwoot.consultar_conversa') as status:
+            assert chatwoot.buscar_historico(12, incluir_autoria=True, somente_bot=True) == []
+        status.assert_not_called()
+
+
+def test_handoff_com_nota_durante_o_turno_cala_mas_deixa_a_nota_interna(app):
+    app.config['CHATWOOT_BOT_SECRET'] = 'seg'
+    c = app.test_client()
+
+    def _handoff_e_anotar(*a, **k):
+        _marcar()
+        return {'acao': 'handoff', 'texto': 'Já te passo pra equipe.',
+                'motivo': 'entregador da Lalamove sem contato', 'tools_resumo': []}
+
+    with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.buscar_historico', return_value=[]), \
+         patch('app.services.chatbot.responder', side_effect=_handoff_e_anotar), \
+         patch('app.services.chatwoot.enviar_mensagem') as env, \
+         patch('app.services.chatwoot.enviar_nota_privada',
+               return_value={'ok': True}) as nota, \
+         patch('app.services.chatwoot.definir_status', return_value={'ok': True}) as st:
+        c.post('/crm/bot?k=seg', json=_incoming(content='sou o entregador'))
+    env.assert_not_called()
+    st.assert_called_once_with(7, 'open')
+    nota.assert_called_once()
+    assert 'entregador da Lalamove' in nota.call_args[0][1]
+
+
+def test_encerrar_do_bot_com_nota_durante_o_turno_nao_resolve(app):
+    app.config['CHATWOOT_BOT_SECRET'] = 'seg'
+    c = app.test_client()
+
+    def _encerrar_e_anotar(*a, **k):
+        _marcar()
+        return {'acao': 'encerrar', 'texto': '', 'motivo': 'fechamento'}
+
+    with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.buscar_historico', return_value=[]), \
+         patch('app.services.chatbot.responder', side_effect=_encerrar_e_anotar), \
+         patch('app.services.chatwoot.enviar_mensagem') as env, \
+         patch('app.services.chatwoot.definir_status', return_value={'ok': True}) as st:
+        c.post('/crm/bot?k=seg', json=_incoming(content='obrigado'))
+    env.assert_not_called()
+    st.assert_called_once_with(7, 'open')      # nunca 'resolved' por cima da equipe
+
+
 # ── 8. Sonda: o marcador é visível de fora ──
 
 def test_sonda_vigia_vereditos_expoe_presenca_humana(app):
