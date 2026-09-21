@@ -367,7 +367,23 @@ def bot_webhook():
         return jsonify({'ok': False, 'erro': 'token inválido'}), 403
 
     payload = request.get_json(silent=True) or {}
-    if payload.get('event') != 'message_created':
+    evento = payload.get('event')
+    if evento != 'message_created':
+        # Encerramento do episodio humano (regra da nota privada): humano
+        # RESOLVEU ou DEVOLVEU AO BOT (pending). Se o Chatwoot entrega esse
+        # evento ao Agent Bot, o marcador cai aqui; senao valem o painel,
+        # o `candidatos()` e a janela `PRESENCA_HUMANA_HORAS`. O log em
+        # INFO diz quais eventos chegam (hipotese a confirmar em prod).
+        conv_ev = payload.get('conversation') or {}
+        status_ev = (payload.get('status') or conv_ev.get('status') or '')
+        conv_id_ev = conv_ev.get('id') or payload.get('conversation_id') or payload.get('id')
+        logger.info('crm/bot evento=%s conv=%s status=%s', evento, conv_id_ev, status_ev or '?')
+        if (evento in ('conversation_status_changed', 'conversation_resolved',
+                       'conversation_updated')
+                and conv_id_ev and status_ev in ('resolved', 'pending')):
+            from app.services import presenca_humana
+            presenca_humana.encerrar(conv_id_ev, f'{evento}:{status_ev}')
+            return jsonify({'ok': True, 'ignorado': 'evento', 'episodio': 'encerrado'})
         return jsonify({'ok': True, 'ignorado': 'evento'})
     if payload.get('private'):
         # NOTA PRIVADA (chega como outgoing+private): de agente HUMANO é o
