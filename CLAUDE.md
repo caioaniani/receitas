@@ -4539,13 +4539,30 @@ bot não pode falar quando a gente fala no privado com a equipe"**.
   auto-disparo.
 - **Marcador** `PresencaHumanaConversa` (`chatwoot_presenca_humana`,
   tabela NOVA via `db.create_all`, sem ALTER): conv_id, `nota_em` (última
-  nota), autor, contador, `aberta_em`. FONTE ÚNICA de leitura:
-  `presenca_humana.humano_presente(conv_id)` — janela
-  `PRESENCA_HUMANA_HORAS = 12`. Passada a janela a conversa volta ao bot
-  (resolvida e reaberta dias depois pelo mesmo contato). Dentro dela o
-  bot fica calado mesmo que a equipe tenha resolvido e o cliente volte —
-  errar para o silêncio é a direção pedida; a conversa vai para a fila
-  humana, nunca para o vácuo.
+  nota conhecida), autor, `notas` (notas DESTE episódio; **0 = episódio
+  encerrado**), `aberta_em`. FONTE ÚNICA de leitura:
+  `presenca_humana.humano_presente(conv_id)` — episódio aberto E
+  `nota_em` dentro de `PRESENCA_HUMANA_HORAS = 6` (teto). Escritas em
+  sessão isolada (`Session(db.engine)`) — `registrar_nota_privada` roda
+  dentro de leitores e não pode commitar a transação alheia.
+  **"Quando a gente fala" = enquanto o episódio dura (revisão 21/09,
+  achado ALTO da 1ª versão: 12h fixas passavam por cima do gesto humano
+  "Devolvida pro bot" e do resolve+reabre — o bot calava e REABRIA a
+  conversa contra a decisão do atendente).** `presenca_humana.encerrar`
+  zera `notas` mantendo `nota_em`; só nota MAIS NOVA que `nota_em`
+  reabre (a mesma nota relida pela API nunca reabre). Quem encerra:
+  evento `conversation_status_changed`/`conversation_resolved` com status
+  resolved|pending no webhook (`conversation_updated` fica FORA: dispara
+  por label/atribuição com status do momento e um `pending` velho
+  encerraria o episódio recém-aberto), os botões pending/resolved do
+  painel de entregas (`api_atendimento_status`) e a leitura de resolved
+  em `atendimento_pendente.candidatos`. Sem nenhum sinal, o teto de 6h
+  devolve a conversa ao bot. O webhook loga em INFO todo evento que não
+  é `message_created` — é assim que se descobre em prod quais eventos o
+  Agent Bot recebe (hipótese ainda não provada).
+- **Re-checagem antes de falar** (`_processar`): nota escrita DURANTE a
+  chamada ao modelo (segundos) descarta a resposta (`silencio_humano`);
+  o fallback de exceção (`FALLBACK_TEXTO`) também consulta o marcador.
 - **Quem obedece** (todos os caminhos que falam com o contato):
   (1) nota em conversa `pending` → o próprio webhook tira do bot
   (`definir_status open`, em thread, best-effort) e marca `aberta_em`;
