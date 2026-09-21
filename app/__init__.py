@@ -549,7 +549,7 @@ def create_app(config_class=None):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['Referrer-Policy'] = (
-            'no-referrer' if caminho_privado(request.path) else 'strict-origin-when-cross-origin')
+            'same-origin' if caminho_privado(request.path) else 'strict-origin-when-cross-origin')
         if hasattr(g, 'request_id'):
             response.headers['X-Request-ID'] = g.request_id
         response.headers['Content-Security-Policy'] = (

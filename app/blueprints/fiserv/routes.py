@@ -51,7 +51,9 @@ def proteger_area():
 def proteger_resposta(response):
     response.headers['Cache-Control'] = 'no-store, private'
     response.headers['Pragma'] = 'no-cache'
-    response.headers['Referrer-Policy'] = 'no-referrer'
+    # Flask-WTF exige Referer da mesma origem nos POSTs HTTPS. Mantém essa
+    # validação sem enviar a URL desta área a destinos externos.
+    response.headers['Referrer-Policy'] = 'same-origin'
     return response
 
 
