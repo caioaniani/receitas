@@ -65,9 +65,10 @@ Duas pontas, dois jobs do cron (`seru_cron`):
 Kill-switches: `AUTO_PEDIDOS=0` e `AUTO_ENVIO_PLANO=0` (default ligados —
 pedido explícito do dono). Locks 7758/7759 no `seru_cron`.
 """
+import json
 import logging
 import os
-from datetime import timedelta
+from datetime import date, timedelta
 
 from app.extensions import db
 from app.models import PedidoLoja
@@ -84,6 +85,7 @@ logger = logging.getLogger(__name__)
 # niveladas seg-sex, entrega nunca atrasa (mesmo motor do antigo checkbox da
 # tela, que virou padrão lá também — grid e ordem na mesma régua).
 EQUILIBRAR_AUTO = True
+STATUS_ENVIO_PLANO_KEY = 'auto_envio_plano_status'
 
 
 def _janela_da_semana(hoje_d):
@@ -392,7 +394,138 @@ def atualizar_plano_automatico():
     return out
 
 
-def enviar_ordens_da_semana():
+def _receitas_do_dia(crono, data_iso):
+    return {
+        rec['receita_id'] for rec in crono['receitas']
+        if not rec.get('retorno') and any(
+            c['data'] == data_iso and
+            (c['qtd'] > 0 or c.get('qtd_solicitada', 0) > 0)
+            for c in rec['por_dia'])
+    }
+
+
+def _subs_envio(rid, receitas, linhas, data_iso):
+    """Inclui o BOM congelado: editar a ficha não apaga a massa da ordem."""
+    from app.services.previsao_producao import _subs_de
+
+    subs = {sid: ratio for sid, ratio in _subs_de(rid, receitas) if ratio > 0}
+    celulas = linhas.get(rid, {}).get('por_dia', [])
+    exatas = [c for c in celulas if c['data'] == data_iso]
+    for celula in exatas or celulas:
+        for sub in (celula.get('batelada_padrao') or {}).get('subs', []):
+            if sub['id'] in receitas and sub['quantidade'] > 0:
+                subs.setdefault(sub['id'], 0.0)
+    retorno = {r.retorno_receita_id for r in receitas.values() if r.retorno_receita_id}
+    return {sid: ratio for sid, ratio in subs.items() if sid not in retorno}
+
+
+def _data_preparo_envio(sid, consumo, receitas):
+    from app.services.previsao_producao import producao_permitida_no_dia
+
+    dia = consumo - timedelta(days=int(receitas[sid].dias_producao or 0))
+    for _ in range(14):
+        if producao_permitida_no_dia(receitas[sid], dia):
+            return dia
+        dia -= timedelta(days=1)
+    return dia
+
+
+def _necessidade_preparo_envio(sid, ate, receitas, linhas):
+    """Demanda acumulada do mesmo cronograma, na unidade canônica do insumo."""
+    from app.services.cronograma_bateladas import consumo_insumo
+
+    linha = linhas.get(sid, {})
+    necessidades = linha.get('_necessidade_insumo_por_dia')
+    if isinstance(necessidades, list) and len(necessidades) == len(linha['por_dia']):
+        return sum(float(q or 0) for c, q in zip(linha['por_dia'], necessidades)
+                   if c['data'] <= ate)
+    # Cronogramas sem vetor explícito: exigir todo o consumo calculado pelo
+    # BOM, inclusive snapshots, em vez de presumir cobertura por estoque.
+    total = 0.0
+    for rid, rr in linhas.items():
+        for c in rr['por_dia']:
+            subs = _subs_envio(rid, receitas, linhas, c['data'])
+            if sid in subs and _data_preparo_envio(
+                    sid, date.fromisoformat(c['data']), receitas).isoformat() <= ate:
+                total += consumo_insumo(c, sid, subs[sid])
+    return total
+
+
+def _preparo_substituto_valido(prova, sid, data_iso, necessario_em, necessario):
+    """Prova de envio não é saldo: só vale na janela e nas fontes originais."""
+    from app.models import PlanejamentoItem
+    from app.services.viennoiserie import quantidade_em_bolas
+
+    if not prova or (
+            prova.get('janela_inicio') != hoje().isoformat()
+            or prova.get('consumo_ate', '') < data_iso
+            or prova['data'] > necessario_em
+            or prova['quantidade'] < necessario
+            or not prova.get('fontes')):
+        return False
+    for fonte in prova['fontes']:
+        item = db.session.get(PlanejamentoItem, fonte['item_id'])
+        if (item is None or item.receita_id != sid
+                or item.planejamento_id != fonte['plano_id']
+                or item.planejamento.data.isoformat() != fonte['data']
+                or item.planejamento.enviado_ao_padeiro is False
+                or item.dispensada_em is not None
+                or item.falta_encerrada_em is not None
+                or quantidade_em_bolas(item, max(
+                    0, (item.qtd_alvo or 0) - (item.produzido_qtd or 0)))
+                < fonte['quantidade']):
+            return False
+    return True
+
+
+def _dias_insumos_bloqueados(receita_ids, falhas_por_dia, receitas,
+                             data_iso, crono, novos_preparos):
+    """Falhas permanecem entre rodadas até envio correto ou novo preparo.
+
+    Só um novo envio positivo desta rodada, suficiente para a demanda
+    acumulada e com antecedência, comprova a substituição de preparo antigo.
+    Um plano preexistente ou a passagem do tempo não constitui essa prova.
+    """
+    linhas = {r['receita_id']: r for r in crono['receitas']}
+    dependencias = set()
+
+    def visitar(rid, dia, caminho=()):
+        if rid in caminho:
+            return
+        for sid in _subs_envio(rid, receitas, linhas, dia.isoformat()):
+            anterior = _data_preparo_envio(sid, dia, receitas)
+            dependencias.add((sid, anterior.isoformat()))
+            visitar(sid, anterior, (*caminho, rid))
+
+    for rid in receita_ids:
+        visitar(rid, date.fromisoformat(data_iso))
+    bloqueadas = set()
+    for sid, necessario_em in dependencias:
+        for dia_falho, falha in falhas_por_dia.items():
+            if dia_falho >= data_iso or sid not in falha.get('receita_ids', []):
+                continue
+            necessario = _necessidade_preparo_envio(
+                sid, necessario_em, receitas, linhas)
+            substituicao = falha.get('preparos_substituidos', {}).get(str(sid))
+            if _preparo_substituto_valido(
+                    substituicao, sid, data_iso, necessario_em, necessario):
+                continue
+            novos = [p for p in novos_preparos.get(sid, [])
+                     if dia_falho < p['data'] <= necessario_em]
+            quantidade = sum(p['quantidade'] for p in novos)
+            if novos and necessario > 0 and quantidade >= necessario:
+                falha.setdefault('preparos_substituidos', {})[str(sid)] = {
+                    'data': max(p['data'] for p in novos),
+                    'quantidade': quantidade, 'necessidade': necessario,
+                    'ordens': [p['plano_id'] for p in novos],
+                    'fontes': novos, 'janela_inicio': hoje().isoformat(),
+                    'consumo_ate': data_iso}
+            else:
+                bloqueadas.add(dia_falho)
+    return sorted(bloqueadas)
+
+
+def enviar_ordens_da_semana(*, incluir_hoje=False, somente_pendentes=False):
     """Solta a ORDEM DE PRODUÇÃO DA SEMANA (dono 17/08/2026: "a ordem de
     produção da semana soltando ela no domingo, meio-dia, até o próximo
     domingo"): envia ao padeiro a ordem de cada dia de AMANHÃ até o
@@ -407,8 +540,15 @@ def enviar_ordens_da_semana():
     intocável — "ordem enviada nunca muda por caminho implícito" vale pra
     gesto humano; ordem de cron sempre foi mantida por refresh automático
     (mesmo princípio do 🔄 das 06:45/19:05, que segue sendo a precisão do
-    PRÓPRIO dia). Motor: env `AUTO_ENVIO_MOTOR` (default 'vendas')."""
-    from app.models import PlanejamentoProducao
+    PRÓPRIO dia). Motor: env `AUTO_ENVIO_MOTOR` (default 'vendas').
+
+    Uma ficha inválida desfaz o DIA inteiro, sem pular receita ou perder
+    a validação de consumo. Dias independentes continuam; dependentes de
+    insumos daquele dia ficam aguardando a correção. Resultado persistido
+    em AppConfig para a tela informar o motivo, além do log do cron."""
+    from app.models import AppConfig, PlanejamentoProducao, Receita
+    from app.services.auto_envio_status import ler_status
+    from app.services.previsao_producao import cronograma_producao
     from app.services.producao import (
         PlanoJaEnviadoError,
         aprovar_plano_do_dia,
@@ -417,8 +557,16 @@ def enviar_ordens_da_semana():
     motor = (os.environ.get('AUTO_ENVIO_MOTOR') or 'vendas').strip()
     hoje_d = hoje()
     inicio, fim = _janela_da_semana(hoje_d)
+    if incluir_hoje:
+        inicio = hoje_d
     # O grid precisa CONTER o fim (coluna fora do horizonte = envio no-op).
     horizonte = min(14, (fim - hoje_d).days + 1)
+    # Uma única previsão para a rodada: pai e insumo são escritos a partir
+    # da mesma distribuição, inclusive ao conferir dependências após falha.
+    crono = cronograma_producao(horizonte_dias=horizonte,
+                                janela_semanas=6, inicio_offset_dias=0,
+                                equilibrar=EQUILIBRAR_AUTO, motor=motor)
+    receitas = {r.id: r for r in Receita.query.all()}
 
     planos = {p.data: p for p in (
         PlanejamentoProducao.query
@@ -426,44 +574,96 @@ def enviar_ordens_da_semana():
         .filter(PlanejamentoProducao.data >= inicio,
                 PlanejamentoProducao.data <= fim))}
 
-    out = {'de': inicio.isoformat(), 'ate': fim.isoformat(), 'motor': motor,
-           'enviadas': [], 'resincronizadas': [], 'puladas': [], 'vazias': []}
+    out = {'tentativa_em': agora().isoformat(), 'de': inicio.isoformat(),
+           'ate': fim.isoformat(), 'motor': motor, 'enviadas': [],
+           'resincronizadas': [], 'puladas': [], 'vazias': [], 'falhas': []}
+    # Repetir a rodada ou virar o dia não corrige um envio que falhou.
+    # Preserve também preparos passados: a UI oculta datas antigas, mas seus
+    # dependentes não podem assumir que a massa foi preparada sem resolução.
+    falhas_por_dia = {}
+    anteriores = ler_status().get('falhas')
+    for falha in anteriores if isinstance(anteriores, list) else []:
+        if not isinstance(falha, dict) or not isinstance(falha.get('erro'), str):
+            continue
+        try:
+            iso_falha = date.fromisoformat(falha.get('data')).isoformat()
+        except (TypeError, ValueError):
+            continue
+        falhas_por_dia[iso_falha] = falha
+
+    novos_preparos = {}
+
     dia = inicio
     while dia <= fim:
         iso = dia.isoformat()
         plano = planos.get(dia)
         enviado = plano is not None and plano.enviado_ao_padeiro is not False
+        # Recuperação explícita de buracos: hoje só pode nascer se estiver
+        # ausente. Nenhum envio anterior nem rascunho humano é reinterpretado.
+        if plano is not None and (
+                (incluir_hoje and dia == hoje_d) or
+                (somente_pendentes and (enviado or plano.criado_por is not None))):
+            out['puladas'].append(iso)
+            dia += timedelta(days=1)
+            continue
         if enviado and plano.criado_por is not None:
             out['puladas'].append(iso)     # ordem HUMANA: nunca tocada
             dia += timedelta(days=1)
             continue
-        if enviado:
-            # Ordem do PRÓPRIO CRON: re-sincroniza com o grid de agora.
-            r = enviar_plano_do_dia(dia, user_id=None,
-                                    horizonte_dias=horizonte, motor=motor,
-                                    equilibrar=EQUILIBRAR_AUTO)
-            out['resincronizadas' if r is not None else 'vazias'].append(iso)
+        receita_ids = _receitas_do_dia(crono, iso)
+        bloqueada_por = _dias_insumos_bloqueados(
+            receita_ids, falhas_por_dia, receitas, iso, crono, novos_preparos)
+        if bloqueada_por:
+            falhas_por_dia[iso] = {
+                'data': iso, 'bloqueada_por': bloqueada_por,
+                'receita_ids': sorted(receita_ids),
+                'erro': 'Aguardando corrigir o envio dos preparos de '
+                        + ', '.join(bloqueada_por) + '.'}
             dia += timedelta(days=1)
             continue
         try:
-            aprovar_plano_do_dia(dia, user_id=None, horizonte_dias=horizonte,
-                                 motor=motor, equilibrar=EQUILIBRAR_AUTO)
+            if not enviado:
+                plano = aprovar_plano_do_dia(
+                    dia, user_id=None, horizonte_dias=horizonte, motor=motor,
+                    equilibrar=EQUILIBRAR_AUTO, crono=crono, commit=False)
+            plano = enviar_plano_do_dia(
+                dia, user_id=None, horizonte_dias=horizonte, motor=motor,
+                equilibrar=EQUILIBRAR_AUTO, crono=crono)
         except PlanoJaEnviadoError:
             # Corrida: um humano enviou entre o snapshot e o aprovar — a
             # ordem dele vale.
             out['puladas'].append(iso)
             dia += timedelta(days=1)
             continue
-        plano = enviar_plano_do_dia(dia, user_id=None,
-                                    horizonte_dias=horizonte, motor=motor,
-                                    equilibrar=EQUILIBRAR_AUTO)
+        except ValueError as exc:
+            # Nada deste dia pode vazar para o commit do próximo ou para o
+            # status: reserva, itens e aprovação pertencem à mesma transação.
+            db.session.rollback()
+            logger.exception('ordens_semana: envio de %s recusado', iso)
+            falhas_por_dia[iso] = {'data': iso, 'erro': str(exc),
+                                   'receita_ids': sorted(receita_ids)}
+            dia += timedelta(days=1)
+            continue
         if plano is None:
             out['vazias'].append(iso)      # grid sem nada a produzir no dia
         else:
-            out['enviadas'].append(iso)
+            out['resincronizadas' if enviado else 'enviadas'].append(iso)
+            if not enviado and falhas_por_dia:
+                from app.services.viennoiserie import quantidade_em_bolas
+                for item in plano.itens:
+                    quantidade = quantidade_em_bolas(
+                        item, max(0, (item.qtd_alvo or 0) - (item.produzido_qtd or 0)))
+                    if quantidade > 0:
+                        novos_preparos.setdefault(item.receita_id, []).append({
+                            'data': iso, 'quantidade': quantidade, 'plano_id': plano.id,
+                            'item_id': item.id})
+        falhas_por_dia.pop(iso, None)
         dia += timedelta(days=1)
+    out['falhas'] = [falhas_por_dia[d] for d in sorted(falhas_por_dia)]
+    AppConfig.set(STATUS_ENVIO_PLANO_KEY, json.dumps(out, ensure_ascii=False))
+    db.session.commit()
     logger.info('ordens_semana: %s..%s enviadas=%s resinc=%s puladas=%s '
-                'vazias=%s (motor=%s)', out['de'], out['ate'],
+                'vazias=%s falhas=%s (motor=%s)', out['de'], out['ate'],
                 out['enviadas'], out['resincronizadas'], out['puladas'],
-                out['vazias'], motor)
+                out['vazias'], out['falhas'], motor)
     return out

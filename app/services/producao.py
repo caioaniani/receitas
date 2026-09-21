@@ -104,7 +104,7 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
             continue
         if it is None:
             it = PlanejamentoItem(
-                planejamento_id=plano.id, receita_id=rid,
+                planejamento=plano, receita_id=rid,
                 receita=rec,
                 multiplicador=max(1, ceil(qtd / rend)), qtd_alvo=qtd)
             db.session.add(it)
@@ -232,7 +232,7 @@ class PlanoJaEnviadoError(Exception):
 
 def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
                          inicio_offset_dias=0, equilibrar=False,
-                         motor='pedidos', crono=None):
+                         motor='pedidos', crono=None, commit=True):
     """Aprova a coluna de UM dia do cronograma -> cria/atualiza o
     PlanejamentoProducao (origem='cronograma') desse dia como RASCUNHO
     (enviado_ao_padeiro=False), pronto pra revisar e enviar. Reconstroi os itens
@@ -242,7 +242,9 @@ def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
     Dia ja ENVIADO -> PlanoJaEnviadoError, sem tocar no plano: re-aprovar
     reconstruiria os itens da ordem que o padeiro ja esta executando. Pra
     aplicar o grid num dia enviado, use enviar_plano_do_dia ("atualizar
-    producao"), que e o gesto explicito."""
+    producao"), que e o gesto explicito. `commit=False` permite ao job
+    aprovar e enviar na mesma transação; o chamador deve confirmar ou
+    desfazer integralmente o dia."""
     from app.models import PlanejamentoProducao
 
     existente = (PlanejamentoProducao.query
@@ -255,9 +257,15 @@ def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
         equilibrar, motor=motor, crono=crono)
     if n == 0 and not plano.itens:
         db.session.delete(plano)
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         return None
-    db.session.commit()
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()
     return plano
 
 

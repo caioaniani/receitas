@@ -1,0 +1,32 @@
+<section class="workspace card card-body mb-3" aria-labelledby="envio-ordens-title">
+  <div class="section-title">
+    <div>
+      <h2 id="envio-ordens-title" style="font-size:1.1rem;margin:0 0 .4rem">Envio ao padeiro</h2>
+      <p style="margin:0 0 .8rem">Recupera o plano automático de hoje até o próximo domingo. Mantém ordens já enviadas e rascunhos manuais.</p>
+    </div>
+    <form method="POST" action="{{ url_for('industria_teste.recuperar_ordens') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="{{ 'v2' if envio_v2 else 'legacy' }}" value="1">
+      <input type="hidden" name="view" value="week">
+      <input type="hidden" name="horizonte" value="{{ horizonte }}">
+      <input type="hidden" name="janela" value="{{ janela }}">
+      <input type="hidden" name="inicio" value="{{ inicio }}">
+      <input type="hidden" name="motor" value="{{ motor }}">
+      <input type="hidden" name="equilibrar" value="{{ 1 if equilibrar else 0 }}">
+      <button type="submit" class="primary-action btn btn-success" style="background:#275d45;color:white;padding:.65rem .9rem;border-radius:.5rem">Enviar ordens pendentes</button>
+    </form>
+  </div>
+  {% if falhas_envio %}
+  <div role="alert" style="border-left:4px solid #b03030;padding:.5rem .8rem;background:#fff5f4;color:#702020">
+    <strong>Envio bloqueado</strong>
+    <p>Corrija os motivos abaixo e envie as pendências novamente. Para uma ordem já enviada, abra o dia no planejamento e atualize a ordem.</p>
+    <ul>
+      {% for falha in falhas_envio %}
+      <li><strong>{{ falha.label }}:</strong> {{ falha.erro }}
+        {% if falha.receita_id %}<a href="{{ url_for('receitas.ficha', id=falha.receita_id) }}">Revisar ficha</a>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</section>

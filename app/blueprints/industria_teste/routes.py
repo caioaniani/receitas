@@ -6,6 +6,7 @@ faltar nem sobrar. "Aprovar plano do dia" cria a ordem de produção daquele dia
 (origem='cronograma') que DESCE pro padeiro. O estoque/MP só mexem quando o
 padeiro produz (opção B). NÃO mexe na /padeiro oficial.
 """
+from contextlib import contextmanager
 from datetime import date
 from time import perf_counter
 
@@ -19,6 +20,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required
+from sqlalchemy import text
 
 from app.blueprints.industria_teste import industria_teste_bp
 from app.decorators import admin_required
@@ -94,6 +96,61 @@ def _params_visao(**extra):
         p['view'] = request.values['view']
     p.update(extra)
     return p
+
+
+@contextmanager
+def _trava_recuperacao_ordens():
+    """Serializa com o cron; advisory lock e unlock usam a mesma conexão."""
+    from app.services.seru_cron import LOCK_KEY_AUTO_ENVIO
+
+    if db.engine.dialect.name != 'postgresql':
+        yield True
+        return
+    conn = db.engine.connect()
+    obtida = False
+    try:
+        obtida = bool(conn.execute(text('SELECT pg_try_advisory_lock(:k)'),
+                                  {'k': LOCK_KEY_AUTO_ENVIO}).scalar())
+        yield obtida
+    finally:
+        try:
+            if obtida:
+                try:
+                    conn.execute(text('SELECT pg_advisory_unlock(:k)'),
+                                 {'k': LOCK_KEY_AUTO_ENVIO})
+                except Exception:
+                    # Não devolver ao pool uma sessão com lock preso.
+                    conn.invalidate()
+                    raise
+        finally:
+            conn.close()
+
+
+@industria_teste_bp.route('/recuperar-ordens', methods=['POST'])
+@login_required
+@admin_required
+def recuperar_ordens():
+    from app.services.auto_pedidos import enviar_ordens_da_semana
+    from app.utils import hoje
+
+    with _trava_recuperacao_ordens() as obtida:
+        if not obtida:
+            flash('O envio das ordens já está em andamento. Aguarde e atualize a tela.',
+                  'warning')
+            return redirect(url_for('industria_teste.index', **_params_visao()))
+        resultado = enviar_ordens_da_semana(incluir_hoje=True, somente_pendentes=True)
+    enviadas = len(resultado.get('enviadas', []))
+    falhas = sum(1 for f in resultado.get('falhas', [])
+                 if f['data'] >= hoje().isoformat())
+    if falhas:
+        flash(f'{enviadas} ordem(ns) enviada(s). {falhas} dia(s) continuam bloqueados; '
+              'confira os motivos abaixo.', 'warning')
+    elif enviadas:
+        flash(f'{enviadas} ordem(ns) enviada(s) ao padeiro. Ordens anteriores preservadas.',
+              'success')
+    else:
+        flash('Nenhuma nova ordem pendente para enviar. Ordens anteriores preservadas.', 'info')
+    return redirect(url_for('industria_teste.index', **_params_visao()))
 
 
 @industria_teste_bp.route('/')
@@ -291,6 +348,7 @@ def index():
     if resumo['stale_n']:
         acoes.append({'tipo': 'stale', 'n': resumo['stale_n']})
 
+    from app.services.auto_envio_status import falhas_atuais
     from app.ui_v2 import ui_v2_ativo
     v2 = (request.args.get('v2') == '1'
           or (ui_v2_ativo() and request.args.get('legacy') != '1'))
@@ -302,7 +360,8 @@ def index():
                            totais_dia=totais_dia, pico_idx=pico_idx,
                            resumo=resumo, ordem_enviada=ordem_enviada,
                            difere=difere, fechados=fechados, acoes=acoes,
-                           monitor=monitor)
+                           monitor=monitor, falhas_envio=falhas_atuais(),
+                           envio_v2=v2)
 
 
 @industria_teste_bp.route('/auditoria')
@@ -502,6 +561,9 @@ def enviar():
         flash(str(exc), 'warning')
         return redirect(url_for('industria_teste.index', **_params_visao()))
     if plano:
+        from app.services.auto_envio_status import limpar_falha
+        if limpar_falha(data_alvo):
+            db.session.commit()
         flash('Produção de %s enviada ao padeiro (%d receita(s)).'
               % (data_alvo.strftime('%d/%m'), len(plano.itens)), 'success')
     else:

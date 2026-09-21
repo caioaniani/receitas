@@ -2199,6 +2199,21 @@ do seru_cron junto.
   'pendente' com o marcador padrao. No domingo 12:00 nascem os pedidos de
   seg..dom E na sequencia as ordens da semana (mesmo job `ordens-semana`
   — pedidos primeiro, o firme alimenta o grid).
+- **Falha de envio semanal (21/09/2026)**: o cron rodou em 20 e 21/09
+  às 12h, mas `Sourdough Nozes e Azeitonas` tinha ingrediente `azeitonas`
+  sem MP cadastrada; a validação de batelada interrompia a semana inteira.
+  Preservar essa validação: não fabricar estoque/custo nem associar a
+  `Azeite` ou à MP composta `Nozes e Azeitonas`. Agora aprovação + envio
+  são atômicos por dia; uma ficha inválida faz rollback do dia inteiro,
+  registra o motivo e deixa continuar dias independentes. Dias dependentes
+  de preparos que falharam ficam bloqueados, inclusive após virar o dia.
+  Preparo substituto exige quantidade/antecedência suficientes; sua prova
+  só vale na janela e datas cobertas, com itens ainda enviados e pendentes
+  (nunca como saldo permanente de estoque). `auto_envio_plano_status`
+  (AppConfig) alimenta o aviso no planejamento. A recuperação explícita
+  envia só pendências: nunca reescreve ordens enviadas ou rascunhos humanos;
+  hoje só pode ser criado quando não existe ordem. Nenhuma leitura dispara
+  envio nem credita produto pronto.
 - **Danishes ASSADAS: 2 por loja POR DIA, IMPRETERIVELMENTE (dono
   17/08/2026, em duas rodadas na mesma tarde)**: a 1a leitura (colchao
   `estoque_minimo=2`, seed v1) foi SUBSTITUIDA quando o dono cravou
