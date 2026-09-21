@@ -2192,6 +2192,12 @@ def varrer_pendentes_sem_resposta():
         # So quando a ULTIMA mensagem e do CLIENTE (o bot ficou devendo).
         if api_hist[-1].get('role') != 'user':
             continue
+        from app.services import presenca_humana
+        if presenca_humana.humano_presente(conv_id):
+            # Equipe em nota privada (dono 20/09/2026): a vassoura nao
+            # responde pelo bot — garante a fila humana e segue.
+            chatwoot.definir_status(conv_id, 'open')
+            continue
         telefone = telefone_chave(c.get('telefone') or '')
         varridas += 1
         # Mesmos DOIS locks do webhook (thread + advisory cross-worker),
