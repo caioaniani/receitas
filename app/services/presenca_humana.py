@@ -15,7 +15,7 @@ contato consulta aqui. O marcador é gravado pelo webhook do Agent Bot
 `private=true` e remetente HUMANO (`chatwoot.remetente_humano`) — o bot e
 as automações do Chatwoot não contam; a nota do PRÓPRIO bot
 (`chatwoot.enviar_nota_privada`, prefixo `entrega_candidata.PREFIXO_NOTA_BOT`)
-também não.
+também não; nota em conversa já RESOLVIDA é registro, não presença.
 
 "Quando a gente fala" = ENQUANTO o episódio humano dura. O episódio é
 ENCERRADO (`encerrar`) quando um humano resolve ou devolve a conversa ao
@@ -25,21 +25,27 @@ botões do painel de entregas e a leitura de `resolved` em
 `atendimento_pendente.candidatos`. Encerrado = `notas == 0` com
 `nota_em` guardando a ÚLTIMA nota conhecida (sem coluna nova: a tabela já
 está em produção); só nota MAIS NOVA que `nota_em` reabre o episódio — a
-mesma nota relida pela API nunca reabre. Como os sinais de encerramento
-podem não chegar, `PRESENCA_HUMANA_HORAS` é o teto: passada a janela o
-bot volta. Dentro dela, sem sinal, errar para o silêncio é a direção
-pedida — a conversa vai para a fila humana, não para o vácuo (revisão
-21/09/2026: o gesto "Devolvida pro bot" e o resolve+reabre tinham ficado
-presos pelos 12h da 1ª versão).
+mesma nota relida pela API nunca reabre. `encerrar` sem linha CRIA a
+linha encerrada (senão a releitura da API reabria contra o gesto —
+revisão 21/09, 2ª rodada). Como os sinais de encerramento podem não
+chegar, `PRESENCA_HUMANA_HORAS` é o teto: passada a janela o bot volta.
+Dentro dela, sem sinal, errar para o silêncio é a direção pedida — a
+conversa vai para a fila humana, não para o vácuo.
+
+Instante da nota: o `created_at` do Chatwoot (mesma fonte do webhook e da
+listagem) — comparar `agora()` do nosso relógio com o deles reabria
+episódio pela mesma nota e contava reentrega do webhook como nota nova.
 
 `consultar_chatwoot=True` (contenção e vassoura, 1 GET): rede de
 segurança caso o webhook da nota não tenha chegado — lê as mensagens da
-conversa e procura nota privada humana recente; se achar, persiste.
+conversa e procura nota privada humana recente; se achar, persiste. Sinal
+na mão + banco falhando = presença (o erro nunca libera a fala).
 
 Escritas em SESSÃO ISOLADA (`Session(db.engine)`, padrão do `uso_ia`):
 `registrar_nota_privada` é chamado de dentro de leitores
 (`chatwoot.buscar_historico`) e nunca pode commitar/reverter a transação
-de quem chamou.
+de quem chamou. Leituras usam a sessão principal (sem escrita, sem
+conexão extra no caminho quente).
 """
 import logging
 from datetime import timedelta
@@ -53,15 +59,19 @@ from app.utils import agora
 logger = logging.getLogger(__name__)
 
 PRESENCA_HUMANA_HORAS = 6
+# Evento de status `pending` entregue ATRASADO pelo Chatwoot (job separado)
+# pode chegar depois da nota e encerrar o episódio recém-aberto; evento
+# que alcança uma nota mais nova que isto é ignorado.
+ENCERRAR_TOLERANCIA_SEG = 90
 
 
 def registrar_nota_privada(conv_id, autor=None, *, quando=None):
-    """Upsert do marcador. `quando` (BRT naive) permite registrar a nota
-    lida da API com o instante real dela; default = agora. Só nota MAIS
-    NOVA que a registrada conta (reabre episódio encerrado e incrementa
-    `notas`); a mesma nota relida pela API não conta duas vezes. Nunca
-    levanta: falha aqui não pode derrubar o webhook. Devolve True se a
-    nota foi registrada como nova."""
+    """Upsert do marcador. `quando` (BRT naive) = instante da nota
+    (`created_at` do Chatwoot); default = agora. Só nota MAIS NOVA que a
+    registrada conta (reabre episódio encerrado e incrementa `notas`); a
+    mesma nota relida ou reentregue não conta duas vezes. Nunca levanta.
+    Devolve True (nota nova registrada), False (não é mais nova) ou None
+    (falha de banco — o chamador com o sinal na mão trata como presença)."""
     conv_id = str(conv_id or '').strip()
     if not conv_id:
         return False
@@ -84,7 +94,7 @@ def registrar_nota_privada(conv_id, autor=None, *, quando=None):
             return True
     except Exception:  # noqa: BLE001
         logger.exception('presenca_humana: registrar falhou conv=%s', conv_id)
-        return False
+        return None
 
 
 def marcar_aberta(conv_id):
@@ -99,21 +109,32 @@ def marcar_aberta(conv_id):
         logger.exception('presenca_humana: marcar_aberta falhou conv=%s', conv_id)
 
 
-def encerrar(conv_id, motivo=''):
+def encerrar(conv_id, motivo='', *, tolerancia_seg=0):
     """Encerra o episódio humano (conversa resolvida / devolvida ao bot):
     `notas` vira 0 e `nota_em` fica como a última nota conhecida — só nota
-    mais nova reabre. Idempotente; nunca levanta. True se havia episódio
-    aberto."""
+    mais nova reabre. Sem linha, CRIA a linha encerrada com `nota_em` =
+    agora (a releitura da API não reabre pela nota antiga). Com
+    `tolerancia_seg`, nota mais nova que isso NÃO é encerrada (evento de
+    status atrasado). `aberta_em` fica (trilha). Idempotente; nunca
+    levanta. True se havia episódio aberto e foi encerrado."""
     conv_id = str(conv_id or '').strip()
     if not conv_id:
         return False
     try:
         with Session(db.engine) as s:
             row = s.get(PresencaHumanaConversa, conv_id)
-            if row is None or not row.notas:
+            if row is None:
+                s.add(PresencaHumanaConversa(conv_id=conv_id, nota_em=agora(), notas=0))
+                s.commit()
+                return False
+            if not row.notas:
+                return False
+            if (tolerancia_seg and row.nota_em
+                    and row.nota_em >= agora() - timedelta(seconds=tolerancia_seg)):
+                logger.info('presenca_humana: encerrar ignorado conv=%s (%s) — nota '
+                            'mais nova que %ss', conv_id, motivo or '?', tolerancia_seg)
                 return False
             row.notas = 0
-            row.aberta_em = None
             s.commit()
         logger.info('presenca_humana: episodio encerrado conv=%s (%s)',
                     conv_id, motivo or '?')
@@ -124,14 +145,13 @@ def encerrar(conv_id, motivo=''):
 
 
 def estado(conv_id):
-    """(nota_em, episodio_aberto) ou (None, False). Leitura em sessão
-    isolada; erro = (None, False)."""
+    """(nota_em, episodio_aberto) ou (None, False). Leitura na sessão
+    principal (sem escrita); erro = (None, False)."""
     try:
-        with Session(db.engine) as s:
-            row = s.get(PresencaHumanaConversa, str(conv_id))
-            if row is None:
-                return None, False
-            return row.nota_em, bool(row.notas)
+        row = db.session.get(PresencaHumanaConversa, str(conv_id))
+        if row is None:
+            return None, False
+        return row.nota_em, bool(row.notas)
     except Exception:  # noqa: BLE001
         logger.exception('presenca_humana: leitura falhou conv=%s', conv_id)
         return None, False
@@ -142,8 +162,9 @@ def humano_presente(conv_id, *, horas=PRESENCA_HUMANA_HORAS,
     """True se um humano escreveu nota privada nesta conversa nas últimas
     `horas` e o episódio não foi encerrado. Com `consultar_chatwoot=True`,
     relê a API do Chatwoot como rede de segurança: nota MAIS NOVA que a
-    conhecida (ou sem marcador) dentro da janela reabre e persiste. Falha
-    de leitura = False (fail-open para a fala automática: o que barra é o
+    conhecida (ou sem marcador) dentro da janela reabre e persiste; se o
+    banco falhar com a nota na mão, é presença mesmo assim. Falha de
+    LEITURA = False (fail-open para a fala automática: o que barra é o
     SINAL, nunca a ausência de sinal por erro)."""
     if not conv_id:
         return False
@@ -162,5 +183,6 @@ def humano_presente(conv_id, *, horas=PRESENCA_HUMANA_HORAS,
         return False
     if na_api is None:
         return False
-    return registrar_nota_privada(conv_id, na_api.get('autor'),
-                                  quando=na_api.get('quando'))
+    res = registrar_nota_privada(conv_id, na_api.get('autor'),
+                                 quando=na_api.get('quando'))
+    return True if res is None else res
