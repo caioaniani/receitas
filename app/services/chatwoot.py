@@ -480,9 +480,12 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
         nota = nota_privada_humana_em(msgs, horas=presenca_humana.PRESENCA_HUMANA_HORAS)
         if nota:
             # Nota ja conhecida e episodio encerrado ("Devolvida pro bot",
-            # resolvida) NAO reabre: so nota mais nova conta.
-            presenca_humana.registrar_nota_privada(
+            # resolvida) NAO reabre: so nota mais nova conta. Banco falhando
+            # com a nota na mao (None) = presenca — o erro nunca libera.
+            gravou = presenca_humana.registrar_nota_privada(
                 conversation_id, nota.get('autor'), quando=nota.get('quando'))
+            if gravou is None:
+                return []
         if presenca_humana.humano_presente(conversation_id):
             return []
         atual = consultar_conversa(conversation_id)
