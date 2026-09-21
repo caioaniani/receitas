@@ -1579,11 +1579,20 @@ def vigia_vereditos():
             msgs = _json.loads(c.mensagens_json) if c else []
         except (ValueError, TypeError):
             msgs = []
+        # Marcador "equipe em nota privada" (dono 20/09/2026): confere de
+        # fora se o webhook da nota chegou e calou o bot.
+        from app.models import PresencaHumanaConversa
+        pres = PresencaHumanaConversa.query.get(conversa)
         out['conversa'] = {
             'conv_id': conversa,
             'existe_no_store': c is not None,
             'ultima_msg_em': (c.ultima_msg_em.isoformat()
                               if c and c.ultima_msg_em else None),
+            'presenca_humana': ({
+                'nota_em': pres.nota_em.isoformat() if pres.nota_em else None,
+                'autor': pres.autor, 'notas': pres.notas,
+                'aberta_em': pres.aberta_em.isoformat() if pres.aberta_em else None,
+            } if pres is not None else None),
             'mensagens': msgs,
         }
     return jsonify(out)
