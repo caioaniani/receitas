@@ -251,16 +251,39 @@ def _mensagem_humana(m):
                      or (not _automatica(m) and atributos.get('external_echo'))))
 
 
-def nota_privada_humana_recente(conversation_id, horas=12):
-    """Rede de segurança da regra "nota privada cala o bot"
-    (`presenca_humana`): lê a última página de mensagens da conversa e
-    devolve {'quando': datetime BRT naive, 'autor': str} da nota privada
-    HUMANA mais recente dentro de `horas`, ou None. Leitura com o token de
-    USUÁRIO (o de bot não lista). Erro = None (quem chama trata como "sem
-    sinal")."""
+def nota_privada_humana_em(msgs, horas=12):
+    """Da listagem CRUA de mensagens (formato da API /messages), a nota
+    privada HUMANA mais recente dentro de `horas`: {'quando': datetime BRT
+    naive, 'autor': str} ou None. Função pura — usada pela rede de
+    segurança da contenção e pelo gate `somente_bot` de `buscar_historico`
+    (follow-up/vassoura), que já tem a listagem na mão."""
     from datetime import UTC, datetime, timedelta
 
     from app.utils import BRT, agora
+    if not isinstance(msgs, list):
+        return None
+    corte = agora() - timedelta(hours=horas)
+    melhor = None
+    for m in msgs:
+        if not isinstance(m, dict) or not m.get('private') or not remetente_humano(m):
+            continue
+        try:
+            quando = (datetime.fromtimestamp(float(m.get('created_at')), UTC)
+                      .astimezone(BRT).replace(tzinfo=None))
+        except (TypeError, ValueError, OverflowError, OSError):
+            continue
+        if quando >= corte and (melhor is None or quando > melhor['quando']):
+            melhor = {'quando': quando,
+                      'autor': ((m.get('sender') or {}).get('name') or '')[:120]}
+    return melhor
+
+
+def nota_privada_humana_recente(conversation_id, horas=12):
+    """Rede de segurança da regra "nota privada cala o bot"
+    (`presenca_humana`): lê a última página de mensagens da conversa e
+    devolve a nota privada HUMANA mais recente dentro de `horas`
+    (`nota_privada_humana_em`), ou None. Leitura com o token de USUÁRIO (o
+    de bot não lista). Erro = None (quem chama trata como "sem sinal")."""
     if disponivel():
         headers = _headers()
     elif bot_disponivel():
@@ -279,22 +302,7 @@ def nota_privada_humana_recente(conversation_id, horas=12):
         logger.exception('chatwoot nota_privada_humana_recente falhou')
         return None
     msgs = data.get('payload') if isinstance(data, dict) else data
-    if not isinstance(msgs, list):
-        return None
-    corte = agora() - timedelta(hours=horas)
-    melhor = None
-    for m in msgs:
-        if not isinstance(m, dict) or not m.get('private') or not remetente_humano(m):
-            continue
-        try:
-            quando = (datetime.fromtimestamp(float(m.get('created_at')), UTC)
-                      .astimezone(BRT).replace(tzinfo=None))
-        except (TypeError, ValueError, OverflowError, OSError):
-            continue
-        if quando >= corte and (melhor is None or quando > melhor['quando']):
-            melhor = {'quando': quando,
-                      'autor': ((m.get('sender') or {}).get('name') or '')[:120]}
-    return melhor
+    return nota_privada_humana_em(msgs, horas=horas)
 
 
 def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
