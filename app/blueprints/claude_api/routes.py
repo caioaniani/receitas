@@ -1583,6 +1583,7 @@ def vigia_vereditos():
         # fora se o webhook da nota chegou e calou o bot.
         from app.extensions import db as _db
         from app.models import PresencaHumanaConversa
+        from app.services import presenca_humana
         pres = _db.session.get(PresencaHumanaConversa, conversa)
         out['conversa'] = {
             'conv_id': conversa,
@@ -1591,7 +1592,13 @@ def vigia_vereditos():
                               if c and c.ultima_msg_em else None),
             'presenca_humana': ({
                 'nota_em': pres.nota_em.isoformat() if pres.nota_em else None,
-                'autor': pres.autor, 'notas': pres.notas,
+                'autor': pres.autor,
+                # `notas` = notas DESTE episodio; 0 = episodio encerrado
+                # (resolvida / devolvida ao bot) — `nota_em` fica como a
+                # ultima nota conhecida.
+                'notas': pres.notas,
+                'episodio_aberto': bool(pres.notas),
+                'humano_presente': presenca_humana.humano_presente(conversa),
                 'aberta_em': pres.aberta_em.isoformat() if pres.aberta_em else None,
             } if pres is not None else None),
             'mensagens': msgs,
