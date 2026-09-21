@@ -1581,8 +1581,9 @@ def vigia_vereditos():
             msgs = []
         # Marcador "equipe em nota privada" (dono 20/09/2026): confere de
         # fora se o webhook da nota chegou e calou o bot.
+        from app.extensions import db as _db
         from app.models import PresencaHumanaConversa
-        pres = PresencaHumanaConversa.query.get(conversa)
+        pres = _db.session.get(PresencaHumanaConversa, conversa)
         out['conversa'] = {
             'conv_id': conversa,
             'existe_no_store': c is not None,
