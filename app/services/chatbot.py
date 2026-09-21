@@ -2282,6 +2282,9 @@ def varrer_pendentes_sem_resposta():
                                          contato_key=telefone or None)
             if acao in ('handoff', 'handoff_repetido'):
                 chatwoot.definir_status(conv_id, 'open')
+                if acao == 'handoff':
+                    from app.services import entrega_candidata
+                    entrega_candidata.anotar_handoff(conv_id, resultado, historico)
             elif acao == 'encerrar':
                 chatwoot.definir_status(conv_id, 'resolved')
             logger.warning('vassoura: conv=%s recuperada apos %smin sem '
