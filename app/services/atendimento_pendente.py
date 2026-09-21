@@ -33,6 +33,10 @@ def candidatos():
             row.estado = 'resolvido'
             row.resolvido_em = agora()
             row.proximo_aviso_em = None
+            # Conversa resolvida por humano: episodio "equipe em nota
+            # privada" encerrado (sinal alternativo ao evento do webhook).
+            from app.services import presenca_humana
+            presenca_humana.encerrar(row.conversa_id, 'candidatos:resolved')
         elif atual.get('status') in ('open', 'pending', 'snoozed'):
             if row.estado == 'respondido':
                 row.estado = 'em_atendimento'
