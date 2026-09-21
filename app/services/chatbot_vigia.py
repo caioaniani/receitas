@@ -1201,12 +1201,22 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
         # do Spotify: env nova só chega ao app.config se declarada no
         # config.py; kill-switch de vigia lê os.environ como os demais).
         import os as _os
+
         # `not bot_no_turno`: em conversa pending o BOT esta respondendo —
         # o gateway ja recusaria (status_esperado='open'), mas nem vale a
         # consulta HTTP.
+        # Equipe em NOTA PRIVADA (dono 20/09/2026, caso conv 2409: nota
+        # "@Painel" as 19:06 e a contencao saindo ao entregador as 19:20):
+        # nenhuma fala automatica ao contato. `consultar_chatwoot=True` =
+        # rede de seguranca (1 GET) caso o webhook da nota nao tenha
+        # chegado. A COBRANCA ao dono segue ate resolver — so o texto ao
+        # contato e barrado.
+        from app.services import presenca_humana
         if (espera.estado == 'aguardando' and not espera.contencao_em
                 and not bot_no_turno
-                and _os.environ.get('ESPERA_HUMANO_CONTENCAO', '1') != '0'):
+                and _os.environ.get('ESPERA_HUMANO_CONTENCAO', '1') != '0'
+                and not presenca_humana.humano_presente(
+                    conv_id, consultar_chatwoot=True)):
             # Anti-duplicidade em DUAS camadas (contato duplicado):
             # (a) o texto ja esta NESTA conversa (re-alerta pos-12h nao
             # re-manda o mesmo aviso pro cliente); (b) o MESMO CONTATO ja
