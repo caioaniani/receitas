@@ -331,8 +331,19 @@ def _registrar_nota_privada(payload):
         # caso o Chatwoot a atribua a um usuario humano.
         return jsonify({'ok': True, 'ignorado': 'nota-nao-humana'})
     autor = ((payload.get('sender') or {}).get('name') or '')
-    presenca_humana.registrar_nota_privada(conv_id, autor)
     status = (conv.get('status') or '')
+    if status == 'resolved':
+        # Nota em conversa RESOLVIDA e registro ("resolver e anotar"), nao
+        # presenca: reabrir o episodio aqui prendia a proxima mensagem do
+        # cliente por 6h (revisao 21/09, 2a rodada).
+        logger.info('crm/bot: nota privada em conversa resolvida conv=%s — nao conta',
+                    conv_id)
+        return jsonify({'ok': True, 'ignorado': 'nota-em-resolvida'})
+    # Instante da NOTA (created_at do Chatwoot), nao o nosso relogio: e a
+    # mesma fonte da listagem (releitura nao reabre) e a reentrega do
+    # webhook nao vira nota nova.
+    quando = chatwoot.epoch_para_brt(payload.get('created_at'))
+    presenca_humana.registrar_nota_privada(conv_id, autor, quando=quando)
     logger.info('crm/bot: nota privada humana conv=%s autor=%s status=%s — '
                 'bot em silencio', conv_id, autor or '?', status or '?')
     aberta = status == 'pending'
