@@ -159,8 +159,47 @@ def test_nota_de_handoff_traz_motivo_ferramentas_e_candidata(app):
     assert nota.startswith(ec.PREFIXO_NOTA_BOT)
     assert 'motivo: entregador da Lalamove' in nota
     assert 'Ferramentas: consultar_pedido' in nota
-    assert 'Entrega candidata pela rua citada: B276C19B — Rua Serra da Bocaina, 547 — Quarta Parada' in nota
+    assert ('Entrega candidata pela rua citada (conferir antes de agir): '
+            'B276C19B — Rua Serra da Bocaina, 547 — Quarta Parada') in nota
     assert 'p/ Matheus' in nota and 'uso interno' in nota
+
+
+# ── 2b. Revisão 21/09: logradouro de um token, falas antigas, divulgação ──
+
+def test_logradouro_de_um_token_so_casa_com_tipo_de_via_na_fala(app):
+    """'Rua Nova' × 'quero uma nova cesta' e 'Rua Pinheiros' × 'moro em
+    Pinheiros' eram falsos positivos; 'rua augusta' casa 'Rua Augusta'."""
+    from app.services import entrega_candidata as ec
+    with app.app_context():
+        _pedido('NOVA0001', rua='Rua Nova', bairro='Centro')
+        _pedido('AUGUS001', rua='Rua Augusta', bairro='Consolação')
+        assert ec.candidatas_por_rua(_hist('quero uma nova cesta pra amanhã')) == []
+        assert ec.candidatas_por_rua(_hist('estou na augusta')) == []
+        assert [c['codigo'] for c in ec.candidatas_por_rua(
+            _hist('to na rua augusta 100, ninguém atende'))] == ['AUGUS001']
+        assert [c['codigo'] for c in ec.candidatas_por_rua(
+            _hist('entrega na R. Nova, 10'))] == ['NOVA0001']
+
+
+def test_so_as_ultimas_falas_do_contato_entram(app):
+    from app.services import entrega_candidata as ec
+    with app.app_context():
+        _pedido('B276C19B')
+        antigas = ['pode deixar na portaria?', 'Rua Serra da Bocaina']
+        recentes = [f'mensagem {i}' for i in range(ec._ULTIMAS_FALAS)]
+        hist = _hist(*antigas, *recentes)
+        assert ec.candidatas_por_rua(hist) == []
+        assert not ec.terceiro_na_conversa(hist)
+        # dentro da janela, conta
+        assert ec.terceiro_na_conversa(_hist(*antigas, *recentes[:-2]))
+
+
+def test_divulgacao_entra_no_match(app):
+    from app.services import entrega_candidata as ec
+    with app.app_context():
+        _pedido('DIVULG01', status='divulgacao')
+        assert [c['codigo'] for c in ec.candidatas_por_rua(
+            _hist('rua serra da bocaina'))] == ['DIVULG01']
 
 
 def test_nota_sem_terceiro_nao_procura_rua(app):
