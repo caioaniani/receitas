@@ -664,7 +664,8 @@ def bot_webhook():
                         conv_id, historico, resultado.get('texto') or '',
                         handoff=(resultado['acao'] == 'handoff'),
                         contato_key=telefone_contato)
-                    if resultado['acao'] in ('handoff', 'handoff_repetido'):
+                    if resultado['acao'] in ('handoff', 'handoff_repetido',
+                                             'silencio_humano'):
                         res_status = chatwoot.definir_status(conv_id, 'open')
                         if res_status.get('ok'):
                             logger.info('crm bot handoff conv=%s motivo=%s',
