@@ -77,10 +77,21 @@ def _texto_do_contato(historico):
     from app.services.chatbot import texto_da_mensagem
     falas = [texto_da_mensagem(m) for m in (historico or [])
              if m.get('role') == 'user' and not m.get('herdada')]
-    return ' ' + normalizar_busca(' '.join(f for f in falas if f)) + ' '
+    falas = [f for f in falas if f][-_ULTIMAS_FALAS:]
+    return ' ' + normalizar_busca(' '.join(falas)) + ' '
 
 
 def _todos_presentes(tokens, texto_norm):
+    """Todos os tokens do logradouro do PEDIDO como palavras inteiras na
+    fala. Logradouro de UM token só casa precedido de tipo de via na fala
+    ("rua augusta", "av paulista"): "Rua Nova" × "quero uma nova cesta" e
+    "Rua Pinheiros" × "moro em Pinheiros" eram falsos positivos (revisão
+    21/09/2026)."""
+    if not tokens:
+        return False
+    if len(tokens) == 1:
+        return bool(re.search(_VIA_ANTES + re.escape(tokens[0]) + r'(?![a-z0-9])',
+                              texto_norm))
     return all(re.search(r'(?<![a-z0-9])' + re.escape(t) + r'(?![a-z0-9])',
                          texto_norm) for t in tokens)
 
