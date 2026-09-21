@@ -72,6 +72,19 @@
             <div class="card-header py-2"><strong>Nota Fiscal consolidada (Tiny)</strong></div>
             <div class="card-body small">
                 {% if nf_erro %}<div class="alert alert-danger" role="alert">{{ nf_erro }}</div>{% endif %}
+                {% if fatura.tiny_nota_fiscal_id or fatura.nf_numero %}
+                    <form method="POST" action="{{ url_for('b2b.fatura_sincronizar_nf', fid=fatura.id) }}" class="mb-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            {{ 'Atualizar situação do Tiny' if fatura.tiny_nota_fiscal_id else 'Localizar NF existente no Tiny' }}
+                        </button>
+                    </form>
+                    {% if not fatura.tiny_nota_fiscal_id %}
+                    <p class="text-muted">Localize a NF nº <strong>{{ fatura.nf_numero }}</strong>
+                        já cadastrada no Tiny para atualizar esta fatura.</p>
+                    {% endif %}
+                {% endif %}
                 {% if fatura.nf_emitida_em %}
                     <div>NF: <code>{{ fatura.tiny_nota_fiscal_id }}</code>
                         {% if fatura.nf_numero %} · nº <strong>{{ fatura.nf_numero }}</strong>{% endif %}</div>
@@ -93,12 +106,6 @@
                         para consultar a mesma nota. Só use <strong>Refazer do zero</strong>
                         se ela continuar <em>rejeitada</em> no Tiny.
                     </div>
-                    <form method="POST" action="{{ url_for('b2b.fatura_sincronizar_nf', fid=fatura.id) }}" class="mb-2">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-outline-primary w-100">
-                            <i class="bi bi-arrow-clockwise"></i> Atualizar situação do Tiny
-                        </button>
-                    </form>
                     {% if current_user.pode_emitir_nf_b2b() %}
                     <form method="POST" action="{{ url_for('b2b.fatura_emitir_nf', fid=fatura.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -119,6 +126,9 @@
                     {% else %}
                     <p class="text-muted small mb-0">Peça ao dono a permissão para emitir NF B2B.</p>
                     {% endif %}
+                {% elif fatura.nf_numero and nf_erro %}
+                    <p class="text-muted mb-0">A tentativa anterior não foi concluída aqui.
+                        Use <strong>Localizar NF existente no Tiny</strong> para conferir a nota.</p>
                 {% elif fatura.status == 'fechada' %}
                     {% if current_user.pode_emitir_nf_b2b() %}
                     <form method="POST" action="{{ url_for('b2b.fatura_emitir_nf', fid=fatura.id) }}"

@@ -84,6 +84,48 @@ def disponivel():
     return bool((current_app.config.get('TINY_API_TOKEN') or '').strip())
 
 
+def pesquisar_notas_fiscais(numero, documento):
+    """Pesquisa somente leitura por número e destinatário, com paginação completa.
+
+    Contrato: https://tiny.com.br/api-docs/api2-notas-fiscais-pesquisar
+    O chamador ainda deve conferir o detalhe antes de vincular uma nota.
+    """
+    numero = str(numero or '').strip().replace('.', '')
+    documento = _so_digitos(documento)
+    if not numero.isdigit() or not int(numero) or len(documento) not in (11, 14):
+        raise ValueError('Informe o número da NF e um CPF/CNPJ válido para localizar a nota no Tiny.')
+    notas = {}
+    pagina = 1
+    paginas_esperadas = None
+    while True:
+        retorno = _get('notas.fiscais.pesquisa.php', {
+            'tipoNota': 'S', 'numero': str(int(numero)),
+            'cpf_cnpj': documento, 'pagina': pagina,
+        }, retornar_erro=True)
+        if not retorno or str(retorno.get('status', '')).lower() != 'ok':
+            raise ValueError('Não foi possível pesquisar a NF existente no Tiny. '
+                             + (_extrair_erros(retorno) or 'Tente novamente em instantes.'))
+        for item in retorno.get('notas_fiscais') or []:
+            nota = item.get('nota_fiscal') or {}
+            if nota.get('id'):
+                notas[str(nota['id'])] = nota
+        try:
+            paginas = int(retorno['numero_paginas'])
+            if int(retorno['pagina']) != pagina or paginas < pagina:
+                raise ValueError
+            if paginas_esperadas is not None and paginas != paginas_esperadas:
+                raise ValueError
+        except (KeyError, ValueError, TypeError):
+            raise ValueError('O Tiny não confirmou todas as páginas da pesquisa de NF.') from None
+        paginas_esperadas = paginas
+        if pagina >= paginas:
+            break
+        if pagina >= 3:
+            raise ValueError('A pesquisa retornou muitas notas. Confira o número da NF no cadastro.')
+        pagina += 1
+    return list(notas.values())
+
+
 _TIMEOUT = 12
 _RETRY_BACKOFF = (1.0, 2.0)   # delays antes da 2a e 3a tentativas
 _HTTP_TRANSIENTES = (408, 429, 500, 502, 503, 504)

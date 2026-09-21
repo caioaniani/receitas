@@ -2,6 +2,8 @@
 import hashlib
 import json
 
+from sqlalchemy import String, and_, cast, exists, or_
+
 from app.extensions import db
 from app.models import AppConfig, FaturaB2B, TentativaNFB2B, VendaB2B
 from app.services.cobrancas_trava import OperacaoEmAndamento, chave_documento, trava
@@ -42,8 +44,8 @@ def sincronizar(doc):
         with trava(chave_documento(doc)):
             db.session.refresh(doc, with_for_update=True)
             if not doc.tiny_nota_fiscal_id:
-                return {'ok': False, 'autorizada': False,
-                        'msg': 'Este documento ainda não tem uma NF vinculada ao Tiny.'}
+                from app.services.cobrancas_nf_recuperacao import recuperar
+                return recuperar(doc)
             situacao = tiny_nf._sincronizar_situacao(doc)
             if not situacao:
                 return {'ok': False, 'autorizada': False,
@@ -59,6 +61,9 @@ def sincronizar(doc):
             return {'ok': True, 'autorizada': False,
                     'msg': 'Consulta realizada: a autorização da NF ainda não foi confirmada no Tiny.'}
     except OperacaoEmAndamento as exc:
+        db.session.rollback()
+        return {'ok': False, 'autorizada': False, 'msg': str(exc)}
+    except ValueError as exc:
         db.session.rollback()
         return {'ok': False, 'autorizada': False, 'msg': str(exc)}
     except Exception:
@@ -77,8 +82,10 @@ def sincronizar_pendentes(limite=5):
     for modelo, tipo in ((VendaB2B, 'venda'), (FaturaB2B, 'fatura')):
         chave = f'b2b_nf_sync_cursor_{tipo}'
         cursor = AppConfig.get_int(chave, 0)
+        tentativa = exists().where(TentativaNFB2B.chave == tipo + ':' + cast(modelo.id, String))
         pendentes = modelo.query.filter(
-            modelo.tiny_nota_fiscal_id.isnot(None), modelo.tiny_nota_fiscal_id != '',
+            or_(and_(modelo.tiny_nota_fiscal_id.isnot(None), modelo.tiny_nota_fiscal_id != ''),
+                and_(modelo.nf_numero.isnot(None), modelo.nf_numero != '', tentativa)),
             modelo.nf_emitida_em.is_(None))
         documentos = pendentes.filter(modelo.id > cursor).order_by(modelo.id).limit(limite).all()
         if not documentos and cursor:

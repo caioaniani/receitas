@@ -453,9 +453,9 @@ def _sincronizar_situacao(pedido):
         logger.info('tiny obter NF %s: situacao desconhecida (sigs=%r, '
                     'campos=%s)', pedido.tiny_nota_fiscal_id, sigs[:120],
                     list(nf.keys())[:20])
-    if autorizada and not pedido.nf_emitida_em:
+    if autorizada:
         pedido.nf_status = 'autorizada'
-        pedido.nf_emitida_em = agora()
+        pedido.nf_emitida_em = pedido.nf_emitida_em or agora()
         if nf.get('numero') and hasattr(pedido, 'nf_numero'):
             pedido.nf_numero = str(nf['numero'])[:50]
         db.session.commit()
@@ -488,25 +488,17 @@ def emitir_nf_generico(alvo, montar_payload, recriar=False, *, inclusao_segura=F
     a situação real, pq o status_processamento do emitir é ambíguo).
     Idempotente: NF já emitida COM SUCESSO (nf_emitida_em setado) não refaz.
 
-    `recriar=True`: descarta a NF rascunho anterior (que a SEFAZ rejeitou) e
-    cria uma nova do zero com o payload atual. Reemitir o MESMO rascunho não
-    corrige dados — o rascunho ruim fica órfão no Tiny (apagável)."""
+    `recriar=True`: cria uma nova NF com o payload atual e só substitui o
+    vínculo anterior depois de receber o ID da nova nota. Se a inclusão
+    falhar, a nota anterior continua disponível para consulta no Tiny."""
     if alvo.nf_emitida_em and alvo.tiny_nota_fiscal_id and not recriar:
         return {'ok': True, 'nota_fiscal_id': alvo.tiny_nota_fiscal_id,
                 'msg': 'NF já emitida.'}
-    if recriar:
-        if hasattr(alvo, 'tiny_pedido_id'):
-            alvo.tiny_pedido_id = None
-        alvo.tiny_nota_fiscal_id = None
-        alvo.nf_status = None
-        alvo.nf_emitida_em = None
-        _set_nf_erro(alvo, None)          # tentativa nova, sem erro velho
-        db.session.commit()
     # ANTES de tentar emitir de novo: se já temos NF, ver se ela já autorizou
     # em background (caso da 011428 — status_processamento='2' enganoso). Isso
     # também é o que o botão "Reenviar / verificar" precisa fazer pra
     # sincronizar sem duplicar.
-    if alvo.tiny_nota_fiscal_id:
+    if alvo.tiny_nota_fiscal_id and not recriar:
         sit = _sincronizar_situacao(alvo)
         if sit and sit['autorizada']:
             return {'ok': True, 'nota_fiscal_id': alvo.tiny_nota_fiscal_id,
@@ -517,8 +509,9 @@ def emitir_nf_generico(alvo, montar_payload, recriar=False, *, inclusao_segura=F
                            f'Use "Refazer do zero" para criar uma nova.'}
     # 1) Cria a NF (rascunho) com natureza + série explícitas, se ainda não
     #    temos uma. Resumível: se já criamos mas a emissão falhou, reusa o id.
-    if not alvo.tiny_nota_fiscal_id:
-        if inclusao_segura and alvo.nf_status == 'inclusao_iniciada':
+    if recriar or not alvo.tiny_nota_fiscal_id:
+        tem_vinculo_anterior = bool(alvo.tiny_nota_fiscal_id)
+        if inclusao_segura and not tem_vinculo_anterior and alvo.nf_status == 'inclusao_iniciada':
             return {'ok': False, 'msg': 'A inclusão anterior da NF ficou sem confirmação. '
                     'Confira a nota no Tiny antes de tentar criar outra; o sistema não repetirá a inclusão.'}
         payload, erro = montar_payload()
@@ -529,18 +522,31 @@ def emitir_nf_generico(alvo, montar_payload, recriar=False, *, inclusao_segura=F
         if inclusao_segura:
             # Persiste ANTES da rede: queda do worker/resposta perdida não
             # permite que o cron crie outro rascunho sem conferir o anterior.
-            alvo.nf_status = 'inclusao_iniciada'
-            db.session.commit()
+            if not tem_vinculo_anterior:
+                alvo.nf_status = 'inclusao_iniciada'
+                db.session.commit()
             incl = tiny.incluir_nota_fiscal(payload, repetir_em_falha=False)
         else:
             incl = tiny.incluir_nota_fiscal(payload)
-        if not incl.get('ok'):
-            if inclusao_segura and not incl.get('incerto'):
+        if not incl.get('ok') or not incl.get('id'):
+            if (inclusao_segura and not tem_vinculo_anterior
+                    and not incl.get('incerto') and not incl.get('ok')):
                 alvo.nf_status = None
-            _set_nf_erro(alvo, incl.get('erro'))
+            erro_inclusao = incl.get('erro') or 'A resposta do Tiny não confirmou o ID da nova nota.'
+            _set_nf_erro(alvo, erro_inclusao)
             db.session.commit()
             return {'ok': False,
-                    'msg': f'Falha ao criar a NF no Tiny: {incl.get("erro")}'}
+                    'msg': f'Falha ao criar a NF no Tiny: {erro_inclusao}'}
+        # Só troca o vínculo após confirmar a nova nota. Até aqui, inclusive
+        # durante exceções/timeout, o ID anterior permanece salvo e consultável.
+        if recriar:
+            if hasattr(alvo, 'tiny_pedido_id'):
+                alvo.tiny_pedido_id = None
+            alvo.nf_status = None
+            alvo.nf_emitida_em = None
+            if hasattr(alvo, 'nf_numero'):
+                alvo.nf_numero = None
+            _set_nf_erro(alvo, None)
         alvo.tiny_nota_fiscal_id = incl['id']
         if inclusao_segura:
             alvo.nf_status = 'rascunho'

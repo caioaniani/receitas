@@ -246,6 +246,26 @@ def test_documento_em_processamento_nao_consulta_tiny(app):
     assert tentativa.estado == 'conferir' and tentativa.erro == erro_anterior
 
 
+def test_consulta_nota_ja_emitida_atualiza_numero_e_preserva_confirmacao(app):
+    doc, tentativa = _pendente()
+    confirmada_em = datetime(2026, 9, 21, 16, 42)
+    doc.nf_emitida_em = confirmada_em
+    db.session.commit()
+    assinatura = tentativa.assinatura
+    with patch('app.services.tiny.obter_nota_fiscal', return_value={
+            'id': '911314754', 'situacao': 6, 'numero': '012693'}), \
+            patch('app.services.tiny.incluir_nota_fiscal') as incluir, \
+            patch('app.services.tiny.emitir_nota_fiscal') as emitir:
+        resultado = cobrancas_nf.sincronizar(doc)
+    assert resultado['ok'] and resultado['autorizada']
+    assert doc.nf_numero == '012693' and doc.nf_status == 'autorizada'
+    assert doc.nf_emitida_em == confirmada_em
+    assert doc.tiny_nota_fiscal_id == '911314754'
+    assert tentativa.assinatura == assinatura and tentativa.erro is None
+    incluir.assert_not_called()
+    emitir.assert_not_called()
+
+
 @pytest.mark.parametrize('situacao', [10, '10'])
 def test_refazer_denegada_numerica_preserva_nota(app, situacao):
     doc, _ = _pendente()
