@@ -186,6 +186,38 @@ def enviar_mensagem(conversation_id, content, *, status_esperado=None):
         return {'ok': False, 'erro': str(exc)}
 
 
+def enviar_nota_privada(conversation_id, content):
+    """Posta uma NOTA PRIVADA (só a equipe vê) na conversa, como o BOT.
+
+    Criada em 21/09/2026 (caso conv 2409): o `motivo` do handoff — o
+    relato do entregador, a entrega candidata pela rua citada — ia só pro
+    log e pro veredito do vigia; o atendente que assumia a conversa não
+    via nada. Token do BOT de propósito: o remetente é o agent bot, então
+    `remetente_humano` é falso e a própria nota NÃO dispara a regra
+    "nota privada da equipe cala o bot" (`presenca_humana`). NUNCA usar
+    esta função para falar com o contato — `private=True` é o contrato.
+    Best-effort: erro = {'ok': False} com log, nunca levanta."""
+    from app.services import instancia as _inst
+    if not _inst.pode_falar_com_o_mundo('chatwoot'):
+        return {'ok': False, 'suprimido_instancia': True,
+                'erro': 'instancia nao canonica — nota suprimida'}
+    if not bot_disponivel():
+        return {'ok': False, 'erro': 'Chatwoot bot nao configurado'}
+    url = f'{_base()}/conversations/{conversation_id}/messages'
+    try:
+        r = requests.post(url, json={'content': content, 'message_type': 'outgoing',
+                                     'private': True},
+                          headers=_bot_headers(), timeout=10)
+        if r.status_code not in (200, 201):
+            logger.warning('chatwoot enviar_nota_privada %s: %s',
+                           r.status_code, (r.text or '')[:200])
+            return {'ok': False, 'erro': f'HTTP {r.status_code}'}
+        return {'ok': True}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('chatwoot enviar_nota_privada falhou')
+        return {'ok': False, 'erro': str(exc)}
+
+
 def definir_status(conversation_id, status, tentativas=3):
     """Muda o status da conversa. 'open' = passa pro humano (sai do bot);
     'pending' = devolve pro bot; 'resolved' = encerra.
