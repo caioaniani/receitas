@@ -308,6 +308,47 @@ def _e_story_mention_instagram(payload, conv):
     return ''
 
 
+def _registrar_nota_privada(payload):
+    """Nota privada de agente HUMANO = a equipe tomou a conversa.
+
+    Regra do dono (20/09/2026, caso conv 2409: nota "@Painel" às 19:06 e a
+    contenção automática saindo ao entregador às 19:20): "o bot não pode
+    falar quando a gente fala no privado com a equipe". Grava o marcador
+    (`presenca_humana`) que cala TODA fala automática ao contato e, se a
+    conversa ainda estava com o bot (pending), passa-a para a fila humana
+    em silêncio — quem escreveu a nota é o dono da conversa agora. Nota do
+    próprio bot / de automação não conta (`chatwoot.remetente_humano`)."""
+    from app.services import chatwoot, presenca_humana
+    conv = payload.get('conversation') or {}
+    conv_id = conv.get('id') or payload.get('conversation_id')
+    if not conv_id:
+        return jsonify({'ok': True, 'ignorado': 'nota-sem-conversa'})
+    if not chatwoot.remetente_humano(payload):
+        return jsonify({'ok': True, 'ignorado': 'nota-nao-humana'})
+    autor = ((payload.get('sender') or {}).get('name') or '')
+    presenca_humana.registrar_nota_privada(conv_id, autor)
+    status = (conv.get('status') or '')
+    logger.info('crm/bot: nota privada humana conv=%s autor=%s status=%s — '
+                'bot em silencio', conv_id, autor or '?', status or '?')
+    aberta = status == 'pending'
+    if aberta:
+        import threading
+
+        app = current_app._get_current_object()
+
+        def _abrir():
+            with app.app_context():
+                res = chatwoot.definir_status(conv_id, 'open')
+                if res.get('ok'):
+                    presenca_humana.marcar_aberta(conv_id)
+                else:
+                    logger.error('crm/bot: nota privada conv=%s — tirar do bot '
+                                 'FALHOU (%s); o bot segue calado pelo marcador',
+                                 conv_id, res.get('erro'))
+        threading.Thread(target=_abrir, daemon=True).start()
+    return jsonify({'ok': True, 'nota_humana': True, 'aberta': aberta})
+
+
 @crm_bp.route('/bot', methods=['POST'])
 def bot_webhook():
     """Webhook do Agent Bot do Chatwoot.
@@ -323,10 +364,13 @@ def bot_webhook():
     payload = request.get_json(silent=True) or {}
     if payload.get('event') != 'message_created':
         return jsonify({'ok': True, 'ignorado': 'evento'})
+    if payload.get('private'):
+        # NOTA PRIVADA (chega como outgoing+private): de agente HUMANO é o
+        # sinal "a equipe está falando desta conversa" — regra do dono
+        # 20/09/2026 (caso conv 2409), ver app/services/presenca_humana.py.
+        return _registrar_nota_privada(payload)
     if payload.get('message_type') not in ('incoming', 0):
         return jsonify({'ok': True, 'ignorado': 'nao-incoming'})
-    if payload.get('private'):
-        return jsonify({'ok': True, 'ignorado': 'nota'})
 
     conv = payload.get('conversation') or {}
 
