@@ -225,12 +225,18 @@ def enviar_nota_privada(conversation_id, content):
             logger.error('chatwoot enviar_nota_privada conv=%s: Chatwoot NAO honrou '
                          'private=true (msg %s) — nota saiu publica; apagando',
                          conversation_id, msg_id)
+            apagada = False
             if msg_id:
                 try:
-                    requests.delete(f'{url}/{msg_id}', headers=_bot_headers(), timeout=10)
+                    rd = requests.delete(f'{url}/{msg_id}', headers=_bot_headers(), timeout=10)
+                    apagada = rd.status_code in (200, 204)
+                    if not apagada:
+                        logger.error('chatwoot enviar_nota_privada: apagar nota publica '
+                                     'msg %s devolveu HTTP %s — nota SEGUE visivel ao contato',
+                                     msg_id, rd.status_code)
                 except Exception:  # noqa: BLE001
                     logger.exception('chatwoot enviar_nota_privada: apagar nota publica falhou')
-            return {'ok': False, 'erro': 'nao_privada'}
+            return {'ok': False, 'erro': 'nao_privada', 'apagada': apagada}
         return {'ok': True}
     except Exception as exc:  # noqa: BLE001
         logger.exception('chatwoot enviar_nota_privada falhou')
