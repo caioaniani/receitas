@@ -378,8 +378,10 @@ def bot_webhook():
         status_ev = (payload.get('status') or conv_ev.get('status') or '')
         conv_id_ev = conv_ev.get('id') or payload.get('conversation_id') or payload.get('id')
         logger.info('crm/bot evento=%s conv=%s status=%s', evento, conv_id_ev, status_ev or '?')
-        if (evento in ('conversation_status_changed', 'conversation_resolved',
-                       'conversation_updated')
+        # `conversation_updated` fica FORA de proposito: dispara por label/
+        # atribuicao com o status do momento, e um `pending` velho chegando
+        # entre a nota e o nosso `_abrir` encerraria o episodio recem-aberto.
+        if (evento in ('conversation_status_changed', 'conversation_resolved')
                 and conv_id_ev and status_ev in ('resolved', 'pending')):
             from app.services import presenca_humana
             presenca_humana.encerrar(conv_id_ev, f'{evento}:{status_ev}')
