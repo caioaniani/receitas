@@ -68,7 +68,12 @@
                 quando o app <em>não sobe</em> (nessa situação o Sentry e todos os vigias internos ficam mudos,
                 porque rodam dentro do próprio app). Alerta no seu WhatsApp. Instalação e configuração:
                 pasta <code>uptime_kuma/</code> no repositório.</li>
-            <li><strong>Bot de atendimento</strong> responde clientes no Chatwoot; auditor manda balanço 5×/dia.</li>
+            <li><strong>Bot de atendimento</strong> responde clientes no Chatwoot; auditor manda balanço 5×/dia.
+                <strong>Nota privada cala o bot</strong>: quando alguém da equipe escreve uma
+                <em>nota privada</em> na conversa, o bot e todas as mensagens automáticas ao cliente
+                (contenção, follow-up) param por 12h e a conversa vai para a fila humana — quem anotou
+                é quem responde. A cobrança de espera no WhatsApp do dono continua até a conversa ser
+                <em>resolvida</em> no Chatwoot.</li>
             <li><strong>Listas de e-mail marketing</strong> (Listmonk): todo dia
                 às 09:00 o sistema atualiza as listas — quem comprou no site,
                 quem se cadastrou no Wi-Fi das lojas — e traz de volta quem
