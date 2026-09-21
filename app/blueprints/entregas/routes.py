@@ -440,6 +440,12 @@ def api_atendimento_status(cid):
     res = cw_svc.definir_status(cid, status)
     if res.get('ok') and status == 'resolved':
         _confirmar_atendimento_painel(cid, status, iniciado_em)
+    if res.get('ok') and status in ('resolved', 'pending'):
+        # Humano resolveu ou devolveu ao bot: encerra o episodio "equipe
+        # em nota privada" (senao o bot ficaria calado e reabriria a
+        # conversa contra o gesto explicito — revisao 21/09/2026).
+        from app.services import presenca_humana
+        presenca_humana.encerrar(cid, f'painel:{status}')
     return jsonify(res), (200 if res.get('ok') else 502)
 
 
