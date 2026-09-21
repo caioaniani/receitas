@@ -2185,18 +2185,21 @@ def varrer_pendentes_sem_resposta():
         minutos = c.get('minutos_paradas', 0)
         if not conv_id or minutos > max_sil:
             continue
+        from app.services import presenca_humana
+        if presenca_humana.humano_presente(conv_id, consultar_chatwoot=True):
+            # Equipe em nota privada (dono 20/09/2026): a vassoura nao
+            # responde pelo bot — garante a fila humana e segue. ANTES do
+            # `buscar_historico(somente_bot=True)`, que devolve [] com a
+            # nota na listagem e pularia este ramo (revisao 21/09/2026:
+            # cliente esperando + webhook da nota perdido ficava no vacuo).
+            chatwoot.definir_status(conv_id, 'open')
+            continue
         api_hist = chatwoot.buscar_historico(
             conv_id, incluir_autoria=True, somente_bot=True)
         if not api_hist:
             continue
         # So quando a ULTIMA mensagem e do CLIENTE (o bot ficou devendo).
         if api_hist[-1].get('role') != 'user':
-            continue
-        from app.services import presenca_humana
-        if presenca_humana.humano_presente(conv_id):
-            # Equipe em nota privada (dono 20/09/2026): a vassoura nao
-            # responde pelo bot — garante a fila humana e segue.
-            chatwoot.definir_status(conv_id, 'open')
             continue
         telefone = telefone_chave(c.get('telefone') or '')
         varridas += 1
