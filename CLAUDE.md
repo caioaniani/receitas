@@ -4561,8 +4561,30 @@ bot não pode falar quando a gente fala no privado com a equipe"**.
   é `message_created` — é assim que se descobre em prod quais eventos o
   Agent Bot recebe (hipótese ainda não provada).
 - **Re-checagem antes de falar** (`_processar`): nota escrita DURANTE a
-  chamada ao modelo (segundos) descarta a resposta (`silencio_humano`);
-  o fallback de exceção (`FALLBACK_TEXTO`) também consulta o marcador.
+  chamada ao modelo (segundos) descarta a resposta (`silencio_humano`) —
+  vale para responder, handoff (que ainda deixa a nota interna) e
+  encerrar (nunca `resolved` por cima da equipe); o fallback de exceção
+  (`FALLBACK_TEXTO`) também consulta o marcador.
+- **2ª rodada da revisão (21/09), fechada por execução**: (1) `encerrar`
+  sem linha CRIA a linha encerrada (`nota_em=agora`) — senão a releitura
+  da API reabria pela nota antiga contra o "Devolvida pro bot" com
+  webhook perdido; (2) nota em conversa RESOLVIDA é registro, não
+  presença (`nota-em-resolvida`) — "resolver e anotar" prendia a próxima
+  mensagem do cliente; (3) evento de status `pending` atrasado que chega
+  DEPOIS de nota com menos de `ENCERRAR_TOLERANCIA_SEG=90` não encerra
+  (o botão do painel, gesto explícito, não tem tolerância); (4) o instante
+  da nota é o `created_at` do Chatwoot (`chatwoot.epoch_para_brt`), não o
+  nosso `agora()` — releitura e reentrega do webhook não viram nota nova;
+  (5) `registrar_nota_privada` devolve None em erro de banco e quem tem a
+  nota na mão trata None como presença (gate `somente_bot`, releitura);
+  (6) `_VIA_ANTES` derivado de `_TIPOS_VIA` com conectivo opcional ("rua
+  da consolação", "av. paulista"); (7) `enviar_nota_privada` confere o
+  HTTP do DELETE e devolve `apagada`; (8) sonda expõe `episodio_aberto` e
+  `humano_presente` calculados. ACEITOS: `Session(db.engine)` só nas
+  escritas (leitura na sessão principal — sem conexão extra no turno);
+  "Devolver ao bot" pela UI do Chatwoot depende de o evento de status
+  chegar ao Agent Bot (hipótese; sem ele vale o teto de 6h e o log INFO
+  de eventos mostra o que chega).
 - **Quem obedece** (todos os caminhos que falam com o contato):
   (1) nota em conversa `pending` → o próprio webhook tira do bot
   (`definir_status open`, em thread, best-effort) e marca `aberta_em`;
