@@ -181,6 +181,23 @@ def test_logradouro_de_um_token_so_casa_com_tipo_de_via_na_fala(app):
             _hist('entrega na R. Nova, 10'))] == ['NOVA0001']
 
 
+def test_conectivo_entre_a_via_e_o_nome(app):
+    """'Rua da Consolação', 'Rua dos Pinheiros', 'Av. Paulista' — o
+    padrão mais comum de SP (revisão 21/09, 2ª rodada)."""
+    from app.services import entrega_candidata as ec
+    with app.app_context():
+        _pedido('CONSOL01', rua='Rua da Consolação', bairro='Consolação')
+        _pedido('PINHE001', rua='Rua dos Pinheiros', bairro='Pinheiros')
+        _pedido('PAULI001', rua='Av. Paulista', bairro='Bela Vista')
+        assert [c['codigo'] for c in ec.candidatas_por_rua(
+            _hist('na rua da consolacao, ninguém atende'))] == ['CONSOL01']
+        assert [c['codigo'] for c in ec.candidatas_por_rua(
+            _hist('rua dos pinheiros 500'))] == ['PINHE001']
+        assert [c['codigo'] for c in ec.candidatas_por_rua(
+            _hist('to na av. paulista'))] == ['PAULI001']
+        assert ec.candidatas_por_rua(_hist('moro em pinheiros, tem entrega?')) == []
+
+
 def test_so_as_ultimas_falas_do_contato_entram(app):
     from app.services import entrega_candidata as ec
     with app.app_context():
