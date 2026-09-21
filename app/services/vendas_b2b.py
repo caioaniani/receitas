@@ -734,6 +734,12 @@ def excluir_venda(venda, user=None):
     from app.models import Orcamento
     for orc in Orcamento.query.filter_by(venda_id=venda.id).all():
         orc.venda_id = None
+    from app.models import AutomacaoCobranca
+    from app.utils import agora
+    for job in AutomacaoCobranca.query.filter_by(tipo='venda', documento_id=venda.id).all():
+        job.estado = 'ignorada'
+        job.erro = 'Origem excluída. Nada será emitido ou enviado.'
+        job.atualizado_em = agora()
     db.session.delete(venda)                # itens/parcelas via cascade
     db.session.commit()
 

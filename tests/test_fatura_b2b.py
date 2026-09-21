@@ -9,6 +9,8 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
+import pytest
+
 from app.extensions import db
 from app.models import (
     ClienteB2B,
@@ -377,3 +379,6 @@ def test_quitar_fatura_com_valor_divergente_avisa_e_rateia(app):
         assert parcelas[1].valor_pago == Decimal('20')         # parcial
         assert parcelas[1].pago_em is None                     # em aberto
         assert fat.status == 'paga'
+
+
+pytestmark = pytest.mark.usefixtures("contato_fiscal_tiny")

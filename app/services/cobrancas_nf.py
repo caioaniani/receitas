@@ -8,6 +8,11 @@ from app.services.cobrancas_trava import OperacaoEmAndamento, chave_documento, t
 from app.utils import agora
 
 
+def ultimo_erro(doc):
+    tentativa = db.session.get(TentativaNFB2B, chave_documento(doc))
+    return tentativa.erro if tentativa and not doc.nf_emitida_em else None
+
+
 def assinatura_documento(doc):
     """Itens, valores e destinatário da NF; não inclui status/datas/e-mail."""
     vendas = sorted(doc.vendas, key=lambda v: v.id) if isinstance(doc, FaturaB2B) else [doc]
@@ -39,6 +44,14 @@ def emitir(doc, montar_payload, usuario_id=None, recriar=False):
                         'msg': 'NF já emitida. Uma nota autorizada não será recriada.'}
             chave = chave_documento(doc)
             tentativa = db.session.get(TentativaNFB2B, chave)
+            if recriar and doc.tiny_nota_fiscal_id:
+                situacao = tiny_nf._sincronizar_situacao(doc)
+                if situacao and situacao['autorizada']:
+                    return {'ok': True, 'nota_fiscal_id': doc.tiny_nota_fiscal_id,
+                            'msg': 'NF já autorizada no Tiny. Nenhuma nova nota foi criada.'}
+                if not situacao or not situacao['rejeitada'] or 'denegad' in situacao['situacao']:
+                    return {'ok': False, 'msg': 'Não foi confirmada uma rejeição que permita refazer. '
+                            'A nota atual foi preservada; confira sua situação no Tiny.'}
             if tentativa and not doc.tiny_nota_fiscal_id and not recriar:
                 return {'ok': False, 'msg': 'A criação anterior da NF não foi confirmada. '
                         'Confira no Tiny antes de refazer: ela pode ter sido criada lá.'}
@@ -47,6 +60,9 @@ def emitir(doc, montar_payload, usuario_id=None, recriar=False):
             if not doc.tiny_nota_fiscal_id or recriar:
                 payload, erro = montar_payload()
                 if erro:
+                    if tentativa:
+                        tentativa.erro = str(erro)[:500]
+                        db.session.commit()
                     return {'ok': False, 'msg': erro}
             if not tentativa:
                 tentativa = TentativaNFB2B(chave=chave)
@@ -54,6 +70,7 @@ def emitir(doc, montar_payload, usuario_id=None, recriar=False):
             tentativa.estado = 'iniciada'
             tentativa.usuario_id = usuario_id
             tentativa.iniciada_em = agora()
+            erro_anterior = tentativa.erro if not recriar else None
             tentativa.erro = None
             if not doc.tiny_nota_fiscal_id or recriar:
                 tentativa.assinatura = assinatura_documento(doc)
@@ -64,6 +81,8 @@ def emitir(doc, montar_payload, usuario_id=None, recriar=False):
                 db.session.rollback()
                 resultado = {'ok': False, 'msg': f'Emissão não confirmada: {exc}. Confira no Tiny antes de tentar novamente.'}
             tentativa = db.session.get(TentativaNFB2B, chave)
+            if erro_anterior and str(resultado.get('msg', '')).startswith('NF rejeitada pela SEFAZ'):
+                resultado['msg'] = erro_anterior
             tentativa.estado = 'concluida' if resultado.get('ok') else 'conferir'
             tentativa.erro = None if resultado.get('ok') else str(resultado.get('msg', 'Falha na emissão'))[:500]
             db.session.commit()

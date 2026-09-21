@@ -71,6 +71,7 @@
         <div class="card" id="nota-fiscal">
             <div class="card-header py-2"><strong>Nota Fiscal consolidada (Tiny)</strong></div>
             <div class="card-body small">
+                {% if nf_erro %}<div class="alert alert-danger" role="alert">{{ nf_erro }}</div>{% endif %}
                 {% if fatura.nf_emitida_em %}
                     <div>NF: <code>{{ fatura.tiny_nota_fiscal_id }}</code>
                         {% if fatura.nf_numero %} · nº <strong>{{ fatura.nf_numero }}</strong>{% endif %}</div>

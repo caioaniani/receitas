@@ -343,6 +343,11 @@ def _site_block(inicio, fim):
         return {'total': 0.0, 'n_pedidos': 0, 'erro': True}
 
 
+def _tiny_block(inicio, fim):
+    from app.services.tiny_pdv_sync import faturamento_periodo_por_loja
+    return {'lojas': faturamento_periodo_por_loja(inicio, fim)}
+
+
 def _api_vendas_impl():
     """Vendas Seru (PDV) + site no intervalo. Default: hoje.
 
@@ -399,6 +404,7 @@ def _api_vendas_impl():
             por_loja_delivery_sem_itens=d['por_loja_delivery_sem_itens'],
             por_loja_detalhe=d['por_loja_detalhe'],
             site=_site_block(inicio, fim),
+            tiny=_tiny_block(inicio, fim),
             consulta_limitada=False,
             pedidos=None,
         )
@@ -547,6 +553,7 @@ def _api_vendas_impl():
             por_loja_sem_itens_n=por_loja_sem_itens_n,
             por_loja_delivery_sem_itens=por_loja_delivery_sem_itens,
             site=site,
+            tiny=_tiny_block(inicio, fim),
             consulta_limitada=consulta_limitada,
             pedidos=pedidos,
         )

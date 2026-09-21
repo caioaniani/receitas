@@ -52,7 +52,21 @@ def _payload_cliente_b2b(cli):
         return None, ('Endereço do cliente incompleto pra NF (SEFAZ exige '
                       'campos separados): falta ' + ', '.join(faltam)
                       + '. Complete no cadastro (Clientes B2B).')
+    fiscal = {}
+    if len(doc) == 14:
+        from app.services import tiny
+        try:
+            contato = tiny.contato_fiscal_por_documento(doc)
+        except ValueError as exc:
+            return None, str(exc)
+        # A API de inclusão documenta IE/código, não um indicador de
+        # contribuinte. Preserve a classificação do cadastro existente.
+        fiscal['ie'] = str(contato.get('ie') or '').strip()
+        if contato.get('codigo'):
+            fiscal['codigo'] = str(contato['codigo'])
     return {
+        **fiscal,
+        'atualizar_cliente': 'N',
         'nome': cli.nome,
         'tipo_pessoa': 'J' if len(doc) == 14 else 'F',
         'cpf_cnpj': doc,

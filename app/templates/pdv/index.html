@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% from "_macros.html" import page_header %}
 
-{% block title %}Vendas — PDV + Site{% endblock %}
+{% block title %}Vendas — Seru + Tiny + Site{% endblock %}
 
 {% block content %}
-{% call page_header('Vendas', 'bi-shop', 'PDV (Seru) + Site') %}
+{% call page_header('Vendas', 'bi-shop', 'PDV (Seru + Tiny) + Site') %}
     <a href="{{ url_for('pdv.itens_vendidos') }}" class="btn btn-sm btn-outline-primary">
         <i class="bi bi-bag-check"></i> Itens vendidos
     </a>
@@ -154,6 +154,11 @@
         var sel = document.getElementById('pdv-filtro-loja');
         var atual = filtroLoja;
         var lojas = Object.keys(d.por_loja || {}).sort();
+        ((d.tiny || {}).lojas || []).forEach(function(l) {
+            if (lojas.indexOf(l.loja) === -1) lojas.push(l.loja);
+        });
+        lojas.sort();
+        if (lojas.indexOf(atual) === -1) filtroLoja = atual = '';
         var html = '<option value="">Todas (' + lojas.length + ')</option>';
         lojas.forEach(function(nome) {
             html += '<option value="' + escapeHtml(nome) + '"' + (nome === atual ? ' selected' : '') + '>' + escapeHtml(nome) + '</option>';
@@ -165,6 +170,7 @@
         if (!ultimoResultado) return;
         var r = ultimoResultado;
         var view = (r.fonte === 'banco' || !r.pedidos) ? viewDoBanco(r) : viewAoVivo(r);
+        incluirTiny(view, r);
         renderResumo(view);
         renderLista(view);
     }
@@ -180,8 +186,8 @@
                 total_pedidos: (det.n_pedidos || 0) + (det.cancelados || 0),
                 cancelados: det.cancelados || 0,
                 total_valor: det.total || 0,
-                por_pagamento: det.por_pagamento || {},
-                por_canal: det.por_canal || {},
+                por_pagamento: Object.assign({}, det.por_pagamento || {}),
+                por_canal: Object.assign({}, det.por_canal || {}),
                 por_loja: {},
                 por_loja_sem_itens: {},
                 fonte: 'banco',
@@ -202,7 +208,7 @@
                 total_valor: Number(r.total_valor) || 0,
                 por_pagamento: Object.assign({}, r.por_pagamento || {}),
                 por_canal: Object.assign({}, r.por_canal || {}),
-                por_loja: r.por_loja || {},
+                por_loja: Object.assign({}, r.por_loja || {}),
                 por_loja_sem_itens: r.por_loja_sem_itens || {},
                 por_loja_delivery_sem_itens: r.por_loja_delivery_sem_itens || {},
                 sem_itens_total: Number(r.sem_itens_total) || 0,
@@ -302,6 +308,23 @@
         return view;
     }
 
+    function incluirTiny(view, r) {
+        var total = 0, n = 0;
+        ((r.tiny || {}).lojas || []).forEach(function(l) {
+            if (filtroLoja && filtroLoja !== l.loja) return;
+            var valor = Number(l.total) || 0;
+            total += valor;
+            n += Number(l.n_pedidos) || 0;
+            view.por_loja[l.loja] = (view.por_loja[l.loja] || 0) + valor;
+        });
+        view.total_valor += total;
+        view.total_pedidos += n;
+        if (n || total) {
+            view.por_canal['PDV Tiny'] = (view.por_canal['PDV Tiny'] || 0) + total;
+            view.tiny_incluido = {total: total, n_pedidos: n};
+        }
+    }
+
     function renderResumo(d) {
         document.getElementById('pdv-resumo').style.display = '';
         var avisos = '';
@@ -319,8 +342,15 @@
                 '<i class="bi bi-globe"></i> Inclui o <strong>site</strong> (loja própria): ' +
                 d.site_incluido.n_pedidos + ' pedido(s), R$ ' + fmt(d.site_incluido.total) +
                 ' — somado ao total, ao ticket e à linha "Site" do canal de venda. ' +
-                'Os quadros <em>forma de pagamento</em> e <em>por loja</em> são só do PDV.' +
+                'O quadro <em>por loja</em> reúne os PDVs; <em>forma de pagamento</em> mostra apenas o Seru.' +
                 '</div>';
+        }
+        if (d.tiny_incluido) {
+            avisos += '<div class="alert alert-light border py-2 small mb-2">Inclui o <strong>PDV do Tiny</strong>: ' +
+                d.tiny_incluido.n_pedidos + ' pedido(s), R$ ' + fmt(d.tiny_incluido.total) +
+                '. Vendas importadas, sem canceladas, somadas ao faturamento, pedidos, ticket e lojas. ' +
+                'Pagamentos e cancelamentos exibidos são apenas do Seru. ' +
+                'A consulta ao vivo detalha pedidos do Seru; consulte o <a href="/pdv/tiny">PDV do Tiny</a> para conferir a importação.</div>';
         }
         // Cobrança SEM produto (teste de impressora etc.) FORA do resumo —
         // decisão do dono 18/07/2026: "contar somente o valor das vendas
@@ -356,6 +386,7 @@
         document.getElementById('pdv-r-cancelados').textContent = d.cancelados;
 
         // Por pagamento
+        document.getElementById('pdv-pagamentos-card').style.display = 'none';
         var pgs = Object.entries(d.por_pagamento || {}).sort(function(a, b) { return b[1] - a[1]; });
         if (pgs.length > 0) {
             document.getElementById('pdv-pagamentos-card').style.display = '';
@@ -431,7 +462,7 @@
             return;
         }
         if (!d.pedidos || d.pedidos.length === 0) {
-            lista.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido neste período.</div>';
+            lista.innerHTML = '<div class="alert alert-info py-2 small">Nenhum pedido do Seru neste período e filtro.</div>';
             return;
         }
         // Ordena por createdAt desc

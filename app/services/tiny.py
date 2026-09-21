@@ -37,6 +37,49 @@ def _consumir_falha():
     return motivo
 
 
+def contato_fiscal_por_documento(documento):
+    """Busca exata, somente leitura. Nunca escolhe por nome ou assume isenção."""
+    documento = _so_digitos(documento)
+    if len(documento) not in (11, 14):
+        raise ValueError('CPF/CNPJ inválido para consultar o cadastro fiscal no Tiny.')
+    contatos = {}
+    pagina = 1
+    while True:
+        retorno = _get('contatos.pesquisa.php', {
+            'pesquisa': '', 'cpf_cnpj': documento, 'situacao': 'Ativo', 'pagina': pagina,
+        }, retornar_erro=True)
+        if not retorno or str(retorno.get('status', '')).lower() not in ('ok', '1'):
+            raise ValueError('Não foi possível consultar o cadastro fiscal no Tiny. '
+                             + (_extrair_erros(retorno) or 'Tente novamente após conferir a conexão.'))
+        for item in retorno.get('contatos') or []:
+            contato = item.get('contato') or {}
+            if _so_digitos(contato.get('cpf_cnpj')) == documento and contato.get('id'):
+                contatos[str(contato['id'])] = contato
+        try:
+            paginas = int(retorno.get('numero_paginas') or 1)
+        except (ValueError, TypeError):
+            raise ValueError('Paginação do cadastro fiscal não confirmada pelo Tiny.')
+        if pagina >= paginas:
+            break
+        if pagina >= 10:
+            raise ValueError('Muitos cadastros no Tiny para este CPF/CNPJ. Confira as duplicidades.')
+        pagina += 1
+    if len(contatos) != 1:
+        raise ValueError('Cadastro fiscal não localizado ou duplicado no Tiny para este CPF/CNPJ. '
+                         'Confira o cadastro antes de criar a nota.')
+    contato_id = next(iter(contatos))
+    retorno = _get('contato.obter.php', {'id': contato_id}, retornar_erro=True)
+    if not retorno or str(retorno.get('status', '')).lower() not in ('ok', '1'):
+        raise ValueError('Não foi possível obter os dados fiscais do cliente no Tiny. '
+                         + (_extrair_erros(retorno) or 'Tente novamente após conferir a conexão.'))
+    contato = retorno.get('contato') or {}
+    if (_so_digitos(contato.get('cpf_cnpj')) != documento
+            or str(contato.get('id')) != contato_id
+            or str(contato.get('situacao', '')).lower() in ('e', 'excluido', 'excluído')):
+        raise ValueError('O cadastro fiscal retornado pelo Tiny não corresponde ao cliente ativo.')
+    return contato
+
+
 def disponivel():
     return bool((current_app.config.get('TINY_API_TOKEN') or '').strip())
 

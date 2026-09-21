@@ -323,3 +323,6 @@ def test_copilot_criar_venda_b2b_com_frete(app, admin_user):
     assert v.frete_valor == Decimal('8.00')
     assert v.valor_total == Decimal('28.00')
     assert res['frete_valor'] == Decimal('8.00')
+
+
+pytestmark = pytest.mark.usefixtures("contato_fiscal_tiny")

@@ -738,6 +738,16 @@ def funcionarios_reenviar_acessos():
 @rh_required
 def novo_funcionario():
     if request.method == 'POST':
+        cargo = None
+        # A escolha explícita usa o cadastro oficial, nunca o valor enviado
+        # pelo navegador. Mantém compatibilidade com integrações legadas.
+        if 'cargo_id' in request.form:
+            cargo_id = request.form.get('cargo_id', '').strip()
+            if not cargo_id.isdigit():
+                abort(400)
+            cargo = db.session.get(Cargo, int(cargo_id))
+            if cargo is None or not cargo.ativo:
+                abort(400)
         # Dados de remuneração só são aceitos do owner. A tela simplificada do
         # Dakson não exibe esses campos e o servidor também ignora uma eventual
         # tentativa de enviá-los manualmente.
@@ -748,8 +758,9 @@ def novo_funcionario():
         func = Funcionario(
             nome=request.form.get('nome', '').strip(),
             cpf=request.form.get('cpf', '').strip(),
-            funcao=request.form.get('funcao', '').strip() or None,
-            salario_base=salario_in,
+            funcao=cargo.nome if cargo else request.form.get('funcao', '').strip() or None,
+            cargo_id=cargo.id if cargo else None,
+            salario_base=cargo.salario_base if cargo else salario_in,
             tem_cargo_confianca=(pode_remuneracao
                                  and 'tem_cargo_confianca' in request.form),
             premiacao=(parse_float_br(
@@ -804,7 +815,8 @@ def novo_funcionario():
         return redirect(url_for('rh.detalhe_funcionario', id=func.id))
 
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
-    return render_template('rh/funcionario_form.html', func=None, lojas=lojas)
+    cargos = Cargo.query.filter_by(ativo=True).order_by(Cargo.nome, Cargo.salario_base).all()
+    return render_template('rh/funcionario_form.html', func=None, lojas=lojas, cargos=cargos)
 
 
 # ── Pré-cadastro por QR (23/07/2026) ──────────────────────────────────────

@@ -22,17 +22,26 @@
                    placeholder="000.000.000-00">
         </div>
         <div class="col-md-3">
-            <label class="form-label fw-bold">Função</label>
-            <input type="text" name="funcao" class="form-control" value="{{ func.funcao if func else '' }}">
+            <label for="cargo-id" class="form-label fw-bold">{{ 'Função e salário' if current_user.is_owner else 'Função' }} *</label>
+            <select id="cargo-id" name="cargo_id" class="form-select" required>
+                <option value="">Selecione a função</option>
+                {% for cargo in cargos %}
+                <option value="{{ cargo.id }}" {% if current_user.is_owner %}data-salario="{{ '%.2f' % cargo.salario_base }}"{% endif %}
+                        {% if func and func.cargo_id == cargo.id %}selected{% endif %}>{{ cargo.nome }}{% if current_user.is_owner %} — R$ {{ '{:,.2f}'.format(cargo.salario_base).replace(',', 'X').replace('.', ',').replace('X', '.') }}{% endif %}</option>
+                {% endfor %}
+            </select>
+            {% if not cargos %}<p class="small text-muted mt-1">Nenhuma função ativa cadastrada.</p>{% endif %}
+            {% if current_user.is_owner %}<a class="small" href="{{ url_for('rh.cargos') }}" target="_blank" rel="noopener">Gerenciar funções e salários</a>{% endif %}
         </div>
     </div>
 
     {% if current_user.is_owner %}
     <div class="row g-3 mt-1">
         <div class="col-md-3">
-            <label class="form-label fw-bold">Salário Base</label>
-            <input type="text" name="salario_base" class="form-control"
-                   value="{{ '%.2f' % func.salario_base if func else '' }}">
+            <label for="salario-base" class="form-label fw-bold">Salário Base</label>
+            <input id="salario-base" type="text" class="form-control" readonly
+                   placeholder="Selecione a função acima" value="">
+            <div class="form-text">Preenchido com o salário cadastrado para a função.</div>
         </div>
         <div class="col-md-3">
             <label class="form-label fw-bold">Cargo de Confiança</label>
@@ -105,8 +114,23 @@
     </div>
 
     <div class="mt-3">
-        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> Salvar</button>
+        <button type="submit" class="btn btn-primary btn-sm" {% if not cargos %}disabled{% endif %}><i class="bi bi-check-lg"></i> Salvar</button>
         <a href="{{ url_for('rh.funcionarios') }}" class="btn btn-outline-secondary btn-sm">Cancelar</a>
     </div>
 </form>
+{% if current_user.is_owner %}
+<script>
+(function () {
+    const cargo = document.getElementById('cargo-id');
+    const salario = document.getElementById('salario-base');
+    function atualizarSalario() {
+        const opcao = cargo.selectedOptions[0];
+        const valor = opcao && opcao.dataset.salario;
+        salario.value = valor ? Number(valor).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}) : '';
+    }
+    cargo.addEventListener('change', atualizarSalario);
+    atualizarSalario();
+})();
+</script>
+{% endif %}
 {% endblock %}

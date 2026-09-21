@@ -7,6 +7,8 @@ endereço estruturado + itens por SKU → nota.fiscal.emitir. Tiny mockado.
 from decimal import Decimal
 from unittest.mock import patch
 
+import pytest
+
 from app.extensions import db
 from app.models import ClienteB2B, Produto, VendaB2B, VendaB2BItem
 
@@ -273,3 +275,6 @@ def test_rota_emitir_nf_owner_emite(app, owner_user):
         v = db.session.get(VendaB2B, vid)
         assert v.tiny_nota_fiscal_id == 'nf-rt'
         assert v.nf_emitida_em is not None
+
+
+pytestmark = pytest.mark.usefixtures("contato_fiscal_tiny")

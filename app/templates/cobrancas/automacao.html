@@ -35,11 +35,12 @@
     <h2 class="h5">Entregas e fechamentos automáticos</h2>
     <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Origem</th><th>Etapa</th><th>Atualização</th><th>Ação</th></tr></thead><tbody>
         {% for j in fila.items %}<tr>
-            <td><a href="{{ url_for('b2b.fatura_detalhe', fid=j.documento_id) if j.tipo == 'fatura' else url_for('b2b.venda_detalhe', vid=j.documento_id) }}">{{ j.referencia }}</a></td>
-            <td>{{ estados.get(j.estado, j.estado) }}{% if j.erro %}<small class="d-block text-danger">{{ j.erro }}</small>{% endif %}
+            {% set origem_existe = (j.tipo, j.documento_id) in origens_existentes %}
+            <td>{% if origem_existe %}<a href="{{ url_for('b2b.fatura_detalhe', fid=j.documento_id) if j.tipo == 'fatura' else url_for('b2b.venda_detalhe', vid=j.documento_id) }}">{{ j.referencia }}</a>{% else %}{{ j.referencia }}{% endif %}</td>
+            <td>{% if not origem_existe %}Origem excluída{% else %}{{ estados.get(j.estado, j.estado) }}{% if j.erro %}<small class="d-block text-danger">{{ j.erro }}</small>{% endif %}{% endif %}
                 {% if j.estado == 'enviado' %}<small class="d-block">Aceito pelo serviço de e-mail; não comprova leitura nem pagamento.</small>{% endif %}
             </td><td>{{ j.atualizado_em.strftime('%d/%m às %H:%M') }}</td>
-            <td>{% if j.estado == 'erro' and current_user.pode_emitir_nf_b2b() %}
+            <td>{% if origem_existe and j.estado == 'erro' and current_user.pode_emitir_nf_b2b() %}
                 <form method="POST" action="{{ url_for('cobrancas.retomar_automacao', id=j.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-outline-primary btn-sm" type="submit">Corrigi os dados · conferir novamente</button></form>
                 {% endif %}

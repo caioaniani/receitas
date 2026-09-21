@@ -54,10 +54,17 @@ def automacao():
         ultimo = None
     atrasado = ultimo is None or (agora() - ultimo).total_seconds() > 300
     fila = AutomacaoCobranca.query.order_by(AutomacaoCobranca.id.desc()).paginate(per_page=30, error_out=False)
+    from app.models import FaturaB2B, VendaB2B
+    origens_existentes = set()
+    for tipo, modelo in (('venda', VendaB2B), ('fatura', FaturaB2B)):
+        ids = [j.documento_id for j in fila.items if j.tipo == tipo]
+        if ids:
+            origens_existentes.update((tipo, id) for (id,) in db.session.query(modelo.id).filter(modelo.id.in_(ids)))
     avisos = AvisoRemessa.query.order_by(AvisoRemessa.id.desc()).limit(40).all()
     return render_template('cobrancas/automacao.html', fila=fila, remessas=remessas_pendentes(),
                            avisos=avisos, estados=ESTADOS, responsaveis=RESPONSAVEIS,
-                           ultimo_ciclo=ultimo, ciclo_atrasado=atrasado)
+                           ultimo_ciclo=ultimo, ciclo_atrasado=atrasado,
+                           origens_existentes=origens_existentes)
 
 
 @cobrancas_bp.route('/automacao/remessa/<int:id>/confirmar', methods=['POST'])
@@ -88,6 +95,12 @@ def retomar_automacao(id):
         abort(409)
     if not current_user.pode_emitir_nf_b2b():
         abort(403)
+    from app.models import FaturaB2B, VendaB2B
+    modelo = FaturaB2B if j.tipo == 'fatura' else VendaB2B
+    if db.session.get(modelo, j.documento_id) is None:
+        _mudar(j, 'ignorada', 'Origem excluída. Nada será emitido ou enviado.')
+        flash('A origem foi excluída. A automação foi encerrada.', 'info')
+        return redirect(url_for('cobrancas.automacao'))
     _mudar(j, 'pendente')
     flash('Conferência solicitada. Documentos já gerados serão reutilizados; e-mails incertos não serão repetidos.', 'success')
     return redirect(url_for('cobrancas.automacao'))

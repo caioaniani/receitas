@@ -19,6 +19,13 @@ import os
 
 import pytest
 
+
+@pytest.fixture
+def contato_fiscal_tiny(monkeypatch):
+    """Cadastro externo para testes de emissão; gateway tem testes próprios."""
+    monkeypatch.setattr('app.services.tiny.contato_fiscal_por_documento',
+                        lambda doc: {'id': 'cliente-teste', 'cpf_cnpj': doc, 'ie': '123456789'})
+
 # ── Isolamento do banco POR PROCESSO de teste ─────────────────────────────
 # Sem DATABASE_URL setado, config.py cai no ~/.padaria/padaria.db FIXO. Dois
 # problemas reais quando isso vale pra todo processo pytest:

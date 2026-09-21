@@ -105,6 +105,7 @@
             <div class="card-header py-2"><strong>Nota Fiscal (Tiny)</strong></div>
             <div class="card-body small">
                 {% set email_cliente = venda.cliente.email if venda.cliente else '' %}
+                {% if nf_erro %}<div class="alert alert-danger" role="alert">{{ nf_erro }}</div>{% endif %}
                 {% if venda.nf_emitida_em %}
                     <div>NF: <code>{{ venda.tiny_nota_fiscal_id }}</code>
                         {% if venda.nf_numero %} · nº <strong>{{ venda.nf_numero }}</strong>{% endif %}</div>

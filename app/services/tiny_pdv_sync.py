@@ -339,6 +339,24 @@ def faturamento_periodo(data_ini, data_fim):
     }
 
 
+def faturamento_periodo_por_loja(inicio, fim):
+    """Vendas importadas, por loja registrada na venda; exclui canceladas."""
+    from sqlalchemy import func
+
+    from app.models import Loja
+
+    rows = (db.session.query(TinyPedidoProcessado.loja_id, Loja.nome,
+                            func.coalesce(func.sum(TinyPedidoProcessado.valor), 0),
+                            func.count(TinyPedidoProcessado.tiny_pedido_id))
+            .outerjoin(Loja, Loja.id == TinyPedidoProcessado.loja_id)
+            .filter(TinyPedidoProcessado.data_pedido >= inicio,
+                    TinyPedidoProcessado.data_pedido <= fim,
+                    TinyPedidoProcessado.cancelado_em.is_(None))
+            .group_by(TinyPedidoProcessado.loja_id, Loja.nome).all())
+    return [{'loja_id': lid, 'loja': nome or f'Tiny — loja {lid or "não identificada"}',
+             'total': float(valor), 'n_pedidos': int(n)} for lid, nome, valor, n in rows]
+
+
 def faturamento_do_dia_por_loja(dia):
     """{loja_id: {'total': float, 'n': int}} de UM dia — o que o cockpit da
     home usa.

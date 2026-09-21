@@ -137,6 +137,9 @@ def processar(job):
     from app.services.sicredi_cnab import gerar_remessa
     modelo = FaturaB2B if job.tipo == 'fatura' else VendaB2B
     doc = db.session.get(modelo, job.documento_id)
+    if doc is None:
+        _mudar(job, 'ignorada', 'Origem excluída. Nada será emitido ou enviado.')
+        return
     _validar(doc, job)
     usuario = db.session.get(Usuario, job.usuario_id) if job.usuario_id else None
     uid = usuario.id if usuario else None  # Fonte pode ser o padeiro, não amplie sua permissão.

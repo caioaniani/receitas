@@ -61,6 +61,42 @@ def _fila(v, usuario):
     return j
 
 
+def test_excluir_venda_encerra_fila_sem_apagar_historico(app, owner_user, provedores):
+    from app.services.vendas_b2b import excluir_venda
+    v = _avulsa()
+    j = _fila(v, owner_user)
+    vid, jid = v.id, j.id
+    excluir_venda(v, user=owner_user)
+    assert db.session.get(AutomacaoCobranca, jid).estado == 'ignorada'
+    corpo = _client(app, owner_user).get('/cobrancas/automacao').get_data(as_text=True)
+    assert f'Venda #{vid}' in corpo and 'Origem excluída' in corpo
+    assert f'href="/b2b/vendas/{vid}"' not in corpo
+    svc.executar()
+    for provedor in provedores:
+        provedor.assert_not_called()
+
+
+@pytest.mark.parametrize('tipo', ['venda', 'fatura'])
+@pytest.mark.parametrize('estado', ['pendente', 'erro'])
+def test_origem_ja_excluida_sem_link_ou_retomada(app, owner_user, provedores, tipo, estado):
+    j = AutomacaoCobranca(chave=f'{tipo}:99999', tipo=tipo, documento_id=99999,
+                         referencia='Origem antiga', estado=estado)
+    db.session.add(j)
+    db.session.commit()
+    c = _client(app, owner_user)
+    corpo = c.get('/cobrancas/automacao').get_data(as_text=True)
+    assert 'Origem excluída' in corpo and 'Na fila de emissão' not in corpo
+    assert 'href="/b2b/' not in corpo.split('Origem antiga')[0].rsplit('<tr>', 1)[-1]
+    assert f'/automacao/{j.id}/retomar' not in corpo
+    if estado == 'erro':
+        assert c.post(f'/cobrancas/automacao/{j.id}/retomar').status_code == 302
+    else:
+        svc.executar()
+    assert j.estado == 'ignorada'
+    for provedor in provedores:
+        provedor.assert_not_called()
+
+
 def test_fluxo_entrega_aguarda_banco_avisa_ambos_e_envia_uma_vez(app, owner_user, provedores):
     nf, emitir, email = provedores
     v = _avulsa()
@@ -400,3 +436,6 @@ def test_migracao_somente_tabelas_novas_idempotente():
             mod.upgrade()
         assert set(sa.inspect(conn).get_table_names()) == {'usuario', 'delegacao_fiscal_b2b', 'tentativa_nf_b2b', 'automacao_cobranca', 'aviso_remessa', 'confirmacao_registro_boleto'}
         assert [c['name'] for c in sa.inspect(conn).get_columns('usuario')] == ['id']
+
+
+pytestmark = pytest.mark.usefixtures("contato_fiscal_tiny")

@@ -582,8 +582,9 @@ def fatura_detalhe(fid):
                        joinedload(FaturaB2B.vendas))
               .get_or_404(fid))
     cobranca = fatura.cobrancas[0] if fatura.cobrancas else None
+    from app.services.cobrancas_nf import ultimo_erro
     return render_template('b2b/fatura_detalhe.html', fatura=fatura,
-                           cobranca=cobranca)
+                           cobranca=cobranca, nf_erro=ultimo_erro(fatura))
 
 
 @b2b_bp.route('/faturas/<int:fid>/cancelar', methods=['POST'])
@@ -1025,8 +1026,9 @@ def venda_detalhe(vid):
     # "Enviar NF + Boleto juntos".
     tem_boleto = any(p.cobranca and p.cobranca[0].nosso_numero
                      for p in venda.parcelas)
+    from app.services.cobrancas_nf import ultimo_erro
     return render_template('b2b/venda_detalhe.html', venda=venda,
-                           tem_boleto=tem_boleto)
+                           tem_boleto=tem_boleto, nf_erro=ultimo_erro(venda))
 
 
 @b2b_bp.route('/vendas/<int:vid>/entrega', methods=['POST'])
