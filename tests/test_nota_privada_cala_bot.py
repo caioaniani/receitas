@@ -635,7 +635,8 @@ def test_enviar_nota_privada_apaga_se_o_chatwoot_nao_honrou_private(app):
         app.config['CHATWOOT_ACCOUNT_ID'] = '1'
         app.config['CHATWOOT_BOT_TOKEN'] = 'bot-tok'
         with patch('app.services.chatwoot.requests.post', return_value=fake), \
-             patch('app.services.chatwoot.requests.delete') as delete, \
+             patch('app.services.chatwoot.requests.delete',
+                   return_value=MagicMock(status_code=200)) as delete, \
              patch('app.services.chatwoot.logger') as log:
             res = chatwoot.enviar_nota_privada(2409, 'x')
     assert res == {'ok': False, 'erro': 'nao_privada'}
