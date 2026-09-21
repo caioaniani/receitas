@@ -705,16 +705,21 @@ def bot_webhook():
                         resultado = dict(
                             resultado, acao='handoff_repetido',
                             texto=chatbot.TEXTO_HANDOFF_REPETIDO)
-                    if (resultado.get('texto')
-                            and resultado.get('acao') != 'silencio_humano'
+                    anotar_mesmo_calado = False
+                    if (resultado.get('acao') in ('responder', 'handoff', 'encerrar')
                             and presenca_humana.humano_presente(conv_id)):
                         # Nota privada escrita DURANTE a chamada ao modelo
                         # (revisao 21/09/2026, classe do caso 2409 em
-                        # escala de segundos): re-checa antes de falar.
+                        # escala de segundos): re-checa antes de falar —
+                        # e antes de RESOLVER por cima da equipe. O handoff
+                        # ainda deixa a nota interna (relato/candidata).
                         logger.info('crm bot: humano anotou durante o turno '
-                                    'conv=%s — resposta descartada', conv_id)
+                                    'conv=%s — %s descartado', conv_id,
+                                    resultado.get('acao'))
+                        anotar_mesmo_calado = resultado.get('acao') == 'handoff'
                         resultado = dict(resultado, acao='silencio_humano', texto='',
-                                         motivo='equipe em nota privada durante o turno')
+                                         motivo=(resultado.get('motivo')
+                                                 or 'equipe em nota privada durante o turno'))
                     if resultado.get('texto'):
                         chatwoot.enviar_mensagem(conv_id, resultado['texto'])
                         texto_enviado = True
