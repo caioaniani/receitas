@@ -36,9 +36,9 @@ def custos():
         preco_loja = r.preco_loja or 0
         preco_site = r.preco_site or 0
 
-        margem_atac = impostos.margem_liquida(preco_atac, custo_unit, carga) or 0
-        margem_loja = impostos.margem_liquida(preco_loja, custo_unit, carga) or 0
-        margem_site = impostos.margem_liquida(preco_site, custo_unit, carga) or 0
+        margem_atac = impostos.margem_liquida(preco_atac, custo_unit, carga)
+        margem_loja = impostos.margem_liquida(preco_loja, custo_unit, carga)
+        margem_site = impostos.margem_liquida(preco_site, custo_unit, carga)
 
         dados.append({
             'nome': r.nome,
@@ -76,12 +76,14 @@ def custos_csv():
         pa = r.preco_venda or 0
         pl = r.preco_loja or 0
         ps = r.preco_site or 0
-        ma = impostos.margem_liquida(pa, custo, carga) or 0
-        ml = impostos.margem_liquida(pl, custo, carga) or 0
-        ms = impostos.margem_liquida(ps, custo, carga) or 0
+        ma = impostos.margem_liquida(pa, custo, carga)
+        ml = impostos.margem_liquida(pl, custo, carga)
+        ms = impostos.margem_liquida(ps, custo, carga)
         writer.writerow([r.categoria or 'Outros', r.nome,
-                         f'{custo:.2f}', f'{pa:.2f}', f'{ma:.1f}',
-                         f'{pl:.2f}', f'{ml:.1f}', f'{ps:.2f}', f'{ms:.1f}'])
+                         'Custo pendente' if custo is None else f'{custo:.2f}',
+                         f'{pa:.2f}', '' if ma is None else f'{ma:.1f}',
+                         f'{pl:.2f}', '' if ml is None else f'{ml:.1f}',
+                         f'{ps:.2f}', '' if ms is None else f'{ms:.1f}'])
 
     return Response(
         output.getvalue(),
@@ -199,7 +201,8 @@ def api_margem_categoria():
         cat = r.categoria or 'Outros'
         cats[cat].append(margem)
     labels = sorted(cats.keys())
-    valores = [round(sum(cats[c]) / len(cats[c]), 1) for c in labels]
+    valores = [None if any(m is None for m in cats[c])
+               else round(sum(cats[c]) / len(cats[c]), 1) for c in labels]
     return {'labels': labels, 'valores': valores}
 
 

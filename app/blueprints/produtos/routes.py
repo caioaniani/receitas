@@ -5,6 +5,7 @@ from app.blueprints.produtos import produtos_bp
 from app.decorators import admin_required, catalogo_required
 from app.extensions import db
 from app.models import MateriaPrima, Produto, ProdutoItem, Receita
+from app.services.custo_opcional import parse_custo_opcional, somar_custos
 from app.services.custos import calcular_custo_produto, calcular_custos_receitas
 from app.utils import fmt_brl, parse_float_br
 
@@ -169,7 +170,7 @@ def detalhe(id):
             custo_kg = info.get('custo_por_kg', 0)
             unidade = info.get('unidade', 'un')
             if unidade in ('g', 'ml'):
-                custo_un = custo_kg / 1000
+                custo_un = None if custo_kg is None else custo_kg / 1000
             else:
                 custo_un = custo_kg
         itens_data.append({
@@ -183,7 +184,8 @@ def detalhe(id):
             'preco_menu': getattr(item, 'preco_menu', None),
         })
 
-    custo_total = sum(i['custo_un'] * i['quantidade'] for i in itens_data)
+    custo_total = somar_custos(None if i['custo_un'] is None else
+                               i['custo_un'] * i['quantidade'] for i in itens_data)
 
     # Galeria de fotos extras do site (26/07/2026) — a capa continua sendo
     # `imagem_dropbox_url`; estas sao as SEGUINTES.
@@ -435,18 +437,18 @@ def salvar_composicao(id):
 def nova_mp():
     """Cria matéria-prima via AJAX (sem sair da página da cesta)."""
     nome = request.form.get('mp_nome', '').strip()
-    custo = request.form.get('mp_custo', '').replace(',', '.').strip()
+    custo = request.form.get('mp_custo', '').strip()
 
-    if not nome or not custo:
-        return jsonify(success=False, error='Preencha nome e custo.')
+    if not nome:
+        return jsonify(success=False, error='Preencha o nome. O custo pode ficar pendente.')
 
     if MateriaPrima.query.filter_by(nome=nome).first():
         return jsonify(success=False, error=f'"{nome}" ja existe no banco de MP.')
 
     try:
-        custo_float = float(custo)
-    except ValueError:
-        return jsonify(success=False, error='Custo invalido.')
+        custo_float = parse_custo_opcional(custo)
+    except ValueError as exc:
+        return jsonify(success=False, error=str(exc))
 
     mp = MateriaPrima(nome=nome, unidade='un', custo_por_kg=custo_float)
     db.session.add(mp)

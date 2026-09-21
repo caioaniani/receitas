@@ -42,7 +42,7 @@
                 <td><span class="badge bg-secondary">{{ f.categoria }}</span></td>
                 <td class="text-center">{% if f.peso_unitario %}{{ f.peso_unitario | int }}g{% else %}-{% endif %}</td>
                 <td class="text-center">{{ f.rendimento }} un</td>
-                <td class="text-end" style="background:#fff8e1;">{{ f.custo_un | brl }}</td>
+                <td class="text-end" style="background:#fff8e1;">{{ f.custo_un | custo_brl }}</td>
                 <td class="text-end">{% if f.preco_atacado > 0 %}{{ f.preco_atacado | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
                 <td class="text-end">{% if f.preco_loja > 0 %}{{ f.preco_loja | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
                 <td class="text-end">{% if f.preco_site > 0 %}{{ f.preco_site | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
@@ -111,7 +111,7 @@
                     {% endif %}
                 </td>
                 <td class="text-end" style="background:#fff8e1;">
-                    {% if c.custo > 0 %}{{ c.custo | brl }}{% else %}<span class="text-muted">-</span>{% endif %}
+                    {{ c.custo | custo_brl }}
                 </td>
                 <td class="text-end">{% if c.preco_atacado > 0 %}{{ c.preco_atacado | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
                 <td class="text-end">{% if c.preco_loja > 0 %}{{ c.preco_loja | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>

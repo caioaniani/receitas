@@ -25,7 +25,7 @@
         <div class="card border-0 shadow-sm text-center">
             <div class="card-body py-2">
                 <div class="small text-muted">Custo Atual</div>
-                <div class="fw-bold fs-5">R$ {{ "%.2f"|format(mp.custo_por_kg) }}/{{ mp.unidade }}</div>
+                <div class="fw-bold fs-5">{{ mp.custo_por_kg | custo_brl }}/{{ mp.unidade }}</div>
             </div>
         </div>
     </div>

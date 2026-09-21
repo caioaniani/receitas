@@ -58,7 +58,7 @@ def gerar_xlsx_precos():
     ws['A1'] = 'Tabela de preços — O Pão Padaria Artesanal'
     ws['A1'].font = Font(bold=True, size=13)
     ws['A2'] = 'Gerada em %s. Custo = referência do custeio atual '\
-               '(ingredientes + embalagem); vazio = sem ficha de custo.' \
+               '(ingredientes + embalagem); vazio = custo pendente ou sem ficha de custo.' \
                % hoje().strftime('%d/%m/%Y')
     ws['A2'].font = Font(italic=True, size=9, color='666666')
 

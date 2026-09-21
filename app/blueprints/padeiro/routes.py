@@ -1187,7 +1187,7 @@ def produzir():
     from flask import jsonify
 
     from app.models import Produto, Receita
-    from app.services.estoque_congelados import entrada_producao
+    from app.services.producao_avulsa import UsarOrdemDoDia, registrar_lote
 
     dados = request.get_json(silent=True) or {}
     itens = dados.get('itens') or []
@@ -1195,6 +1195,7 @@ def produzir():
         return jsonify(ok=False, erro='Nenhum item informado.'), 400
 
     validados = []
+    refs = set()
     for i, it in enumerate(itens, 1):
         ref = (it.get('ref') or '').strip()
         tipo, _, sid = ref.partition(':')
@@ -1206,33 +1207,30 @@ def produzir():
             return jsonify(ok=False, erro=f'Item {i}: item invalido.'), 400
         if qtd <= 0:
             return jsonify(ok=False, erro=f'Item {i}: quantidade deve ser positiva.'), 400
+        if ref in refs:
+            return jsonify(ok=False, erro='Agrupe a quantidade do mesmo produto em uma linha.'), 400
+        refs.add(ref)
         obj = (Receita.query.get(int(sid)) if tipo == 'receita'
                else Produto.query.get(int(sid)))
         if not obj:
             return jsonify(ok=False, erro=f'Item {i}: item nao encontrado.'), 400
         if tipo == 'receita':
-            from app.services.bateladas_paes import farinha_padrao_g
             from app.services.viennoiserie import eh_massa_compartilhada
-            if farinha_padrao_g(obj) or eh_massa_compartilhada(obj):
+            if eh_massa_compartilhada(obj):
                 return jsonify(ok=False, erro=(
                     f'{obj.nome}: registre pela ordem de produção, para manter '
                     'a pesagem por batelada e a baixa correta dos ingredientes.')), 400
         validados.append((tipo, obj, qtd))
 
     try:
-        from app.services.producao import consumir_subreceitas_prontas
-        resumo = []
-        for tipo, obj, qtd in validados:
-            entrada_producao(
-                receita_id=obj.id if tipo == 'receita' else None,
-                produto_id=obj.id if tipo == 'produto' else None,
-                estado=None, quantidade=qtd, usuario_id=current_user.id,
-                referencia='Produção (TV padeiro)')
-            # receita derivada (ex: almond) consome a sub-receita pronta do congelado
-            if tipo == 'receita':
-                consumir_subreceitas_prontas(obj, qtd, current_user.id)
-            resumo.append({'nome': obj.nome, 'qtd': qtd})
-        db.session.commit()
+        resumo = registrar_lote(validados, current_user.id, dados.get('chave_envio'))
+    except UsarOrdemDoDia as exc:
+        db.session.rollback()
+        return jsonify(ok=False, erro=str(exc),
+                       ordem_url=url_for('padeiro.index', data=hoje().isoformat())), 409
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify(ok=False, erro=str(exc)), 400
     except Exception:
         db.session.rollback()
         logger.exception('padeiro.produzir falhou')
@@ -1249,9 +1247,11 @@ def producao_historico():
     from flask import jsonify
 
     from app.models import MovEstoqueProducao
+    from app.services.producao_avulsa import REFERENCIA_EXTRA
     movs = (MovEstoqueProducao.query
             .filter(MovEstoqueProducao.tipo == 'producao',
-                    MovEstoqueProducao.referencia == 'Produção (TV padeiro)')
+                    db.or_(MovEstoqueProducao.referencia == 'Produção (TV padeiro)',
+                           MovEstoqueProducao.referencia.startswith(REFERENCIA_EXTRA)))
             .order_by(MovEstoqueProducao.data.desc())
             .limit(50).all())
     return jsonify(historico=[{

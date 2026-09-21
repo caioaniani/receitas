@@ -30,6 +30,7 @@ from app.models import (
     ReceitaEtapa,
     ReceitaIngrediente,
 )
+from app.services.custo_opcional import parse_custo_opcional
 from app.services.custos import calcular_custos_produtos, calcular_custos_receitas
 from app.utils import (
     SUB_RECEITA_TIPOS,
@@ -1567,18 +1568,18 @@ def excluir(id):
 def nova_mp():
     """Cria matéria-prima via AJAX (sem sair da ficha técnica)."""
     nome = request.form.get('mp_nome', '').strip()
-    custo = request.form.get('mp_custo', '').replace(',', '.').strip()
+    custo = request.form.get('mp_custo', '').strip()
 
-    if not nome or not custo:
-        return jsonify(success=False, error='Preencha nome e custo.')
+    if not nome:
+        return jsonify(success=False, error='Preencha o nome. O custo pode ficar pendente.')
 
     if MateriaPrima.query.filter_by(nome=nome).first():
         return jsonify(success=False, error=f'"{nome}" ja existe no banco de MP.')
 
     try:
-        custo_float = float(custo)
-    except ValueError:
-        return jsonify(success=False, error='Custo invalido.')
+        custo_float = parse_custo_opcional(custo)
+    except ValueError as exc:
+        return jsonify(success=False, error=str(exc))
 
     mp = MateriaPrima(nome=nome, unidade='g', custo_por_kg=custo_float)
     db.session.add(mp)

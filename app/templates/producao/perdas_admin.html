@@ -33,7 +33,7 @@
     <div class="col-auto">
         <div class="card px-3 py-2">
             <span class="small text-muted">Custo estimado</span>
-            <strong class="fs-5 text-danger">R$ {{ '%.2f'|format(total_custo)|replace('.', ',') }}</strong>
+            <strong class="fs-5 text-danger">{{ total_custo | custo_brl }}</strong>
         </div>
     </div>
 </div>
@@ -74,7 +74,7 @@
                 <td>{{ p.motivo }}</td>
                 <td class="text-end">
                     {% if p.sem_custo %}
-                    <span class="text-muted" title="ficha sem custo calculável">—</span>
+                    <span class="text-muted">Custo pendente</span>
                     {% else %}
                     {{ '%.2f'|format(p.custo_total)|replace('.', ',') }}
                     {% endif %}

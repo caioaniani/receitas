@@ -198,7 +198,8 @@ def dashboard():
     # O custo soma pelos MESMOS nomes ativos pra margem ficar coerente.
     receitas = Receita.ativas().all()
 
-    custo_mp_total = sum(custos_map.get(r.nome, 0) for r in receitas)
+    from app.services.custo_opcional import somar_custos
+    custo_mp_total = somar_custos(custos_map.get(r.nome, 0) for r in receitas)
     receita_estimada = sum((r.preco_venda or 0) for r in receitas if r.preco_venda)
 
     # Eager load do cargo evita N+1 — `custo_total()` acessa `self.cargo.salario_base`.
@@ -207,8 +208,8 @@ def dashboard():
                             .filter_by(ativo=True).all())
     custo_mao_obra = sum(f.custo_total() for f in funcionarios_ativos)
 
-    margem_geral = 0
-    if receita_estimada > 0:
+    margem_geral = None if custo_mp_total is None else 0
+    if receita_estimada > 0 and custo_mp_total is not None:
         # Margem LÍQUIDA: desconta os impostos sobre venda (PIS/COFINS/ICMS,
         # app/services/impostos.py) da receita estimada antes do custo.
         from app.services import impostos
@@ -274,7 +275,7 @@ def rentabilidade():
     for r in receitas:
         custo_un = custos_receita.get(r.nome, 0)
         rendimento = calcular_rendimento(r)
-        custo_total = custo_un * rendimento
+        custo_total = custo_un * rendimento if custo_un is not None else None
 
         preco_at = r.preco_venda or 0
         lucro_at = impostos.lucro_liquido(preco_at, custo_un, carga)

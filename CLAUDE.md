@@ -397,6 +397,17 @@ Testes: `tests/test_briefing_dono.py`.
 
 ### Batimentos padronizados (17/09/2026)
 
+- **Produção extra na TV (21/09/2026)**: francês/sourdough fora da ordem de
+  hoje usam ordem manual concluída + snapshot + executor canônico, com a
+  quantidade REAL declarada, sem excedente fictício pendente. Recibo único
+  por usuário/envio na mesma transação impede replay após timeout. Se o pão
+  já está pendente na ordem do cronograma de hoje, encaminhar para ela;
+  massa compartilhada continua no planejamento semanal.
+- **Custo não bloqueia produção (dono, 21/09/2026)**: cadastro operacional
+  de MP pode ficar com custo pendente (`NULL`), distinto de zero informado.
+  Envio, pesagem e baixa dependem do vínculo/quantidades, nunca de preço.
+  Custeio incompleto permanece visível como pendente até completar o custo.
+
 - Sourdough: 25.000 g de farinha **por sabor**; francês: 12.000 g. Não agrupar sabores.
 - Viennoiserie: 25.000 g de farinha **na massa compartilhada** para croissant,
   Danish, pain au chocolat e derivados. Excedente aumenta produtos por necessidade

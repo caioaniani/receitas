@@ -38,7 +38,7 @@
             <tr class="{{ 'table-danger' if abaixo else '' }}">
                 <td class="fw-bold">{{ mp.nome }}</td>
                 <td>{{ mp.unidade }}</td>
-                <td class="text-end">R$ {{ "%.2f"|format(mp.custo_por_kg) }}</td>
+                <td class="text-end">{{ mp.custo_por_kg | custo_brl }}</td>
                 <td class="text-end">{{ "%.1f"|format(estoque) }}</td>
                 <td class="text-end">{{ "%.1f"|format(minimo) if minimo else '—' }}</td>
                 <td class="text-center">

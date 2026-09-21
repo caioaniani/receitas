@@ -199,8 +199,9 @@
             document.getElementById('kpi-margem').textContent = '—';
             return vazio('chart-margem');
         }
-        const media = d.valores.reduce((a, b) => a + b, 0) / d.valores.length;
-        document.getElementById('kpi-margem').textContent = media.toFixed(1) + '%';
+        const pendente = d.valores.some((v) => v === null);
+        const media = pendente ? null : d.valores.reduce((a, b) => a + b, 0) / d.valores.length;
+        document.getElementById('kpi-margem').textContent = pendente ? 'Custo pendente' : media.toFixed(1) + '%';
         new Chart(document.getElementById('chart-margem'), {
             type: 'bar',
             data: {

@@ -120,7 +120,9 @@ def _custo_unitario_mp(mp):
     """Custo unitário da MP NA UNIDADE do cadastro (espelha a semântica de
     `custos._custo_por_grama`): 'un' → custo_por_kg É o custo por unidade;
     'g'/'ml' → custo_por_kg/1000; 'kg' → custo_por_kg."""
-    custo = float(mp.custo_por_kg or 0)
+    if mp.custo_por_kg is None:
+        return None
+    custo = float(mp.custo_por_kg)
     if mp.unidade in ('g', 'ml'):
         return custo / 1000.0
     return custo
@@ -146,20 +148,19 @@ def _payload_itens(pedido):
             continue
         if it.receita_id:
             kind, iid = 'receita', it.receita_id
-            custo = float(receita_custos.get(
-                it.receita.nome if it.receita else it.nome_item, 0) or 0)
+            custo = receita_custos.get(
+                it.receita.nome if it.receita else it.nome_item, 0)
         elif it.produto_id:
             kind, iid = 'produto', it.produto_id
             nome_prod = it.produto.nome if it.produto else it.nome_item
-            custo = float(produto_custos.get(nome_prod, 0) or 0)
-            if custo <= 0 and it.produto is not None:
+            custo = produto_custos.get(nome_prod, 0)
+            if nome_prod not in produto_custos and it.produto is not None:
                 # Produto INATIVO fica fora de calcular_custos_produtos
                 # (filtra ativo=True) mas pedido antigo/reemissão ainda
                 # precisa do valor (achado A3 da revisão) — calcula a
                 # composição dele diretamente.
-                custo = float(custos_svc.calcular_custo_produto(
-                    it.produto, receita_custos, res['mp_info'],
-                    produto_custos) or 0)
+                custo = custos_svc.calcular_custo_produto(
+                    it.produto, receita_custos, res['mp_info'], produto_custos)
         elif it.materia_prima_id:
             kind, iid = 'mp', it.materia_prima_id
             custo = _custo_unitario_mp(it.materia_prima) \
@@ -171,7 +172,7 @@ def _payload_itens(pedido):
         if not sku:
             sem_sku.append(it.nome_item)
             continue
-        if custo <= 0:
+        if custo is None or custo <= 0:
             sem_custo.append(it.nome_item)
             continue
         unitario = Decimal(str(custo)).quantize(Decimal('0.01'),
@@ -244,7 +245,7 @@ def emitir_nf(pedido, user_id=None, recriar=False):
                           + '. Mapeie em Pedidos → SKUs de transferência '
                           '(/pedidos/tiny-skus-transferencia).')
         if sem_custo:
-            return None, ('Itens com CUSTO zerado (a NF de transferência '
+            return None, ('Itens com CUSTO zerado ou pendente (a NF de transferência '
                           'sai pelo custo da ficha): ' + ', '.join(sem_custo)
                           + '. Corrija a ficha técnica/custo do cadastro.')
         if not itens:

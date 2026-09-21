@@ -37,10 +37,10 @@
             <tr>
                 <td class="small text-muted">{{ d.categoria }}</td>
                 <td class="fw-bold">{{ d.nome }}</td>
-                <td class="text-end">R$ {{ "%.2f"|format(d.custo_unit) }}</td>
+                <td class="text-end">{{ d.custo_unit | custo_brl }}</td>
                 <td class="text-end">{{ ("R$ %.2f"|format(d.preco_atac)) if d.preco_atac else '—' }}</td>
                 <td class="text-end">
-                    {% if d.preco_atac %}
+                    {% if d.margem_atac is not none %}
                     <span class="badge {{ 'bg-success' if d.margem_atac >= 40 else 'bg-warning text-dark' if d.margem_atac >= 20 else 'bg-danger' }}">
                         {{ "%.0f"|format(d.margem_atac) }}%
                     </span>
@@ -48,7 +48,7 @@
                 </td>
                 <td class="text-end">{{ ("R$ %.2f"|format(d.preco_loja)) if d.preco_loja else '—' }}</td>
                 <td class="text-end">
-                    {% if d.preco_loja %}
+                    {% if d.margem_loja is not none %}
                     <span class="badge {{ 'bg-success' if d.margem_loja >= 40 else 'bg-warning text-dark' if d.margem_loja >= 20 else 'bg-danger' }}">
                         {{ "%.0f"|format(d.margem_loja) }}%
                     </span>
@@ -56,7 +56,7 @@
                 </td>
                 <td class="text-end">{{ ("R$ %.2f"|format(d.preco_site)) if d.preco_site else '—' }}</td>
                 <td class="text-end">
-                    {% if d.preco_site %}
+                    {% if d.margem_site is not none %}
                     <span class="badge {{ 'bg-success' if d.margem_site >= 40 else 'bg-warning text-dark' if d.margem_site >= 20 else 'bg-danger' }}">
                         {{ "%.0f"|format(d.margem_site) }}%
                     </span>
@@ -74,7 +74,7 @@
 <script>
 (function() {
     var dados = [
-        {% for d in dados[:20] if d.preco_atac %}
+        {% for d in dados[:20] if d.preco_atac and d.custo_unit is not none %}
         {nome: "{{ d.nome[:20] }}", custo: {{ d.custo_unit }}, preco: {{ d.preco_atac }}},
         {% endfor %}
     ];

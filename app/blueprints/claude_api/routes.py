@@ -1399,7 +1399,8 @@ def custos():
 
     receitas = [
         {'id': r.id, 'nome': r.nome,
-         'custo_unitario': round(base['custos'].get(r.nome, 0), 4),
+         'custo_unitario': (round(base['custos'].get(r.nome, 0), 4)
+                            if base['custos'].get(r.nome, 0) is not None else None),
          'arquivada': r.arquivada_em is not None}
         for r in Receita.query.order_by(Receita.nome).all()]
 
@@ -1408,7 +1409,7 @@ def custos():
         produtos.append({
             'id': p.id, 'nome': p.nome, 'ativo': bool(p.ativo),
             'custo': (round(produto_custos[p.nome], 4)
-                      if p.nome in produto_custos else None),
+                      if produto_custos.get(p.nome) is not None else None),
             'custo_direto': p.custo_direto,
             'custo_embalagem': p.custo_embalagem or 0,
             'n_itens': len(p.itens),
@@ -1435,8 +1436,8 @@ def custos():
     for mp in MateriaPrima.query.order_by(MateriaPrima.nome).all():
         if mp.unidade == 'un':
             custo_un = mp.custo_por_kg
-        elif mp.peso_unidade:
-            custo_un = (mp.custo_por_kg or 0) * mp.peso_unidade / 1000.0
+        elif mp.peso_unidade and mp.custo_por_kg is not None:
+            custo_un = mp.custo_por_kg * mp.peso_unidade / 1000.0
         else:
             custo_un = None
         mv = ult_movs.get(mp.id)
@@ -1444,7 +1445,7 @@ def custos():
             'id': mp.id, 'nome': mp.nome, 'unidade': mp.unidade,
             'custo_por_kg': mp.custo_por_kg,
             'peso_unidade': mp.peso_unidade,
-            'custo_unitario': round(custo_un, 4) if custo_un else None,
+            'custo_unitario': round(custo_un, 4) if custo_un is not None else None,
             'fornecedor': mp.fornecedor,
             'arquivada': mp.arquivada_em is not None,
             'ultima_entrada': ({'data': mv.data.isoformat() if mv.data else None,

@@ -280,7 +280,7 @@ def listar(dias=30):
     """Perdas dos últimos `dias` com CUSTO pela ficha (relatório admin).
 
     Custo calculado 1x fora do loop (`calcular_custos_receitas`, chave por
-    NOME — padrão da casa); receita sem custo calculável sai com custo 0 e
+    NOME — padrão da casa); custo pendente permanece None com
     flag `sem_custo`. Retorna {'perdas': [...], 'total_qtd', 'total_custo',
     'dias'}."""
     from datetime import timedelta
@@ -305,8 +305,9 @@ def listar(dias=30):
     total_custo = 0.0
     for p in rows:
         nome = p.receita.nome if p.receita else f'#{p.receita_id}'
-        custo_unit = float(custos_map.get(nome) or 0)
-        custo_total = custo_unit * int(p.quantidade or 0)
+        custo_unit = custos_map.get(nome, 0)
+        custo_total = (custo_unit * int(p.quantidade or 0)
+                       if custo_unit is not None else None)
         perdas.append({
             'id': p.id, 'receita': nome,
             'quantidade': int(p.quantidade or 0),
@@ -320,10 +321,12 @@ def listar(dias=30):
             'quem': p.criado_por.nome if p.criado_por else '—',
             'custo_unit': custo_unit,
             'custo_total': custo_total,
-            'sem_custo': custo_unit <= 0,
+            'sem_custo': custo_unit is None,
+            'custo_pendente': custo_unit is None,
         })
         total_qtd += int(p.quantidade or 0)
-        total_custo += custo_total
+        total_custo = (total_custo + custo_total
+                       if total_custo is not None and custo_total is not None else None)
     return {'perdas': perdas, 'total_qtd': total_qtd,
             'total_custo': total_custo, 'dias': dias,
             # Cap defensivo: com 500+ perdas no período os totais somam só

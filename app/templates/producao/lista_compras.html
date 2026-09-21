@@ -57,7 +57,7 @@
         {% for forn in ordem.fornecedores %}
         <tr class="oc-forn-titulo">
             <td colspan="7"><i class="bi bi-truck"></i> {{ forn.nome }}
-                <span class="text-muted fw-normal small">— compra R$ {{ "%.2f"|format(forn.subtotal_compra) }}</span>
+                <span class="text-muted fw-normal small">— compra {{ forn.subtotal_compra | custo_brl }}</span>
             </td>
         </tr>
         {% for it in forn.itens %}
@@ -70,7 +70,7 @@
                 {% else %}—{% endif %}
             </td>
             <td class="text-end">{{ "%.2f"|format(it.comprar / 1000) }}</td>
-            <td class="text-end">R$ {{ "%.2f"|format(it.custo_compra) }}</td>
+            <td class="text-end">{{ it.custo_compra | custo_brl }}</td>
             <td class="text-center no-print"><input type="checkbox"></td>
         </tr>
         {% endfor %}
@@ -79,7 +79,7 @@
     <tfoot>
         <tr class="fw-bold">
             <td colspan="5" class="text-end">Total a comprar:</td>
-            <td class="text-end">R$ {{ "%.2f"|format(ordem.total_compra) }}</td>
+            <td class="text-end">{{ ordem.total_compra | custo_brl }}</td>
             <td class="no-print"></td>
         </tr>
     </tfoot>

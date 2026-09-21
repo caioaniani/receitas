@@ -105,7 +105,8 @@ def detalhe(id):
              for i in plano.itens]
     lista_compras = consolidar_lista_compras(itens)
     lista_ordenada = sorted(lista_compras.items(), key=lambda x: x[0])
-    custo_total = sum(v['custo_estimado'] for v in lista_compras.values())
+    from app.services.custo_opcional import somar_custos
+    custo_total = somar_custos(v['custo_estimado'] for v in lista_compras.values())
 
     # Enriquece cada item com FORNADAS (batidas da amassadeira) e unidades.
     # Receita que nao usa amassadeira (capacidade 0) mostra unidades, sem fornada.

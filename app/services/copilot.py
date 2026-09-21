@@ -3100,7 +3100,8 @@ def _read_consultar_margem(params, user):
     alq = impostos.aliquotas()
     carga = alq['total'] / 100.0
     linhas = [f'**{r.nome}** (receita)']
-    linhas.append(f'- Custo unitário: R$ {custo_un:.4f}')
+    linhas.append('- Custo pendente: informe o preço dos ingredientes para calcular a margem.'
+                  if custo_un is None else f'- Custo unitário: R$ {custo_un:.4f}')
     linhas.append(f'- Rendimento: {rendimento}')
     linhas.append(f'- Impostos sobre venda: {alq["total"]:.2f}% '
                   f'(PIS {alq["pis"]:.2f} + COFINS {alq["cofins"]:.2f} '

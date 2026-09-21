@@ -17,7 +17,7 @@
                     <th style="width:50px">Cód</th>
                     <th style="width:22%">Nome do Ingrediente</th>
                     <th style="width:80px">Unid.</th>
-                    <th style="width:120px">Custo (R$)</th>
+                    <th style="width:120px">Custo (R$) opcional</th>
                     <th style="width:110px" title="Peso de cada unidade em gramas (opcional, so faz sentido se Unid = un)">Peso/un (g)</th>
                     <th style="width:70px" class="text-center" title="Marque se as LOJAS pedem esta MP da indústria — ela entra na tela Pedidos da semana por venda+estoque (ex: pão de queijo congelado)">Loja pede</th>
                     <th style="width:120px" class="text-center" title="Caixa (lote) e piso do pedido de loja — a sugestão arredonda pra caixa e nunca pede menos que o mínimo. Só vale pra MP que a loja pede.">Caixa / Mín</th>
@@ -43,8 +43,8 @@
                     </td>
                     <td>
                         <div class="input-group input-group-sm">
-                            <input type="number" name="custo_por_kg[]" value="{{ '%.2f' % mp.custo_por_kg }}" step="0.01" min="0"
-                                   class="form-control form-control-sm input-blue text-end" required>
+                            <input type="number" name="custo_por_kg[]" placeholder="Pendente" value="{{ '%.2f' % mp.custo_por_kg if mp.custo_por_kg is not none else '' }}" step="0.01" min="0"
+                                   class="form-control form-control-sm input-blue text-end">
                             <span class="input-group-text mp-custo-label" style="font-size:10px;">{{ '/un' if mp.unidade == 'un' else '/kg' }}</span>
                         </div>
                     </td>
@@ -150,8 +150,8 @@
         </td>
         <td>
             <div class="input-group input-group-sm">
-                <input type="number" name="custo_por_kg[]" value="0.00" step="0.01" min="0"
-                       class="form-control form-control-sm input-blue text-end" required>
+                <input type="number" name="custo_por_kg[]" value="" placeholder="Pendente" step="0.01" min="0"
+                       class="form-control form-control-sm input-blue text-end">
                 <span class="input-group-text mp-custo-label" style="font-size:10px;">/kg</span>
             </div>
         </td>

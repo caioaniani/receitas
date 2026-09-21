@@ -1541,6 +1541,7 @@
 
   // ── Painel Produzir: receita (typeahead) + qtd -> entrada no congelado ──
   var prodRows = {}, prodSeq = 0, prodEnviando = false, prodPendentes = [];
+  var prodChave = null, prodConteudo = null;
 
   function toggleProd() {
     var abrindo = !document.getElementById('prod-drawer').classList.contains('aberto');
@@ -1647,6 +1648,10 @@
   function prodEnviar() {
     var msg = document.getElementById('prod-msg');
     var itens = prodColetar();
+    if (document.querySelector('#prod-rows .sem-receita, #prod-rows .sem-qtd')) {
+      if (msg) msg.textContent = 'Confira o produto e a quantidade de todas as linhas preenchidas.';
+      return;
+    }
     if (!itens.length) {
       if (msg) { msg.style.color = ''; msg.textContent =
         'Escolha ao menos um item (toque no resultado) e a quantidade.'; }
@@ -1659,6 +1664,13 @@
     prodPendentes = itens.map(function (it) {
       return { ref: it.ref, quantidade: it.quantidade };
     });
+    var conteudo = JSON.stringify(prodPendentes);
+    if (!prodChave || conteudo !== prodConteudo) {
+      var bytes = new Uint8Array(16);
+      window.crypto.getRandomValues(bytes);
+      prodChave = Array.from(bytes).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+      prodConteudo = conteudo;
+    }
     document.getElementById('prod-confirm').classList.add('aberto');
   }
 
@@ -1706,7 +1718,7 @@
     fetch('/padeiro/produzir', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body: JSON.stringify({ itens: prodPendentes })
+      body: JSON.stringify({ itens: prodPendentes, chave_envio: prodChave })
     })
       // Mantemos o status pra mostrar uma mensagem util quando o servidor
       // responder 500 com HTML (ex: rota lança antes de chegar no
@@ -1732,6 +1744,14 @@
           msg.style.color = '';
           if (d && d.erro) {
             msg.textContent = d.erro;
+            if (d.ordem_url) {
+              var link = document.createElement('a');
+              link.href = d.ordem_url;
+              link.className = 'btn btn-sep';
+              link.textContent = 'Abrir ordem de hoje';
+              msg.appendChild(document.createElement('br'));
+              msg.appendChild(link);
+            }
           } else if (d && d.status === 403) {
             msg.textContent = 'Sem permissão (precisa ser padeiro). '
               + 'Avise o Caio.';
@@ -1757,6 +1777,8 @@
 
   function prodReset() {
     prodRows = {};
+    prodChave = null;
+    prodConteudo = null;
     document.getElementById('prod-rows').innerHTML = '';
     prodAddRow();
   }

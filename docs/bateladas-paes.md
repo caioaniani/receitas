@@ -49,6 +49,15 @@ Produção avulsa desses pães deve usar uma ordem. A lista geral não permite
 baixar ingredientes novamente de uma ordem do cronograma. Planos manuais
 padronizados confirmam produção pelo mesmo serviço de estoque e insumos.
 
+No botão **Produção extra** da TV, um pão que não está pendente na ordem de
+hoje ganha uma ordem manual concluída automaticamente. O padeiro informa a
+quantidade real: 220 unidades creditam 220, mesmo que a ficha estime 237 por
+batelada. A diferença não vira produção futura. O snapshot e o consumo
+proporcional ficam registrados; um recibo por envio impede duplicação na
+repetição após falha de rede. Se houver ordem do dia em aberto para o pão,
+a tela encaminha para registrar nela. Massa compartilhada continua seguindo
+o planejamento semanal, pois exige distribuir o batimento entre derivados.
+
 ## Verificação e retorno
 
 Testes cobrem fórmulas reais, tipos de ingrediente, cálculo semanal, piso,

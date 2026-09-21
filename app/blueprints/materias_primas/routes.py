@@ -7,6 +7,7 @@ from app.blueprints.materias_primas import materias_primas_bp
 from app.decorators import admin_required, catalogo_required
 from app.extensions import db
 from app.models import AlertaEstoque, MateriaPrima, MovimentacaoEstoque, ReceitaIngrediente
+from app.services.custo_opcional import parse_custo_opcional
 from app.ui_v2 import ui_v2_ativo
 from app.utils import SUB_RECEITA_TIPOS
 
@@ -115,12 +116,21 @@ def salvar():
         except ValueError:
             return None
 
+    try:
+        custos_parseados = [parse_custo_opcional(custos[i] if i < len(custos) else '')
+                           for i in range(len(nomes))]
+    except ValueError as exc:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify(success=False, error=str(exc)), 400
+        flash(str(exc), 'danger')
+        return redirect(url_for('materias_primas.banco'))
+
     for i in range(len(nomes)):
         nome = nomes[i].strip()
         if not nome:
             continue
 
-        custo = custos[i].replace(',', '.')
+        custo = custos_parseados[i]
         mp_id = int(ids[i]) if ids[i] else None
 
         if mp_id:
@@ -128,7 +138,7 @@ def salvar():
             if mp:
                 mp.nome = nome
                 mp.unidade = unidades[i]
-                mp.custo_por_kg = float(custo)
+                mp.custo_por_kg = custo
                 mp.peso_unidade = _parse_peso(i, unidades[i])
                 mp.fornecedor = fornecedores[i].strip() or None
                 mp.observacoes = observacoes_list[i].strip() or None
@@ -139,7 +149,7 @@ def salvar():
             mp = MateriaPrima(
                 nome=nome,
                 unidade=unidades[i],
-                custo_por_kg=float(custo),
+                custo_por_kg=custo,
                 peso_unidade=_parse_peso(i, unidades[i]),
                 fornecedor=fornecedores[i].strip() or None,
                 observacoes=observacoes_list[i].strip() or None,
@@ -400,7 +410,7 @@ def estoque_entrada():
     db.session.add(mov)
     mp.estoque_atual = (mp.estoque_atual or 0) + quantidade
 
-    if atualizar_custo and preco_unitario:
+    if atualizar_custo and preco_unitario is not None:
         mp.custo_por_kg = preco_unitario
 
     db.session.commit()

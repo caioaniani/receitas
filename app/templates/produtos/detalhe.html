@@ -173,7 +173,7 @@
                         {% if item.unidade in ('g', 'ml') and item.custo_por_kg %}
                             {{ item.custo_por_kg | brl }}/kg
                         {% else %}
-                            {{ item.custo_un | brl }}
+                            {{ item.custo_un | custo_brl }}
                         {% endif %}
                     </td>
                     <td>
@@ -187,7 +187,7 @@
                         </div>
                     </td>
                     <td class="text-end item-custo-total fw-bold" style="background:#fff8e1; vertical-align:middle; font-size:12px;">
-                        {{ (item.custo_un * item.quantidade) | brl }}
+                        {{ (none if item.custo_un is none else item.custo_un * item.quantidade) | custo_brl }}
                     </td>
                     <td>
                         <input type="number" name="preco_menu[]"
@@ -207,7 +207,7 @@
                 <tr style="background:#e8eaf6;">
                     <td colspan="4" class="text-end fw-bold" style="font-size:12px;">CUSTO TOTAL DA CESTA:</td>
                     <td class="text-end fw-bold" id="custo-total-cesta" style="font-size:14px; color:#1a1a2e;">
-                        {{ custo_total | brl }}
+                        {{ custo_total | custo_brl }}
                     </td>
                     <td></td>
                     <td></td>
@@ -501,7 +501,7 @@
                 </div>
                 <div class="mb-2">
                     <label class="form-label small fw-bold">Custo por Unidade (R$)</label>
-                    <input type="number" id="nova-mp-custo" class="form-control form-control-sm text-end" step="0.01" min="0" placeholder="6.54">
+                    <input type="number" id="nova-mp-custo" aria-label="Custo opcional" class="form-control form-control-sm text-end" step="0.01" min="0" placeholder="Pode preencher depois">
                 </div>
                 <div id="nova-mp-erro" class="text-danger small" style="display:none;"></div>
                 <div id="nova-mp-ok" class="text-success small" style="display:none;"></div>

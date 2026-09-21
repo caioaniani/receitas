@@ -15,7 +15,8 @@ class MateriaPrima(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False, unique=True)
     unidade = db.Column(db.String(10), nullable=False, default='g')
-    custo_por_kg = db.Column(db.Float, nullable=False)
+    # None = custo ainda não informado. Produção/estoque usam quantidades.
+    custo_por_kg = db.Column(db.Float, nullable=True)
     peso_unidade = db.Column(db.Float, nullable=True)
     fornecedor = db.Column(db.String(100))
     observacoes = db.Column(db.String(200))

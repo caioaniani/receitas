@@ -4,7 +4,7 @@
 {% macro custo_cell(valor) -%}
 <td class="text-end align-middle bg-light preco-custo" style="white-space:nowrap"
     data-custo="{{ valor if valor is not none else '' }}">
-  {%- if valor is not none and valor > 0 %}<span class="small text-muted">R$</span> {{ '%.2f'|format(valor)|replace('.', ',') }}{% else %}<span class="text-muted">—</span>{% endif -%}
+  {{- valor | custo_brl -}}
 </td>
 {%- endmacro %}
 <div class="d-flex justify-content-between align-items-center mb-2 sticky-top bg-white py-2"

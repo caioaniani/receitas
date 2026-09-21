@@ -60,14 +60,14 @@ def salvar_aliquotas(pis, cofins, icms):
 
 def lucro_liquido(preco, custo, carga):
     """R$ que sobra por unidade após impostos sobre a venda e o custo.
-    None se não há preço."""
-    if not preco or preco <= 0:
+    None se não há preço ou o custo ainda não foi informado."""
+    if not preco or preco <= 0 or custo is None:
         return None
-    return preco * (1 - carga) - (custo or 0)
+    return preco * (1 - carga) - custo
 
 
 def margem_liquida(preco, custo, carga):
-    """% do preço que sobra após impostos e custo. None se não há preço."""
+    """% do preço que sobra após impostos e custo. None se não há preço ou o custo ainda não foi informado."""
     lucro = lucro_liquido(preco, custo, carga)
     if lucro is None:
         return None

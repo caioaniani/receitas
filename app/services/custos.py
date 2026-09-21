@@ -23,6 +23,7 @@ def calcular_custos_receitas():
         mp_dict:    {nome_mp: custo_por_kg}
         mp_info:    {nome_mp: {custo_por_kg, unidade}}
         circulares: [nomes de receitas com dependência circular]
+        custos_pendentes: [nomes com custo desconhecido; pesos continuam disponíveis]
     """
     receitas = Receita.query.options(
         selectinload(Receita.ingredientes)
@@ -70,16 +71,19 @@ def calcular_custos_receitas():
             if origens:
                 vals = []
                 for o in origens:
-                    c = custos.get(o)
-                    if c is None:
-                        c = custos_norm.get(_norm(o))
-                    if c is None:
+                    if o not in custos and _norm(o) not in custos_norm:
                         break                # origem ainda nao resolvida
+                    c = custos[o] if o in custos else custos_norm[_norm(o)]
                     vals.append((c, pesos.get(o) or pesos_norm.get(_norm(o)) or 0))
                 if len(vals) < len(origens):
                     still_remaining.append(r)
                     continue
-                custo_un, peso_un = max(vals)
+                if any(c is None for c, _peso in vals):
+                    # A origem existe e seu peso é conhecido; falta preço,
+                    # não uma dependência. Não escolher um custo menor conhecido.
+                    custo_un, peso_un = None, max(peso for _custo, peso in vals)
+                else:
+                    custo_un, peso_un = max(vals)
                 custos[r.nome] = custo_un
                 pesos[r.nome] = r.peso_unitario or peso_un
                 fabricados.append(_fabricado_dict(
@@ -118,6 +122,7 @@ def calcular_custos_receitas():
         'mp_dict': mp_dict,
         'mp_info': mp_info,
         'circulares': circulares,
+        'custos_pendentes': [nome for nome, custo in custos.items() if custo is None],
     }
 
 
@@ -141,7 +146,10 @@ def calcular_custo_produto(produto, receita_custos, mp_info, produto_custos=None
             # inflava). Orfao (FK NULL) cai no item_nome, como antes.
             nome = item.nome_resolvido
             if item.tipo == 'receita':
-                custo += receita_custos.get(nome, 0) * item.quantidade
+                custo_componente = receita_custos.get(nome, 0)
+                if custo_componente is None and item.quantidade:
+                    return None
+                custo += (custo_componente or 0) * item.quantidade
             elif item.tipo == 'produto':
                 # Resolve via dict ja calculado (suporta cesta-de-cesta).
                 # Fallback: custo_direto do produto-componente.
@@ -151,10 +159,15 @@ def calcular_custo_produto(produto, receita_custos, mp_info, produto_custos=None
                     custo_componente = 0
                     if item.produto_componente_id and item.produto_componente:
                         custo_componente = item.produto_componente.custo_direto or 0
-                custo += custo_componente * item.quantidade
+                if custo_componente is None and item.quantidade:
+                    return None
+                custo += (custo_componente or 0) * item.quantidade
             else:
                 info = mp_info.get(nome, {})
                 custo_kg = info.get('custo_por_kg', 0)
+                if custo_kg is None and item.quantidade:
+                    return None
+                custo_kg = custo_kg or 0
                 if info.get('unidade') in ('g', 'ml'):
                     custo += (custo_kg / 1000) * item.quantidade
                 else:
@@ -241,7 +254,9 @@ def _custo_por_grama(info):
     """
     if not info:
         return 0
-    custo = info.get('custo_por_kg') or 0
+    custo = info.get('custo_por_kg')
+    if custo is None:
+        return None
     unidade = info.get('unidade')
     if unidade in ('g', 'ml'):
         return custo / 1000
@@ -267,6 +282,7 @@ def _calcular_receita(r, custos, custos_norm, pesos, pesos_norm,
     sem o peso da sub-receita o rendimento dava 0 e o custo virava 0).
     """
     custo_total = 0
+    custo_pendente = False
     sum_pct = 0
     qtd_direto = 0
 
@@ -280,15 +296,17 @@ def _calcular_receita(r, custos, custos_norm, pesos, pesos_norm,
             nome_sub = (id2nome or {}).get(ing.sub_receita_id) \
                 or ing.ingrediente_nome
             # Lookup tolerante: tenta exato, depois normalizado.
-            sub_custo = custos.get(nome_sub)
-            if sub_custo is None:
-                sub_custo = custos_norm.get(_norm(nome_sub))
-            if sub_custo is None:
+            if nome_sub not in custos and _norm(nome_sub) not in custos_norm:
                 return None  # dependência não resolvida ainda
+            sub_custo = (custos[nome_sub] if nome_sub in custos
+                         else custos_norm[_norm(nome_sub)])
             # Unidades da sub por fornada-base: absoluto ('receita') ou % da
             # base ('sub_pct'), via helper único — bate com a compra/baixa.
             und_sub = unidades_subreceita(tipo, ing.porcentagem, r.peso_base)
-            custo_total += sub_custo * und_sub
+            if sub_custo is None:
+                custo_pendente |= bool(und_sub)
+            else:
+                custo_total += sub_custo * und_sub
             # Sub-receita contribui pro peso total (mesma logica do JS na
             # ficha): peso = unidades × peso_unitario_da_sub.
             sub_peso = pesos.get(nome_sub)
@@ -298,7 +316,11 @@ def _calcular_receita(r, custos, custos_norm, pesos, pesos_norm,
         elif tipo == 'mp_direto':
             qtd_g = ing.porcentagem
             info = _get_mp_info(ing.ingrediente_nome)
-            custo_total += qtd_g * _custo_por_grama(info)
+            custo_grama = _custo_por_grama(info)
+            if custo_grama is None:
+                custo_pendente |= bool(qtd_g)
+            else:
+                custo_total += qtd_g * custo_grama
             qtd_direto += qtd_g
         elif tipo == 'mp_un':
             # MP cobrada por unidade (ex: Baton Calebaut). porcentagem =
@@ -306,8 +328,11 @@ def _calcular_receita(r, custos, custos_norm, pesos, pesos_norm,
             # custo_por_kg da MP unitaria armazena o custo POR UNIDADE.
             qtd_un = ing.porcentagem
             info = _get_mp_info(ing.ingrediente_nome)
-            custo_por_un = info.get('custo_por_kg') or 0
-            custo_total += qtd_un * custo_por_un
+            custo_por_un = info.get('custo_por_kg', 0)
+            if custo_por_un is None:
+                custo_pendente |= bool(qtd_un)
+            else:
+                custo_total += qtd_un * custo_por_un
             # Se a MP tem peso_unidade definido, soma ao total de peso pra
             # contar no rendimento. Senao, ignora no peso (ex: corante).
             peso_un = info.get('peso_unidade') or 0
@@ -317,7 +342,11 @@ def _calcular_receita(r, custos, custos_norm, pesos, pesos_norm,
             sum_pct += ing.porcentagem
             qtd_g = r.peso_base * ing.porcentagem / 100
             info = _get_mp_info(ing.ingrediente_nome)
-            custo_total += qtd_g * _custo_por_grama(info)
+            custo_grama = _custo_por_grama(info)
+            if custo_grama is None:
+                custo_pendente |= bool(qtd_g)
+            else:
+                custo_total += qtd_g * custo_grama
 
     total_qtd = r.peso_base * sum_pct / 100 + qtd_direto
     perda = r.perda_percentual or 0
@@ -329,7 +358,8 @@ def _calcular_receita(r, custos, custos_norm, pesos, pesos_norm,
         rendimento = int(r.rendimento_qtd)
 
     embalagem = r.custo_embalagem or 0
-    custo_un = (custo_total / rendimento + embalagem) if rendimento > 0 else 0
+    custo_un = (None if custo_pendente else
+                (custo_total / rendimento + embalagem) if rendimento > 0 else 0)
 
     return custo_un, rendimento
 
@@ -343,6 +373,7 @@ def _fabricado_dict(r, custo_un, rendimento):
         'peso_unitario': r.peso_unitario,
         'rendimento': rendimento,
         'custo_un': custo_un,
+        'custo_pendente': custo_un is None,
         'preco_atacado': r.preco_venda or 0,
         'preco_loja': r.preco_loja or 0,
         'preco_site': r.preco_site or 0,

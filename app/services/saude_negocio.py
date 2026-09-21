@@ -125,6 +125,7 @@ def resumo_receitas(margem_minima=None):
         'margem_critica': margem_critica,
         'margem_minima': margem_minima,
         'circulares': dados.get('circulares') or [],
+        'custos_pendentes': [r.nome for r in receitas if custos.get(r.nome, 0) is None],
     }
 
 
@@ -175,6 +176,9 @@ def montar_digest_saude():
         tem_alerta_rec = True
     if r['sem_preco']:
         linhas.append(f'💸 {len(r["sem_preco"])} sem preco de venda')
+        tem_alerta_rec = True
+    if r.get('custos_pendentes'):
+        linhas.append(f'{len(r["custos_pendentes"])} com custo pendente de ingredientes; margens não calculadas.')
         tem_alerta_rec = True
     if not tem_alerta_rec:
         linhas.append('✅ Catalogo saudavel.')

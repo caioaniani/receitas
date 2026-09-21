@@ -24,7 +24,7 @@
             {% endfor %}
         </select>
     </label>
-    {{ campo_texto(prefixo ~ '-custo', 'custo_por_kg[]', 'Custo de referência (R$)', '%.2f'|format(mp.custo_por_kg or 0) if mp else '0.00', 'number', '0.01') }}
+    {{ campo_texto(prefixo ~ '-custo', 'custo_por_kg[]', 'Custo de referência (R$)', '%.2f'|format(mp.custo_por_kg) if mp and mp.custo_por_kg is not none else '', 'number', '0.01', 'Opcional. Pode preencher depois; não impede a produção.') }}
     {{ campo_texto(prefixo ~ '-peso', 'peso_unidade[]', 'Peso por unidade (g)', mp.peso_unidade or '' if mp else '', 'number', '0.01', 'Use apenas quando a unidade de controle for “un”.') }}
     {{ campo_texto(prefixo ~ '-fornecedor', 'fornecedor[]', 'Fornecedor', mp.fornecedor or '' if mp else '') }}
     {{ campo_texto(prefixo ~ '-lote', 'lote_pedido[]', 'Múltiplo do pedido', mp.lote_pedido or '' if mp else '', 'number', '1') }}
@@ -95,7 +95,7 @@
                         <small>{{ mp.fornecedor or 'Fornecedor não informado' }}</small>
                     </span>
                     <span class="mp-v2-item-fact"><small>Unidade</small><strong>{{ mp.unidade }}</strong></span>
-                    <span class="mp-v2-item-fact"><small>Custo</small><strong>R$ {{ '%.2f'|format(mp.custo_por_kg or 0) }}</strong></span>
+                    <span class="mp-v2-item-fact"><small>Custo</small><strong>{{ mp.custo_por_kg | custo_brl }}</strong></span>
                     {% if mp.sugerir_pedido_loja %}<span class="mp-v2-badge"><i class="bi bi-shop"></i> lojas</span>{% endif %}
                     <span class="mp-v2-item-action">Editar <i class="bi bi-chevron-down"></i></span>
                 </summary>

@@ -528,8 +528,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 erroEl.style.display = 'none';
                 okEl.style.display = 'none';
 
-                if (!nome || !custo) {
-                    erroEl.textContent = 'Preencha nome e custo.';
+                if (!nome) {
+                    erroEl.textContent = 'Preencha o nome. O custo pode ficar pendente.';
                     erroEl.style.display = 'block';
                     return;
                 }
@@ -593,6 +593,19 @@ document.addEventListener('DOMContentLoaded', function () {
             if (boxFarinha) boxFarinha.style.order = '2';
             if (boxQtd) boxQtd.style.order = '1';
         }
+    }
+
+    function _valorFichaPorNome(dados, nome) {
+        // Mesma prioridade do custeio: nome exato, depois caixa/espaços.
+        // A presença da chave importa: null é custo pendente, zero é informado.
+        if (!dados) return undefined;
+        if (Object.prototype.hasOwnProperty.call(dados, nome)) return dados[nome];
+        var alvo = (nome || '').trim().toLowerCase();
+        var valor;
+        Object.keys(dados).forEach(function (chave) {
+            if (chave.trim().toLowerCase() === alvo) valor = dados[chave];
+        });
+        return valor;
     }
 
     function _custoPorGrama(mp) {
@@ -662,6 +675,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var totalPct = 0;
         var totalQtd = 0;
         var totalCusto = 0;
+        var custoPendente = false;
 
         document.querySelectorAll('.ingrediente-row').forEach(function (row) {
             var nomeInput = row.querySelector('.nome-input');
@@ -676,12 +690,20 @@ document.addEventListener('DOMContentLoaded', function () {
             var tipo = tipoSel ? tipoSel.value : 'mp';
 
             var qtd, custoRs, custoKg;
+            var mp = _valorFichaPorNome(typeof MP_DATA === 'undefined' ? null : MP_DATA, nome);
+            var custoUnitReceita = _valorFichaPorNome(
+                typeof RECEITA_CUSTOS === 'undefined' ? null : RECEITA_CUSTOS, nome);
+            var custoLinhaPendente = (tipo === 'receita' || tipo === 'sub_pct')
+                ? custoUnitReceita === null
+                : !!(mp && mp.custo_por_kg === null);
+            if (custoLinhaPendente && pct > 0) custoPendente = true;
 
             if (tipo === 'receita' || tipo === 'sub_pct') {
                 // Sub-receita. 'receita': pct = quantidade de unidades.
                 // 'sub_pct': pct = % da base (igual MP %) → unidades = base×%/100.
-                var custoUnitReceita = (typeof RECEITA_CUSTOS !== 'undefined' && RECEITA_CUSTOS[nome]) || 0;
-                var pesoUnitReceita = (typeof RECEITA_PESOS !== 'undefined' && RECEITA_PESOS[nome]) || 0;
+                if (custoUnitReceita === undefined) custoUnitReceita = 0;
+                var pesoUnitReceita = _valorFichaPorNome(
+                    typeof RECEITA_PESOS === 'undefined' ? null : RECEITA_PESOS, nome) || 0;
                 var unidadesSub = (tipo === 'sub_pct') ? (pesoBase * pct / 100) : pct;
                 qtd = unidadesSub * pesoUnitReceita;  // peso total = unidades × peso unitário
                 custoRs = custoUnitReceita * unidadesSub;
@@ -700,7 +722,6 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (tipo === 'mp_direto') {
                 // MP com quantidade em gramas direto (não usa % padeiro)
                 qtd = pct;  // pct é na verdade gramas
-                var mp = MP_DATA[nome];
                 custoKg = mp ? mp.custo_por_kg : 0;
                 custoRs = qtd * _custoPorGrama(mp);
 
@@ -718,7 +739,6 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (tipo === 'mp_un') {
                 // MP cobrada por unidade (ex: Baton Calebaut). pct = qtd de unidades.
                 // Custo = qtd × custo_por_unidade (que esta em custo_por_kg pra mp un).
-                var mp = MP_DATA[nome];
                 var custoUn = mp ? mp.custo_por_kg : 0;
                 qtd = pct;  // unidades
                 custoRs = qtd * custoUn;
@@ -738,7 +758,6 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 // MP normal: % padeiro
                 qtd = pesoBase * pct / 100;
-                var mp = MP_DATA[nome];
                 custoKg = mp ? mp.custo_por_kg : 0;
                 custoRs = qtd * _custoPorGrama(mp);
 
@@ -753,6 +772,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 totalPct += pct;
                 totalQtd += qtd;
                 totalCusto += custoRs;
+            }
+            if (custoLinhaPendente) {
+                custoKgCell.textContent = 'Custo pendente';
+                custoRsCell.textContent = 'Custo pendente';
             }
         });
 
@@ -781,7 +804,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Aplicar fator (Fornadas x Quantidade) aos totais
         var totalQtdMult = totalQtd * fator;
-        var totalCustoMult = totalCusto * fator;
+        var totalCustoMult = custoPendente ? null : totalCusto * fator;
 
         // Aplicar perda de rendimento ao peso
         var pesoAposPerda = totalQtdMult * (1 - perda / 100);
@@ -804,7 +827,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Resumo (custo producao + embalagem por unidade)
         var custoEmbalagem = parseFloat((document.getElementById('custo-embalagem') || {}).value) || 0;
-        var custoUn = rendimento > 0 ? (totalCustoMult / rendimento) + custoEmbalagem : 0;
+        var custoUn = custoPendente ? null : (rendimento > 0 ? (totalCustoMult / rendimento) + custoEmbalagem : 0);
 
         var rPeso = document.getElementById('resumo-peso');
         var rCusto = document.getElementById('resumo-custo');
@@ -836,7 +859,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (el) el.textContent = preco > 0 ? formatBRL(preco) : '-';
 
-            if (preco > 0 && custoUn > 0) {
+            if (custoPendente) {
+                [elM, elL, elT].forEach(function (campo) {
+                    if (campo) { campo.textContent = 'Custo pendente'; campo.className = 'resumo-valor'; }
+                });
+            } else if (preco > 0 && custoUn > 0) {
                 var lucro = preco * (1 - cargaImpostos) - custoUn;
                 var marg = (lucro / preco) * 100;
                 var lucroT = lucro * rendimento;
@@ -993,15 +1020,18 @@ document.addEventListener('DOMContentLoaded', function () {
         function getCustoItem(tipo, nome) {
             if (tipo === 'receita') {
                 if (typeof RECEITA_CUSTOS === 'undefined') return 0;
-                if (RECEITA_CUSTOS[nome]) return RECEITA_CUSTOS[nome];
-                return _receitaCustoN()[_norm(nome)] || 0;
+                if (RECEITA_CUSTOS[nome] !== undefined) return RECEITA_CUSTOS[nome];
+                var custo = _receitaCustoN()[_norm(nome)];
+                return custo === undefined ? 0 : custo;
             } else if (tipo === 'produto') {
                 if (typeof PRODUTO_CUSTOS === 'undefined') return 0;
-                if (PRODUTO_CUSTOS[nome]) return PRODUTO_CUSTOS[nome];
-                return _produtoCustoN()[_norm(nome)] || 0;
+                if (PRODUTO_CUSTOS[nome] !== undefined) return PRODUTO_CUSTOS[nome];
+                var custo = _produtoCustoN()[_norm(nome)];
+                return custo === undefined ? 0 : custo;
             } else {
                 var mp = _findMp(nome);
                 if (!mp) return 0;
+                if (mp.custo_por_kg === null) return null;
                 if (mp.unidade === 'g' || mp.unidade === 'ml') {
                     return mp.custo_por_kg / 1000;
                 }
@@ -1010,12 +1040,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         function formatBrl(val) {
+            if (val === null) return 'Custo pendente';
             return 'R$ ' + val.toFixed(2).replace('.', ',');
         }
 
         function recalcularCesta() {
             var rows = cestaBody.querySelectorAll('tr');
             var custoTotal = 0;
+            var custoPendente = false;
 
             rows.forEach(function (row) {
                 var tipo = row.querySelector('.item-tipo');
@@ -1029,7 +1061,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 var custoUn = getCustoItem(tipo.value, nome.value);
                 var quantidade = parseFloat(qtd.value) || 0;
-                var custoLinha = custoUn * quantidade;
+                var custoLinha = custoUn === null && quantidade > 0 ? null : custoUn * quantidade;
+                if (custoLinha === null) custoPendente = true;
                 custoTotal += custoLinha;
 
                 // Unidade ao lado da qtd: vem da MP cadastrada (g/ml/kg/l) ou
@@ -1055,7 +1088,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     custoUnCell.textContent = custoUn > 0 ? formatBrl(custoUn) : '-';
                 }
-                custoTotalCell.textContent = custoLinha > 0 ? formatBrl(custoLinha) : '-';
+                custoTotalCell.textContent = custoLinha === null ? 'Custo pendente' : custoLinha > 0 ? formatBrl(custoLinha) : '-';
+                if (custoUn === null) custoUnCell.textContent = 'Custo pendente';
             });
 
             // Se não tem composição, usar custo direto
@@ -1067,6 +1101,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Somar embalagem
             var custoEmbalagem = parseFloat((document.getElementById('custo_embalagem') || {}).value) || 0;
             custoTotal += custoEmbalagem;
+            if (custoPendente) custoTotal = null;
 
             document.getElementById('custo-total-cesta').textContent = formatBrl(custoTotal);
 
@@ -1080,7 +1115,9 @@ document.addEventListener('DOMContentLoaded', function () {
             canais.forEach(function (c) {
                 var preco = parseFloat(document.getElementById(c.input).value) || 0;
                 var el = document.getElementById(c.el);
-                if (preco > 0 && custoTotal > 0) {
+                if (custoPendente) {
+                    el.textContent = 'Custo pendente';
+                } else if (preco > 0 && custoTotal > 0) {
                     var lucro = preco - custoTotal;
                     var margem = (lucro / preco * 100).toFixed(1);
                     var cor = lucro >= 0 ? '#2e7d32' : '#c62828';
@@ -1170,8 +1207,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 erroEl.style.display = 'none';
                 okEl.style.display = 'none';
 
-                if (!nome || !custo) {
-                    erroEl.textContent = 'Preencha nome e custo.';
+                if (!nome) {
+                    erroEl.textContent = 'Preencha o nome. O custo pode ficar pendente.';
                     erroEl.style.display = 'block';
                     return;
                 }
@@ -1258,6 +1295,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ═══ HELPERS ═══
     function formatBRL(value) {
+        if (value === null) return 'Custo pendente';
         return 'R$ ' + value.toFixed(2).replace('.', ',');
     }
 

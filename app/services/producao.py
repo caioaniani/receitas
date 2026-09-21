@@ -4,7 +4,6 @@ from math import ceil
 
 from app.extensions import db
 from app.models import MateriaPrima, Receita
-from app.services.custos import calcular_custos_receitas
 from app.services.massa_base import rendimento_massa_crua, unidade_producao
 from app.utils import SUB_RECEITA_TIPOS, hoje, unidades_subreceita
 
@@ -754,7 +753,7 @@ def consumir_ficha(rec, unidades, user_id, referencia_mp, *, saldo_assinado=Fals
 
 
 def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=True,
-                       produzido_esperado=None):
+                       produzido_esperado=None, referencia_estoque=None):
     """OPCAO B: o padeiro produz `unidades` de um item do plano aprovado.
     Numa unica transacao: (1) credita o produto pronto na industria
     (entrada_producao), (2) DESCONTA a MP da ficha tecnica proporcional as
@@ -818,7 +817,7 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=Tr
             peso_bola_g_snapshot=item.batelada_padrao.dados['peso_bola_g'])
     else:
         entrada_producao(receita_id=rec.id, quantidade=unidades, usuario_id=user_id,
-                         referencia='Produção (cronograma) %s' % rec.nome)
+                         referencia=referencia_estoque or 'Produção (cronograma) %s' % rec.nome)
 
     # 3) avanca o produzido do item.
     item.produzido_qtd = int(item.produzido_qtd or 0) + unidades
@@ -856,8 +855,6 @@ def consolidar_lista_compras(itens):
     Recebe lista de dicts [{receita_id, multiplicador}].
     Retorna dict {mp_nome: {quantidade, unidade, custo_estimado, estoque_atual}}.
     """
-    resultado = calcular_custos_receitas()
-    pesos = resultado.get('pesos', {})
     mps = {mp.nome: mp for mp in MateriaPrima.query.all()}
     receitas = {r.id: r for r in Receita.query.all()}
 
@@ -934,7 +931,9 @@ def consolidar_lista_compras(itens):
             org[receita.nome] = org.get(receita.nome, 0) + qtd
 
     for nome, dados in lista.items():
-        if dados.get('em_unidades'):
+        if dados['custo_por_kg'] is None:
+            dados['custo_estimado'] = None
+        elif dados.get('em_unidades'):
             # Unidades: custo = un × custo POR UNIDADE (sem /1000).
             dados['custo_estimado'] = dados['quantidade'] * dados['custo_por_kg']
         else:
@@ -959,6 +958,8 @@ def ordem_compra_consolidada(itens):
     Retorna {fornecedores: [{nome, itens: [...], subtotal_compra}],
              total_compra, total_necessario}.
     """
+    from app.services.custo_opcional import somar_custos
+
     lista = consolidar_lista_compras(itens)
     grupos = {}
     total_compra = 0.0
@@ -975,6 +976,8 @@ def ordem_compra_consolidada(itens):
             custo_compra = comprar_g * (d.get('custo_por_kg') or 0)
         else:
             custo_compra = (comprar_g / 1000.0) * (d.get('custo_por_kg') or 0)
+        if d.get('custo_por_kg') is None and comprar_g > 0:
+            custo_compra = None
         grupos.setdefault(forn, []).append({
             'nome': nome,
             'em_unidades': bool(d.get('em_unidades')),
@@ -987,8 +990,8 @@ def ordem_compra_consolidada(itens):
             'custo_compra': custo_compra,
             'custo_estimado': d.get('custo_estimado', 0),
         })
-        total_compra += custo_compra
-        total_necessario += d.get('custo_estimado', 0)
+        total_compra = somar_custos([total_compra, custo_compra])
+        total_necessario = somar_custos([total_necessario, d.get('custo_estimado', 0)])
 
     # Fornecedores nomeados em ordem alfabetica; 'Sem fornecedor' por ultimo.
     fornecedores = []
@@ -997,7 +1000,7 @@ def ordem_compra_consolidada(itens):
         fornecedores.append({
             'nome': forn,
             'itens': itens_ord,
-            'subtotal_compra': sum(i['custo_compra'] for i in itens_ord),
+            'subtotal_compra': somar_custos(i['custo_compra'] for i in itens_ord),
         })
 
     return {'fornecedores': fornecedores, 'total_compra': total_compra,

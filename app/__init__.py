@@ -93,6 +93,10 @@ def create_app(config_class=None):
         formatted = formatted.replace(',', 'X').replace('.', ',').replace('X', '.')
         return f'R$ {formatted}'
 
+    @app.template_filter('custo_brl')
+    def custo_brl_filter(value):
+        return 'Custo pendente' if value is None else brl_filter(value)
+
     @app.template_filter('brt')
     def brt_filter(dt, fmt='%d/%m %H:%M'):
         """Formata datetime ja em BRT (sistema todo armazena BRT naive).

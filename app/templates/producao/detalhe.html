@@ -96,14 +96,14 @@
                     <span class="text-danger fw-bold">{{ "%.0f"|format(dados.deficit) }}</span>
                     {% else %}—{% endif %}
                 </td>
-                <td class="text-end">R$ {{ "%.2f"|format(dados.custo_estimado) }}</td>
+                <td class="text-end">{{ dados.custo_estimado | custo_brl }}</td>
             </tr>
             {% endfor %}
         </tbody>
         <tfoot>
             <tr class="fw-bold">
                 <td colspan="4" class="text-end">Total Estimado:</td>
-                <td class="text-end">R$ {{ "%.2f"|format(custo_total) }}</td>
+                <td class="text-end">{{ custo_total | custo_brl }}</td>
             </tr>
         </tfoot>
     </table>
