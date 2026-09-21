@@ -323,7 +323,12 @@ def _registrar_nota_privada(payload):
     conv_id = conv.get('id') or payload.get('conversation_id')
     if not conv_id:
         return jsonify({'ok': True, 'ignorado': 'nota-sem-conversa'})
-    if not chatwoot.remetente_humano(payload):
+    from app.services.entrega_candidata import PREFIXO_NOTA_BOT
+    if (not chatwoot.remetente_humano(payload)
+            or (payload.get('content') or '').lstrip().startswith(PREFIXO_NOTA_BOT)):
+        # Nota do bot/automacao — inclusive a NOSSA nota de handoff
+        # (`chatwoot.enviar_nota_privada`), reconhecida tambem pelo prefixo
+        # caso o Chatwoot a atribua a um usuario humano.
         return jsonify({'ok': True, 'ignorado': 'nota-nao-humana'})
     autor = ((payload.get('sender') or {}).get('name') or '')
     presenca_humana.registrar_nota_privada(conv_id, autor)
