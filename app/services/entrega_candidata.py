@@ -40,13 +40,19 @@ from app.utils import agora, hoje, normalizar_busca
 logger = logging.getLogger(__name__)
 
 PREFIXO_NOTA_BOT = '🤖 Bot:'
-_STATUS_ENTREGA = ('pago', 'em_preparo', 'a_caminho')
+# 'divulgacao' (cortesia) sai fisicamente pela porta como qualquer entrega.
+_STATUS_ENTREGA = ('pago', 'em_preparo', 'a_caminho', 'divulgacao')
 _TIPOS_VIA = {'rua', 'r', 'av', 'avenida', 'al', 'alameda', 'travessa', 'tv',
               'praca', 'pc', 'estrada', 'est', 'rod', 'rodovia', 'largo',
               'viela', 'passagem', 'via', 'vl', 'jd', 'jardim'}
 _STOP = {'de', 'da', 'do', 'das', 'dos', 'e', 'a', 'o'}
 _MAX_CANDIDATAS = 3
 _LALAMOVE_EM_RUA = {'ON_GOING', 'PICKED_UP'}
+# Só as últimas falas do contato entram no match e no gatilho de terceiro:
+# um "pode deixar na portaria?" de uma hora atrás não deve rotular um
+# handoff de outro assunto (revisão 21/09/2026).
+_ULTIMAS_FALAS = 8
+_VIA_ANTES = r'(?:rua|r|av|avenida|al|alameda|travessa|tv|praca|estrada|largo)\s+'
 
 
 def _tokens_logradouro(logradouro):
