@@ -711,9 +711,14 @@ def bot_webhook():
                         resultado is not None
                         and resultado.get('acao') == 'encerrar'
                         and 'loop' in (resultado.get('motivo') or ''))
-                    if encerrou_por_loop:
+                    if encerrou_por_loop or (
+                            resultado is not None
+                            and resultado.get('acao') == 'silencio_humano'):
                         # Loop bot-a-bot silenciado: o vigia alertando aqui era
                         # exatamente o ruido (6 ALTAs sem cliente real, 03/07).
+                        # Silencio por nota privada: nao ha turno do bot pra
+                        # julgar — quem responde e a equipe; a cobranca de
+                        # espera humana cobre o tempo de resposta.
                         historico = None
                     if historico and chatbot_vigia.disponivel():
                         # Anexa a resposta do bot ao historico — sem isso, o vigia
