@@ -739,7 +739,8 @@ def bot_webhook():
                     # a conversa ia pra fila humana EM SILENCIO e o cliente
                     # ficava olhando pro nada ate alguem assumir.
                     try:
-                        if not texto_enviado:
+                        from app.services import presenca_humana as _ph
+                        if not texto_enviado and not _ph.humano_presente(conv_id):
                             chatwoot.enviar_mensagem(conv_id, chatbot.FALLBACK_TEXTO)
                     except Exception:
                         logger.exception('crm bot fallback msg falhou conv=%s', conv_id)
