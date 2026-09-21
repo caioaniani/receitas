@@ -485,13 +485,14 @@ def test_evento_de_status_resolved_ou_pending_encerra_o_episodio(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     c = app.test_client()
     with app.app_context():
-        _marcar()
+        _marcar(horas_atras=1)     # nota de 1h atrás (fora da tolerância de 90s)
         r = c.post('/crm/bot?k=seg', json={'event': 'conversation_status_changed',
                                           'conversation': {'id': 7, 'status': 'open'}})
         assert r.get_json().get('episodio') is None
         assert ph.humano_presente('7')
+        # payload PLANO (formato real do evento: status/id no topo)
         r = c.post('/crm/bot?k=seg', json={'event': 'conversation_status_changed',
-                                          'conversation': {'id': 7, 'status': 'pending'}})
+                                          'id': 7, 'status': 'pending'})
         assert r.get_json()['episodio'] == 'encerrado'
         assert not ph.humano_presente('7')
     with patch('threading.Thread', _SyncThread), \
