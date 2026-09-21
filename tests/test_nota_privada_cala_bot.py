@@ -375,3 +375,99 @@ def test_humano_presente_nao_consulta_api_por_padrao(app):
          patch('app.services.chatwoot.nota_privada_humana_recente') as leitura:
         assert not presenca_humana.humano_presente('55')
     leitura.assert_not_called()
+
+
+# ── 6. Gate `somente_bot` (follow-up/vassoura) lê a nota da própria listagem ──
+
+def _listagem(nota_humana=True, minutos=10, sender_type='user', **extra):
+    import time
+    agora_ts = time.time()
+    msgs = [
+        {'id': 1, 'message_type': 'incoming', 'content': 'oi',
+         'created_at': agora_ts - 1200, 'sender': {'type': 'contact'}},
+        {'id': 2, 'message_type': 'outgoing', 'content': 'Olá! Como posso ajudar?',
+         'created_at': agora_ts - 1100, 'sender': {'type': 'agent_bot'}},
+    ]
+    if nota_humana:
+        msgs.append({'id': 3, 'message_type': 'outgoing', 'private': True,
+                     'content': '@Painel', 'created_at': agora_ts - minutos * 60,
+                     'sender': {'type': sender_type, 'name': 'Caio'}, **extra})
+    return msgs
+
+
+def _cfg_chatwoot(app):
+    app.config['CHATWOOT_URL'] = 'https://x.example'
+    app.config['CHATWOOT_ACCOUNT_ID'] = '1'
+    app.config['CHATWOOT_API_TOKEN'] = 'tok'
+
+
+def test_somente_bot_devolve_vazio_com_nota_privada_humana_e_persiste(app):
+    """Follow-up e vassoura param ANTES de gastar modelo, mesmo que o
+    webhook da nota nunca tenha chegado: a listagem crua tem a nota."""
+    from app.models import PresencaHumanaConversa
+    from app.services import chatwoot
+    fake = MagicMock(status_code=200, text='x')
+    fake.json.return_value = {'payload': _listagem()}
+    with app.app_context():
+        _cfg_chatwoot(app)
+        with patch('app.services.chatwoot.requests.get', return_value=fake), \
+             patch('app.services.chatwoot.consultar_conversa') as status:
+            hist = chatwoot.buscar_historico(77, incluir_autoria=True, somente_bot=True)
+        row = app.extensions['sqlalchemy'].session.get(PresencaHumanaConversa, '77')
+    assert hist == []
+    status.assert_not_called()          # nem precisou reconsultar o status
+    assert row is not None and row.autor == 'Caio'
+
+
+def test_somente_bot_ignora_nota_de_automacao_e_nota_velha(app):
+    from app.models import PresencaHumanaConversa
+    from app.services import chatwoot, presenca_humana
+    fake = MagicMock(status_code=200, text='x')
+    with app.app_context():
+        _cfg_chatwoot(app)
+        for listagem in (_listagem(sender_type='agent_bot'),
+                         _listagem(content_attributes={'automation_rule_id': 9}),
+                         _listagem(minutos=(presenca_humana.PRESENCA_HUMANA_HORAS + 1) * 60)):
+            fake.json.return_value = {'payload': listagem}
+            with patch('app.services.chatwoot.requests.get', return_value=fake), \
+                 patch('app.services.chatwoot.consultar_conversa',
+                       return_value={'status': 'pending'}):
+                hist = chatwoot.buscar_historico(78, incluir_autoria=True,
+                                                 somente_bot=True)
+            assert hist and hist[-1]['role'] == 'assistant'
+        assert app.extensions['sqlalchemy'].session.get(
+            PresencaHumanaConversa, '78') is None
+
+
+def test_buscar_historico_normal_segue_descartando_a_nota(app):
+    """Sem `somente_bot` o histórico pro Claude continua sem notas (a nota
+    nunca vira turno do modelo) e nada é persistido."""
+    from app.models import PresencaHumanaConversa
+    from app.services import chatwoot
+    fake = MagicMock(status_code=200, text='x')
+    fake.json.return_value = {'payload': _listagem()}
+    with app.app_context():
+        _cfg_chatwoot(app)
+        with patch('app.services.chatwoot.requests.get', return_value=fake):
+            hist = chatwoot.buscar_historico(79)
+        assert [m['role'] for m in hist] == ['user', 'assistant']
+        assert app.extensions['sqlalchemy'].session.get(
+            PresencaHumanaConversa, '79') is None
+
+
+# ── 7. Sonda: o marcador é visível de fora ──
+
+def test_sonda_vigia_vereditos_expoe_presenca_humana(app):
+    app.config['CLAUDE_API_TOKEN'] = 'tok-sonda'
+    c = app.test_client()
+    with app.app_context():
+        _marcar('2409', autor='Caio Antinhani')
+    r = c.get('/api/claude/vigia-vereditos?conversa=2409',
+              headers={'Authorization': 'Bearer tok-sonda'})
+    assert r.status_code == 200
+    pres = r.get_json()['conversa']['presenca_humana']
+    assert pres['autor'] == 'Caio Antinhani' and pres['notas'] == 1
+    assert pres['nota_em'] and pres['aberta_em'] is None
+    r2 = c.get('/api/claude/vigia-vereditos?conversa=1',
+               headers={'Authorization': 'Bearer tok-sonda'})
+    assert r2.get_json()['conversa']['presenca_humana'] is None
