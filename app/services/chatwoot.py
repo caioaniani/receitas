@@ -222,15 +222,79 @@ def definir_status(conversation_id, status, tentativas=3):
     return {'ok': False, 'erro': ultimo_erro}
 
 
-def _mensagem_humana(m):
+def _atributos_msg(m):
+    return {**(m.get('additional_attributes') or {}), **(m.get('content_attributes') or {})}
+
+
+def _automatica(m):
+    atributos = _atributos_msg(m)
+    return bool(atributos.get('automation_rule_id') or atributos.get('campaign_id')
+                or m.get('automation_rule_id') or m.get('campaign_id'))
+
+
+def remetente_humano(m):
+    """Mensagem (pública ou nota privada) escrita por AGENTE HUMANO: o
+    `sender.type`/`sender_type` do Chatwoot é 'user' para agentes, 'agent_bot'
+    para o bot e 'contact' para o cliente. Automação/campanha nunca conta.
+    Vale para o payload do webhook e para a listagem de mensagens (mesmo
+    formato)."""
     sender = m.get('sender') or {}
-    atributos = {**(m.get('additional_attributes') or {}), **(m.get('content_attributes') or {})}
-    automatico = (atributos.get('automation_rule_id') or atributos.get('campaign_id')
-                  or m.get('automation_rule_id') or m.get('campaign_id'))
+    tipo = str(m.get('sender_type') or sender.get('type') or '').lower()
+    return tipo == 'user' and not _automatica(m)
+
+
+def _mensagem_humana(m):
+    atributos = _atributos_msg(m)
     return bool(m.get('message_type') in ('outgoing', 1) and not m.get('private')
-                and not automatico and str(m.get('status', '')).lower() != 'failed'
-                and (str(m.get('sender_type') or sender.get('type') or '').lower() == 'user'
-                     or atributos.get('external_echo')))
+                and str(m.get('status', '')).lower() != 'failed'
+                and (remetente_humano(m)
+                     or (not _automatica(m) and atributos.get('external_echo'))))
+
+
+def nota_privada_humana_recente(conversation_id, horas=12):
+    """Rede de segurança da regra "nota privada cala o bot"
+    (`presenca_humana`): lê a última página de mensagens da conversa e
+    devolve {'quando': datetime BRT naive, 'autor': str} da nota privada
+    HUMANA mais recente dentro de `horas`, ou None. Leitura com o token de
+    USUÁRIO (o de bot não lista). Erro = None (quem chama trata como "sem
+    sinal")."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.utils import BRT, agora
+    if disponivel():
+        headers = _headers()
+    elif bot_disponivel():
+        headers = _bot_headers()
+    else:
+        return None
+    url = f'{_base()}/conversations/{conversation_id}/messages'
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.status_code not in (200, 201):
+            logger.warning('chatwoot nota_privada_humana_recente %s: %s',
+                           r.status_code, (r.text or '')[:200])
+            return None
+        data = r.json() if r.text else {}
+    except Exception:  # noqa: BLE001
+        logger.exception('chatwoot nota_privada_humana_recente falhou')
+        return None
+    msgs = data.get('payload') if isinstance(data, dict) else data
+    if not isinstance(msgs, list):
+        return None
+    corte = agora() - timedelta(hours=horas)
+    melhor = None
+    for m in msgs:
+        if not isinstance(m, dict) or not m.get('private') or not remetente_humano(m):
+            continue
+        try:
+            quando = (datetime.fromtimestamp(float(m.get('created_at')), UTC)
+                      .astimezone(BRT).replace(tzinfo=None))
+        except (TypeError, ValueError, OverflowError, OSError):
+            continue
+        if quando >= corte and (melhor is None or quando > melhor['quando']):
+            melhor = {'quando': quando,
+                      'autor': ((m.get('sender') or {}).get('name') or '')[:120]}
+    return melhor
 
 
 def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
