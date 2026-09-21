@@ -76,6 +76,11 @@ def test_220_reais_cria_ordem_concluida_sem_17_ficticios_e_repete_sem_duplicar(
     assert CronogramaOverride.query.count() == 0
     historico = c.get('/padeiro/producao-historico.json').json['historico']
     assert len(historico) == 1 and historico[0]['qtd'] == 220
+    detalhe = c.get(f'/producao/{plano.id}')
+    assert detalhe.status_code == 200
+    assert 'Unidades produzidas' in detalhe.text
+    assert '<strong>220</strong>' in detalhe.text
+    assert 'Rendimento de referência: 237' in detalhe.text
     # Mesmo recibo não pode ser reaproveitado para aumentar a produção.
     assert c.post('/padeiro/produzir', json=payload(frances, 221)).status_code == 400
     assert MovEstoqueProducao.query.filter_by(tipo='producao').count() == 1
