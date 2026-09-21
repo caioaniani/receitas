@@ -212,6 +212,25 @@ def enviar_nota_privada(conversation_id, content):
             logger.warning('chatwoot enviar_nota_privada %s: %s',
                            r.status_code, (r.text or '')[:200])
             return {'ok': False, 'erro': f'HTTP {r.status_code}'}
+        # O Chatwoot DEVE devolver a mensagem com private=true. Se ignorou o
+        # campo (versao/permissao do Agent Bot), a nota saiu PUBLICA ao
+        # contato — apaga best-effort e grita ERROR (Sentry): e a unica
+        # promessa deste caminho (revisao 21/09/2026).
+        try:
+            corpo = r.json() if r.text else {}
+        except ValueError:
+            corpo = {}
+        if isinstance(corpo, dict) and 'private' in corpo and not corpo.get('private'):
+            msg_id = corpo.get('id')
+            logger.error('chatwoot enviar_nota_privada conv=%s: Chatwoot NAO honrou '
+                         'private=true (msg %s) — nota saiu publica; apagando',
+                         conversation_id, msg_id)
+            if msg_id:
+                try:
+                    requests.delete(f'{url}/{msg_id}', headers=_bot_headers(), timeout=10)
+                except Exception:  # noqa: BLE001
+                    logger.exception('chatwoot enviar_nota_privada: apagar nota publica falhou')
+            return {'ok': False, 'erro': 'nao_privada'}
         return {'ok': True}
     except Exception as exc:  # noqa: BLE001
         logger.exception('chatwoot enviar_nota_privada falhou')
