@@ -4522,6 +4522,52 @@ atendente"):
   já avisa o dono até alguém assumir. Testes:
   `tests/test_caso_entregador_2409.py`.
 
+### Nota privada da equipe CALA o bot (dono 20/09/2026, mesma noite)
+
+Print do dono: ele reabriu a conversa 2409 às 19:06 e escreveu a nota
+privada "@Painel"; às 19:20 o sistema mandou ao entregador o texto
+automático de contenção ("equipe em alta demanda"). Ordem, textual: **"o
+bot não pode falar quando a gente fala no privado com a equipe"**.
+
+- **Sinal** = `message_created` com `private=true` e remetente HUMANO
+  (`chatwoot.remetente_humano`: `sender.type`/`sender_type == 'user'`;
+  agent_bot, contato e automação/campanha NÃO contam). O webhook do Agent
+  Bot recebe a nota (antes era descartada como 'nota'/'nao-incoming' —
+  `crm/routes._registrar_nota_privada`, tratada ANTES do filtro de
+  incoming). O nosso sistema nunca escreve nota privada
+  (`enviar_mensagem_painel` posta mensagem pública), então não há
+  auto-disparo.
+- **Marcador** `PresencaHumanaConversa` (`chatwoot_presenca_humana`,
+  tabela NOVA via `db.create_all`, sem ALTER): conv_id, `nota_em` (última
+  nota), autor, contador, `aberta_em`. FONTE ÚNICA de leitura:
+  `presenca_humana.humano_presente(conv_id)` — janela
+  `PRESENCA_HUMANA_HORAS = 12`. Passada a janela a conversa volta ao bot
+  (resolvida e reaberta dias depois pelo mesmo contato). Dentro dela o
+  bot fica calado mesmo que a equipe tenha resolvido e o cliente volte —
+  errar para o silêncio é a direção pedida; a conversa vai para a fila
+  humana, nunca para o vácuo.
+- **Quem obedece** (todos os caminhos que falam com o contato):
+  (1) nota em conversa `pending` → o próprio webhook tira do bot
+  (`definir_status open`, em thread, best-effort) e marca `aberta_em`;
+  (2) resposta do bot (`_processar`): ação `silencio_humano` — não chama
+  o modelo, guarda a fala do cliente no store, status open, vigia NÃO
+  avalia (não há turno do bot); (3) resposta a áudio/anexo não suportado:
+  não pede texto, abre; (4) follow-up (`followup_conversas_paradas`)
+  pula; (5) vassoura (`varrer_pendentes_sem_resposta`) abre e não
+  responde; (6) contenção da espera humana (`chatbot_vigia`, bloco da
+  `TEXTO_CONTENCAO_ESPERA`) não sai — aqui com `consultar_chatwoot=True`
+  (rede de segurança: 1 GET em `chatwoot.nota_privada_humana_recente`
+  caso o webhook da nota não tenha chegado; o que achar é persistido).
+  **A COBRANÇA ao dono continua até resolver** — só o texto ao contato é
+  barrado (a regra de 17-18/09 "cobrança até resolver" está intacta).
+- Regressão de teste corrigida no caminho:
+  `test_crm_routes_resolve_conversa_quando_bot_encerra` rodava a thread
+  REAL com `sleep(0.2)` DEPOIS do `with patch(...)` — qualquer latência
+  antes do `responder` (a consulta de presença) fazia a thread rodar sem
+  os patches e bater na rede. Virou `_SyncThread` como os vizinhos.
+  REGRA: teste de webhook usa `_SyncThread`, nunca thread real + sleep.
+- Testes: `tests/test_nota_privada_cala_bot.py` (17 casos).
+
 ## Contas a Pagar (NF/boleto via Slack → IA → Dropbox → banco)
 
 Feature de 2026-05-23. Funcionarios postam foto de NF/boleto em canais Slack de
