@@ -4632,11 +4632,18 @@ para poder passar o número, como está a segurança nisso?". Auditoria
   o endereço estruturado é o do cliente pra NF), tokens do logradouro do
   PEDIDO sem tipo de via/conectivos TODOS presentes como palavras
   inteiras na fala do CONTATO (nunca o contrário; falas do bot ficam
-  fora — ele repete endereços consultados), hoje antes de amanhã, corrida
-  Lalamove ON_GOING/PICKED_UP ou atribuição de motorista desempatam, 2+
-  = lista sem escolher, 0 = "sem rua reconhecida". `resultado['texto']`
+  fora — ele repete endereços consultados; só as ÚLTIMAS 8 falas do
+  contato contam, no match e no gatilho de terceiro; logradouro de UM
+  token só casa precedido de tipo de via na fala — "Rua Nova" × "quero
+  uma nova cesta" e "Rua Pinheiros" × "moro em Pinheiros" eram falsos
+  positivos da revisão 21/09), `divulgacao` entra (sai pela porta), hoje
+  antes de amanhã, corrida Lalamove ON_GOING/PICKED_UP ou atribuição de
+  motorista desempatam, 1 candidata sai com "(conferir antes de agir)",
+  2+ = lista sem escolher, 0 = "sem rua reconhecida". `resultado['texto']`
   segue sendo a ÚNICA fala pública — há teste travando que o código não
-  vai ao contato.
+  vai ao contato. `enviar_nota_privada` confere `private` na resposta do
+  Chatwoot: se veio pública, apaga best-effort, ERROR no log (Sentry) e
+  devolve `nao_privada` — é a única promessa do caminho.
 - **Achados de segurança PENDENTES (decisão do dono, não implementados)**:
   (1) a página pública `/loja/pedido/<codigo>` (allowlist do
   `_gate_acesso`) mostra a quem tem SÓ o código a cartinha, o endereço
