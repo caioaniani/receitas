@@ -398,8 +398,14 @@ def bot_webhook():
         if (evento in ('conversation_status_changed', 'conversation_resolved')
                 and conv_id_ev and status_ev in ('resolved', 'pending')):
             from app.services import presenca_humana
-            presenca_humana.encerrar(conv_id_ev, f'{evento}:{status_ev}')
-            return jsonify({'ok': True, 'ignorado': 'evento', 'episodio': 'encerrado'})
+            # Tolerancia: evento `pending` entregue atrasado (job separado
+            # no Chatwoot) chegando DEPOIS da nota nao pode encerrar o
+            # episodio recem-aberto (revisao 21/09, 2a rodada).
+            enc = presenca_humana.encerrar(
+                conv_id_ev, f'{evento}:{status_ev}',
+                tolerancia_seg=presenca_humana.ENCERRAR_TOLERANCIA_SEG)
+            return jsonify({'ok': True, 'ignorado': 'evento',
+                            'episodio': 'encerrado' if enc else 'sem-episodio'})
         return jsonify({'ok': True, 'ignorado': 'evento'})
     if payload.get('private'):
         # NOTA PRIVADA (chega como outgoing+private): de agente HUMANO é o
