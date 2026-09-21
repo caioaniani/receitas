@@ -838,7 +838,10 @@ class PresencaHumanaConversa(db.Model):
     automática ao contato consulta `presenca_humana.humano_presente`.
 
     Tabela NOVA via `db.create_all` (sem ALTER). Uma linha por conversa;
-    `nota_em` é a ÚLTIMA nota privada humana (BRT naive, `agora()`).
+    `nota_em` é a ÚLTIMA nota privada humana conhecida (BRT naive, do
+    `created_at` do Chatwoot). `notas` = notas DESTE episódio; **0 =
+    episódio ENCERRADO** (conversa resolvida / devolvida ao bot —
+    `presenca_humana.encerrar`), e só nota MAIS NOVA que `nota_em` reabre.
     `aberta_em`: quando o sistema tirou a conversa do bot (pending → open)
     por causa da nota — o humano passou a ser o dono da conversa."""
     __tablename__ = 'chatwoot_presenca_humana'
