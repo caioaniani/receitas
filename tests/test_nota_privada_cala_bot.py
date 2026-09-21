@@ -639,7 +639,7 @@ def test_enviar_nota_privada_apaga_se_o_chatwoot_nao_honrou_private(app):
                    return_value=MagicMock(status_code=200)) as delete, \
              patch('app.services.chatwoot.logger') as log:
             res = chatwoot.enviar_nota_privada(2409, 'x')
-    assert res == {'ok': False, 'erro': 'nao_privada'}
+    assert res == {'ok': False, 'erro': 'nao_privada', 'apagada': True}
     delete.assert_called_once()
     assert delete.call_args[0][0].endswith('/messages/55')
     log.error.assert_called_once()
