@@ -4566,7 +4566,73 @@ bot não pode falar quando a gente fala no privado com a equipe"**.
   antes do `responder` (a consulta de presença) fazia a thread rodar sem
   os patches e bater na rede. Virou `_SyncThread` como os vizinhos.
   REGRA: teste de webhook usa `_SyncThread`, nunca thread real + sleep.
-- Testes: `tests/test_nota_privada_cala_bot.py` (17 casos).
+- Rede de segurança sem depender do webhook: o gate `somente_bot` de
+  `chatwoot.buscar_historico` (follow-up/vassoura) lê a nota privada
+  humana na PRÓPRIA listagem crua (`nota_privada_humana_em`, custo zero,
+  antes de gastar modelo) e persiste o marcador. A sonda
+  `/api/claude/vigia-vereditos?conversa=<id>` expõe `presenca_humana`
+  (nota_em/autor/notas/aberta_em) — é por ela que se confere em produção
+  que a nota do Agent Bot chegou (HIPÓTESE dos investigadores: o
+  Chatwoot entrega `message_created` da nota ao Agent Bot com
+  `sender.type='user'`; a primeira nota privada real prova).
+- EXCEÇÕES deliberadas: o código do PORTAL WI-FI (`crm/routes`, ramo
+  `_eh_codigo_wifi`) segue respondendo em conversa open sem consultar a
+  presença — é validação de posse do número, não atendimento; a nota
+  privada do PRÓPRIO bot (abaixo) não conta (remetente agent_bot +
+  `PREFIXO_NOTA_BOT`).
+- Testes: `tests/test_nota_privada_cala_bot.py` (21 casos).
+
+### Rua = chave INTERNA da entrega + nota privada do handoff (21/09/2026)
+
+Dono, na mesma noite: "o boy deveria confirmar pelo menos o nome da rua
+para poder passar o número, como está a segurança nisso?". Auditoria
+(workflow de 4 leitores, conclusões em `arquivo:linha`):
+
+- **Segurança do BOT está correta e fechada**: só telefone verificado do
+  canal (comprador OU destinatário) ou CPF do comprador abrem um pedido
+  (`bot_tools._consultar_pedido_online`); não autorizado recebe
+  `autorizacao_necessaria` sem nenhum campo; a busca sem número acha SÓ
+  pelo telefone do COMPRADOR; nome nunca localiza. **Rua e código NÃO
+  viram credencial** — a rua é conhecida por exatamente os terceiros que
+  se quer barrar (entregador, portaria, vizinho, stalker) e o código
+  circula na via do motorista, no JSON do app dele e no comprovante.
+  Leitura adotada do pedido do dono: a rua identifica a entrega PARA A
+  EQUIPE, nunca destrava dado ao contato.
+- **Implementado**: `chatwoot.enviar_nota_privada` (token do BOT +
+  `private=True`; remetente agent_bot ⇒ não dispara a regra da nota
+  humana; `PREFIXO_NOTA_BOT` como 2ª defesa no webhook) e
+  `app/services/entrega_candidata.py`: no HANDOFF (webhook e vassoura), a
+  equipe recebe nota privada com o MOTIVO (antes ia só pro log e pro
+  `VigiaVeredito.bot_motivo` — o atendente que assumia não via nada), o
+  resumo das ferramentas e, quando há TERCEIRO na conversa
+  (`_TERCEIRO_ENTREGA` na fala do contato ou
+  `motivo_terceiro_na_entrega`), a **entrega candidata pela rua citada**:
+  pedidos pagos de hoje/amanhã, `modo_entrega != 'retirada'` (na retirada
+  o endereço estruturado é o do cliente pra NF), tokens do logradouro do
+  PEDIDO sem tipo de via/conectivos TODOS presentes como palavras
+  inteiras na fala do CONTATO (nunca o contrário; falas do bot ficam
+  fora — ele repete endereços consultados), hoje antes de amanhã, corrida
+  Lalamove ON_GOING/PICKED_UP ou atribuição de motorista desempatam, 2+
+  = lista sem escolher, 0 = "sem rua reconhecida". `resultado['texto']`
+  segue sendo a ÚNICA fala pública — há teste travando que o código não
+  vai ao contato.
+- **Achados de segurança PENDENTES (decisão do dono, não implementados)**:
+  (1) a página pública `/loja/pedido/<codigo>` (allowlist do
+  `_gate_acesso`) mostra a quem tem SÓ o código a cartinha, o endereço
+  completo com complemento, itens com valores, nome do motorista e o
+  link do DANFE (CPF do comprador) — contradiz a política do bot e a
+  regra da surpresa do presente (13/07); recomendação: 2º fator barato
+  (4 últimos dígitos do telefone do comprador ou e-mail do pedido) para o
+  bloco sensível, deixando status + rastreio livres; (2) o JSON do app
+  do motorista (`driver/routes` via `_pedidos_online_do_dia` completo)
+  carrega cartinha, nome/telefone do comprador e preços mesmo sem o
+  front renderizar; (3) `consultar_pedido` é oráculo de existência
+  (`pedido_nao_encontrado` × `autorizacao_necessaria`) — só o prompt
+  segura; (4) destinatário de presente autorizado pelo próprio telefone
+  vê `total`/`preco_unit`; (5) os envios do webhook não reconfirmam o
+  status no Chatwoot (`status_esperado`) — janela debounce + Claude em
+  que um humano pode ter assumido.
+- Testes: `tests/test_entrega_candidata.py` (16 casos).
 
 ## Contas a Pagar (NF/boleto via Slack → IA → Dropbox → banco)
 
