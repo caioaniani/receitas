@@ -2099,6 +2099,9 @@ def followup_conversas_paradas():
             continue
         if _followup_ja_enviado(conv_id):
             continue
+        from app.services import presenca_humana
+        if presenca_humana.humano_presente(conv_id):
+            continue  # equipe em nota privada: o bot nao cutuca (dono 20/09/2026)
         historico = chatwoot.buscar_historico(
             conv_id, incluir_autoria=True, somente_bot=True)
         if not historico:
