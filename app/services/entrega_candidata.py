@@ -52,7 +52,7 @@ _LALAMOVE_EM_RUA = {'ON_GOING', 'PICKED_UP'}
 # um "pode deixar na portaria?" de uma hora atrás não deve rotular um
 # handoff de outro assunto (revisão 21/09/2026).
 _ULTIMAS_FALAS = 8
-_VIA_ANTES = r'(?:rua|r|av|avenida|al|alameda|travessa|tv|praca|estrada|largo)\s+'
+_VIA_ANTES = r'(?<![a-z0-9])(?:rua|r|av|avenida|al|alameda|travessa|tv|praca|estrada|largo)\.?\s+'
 
 
 def _tokens_logradouro(logradouro):
