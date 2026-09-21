@@ -544,13 +544,19 @@ def bot_webhook():
     if not content and not imagens_atuais and anexos:
         def _responder_sem_suporte():
             with app.app_context():
-                from app.services import chatbot, chatwoot
+                from app.services import chatbot, chatwoot, presenca_humana
                 with _lock_conv, _lock_conv_cross_worker(conv_id):
                     try:
                         texto = ('Ainda não consigo ouvir áudios ou abrir esse '
                                  'tipo de arquivo por aqui. Pode me escrever? '
                                  'Assim te respondo na hora.')
-                        chatwoot.enviar_mensagem(conv_id, texto)
+                        if presenca_humana.humano_presente(conv_id):
+                            # Equipe em nota privada: o bot nao fala nem
+                            # pede texto — a conversa vai pra fila humana.
+                            texto = ''
+                            chatwoot.definir_status(conv_id, 'open')
+                        else:
+                            chatwoot.enviar_mensagem(conv_id, texto)
                         base = chatbot.carregar_historico(conv_id)
                         chatbot.salvar_historico(
                             conv_id,
