@@ -624,7 +624,17 @@ def bot_webhook():
                     # handoff ainda esta mudando `pending` para `open`. Dentro
                     # do lock, o marcador persistido vence o status antigo do
                     # webhook: guarda a fala e mantem o bot em silencio.
-                    if chatbot.handoff_recente(conv_id):
+                    from app.services import presenca_humana
+                    if presenca_humana.humano_presente(conv_id):
+                        # Equipe falando em nota privada (regra do dono
+                        # 20/09/2026): o bot NAO fala. A fala do cliente
+                        # entra no store e a conversa vai pra fila humana.
+                        resultado = {
+                            'acao': 'silencio_humano',
+                            'texto': '',
+                            'motivo': 'equipe em nota privada nesta conversa',
+                        }
+                    elif chatbot.handoff_recente(conv_id):
                         resultado = {
                             'acao': 'handoff_repetido',
                             'texto': '',
