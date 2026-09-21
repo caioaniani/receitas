@@ -826,6 +826,31 @@ class ChatbotConversa(db.Model):
     ultima_msg_em = db.Column(db.DateTime, default=agora, onupdate=agora, index=True)
 
 
+class PresencaHumanaConversa(db.Model):
+    """Marcador "a equipe está falando desta conversa em NOTA PRIVADA".
+
+    Caso conv 2409 (20/09/2026): o dono reabriu a conversa e escreveu a
+    nota privada "@Painel" às 19:06; às 19:20 o sistema mandou ao
+    entregador o texto automático de contenção ("equipe em alta demanda").
+    Regra do dono: "o bot não pode falar quando a gente fala no privado
+    com a equipe". O webhook do Agent Bot recebe a nota privada
+    (`private=true`, remetente humano) e grava esta linha; toda fala
+    automática ao contato consulta `presenca_humana.humano_presente`.
+
+    Tabela NOVA via `db.create_all` (sem ALTER). Uma linha por conversa;
+    `nota_em` é a ÚLTIMA nota privada humana (BRT naive, `agora()`).
+    `aberta_em`: quando o sistema tirou a conversa do bot (pending → open)
+    por causa da nota — o humano passou a ser o dono da conversa."""
+    __tablename__ = 'chatwoot_presenca_humana'
+
+    conv_id = db.Column(db.String(50), primary_key=True)
+    nota_em = db.Column(db.DateTime, nullable=False, default=agora, index=True)
+    autor = db.Column(db.String(120))
+    notas = db.Column(db.Integer, nullable=False, default=1)
+    aberta_em = db.Column(db.DateTime)
+    criado_em = db.Column(db.DateTime, default=agora)
+
+
 class LalamoveEntrega(db.Model):
     """Corrida Lalamove chamada a partir do painel do dia (1 linha por
     cotacao/chamada). `pedido_code` = code do card do painel (VNDA/local).
