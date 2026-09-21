@@ -305,15 +305,28 @@ def _mensagem_humana(m):
                      or (not _automatica(m) and atributos.get('external_echo'))))
 
 
+def epoch_para_brt(ts):
+    """`created_at` do Chatwoot (epoch UTC, segundos) -> datetime BRT naive
+    (o relógio do resto do sistema, `app.utils.agora`). None se ilegível."""
+    from datetime import UTC, datetime
+
+    from app.utils import BRT
+    try:
+        return (datetime.fromtimestamp(float(ts), UTC)
+                .astimezone(BRT).replace(tzinfo=None))
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
 def nota_privada_humana_em(msgs, horas=12):
     """Da listagem CRUA de mensagens (formato da API /messages), a nota
     privada HUMANA mais recente dentro de `horas`: {'quando': datetime BRT
     naive, 'autor': str} ou None. Função pura — usada pela rede de
     segurança da contenção e pelo gate `somente_bot` de `buscar_historico`
     (follow-up/vassoura), que já tem a listagem na mão."""
-    from datetime import UTC, datetime, timedelta
+    from datetime import timedelta
 
-    from app.utils import BRT, agora
+    from app.utils import agora
     if not isinstance(msgs, list):
         return None
     corte = agora() - timedelta(hours=horas)
@@ -321,10 +334,8 @@ def nota_privada_humana_em(msgs, horas=12):
     for m in msgs:
         if not isinstance(m, dict) or not m.get('private') or not remetente_humano(m):
             continue
-        try:
-            quando = (datetime.fromtimestamp(float(m.get('created_at')), UTC)
-                      .astimezone(BRT).replace(tzinfo=None))
-        except (TypeError, ValueError, OverflowError, OSError):
+        quando = epoch_para_brt(m.get('created_at'))
+        if quando is None:
             continue
         if quando >= corte and (melhor is None or quando > melhor['quando']):
             melhor = {'quando': quando,
