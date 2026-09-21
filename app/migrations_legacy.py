@@ -15,6 +15,7 @@ nao pode esperar revisao de migration.
 """
 import logging
 import os
+import re
 
 from app.extensions import db
 
@@ -1718,6 +1719,11 @@ def _migrate_postgres(app):
             "WHERE table_name = 'materia_prima'"
         ))
         cols_mp = {row[0] for row in result}
+        if 'custo_por_kg' in cols_mp:
+            # Preço pendente não impede cadastro/produção. Nenhum preço é
+            # inventado; a aplicação passa a distinguir NULL de zero real.
+            conn.execute(text(
+                'ALTER TABLE materia_prima ALTER COLUMN custo_por_kg DROP NOT NULL'))
         if cols_mp and 'estoque_atual' not in cols_mp:
             conn.execute(text("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0"))
         if cols_mp and 'peso_unidade' not in cols_mp:
@@ -3244,11 +3250,77 @@ def _migrate_postgres(app):
              "ativo BOOLEAN NOT NULL DEFAULT TRUE")
 
 
+def _migrate_mp_custo_opcional_sqlite(conn):
+    """Relaxa somente o custo, conservando o schema e os vínculos existentes.
+
+    Executada antes das outras migrations, fora de transação: SQLite exige
+    desligar FKs para reconstruir a tabela referenciada sem apagar filhos.
+    Não depende do modelo, que só muda no deploy posterior ao ALTER em prod.
+    """
+    colunas = conn.execute('PRAGMA table_info(materia_prima)').fetchall()
+    if not any(c[1] == 'custo_por_kg' and c[3] for c in colunas):
+        return
+    if conn.in_transaction:
+        raise RuntimeError('Migração de custo requer conexão sem transação ativa.')
+    ddl = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='materia_prima'"
+    ).fetchone()[0]
+    ddl, alteradas = re.subn(
+        r'((?:"custo_por_kg"|`custo_por_kg`|\[custo_por_kg\]|\bcusto_por_kg)'
+        r'\s+(?:FLOAT|REAL|DOUBLE(?:\s+PRECISION)?|NUMERIC|DECIMAL)'
+        r'(?:\s*\([^)]*\))?\s+)NOT\s+NULL\b', r'\1', ddl, flags=re.I)
+    if alteradas != 1:
+        raise RuntimeError('Não foi possível identificar a restrição do custo da MP.')
+    ddl, tabelas = re.subn(
+        r'^(CREATE\s+TABLE\s+)(?:"materia_prima"|`materia_prima`|'
+        r'\[materia_prima\]|materia_prima)(?=\s*\()',
+        r'\1"materia_prima_custo_opcional"', ddl, count=1, flags=re.I)
+    if tabelas != 1:
+        raise RuntimeError('Não foi possível identificar o schema da MP.')
+    objetos = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE tbl_name='materia_prima' "
+        "AND type IN ('index', 'trigger') AND sql IS NOT NULL"
+    ).fetchall()
+    fks = conn.execute('PRAGMA foreign_keys').fetchone()[0]
+    legacy = conn.execute('PRAGMA legacy_alter_table').fetchone()[0]
+    violacoes_antes = set(conn.execute('PRAGMA foreign_key_check').fetchall())
+    sequencia = None
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE name='sqlite_sequence'").fetchone():
+        sequencia = conn.execute(
+            "SELECT seq FROM sqlite_sequence WHERE name='materia_prima'").fetchone()
+    nomes = ', '.join('"' + c[1].replace('"', '""') + '"' for c in colunas)
+    try:
+        conn.execute('PRAGMA foreign_keys=OFF')
+        # Mantém views/FKs apontando ao nome original durante a troca.
+        conn.execute('PRAGMA legacy_alter_table=ON')
+        conn.execute('BEGIN IMMEDIATE')
+        conn.execute(ddl)
+        conn.execute(f'INSERT INTO materia_prima_custo_opcional ({nomes}) '
+                     f'SELECT {nomes} FROM materia_prima')
+        conn.execute('DROP TABLE materia_prima')
+        conn.execute('ALTER TABLE materia_prima_custo_opcional RENAME TO materia_prima')
+        for (sql,) in objetos:
+            conn.execute(sql)
+        if sequencia is not None:
+            conn.execute("UPDATE sqlite_sequence SET seq=? WHERE name='materia_prima'",
+                         sequencia)
+        if set(conn.execute('PRAGMA foreign_key_check').fetchall()) != violacoes_antes:
+            raise RuntimeError('Migração de custo alterou vínculos de matérias-primas.')
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.execute(f'PRAGMA legacy_alter_table={legacy}')
+        conn.execute(f'PRAGMA foreign_keys={fks}')
+
+
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
     import sqlite3
     uri = app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
     conn = sqlite3.connect(uri)
+    _migrate_mp_custo_opcional_sqlite(conn)
     cursor = conn.cursor()
     cursor.execute("PRAGMA table_info(receita)")
     colunas = [row[1] for row in cursor.fetchall()]
