@@ -38,6 +38,13 @@ Se essa chave também for aceita parcialmente e o servidor pedir senha novamente
 a coleta atende essa continuação uma única vez. O fluxo termina após no máximo
 quatro etapas principais (chave, senha, chave, senha), sem reiniciar o ciclo.
 Um desafio interativo admite apenas uma resposta de senha, sem terminal ou OTP.
+A sessão solicita o serviço SSH de autenticação uma única vez, usando o
+`ServiceRequestingTransport` do Paramiko, para não reiniciar fatores já aceitos
+em servidores que tratam um novo `SERVICE_REQUEST` como reinício. A espera pela
+aceitação respeita o prazo total, o timeout de autenticação e o fechamento da
+conexão. Cada fator usa um handler novo com o evento de resposta armado antes
+do envio, inclusive para respostas imediatas. Não há mudança nos algoritmos ou
+na exigência da chave conhecida do servidor.
 A abertura do canal, a ativação do subsistema e a negociação SFTP têm
 diagnósticos separados, preservando a conferência da identidade do servidor.
 

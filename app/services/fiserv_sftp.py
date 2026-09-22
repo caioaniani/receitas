@@ -416,6 +416,82 @@ def _timeout(sftp, config, prazo):
     sftp.get_channel().settimeout(_prazo_restante(config, prazo))
 
 
+def _transporte_autenticacao_unica(config, prazo):
+    """Negocia ssh-userauth uma vez, preservando os fatores já aceitos.
+
+    O Transport legado repete SERVICE_REQUEST a cada fator. Alguns servidores
+    reiniciam a autenticação com isso. O transporte alternativo do Paramiko
+    evita a repetição, mas sua espera pelo serviço precisa de prazo e seu
+    handler precisa armar o evento antes do envio da solicitação.
+    """
+    from paramiko.auth_handler import AuthOnlyHandler
+    from paramiko.common import cMSG_SERVICE_REQUEST, cMSG_USERAUTH_REQUEST
+    from paramiko.message import Message
+    from paramiko.transport import ServiceRequestingTransport
+
+    class AutenticacaoComEvento(AuthOnlyHandler):
+        def send_auth_request(self, username, method, finish_message=None):
+            __tracebackhide__ = True
+            self.auth_method = method
+            self.username = username
+            mensagem = Message()
+            mensagem.add_byte(cMSG_USERAUTH_REQUEST)
+            mensagem.add_string(username)
+            mensagem.add_string('ssh-connection')
+            mensagem.add_string(method)
+            if finish_message is not None:
+                finish_message(mensagem)
+            # Uma resposta pode chegar antes de _send_message retornar.
+            self.auth_event = threading.Event()
+            with self.transport.lock:
+                self.transport._send_message(mensagem)
+            return self.wait_for_response(self.auth_event)
+
+    class TransporteAutenticacaoUnica(ServiceRequestingTransport):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._fiserv_servico_solicitado = False
+            self._fiserv_servico_aceito = threading.Event()
+
+        def _parse_service_accept(self, mensagem):
+            __tracebackhide__ = True
+            super()._parse_service_accept(mensagem)
+            if self._service_userauth_accepted:
+                self._fiserv_servico_aceito.set()
+
+        def get_auth_handler(self):
+            return AutenticacaoComEvento(self)
+
+        def ensure_session(self):
+            __tracebackhide__ = True
+            _prazo_restante(config, prazo)
+            if not self.is_active() or not self.initial_kex_done:
+                raise EOFError('Sessão SSH indisponível.')
+            if self._service_userauth_accepted and self.auth_handler is not None:
+                self.auth_handler = self.get_auth_handler()
+                return
+            limite = min(prazo, time.monotonic() + (self.auth_timeout or config.timeout_segundos))
+            if not self._fiserv_servico_solicitado:
+                self._fiserv_servico_solicitado = True
+                mensagem = Message()
+                mensagem.add_byte(cMSG_SERVICE_REQUEST)
+                mensagem.add_string('ssh-userauth')
+                self._send_message(mensagem)
+            while not self._service_userauth_accepted:
+                if not self.is_active():
+                    raise EOFError('Sessão SSH encerrada durante a autenticação.')
+                restante = min(_prazo_restante(config, prazo), limite - time.monotonic())
+                if restante <= 0:
+                    raise socket.timeout('Serviço de autenticação não respondeu no prazo.')
+                self._fiserv_servico_aceito.wait(min(0.1, restante))
+            _prazo_restante(config, prazo)
+            if not self.is_active():
+                raise EOFError('Sessão SSH encerrada durante a autenticação.')
+            self.auth_handler = self.get_auth_handler()
+
+    return TransporteAutenticacaoUnica
+
+
 class _AutenticacaoEmMemoria:
     """Autenticação finita, inclusive quando a senha precisa vir antes da chave."""
 
@@ -587,7 +663,10 @@ def _conectar(config):
             frase = ''
         timeout = verificar_prazo()
         if config.chave_privada is not None:
-            autenticacao = {'auth_strategy': _AutenticacaoEmMemoria(config, prazo)}
+            autenticacao = {
+                'auth_strategy': _AutenticacaoEmMemoria(config, prazo),
+                'transport_factory': _transporte_autenticacao_unica(config, prazo),
+            }
         else:
             autenticacao = {'key_filename': config.chave_privada_path, 'passphrase': frase}
             if config.senha is not None:
