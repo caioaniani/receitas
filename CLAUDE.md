@@ -4763,12 +4763,25 @@ abria a conversa não tinha conversa nenhuma". DOIS defeitos independentes:
    guard `threadAberta()` (nunca abre sozinho com `#at-thread` visível; o
    botão "!" manual continua abrindo), "Abrir conversa" adia TODAS as
    pendências por 5 min, Esc adia como o × (não-modal não recebe
-   `cancel`). Cobrança até resolver, som e adiamento de 5 min INTACTOS: ao
-   voltar à lista, o aviso volta no poll seguinte. ARMADILHA: o painel
-   NÃO recarrega sozinho após deploy — TV e PCs com a página aberta só
-   recebem JS/CSS novo com F5 (`?v=` é hash de conteúdo, mas viaja no
-   HTML). Teste: `tests/test_painel_alertas_js.py` (JS real no node; FALHA
-   contra a versão antiga — conferido).
+   `cancel`). PÓS-REVISÃO (mesmo dia, todos aplicados): (a) "atendendo" =
+   conversa aberta OU rascunho **com atividade recente na página**
+   (`atendendo()`, 10 min) — sem a janela, uma thread esquecida aberta na
+   TV silenciaria o cartão por dias e um rascunho deixado no "Voltar" o
+   bloquearia para sempre; (b) "Abrir conversa" adia SÓ a pendência
+   clicada (o guard já segura o cartão; ao voltar à lista as outras cobram
+   na hora) e o som respeita `atendendo()` (reavalia a cada 1 min);
+   (c) `MutationObserver` em `#at-thread`: conversa aberta por QUALQUER
+   caminho (lista, vigia, "Chamar") com o cartão na frente → o cartão sai
+   da frente; "Voltar" → cobra na hora sem esperar o poll; (d) abertura
+   automática devolve o foco a quem digitava (o `autofocus` do × só vale
+   no gesto manual); (e) cartão posicionado abaixo dos filtros/"Chamar"
+   (`top: 104px`, largura `clamp(360px, 40vw - 32px, 560px)`, altura
+   ≤ 72vh — a caixa de resposta fica livre). Cobrança até resolver,
+   som e adiamento de 5 min INTACTOS. ARMADILHA: o painel NÃO recarrega
+   sozinho após deploy — TV e PCs com a página aberta só recebem JS/CSS
+   novo com F5 (`?v=` é hash de conteúdo, mas viaja no HTML). Teste:
+   `tests/test_painel_alertas_js.py` (JS real no node com relógio, timers e
+   MutationObserver simulados; FALHA contra a versão antiga — conferido).
 
 2. **Conversa iniciada pela EQUIPE virava "abandono" + "Urgente".** A
    pendência apontava para a 2429, aberta pelo botão "Chamar" (template)
