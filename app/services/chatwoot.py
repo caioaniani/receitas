@@ -395,6 +395,11 @@ def nota_privada_humana_recente(conversation_id, horas=12):
     return nota_privada_humana_em(msgs, horas=horas)
 
 
+# Teto de páginas (`before=`) que `buscar_historico` volta procurando a
+# fronteira (fala do cliente): 20 páginas x 20 mensagens cruas = 400.
+_MAX_PAGINAS_HISTORICO = 20
+
+
 def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
                      somente_bot=False):
     """Mensagens recentes da conversa, em ordem cronologica, mapeadas pra
@@ -433,11 +438,22 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
         return []
     if incluir_autoria or somente_bot:
         # Notas internas e automações podem ocupar a página inteira. Procura
-        # uma fronteira real (cliente/humano), em vez de concluir silêncio.
+        # uma fronteira real em vez de concluir silêncio. Com `somente_bot`
+        # a fronteira é cliente OU humano (humano público = devolve [] de
+        # qualquer jeito). Com `incluir_autoria` a fronteira é a FALA DO
+        # CLIENTE: `atendimento_pendente.preparar` decide "cliente nunca
+        # falou" (`chatbot.cliente_ja_falou`) por este histórico, e uma
+        # página só de respostas humanas + notas (caso grave em
+        # acompanhamento) faria uma espera legítima virar `sem_cliente`
+        # (revisão 22/09/2026). Pagina até o início da conversa (`before`
+        # vazio) ou até _MAX_PAGINAS_HISTORICO páginas — uma conversa com
+        # 400 mensagens cruas sem NENHUMA do cliente não existe na prática.
         lote = msgs
-        for _ in range(20):
-            if any(not m.get('private') and (m.get('message_type') in ('incoming', 0)
-                                           or _mensagem_humana(m)) for m in lote):
+        for _ in range(_MAX_PAGINAS_HISTORICO):
+            cliente = any(not m.get('private') and m.get('message_type') in ('incoming', 0)
+                          for m in lote)
+            humano = any(not m.get('private') and _mensagem_humana(m) for m in lote)
+            if cliente or (somente_bot and humano):
                 break
             ids = [m.get('id') for m in lote if isinstance(m.get('id'), int)]
             if not ids:
@@ -486,8 +502,15 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
         elif mt in ('outgoing', 1):
             if not content:
                 continue  # imagem do bot/atendente nao precisa ir pro Claude
-            hist.append({'role': 'assistant', 'content': content,
-                         'created_at': ts})
+            item = {'role': 'assistant', 'content': content, 'created_at': ts}
+            erro_canal = _erro_de_entrega(m)
+            if erro_canal:
+                # Mensagem nossa que a Meta RECUSOU: o painel de atendimento
+                # mostra "⚠ Não entregue" na bolha (chaves extras — quem
+                # monta o prompt do modelo copia só role/content).
+                item['entregue'] = False
+                item['erro_canal'] = erro_canal
+            hist.append(item)
         if (incluir_autoria or somente_bot) and mt in ('incoming', 0, 'outgoing', 1) and hist:
             hist[-1]['humano'] = _mensagem_humana(m)
             hist[-1]['message_id'] = m.get('id')
@@ -1144,7 +1167,14 @@ def _conversa_aberta_do_contato(contact_id, inbox_id):
 
 
 def _criar_conversa(source_id, inbox_id, contact_id):
-    """Cria conversa na inbox do WhatsApp. Retorna conversation_id ou None."""
+    """Cria conversa na inbox do WhatsApp. Retorna conversation_id ou None.
+
+    Sem `status` no corpo DE PROPÓSITO: numa inbox com Agent Bot o próprio
+    Chatwoot força `pending` na criação (`Conversation#determine_
+    conversation_status`, before_create — `self.status = :pending if
+    inbox.active_bot?`), então mandar 'open' aqui não evitaria o
+    `toggle_status` que `iniciar_conversa_whatsapp` faz depois do template
+    (revisão 22/09/2026)."""
     body = {'source_id': source_id, 'inbox_id': int(inbox_id),
             'contact_id': int(contact_id)}
     try:
@@ -1325,8 +1355,12 @@ def iniciar_conversa_whatsapp(telefone, nome, params,
     # 2429, 22/09/2026). `open` = humano é dono; a resposta do cliente ao
     # template cai na fila da equipe, não no bot. Best-effort, 1 tentativa:
     # o template já saiu, e a regra `chatbot.cliente_ja_falou` segura os
-    # três consumidores mesmo se este toggle falhar.
-    aberta = bool(definir_status(conv_id, 'open', tentativas=1).get('ok'))
+    # três consumidores mesmo se este toggle falhar. Vale para os TRÊS
+    # botões (chamar-cliente, chamar-telefone e chamar-motoboy) e também
+    # para conversa `pending` reusada: quem clicou "Chamar" quer falar com a
+    # pessoa — o bot não responde por cima (decisão registrada 22/09/2026).
+    # `aberta` viaja até o painel, que avisa quando ficou na fila do bot.
+    aberta = bool(definir_status(conv_id, 'open', tentativas=1, critico=False).get('ok'))
     if not aberta:
         logger.warning('iniciar_conversa_whatsapp: conversa %s nao foi para open', conv_id)
     return {'ok': True, 'conversation_id': conv_id, 'nova': nova, 'erro': None,
