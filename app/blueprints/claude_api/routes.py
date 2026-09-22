@@ -2802,10 +2802,9 @@ def atendimento_painel():
     if chatwoot.disponivel():
         t0 = _time.monotonic()
         try:
-            import requests as _requests
             r = _requests.get(f'{chatwoot._base()}/conversations',
                               headers=chatwoot._headers(),
-                              params={'status': 'open', 'page': 1}, timeout=(5, 25))
+                              params={'status': 'open', 'page': 1}, timeout=(3, 12))
             out['listagem_crua'] = {'http': r.status_code,
                                     'ms': int((_time.monotonic() - t0) * 1000),
                                     'bytes': len(r.content or b'')}
