@@ -1024,6 +1024,8 @@ def test_atendimento_painel_reproduz_listagem_diagnostico_e_erros_de_envio(app, 
     assert 'contato' not in aberta['amostra'][0] and 'preview' not in aberta['amostra'][0]
     assert d['listagem_crua']['http'] is None
     assert d['diagnostico']['servidor_http'] == 200
+    # Sem CHATWOOT_PAINEL_TOKEN no teste: nada de rede, so o flag.
+    assert d['painel_token'] == {'configurado': False}
     assert d['erros_envio']['ok'] is True and d['erros_envio']['conv'] == '7'
 
 
