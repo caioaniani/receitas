@@ -169,8 +169,8 @@ def preparar(conversa, historico, *, min_minutos=10):
     elif row.estado == 'em_atendimento':
         # A conversa ainda não foi resolvida: outra mensagem não zera o alerta.
         row.estado = 'aguardando'
-    elif row.estado in ('resolvido', 'respondido'):
-        if row.estado == 'resolvido':
+    elif row.estado in ('resolvido', 'respondido', 'sem_cliente'):
+        if row.estado in ('resolvido', 'sem_cliente'):
             row.grave = False
         row.inicio_em = inicio
         row.proximo_aviso_em = None
