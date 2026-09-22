@@ -379,7 +379,24 @@
             threadCorpo.innerHTML = '<div class="at-vazio">Sem mensagens.</div>';
             return;
           }
-          threadCorpo.innerHTML = ms.map(function (m) {
+          // Mensagem nossa que a Meta RECUSOU (`entregue: false` vem do
+          // Chatwoot, status failed/external_error): bolha vermelha com o
+          // erro, e aviso no topo quando a ÚLTIMA nossa não chegou — sem
+          // isso a equipe reclica "Chamar" achando que o cliente ignora.
+          var ultimaNossa = null;
+          ms.forEach(function (m) { if (m.role !== 'user') ultimaNossa = m; });
+          var aviso = '';
+          if (ultimaNossa && ultimaNossa.entregue === false) {
+            var erroUlt = ultimaNossa.erro_canal || '';
+            var dica = /131026/.test(erroUlt)
+              ? 'Este número não recebe WhatsApp (Meta 131026). Tente outro canal: ligação, e-mail ou Instagram.'
+              : /24 h|24h|modelo|template/i.test(erroUlt)
+                ? 'Fora da janela de 24 h do WhatsApp — só o botão "Chamar" (modelo aprovado) chega.'
+                : 'Confira o erro na bolha antes de reenviar.';
+            aviso = '<div class="at-aviso-entrega">⚠ A última mensagem NÃO chegou ao cliente. ' +
+              esc(dica) + '</div>';
+          }
+          threadCorpo.innerHTML = aviso + ms.map(function (m) {
             var cls = m.role === 'user' ? 'cli' : 'nos';
             var quem = m.role === 'user' ? esc(nome || 'Cliente') : 'Nós';
             var imgs = (m.imagens || []).map(function (u) {
@@ -387,7 +404,12 @@
             }).join('');
             var hora = horaMsg(m.created_at);
             var rodape = quem + (hora ? ' · ' + hora : '');
-            return '<div class="bolha ' + cls + '">' + esc(m.content) + imgs +
+            var falha = (m.role !== 'user' && m.entregue === false)
+              ? '<span class="falha">⚠ Não entregue' +
+                (m.erro_canal ? ': ' + esc(m.erro_canal) : '') + '</span>'
+              : '';
+            return '<div class="bolha ' + cls + (falha ? ' falhou' : '') + '">' +
+              esc(m.content) + imgs + falha +
               '<span class="qd">' + rodape + '</span></div>';
           }).join('');
           threadCorpo.scrollTop = threadCorpo.scrollHeight;
