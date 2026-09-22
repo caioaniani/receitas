@@ -31,7 +31,15 @@ body.pa-at-painel .barra-teste { min-height: 52px; padding-right: 190px; }
   box-shadow: 0 20px 70px #0006;
   font: 15px/1.45 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
 }
-.pa-at-dialog[open] { display: flex; flex-direction: column; }
+/* Não-modal (`dialog.show()`, 22/09/2026): flutua sobre a coluna de
+   atendimento, abaixo do indicador, e o painel atrás continua clicável —
+   na TV os pedidos do dia seguem visíveis; no PC a conversa segue usável. */
+.pa-at-dialog[open] {
+  display: flex; flex-direction: column;
+  position: fixed; top: 58px; right: 12px; left: auto; margin: 0; z-index: 1090;
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 70px); max-height: calc(100dvh - 70px);
+}
 .pa-at-dialog:not([open]) { display: none; }
 .pa-at-dialog::backdrop { background: rgb(10 20 30 / 65%); }
 .pa-at-cabecalho {
