@@ -16,11 +16,27 @@ from app.models import EsperaAtendimento, VigiaVeredito
 from app.utils import agora
 
 _SO_NOSSAS = [
-    {'role': 'assistant', 'humano': True,
+    # O template REAL saiu com `status='failed'` na Meta ("131026: Message
+    # undeliverable" nas quatro tentativas — número que não recebe WhatsApp;
+    # sonda /api/claude/atendimento-painel?conv=2429). `_mensagem_humana`
+    # não conta mensagem falhada como humana, e foi por isso que o gate
+    # `somente_bot` do follow-up não segurou o cutucão das 10:25.
+    {'role': 'assistant', 'humano': False, 'entregue': False,
+     'erro_canal': '131026: Message undeliverable',
      'content': 'Olá Cintia, aqui é da O Pão. Ficamos com uma dúvida sobre o seu pedido E3862E49.'},
     {'role': 'assistant', 'humano': False,
      'content': 'Oi, Cintia! Ainda ficou aquela dúvida sobre o pedido, você consegue nos ajudar?'},
 ]
+
+
+def _msg(id_, tipo, content, **extra):
+    """Mensagem CRUA da API do Chatwoot (listagem /messages)."""
+    m = {'id': id_, 'message_type': tipo, 'content': content, 'private': False,
+         'created_at': 1790082000 + id_, 'status': 'sent', 'attachments': []}
+    if tipo == 'outgoing':
+        m['sender'] = {'type': 'user', 'name': 'Micaela'}
+    m.update(extra)
+    return m
 
 
 def _seed_2429(estado='aguardando', resolvido_em=None):
