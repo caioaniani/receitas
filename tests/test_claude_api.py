@@ -1005,8 +1005,10 @@ def test_atendimento_painel_reproduz_listagem_diagnostico_e_erros_de_envio(app, 
                  'status': status, 'canal': 'Channel::Whatsapp',
                  'ultima_em': 1700000000, 'nao_lidas': 2}]
     monkeypatch.setattr(chatwoot, 'listar_conversas', _listar)
-    # Sem token configurado a sonda pula o GET cru (nada de rede no teste).
+    # Sem token configurado a sonda pula os GETs crus (nada de rede no teste,
+    # mesmo num dev com CHATWOOT_* copiados de prod).
     monkeypatch.setattr(chatwoot, 'disponivel', lambda: False)
+    monkeypatch.setattr(chatwoot, 'painel_disponivel', lambda: False)
     monkeypatch.setattr(chatwoot, 'diagnostico', lambda: {'servidor_http': 200, 'saudavel': True})
     monkeypatch.setattr(chatwoot, 'erros_de_envio',
                         lambda conv, limite=10: {'ok': True, 'conv': conv,
