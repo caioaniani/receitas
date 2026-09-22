@@ -548,8 +548,14 @@
           btn.disabled = false;
           var b = r.body || {};
           if (r.status === 200 && b.ok) {
-            toast(b.nova ? 'Template enviado — conversa aberta'
+            // A Meta responde DEPOIS (segundos): "enviado" aqui = aceito
+            // pelo Chatwoot. Se não chegar, a bolha fica vermelha na thread.
+            toast(b.nova ? 'Template enviado — se aparecer ⚠ na conversa, não chegou'
                          : 'Conversa ja existia — template reenviado', 'ok');
+            if (b.aberta === false) {
+              toast('Atenção: a conversa continua na fila do BOT (não consegui '
+                    + 'passar para a equipe). Responda por aqui mesmo assim.', 'erro');
+            }
             abrirThread(b.conversation_id, b.nome);
           } else {
             var msg = b.erro || r.status;
