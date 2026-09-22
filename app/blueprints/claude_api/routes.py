@@ -2774,6 +2774,8 @@ def atendimento_painel():
     """
     import time as _time
 
+    import requests as _requests
+
     from app.services import chatwoot
 
     def _erro(exc):
