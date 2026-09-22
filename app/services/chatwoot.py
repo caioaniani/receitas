@@ -846,7 +846,7 @@ def erros_de_envio(conversation_id, limite=10):
         if not isinstance(m, dict):
             continue
         ca = m.get('content_attributes') or {}
-        if m.get('status') == 'failed' or ca.get('external_error'):
+        if _erro_de_entrega(m):
             falhas.append({
                 'mensagem': (m.get('content') or '')[:80],
                 'criada_em': m.get('created_at'),
