@@ -37,13 +37,14 @@ def test_endpoint_chama_motorista_e_devolve_conv_id(app, admin_user):
     _login(client, admin_user)
     with patch('app.services.chatwoot.iniciar_conversa_whatsapp',
                return_value={'ok': True, 'conversation_id': 901,
-                             'nova': True, 'erro': None}) as m:
+                             'nova': True, 'erro': None, 'aberta': False}) as m:
         r = client.post('/entregas/api/atendimento/chamar-motorista',
                         json={'entrega_id': eid})
     assert r.status_code == 200
     d = r.get_json()
     assert d['ok'] is True and d['conversation_id'] == 901
     assert d['nome'] == 'Motoboy Carlos'
+    assert d['aberta'] is False   # toggle falhou: o painel avisa que ficou no bot
     args, kwargs = m.call_args
     assert args[0] == '11988887777' and args[1] == 'Carlos'
     assert kwargs['params'] == ['Carlos', 'PED42']
