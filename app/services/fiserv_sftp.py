@@ -93,6 +93,9 @@ class ErroOperacaoFiservSFTP(ErroConexaoFiservSFTP):
     def __init__(self, etapa, codigo):
         etapas = {
             'CONEXAO': 'conexão SSH', 'ABERTURA_SFTP': 'abertura SFTP',
+            'CANAL_SFTP': 'abertura do canal de transferência',
+            'SUBSISTEMA_SFTP': 'ativação da transferência',
+            'NEGOCIACAO_SFTP': 'negociação da transferência',
             'PASTA_LSTAT': 'consulta da pasta', 'PASTA_REALPATH': 'validação da pasta',
             'LISTAGEM': 'listagem dos arquivos', 'ARQUIVO_LSTAT': 'consulta do arquivo',
             'ARQUIVO_REALPATH': 'validação do arquivo', 'ARQUIVO_OPEN': 'abertura do arquivo',
@@ -133,7 +136,8 @@ def _erro_operacao(exc, etapa):
         return ErroSegurancaFiservSFTP('A chave do servidor Fiserv não corresponde à chave confiável.')
     if isinstance(exc, paramiko.AuthenticationException):
         return ErroAutenticacaoFiservSFTP('A autenticação SFTP Fiserv foi recusada; revise as credenciais.')
-    if isinstance(exc, OSError) and etapa not in ('CONEXAO', 'ABERTURA_SFTP'):
+    if isinstance(exc, OSError) and etapa not in (
+            'CONEXAO', 'ABERTURA_SFTP', 'CANAL_SFTP', 'SUBSISTEMA_SFTP', 'NEGOCIACAO_SFTP'):
         if exc.errno in (errno.EACCES, errno.EPERM):
             return ErroAcessoFiservSFTP('SEM_PERMISSAO')
         if etapa.startswith('PASTA_') and exc.errno in (errno.ENOENT, errno.ENOTDIR):
@@ -381,12 +385,89 @@ def _timeout(sftp, config, prazo):
     sftp.get_channel().settimeout(_prazo_restante(config, prazo))
 
 
+class _AutenticacaoEmMemoria:
+    """Autenticação finita, inclusive quando a senha precisa vir antes da chave."""
+
+    def __init__(self, config, prazo):
+        self._config = config
+        self._prazo = prazo
+
+    def authenticate(self, transport):
+        __tracebackhide__ = True
+        paramiko = _carregar_paramiko()
+        config = self._config
+
+        def autenticar_chave():
+            __tracebackhide__ = True
+            transport.auth_timeout = _prazo_restante(config, self._prazo)
+            return transport.auth_publickey(config.usuario, config.chave_privada)
+
+        def autenticado():
+            __tracebackhide__ = True
+            if not transport.is_active():
+                raise ErroOperacaoFiservSFTP('CONEXAO', 'EOF')
+            return transport.is_authenticated()
+
+        def autenticar_senha(metodos):
+            __tracebackhide__ = True
+            respondeu = False
+
+            def responder(_titulo, _instrucoes, campos):
+                __tracebackhide__ = True
+                nonlocal respondeu
+                if not campos:
+                    return []
+                # Uma resposta de senha, nunca desafios adicionais/OTP nem stdin.
+                if respondeu or len(campos) != 1 or campos[0][1]:
+                    raise ErroAutenticacaoFiservSFTP('A autenticação Fiserv exige revisão do acesso.')
+                respondeu = True
+                return [config.senha]
+
+            transport.auth_timeout = _prazo_restante(config, self._prazo)
+            if 'password' in metodos:
+                try:
+                    return transport.auth_password(config.usuario, config.senha, fallback=False)
+                except paramiko.BadAuthenticationType as exc:
+                    if 'keyboard-interactive' not in exc.allowed_types:
+                        raise
+            transport.auth_timeout = _prazo_restante(config, self._prazo)
+            return transport.auth_interactive(config.usuario, responder)
+
+        try:
+            proximos = autenticar_chave()
+        except paramiko.BadAuthenticationType as exc:
+            proximos = exc.allowed_types
+            if config.senha is None or not any(
+                    metodo in proximos for metodo in ('password', 'keyboard-interactive')):
+                raise
+        except paramiko.AuthenticationException:
+            if config.senha is None:
+                raise
+            # Alguns servidores só aceitam a chave depois da senha.
+            proximos = ('password',)
+        if autenticado():
+            return
+        if config.senha is None or not any(
+                metodo in proximos for metodo in ('password', 'keyboard-interactive')):
+            raise ErroAutenticacaoFiservSFTP('A autenticação Fiserv não foi concluída.')
+        proximos = autenticar_senha(proximos)
+        if autenticado():
+            return
+        # A API pode retornar sucesso parcial sem lançar exceção. Completa
+        # somente a continuação publickey solicitada pelo próprio servidor.
+        if 'publickey' in proximos:
+            autenticar_chave()
+        if not autenticado():
+            raise ErroAutenticacaoFiservSFTP('A autenticação Fiserv não foi concluída.')
+
+
 @contextmanager
 def _conectar(config):
     __tracebackhide__ = True
     paramiko = _carregar_paramiko()
     cliente = None
     sftp = None
+    canal = None
     etapa = 'CONEXAO'
     temporizador = None
     prazo_expirado = threading.Event()
@@ -442,15 +523,15 @@ def _conectar(config):
         if config.senha is not None and frase is None:
             frase = ''
         timeout = verificar_prazo()
-        autenticacao = (
-            {'pkey': config.chave_privada} if config.chave_privada is not None
-            else {'key_filename': config.chave_privada_path}
-        )
-        if config.senha is not None:
-            autenticacao['password'] = config.senha
+        if config.chave_privada is not None:
+            autenticacao = {'auth_strategy': _AutenticacaoEmMemoria(config, prazo)}
+        else:
+            autenticacao = {'key_filename': config.chave_privada_path, 'passphrase': frase}
+            if config.senha is not None:
+                autenticacao['password'] = config.senha
         cliente.connect(
             hostname=config.host, port=PORTA, username=config.usuario,
-            passphrase=frase, **autenticacao,
+            **autenticacao,
             allow_agent=False, look_for_keys=False,
             timeout=timeout, banner_timeout=timeout, auth_timeout=timeout,
             channel_timeout=timeout,
@@ -458,8 +539,19 @@ def _conectar(config):
         # O timer pode ter vencido durante DNS/chave, antes de haver transporte
         # para fechar; nesse caso não abre SFTP com um timer já consumido.
         verificar_prazo()
-        etapa = 'ABERTURA_SFTP'
-        sftp = cliente.open_sftp()
+        transporte = cliente.get_transport()
+        if transporte is None or not transporte.is_active():
+            raise ErroOperacaoFiservSFTP('CONEXAO', 'EOF')
+        if not transporte.is_authenticated():
+            raise ErroAutenticacaoFiservSFTP('A autenticação Fiserv não foi concluída.')
+        etapa = 'CANAL_SFTP'
+        canal = transporte.open_session(timeout=verificar_prazo())
+        canal.settimeout(verificar_prazo())
+        etapa = 'SUBSISTEMA_SFTP'
+        canal.invoke_subsystem('sftp')
+        canal.settimeout(verificar_prazo())
+        etapa = 'NEGOCIACAO_SFTP'
+        sftp = paramiko.SFTPClient(canal)
         etapa = 'OPERACAO'
         verificar_prazo()
         _timeout(sftp, config, prazo)
@@ -476,7 +568,7 @@ def _conectar(config):
             raise ErroLimiteFiservSFTP(_MENSAGEM_PRAZO) from None
         # Recusa administrativa/tipo de canal desconhecido exigem revisão.
         # Falha de conexão ou falta de recursos (2/4) continuam transitórias.
-        if (etapa == 'ABERTURA_SFTP' and isinstance(exc, paramiko.ChannelException)
+        if (etapa == 'CANAL_SFTP' and isinstance(exc, paramiko.ChannelException)
                 and exc.code in (1, 3)):
             raise ErroAcessoFiservSFTP('SFTP_INDISPONIVEL') from None
         raise _erro_operacao(exc, etapa) from None
@@ -489,6 +581,11 @@ def _conectar(config):
             if sftp is not None:
                 try:
                     sftp.close()
+                except (OSError, EOFError, ValueError, paramiko.SSHException, paramiko.SFTPError):
+                    erro_fechamento = True
+            elif canal is not None:
+                try:
+                    canal.close()
                 except (OSError, EOFError, ValueError, paramiko.SSHException, paramiko.SFTPError):
                     erro_fechamento = True
             try:

@@ -30,6 +30,14 @@ consulta da pasta, listagem e leitura sem guardar texto da exceção remota,
 nome de usuário, caminhos de chaves ou conteúdo dos arquivos. As categorias
 não inferem senha incorreta a partir de uma falha genérica de protocolo.
 
+A autenticação da chave guardada no painel só é considerada concluída quando
+o transporte confirma isso. São suportadas as sequências chave/senha e
+senha/chave: a chave pode ser repetida após a senha somente quando o servidor
+solicitar essa continuação. A senha não é repetida automaticamente após recusa.
+Um desafio interativo admite apenas uma resposta de senha, sem terminal ou OTP.
+A abertura do canal, a ativação do subsistema e a negociação SFTP têm
+diagnósticos separados, preservando a conferência da identidade do servidor.
+
 Os arquivos recebidos são preservados cifrados e podem ser baixados pelo owner.
 Este estágio recebe o EDI original: **não normaliza ou soma os valores no caixa**.
 Os cinco leiautes (vendas, pagamentos, recebíveis, PIX e voucher) ainda precisam
