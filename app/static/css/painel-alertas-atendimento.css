@@ -32,13 +32,14 @@ body.pa-at-painel .barra-teste { min-height: 52px; padding-right: 190px; }
   font: 15px/1.45 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
 }
 /* Não-modal (`dialog.show()`, 22/09/2026): flutua sobre a coluna de
-   atendimento, abaixo do indicador, e o painel atrás continua clicável —
-   na TV os pedidos do dia seguem visíveis; no PC a conversa segue usável. */
+   atendimento, abaixo do indicador e da barra de filtros/"Chamar". A coluna
+   de pedidos (TV) e a caixa de resposta seguem utilizáveis; a lista de
+   conversas fica atrás do cartão até × / Esc / abrir uma conversa. */
 .pa-at-dialog[open] {
   display: flex; flex-direction: column;
-  position: fixed; top: 58px; right: 12px; left: auto; margin: 0; z-index: 1090;
-  width: min(560px, calc(100vw - 24px));
-  max-height: calc(100vh - 70px); max-height: calc(100dvh - 70px);
+  position: fixed; top: 104px; right: 12px; left: auto; margin: 0; z-index: 1090;
+  width: clamp(360px, calc(40vw - 32px), 560px);
+  max-height: min(72vh, calc(100vh - 130px)); max-height: min(72dvh, calc(100dvh - 130px));
 }
 .pa-at-dialog:not([open]) { display: none; }
 .pa-at-dialog::backdrop { background: rgb(10 20 30 / 65%); }
