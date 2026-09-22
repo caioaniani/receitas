@@ -303,7 +303,9 @@ def confirmar_acao_painel(cid, acao, *, iniciado_em, usuario_id):
             row.estado = 'resolvido'
             row.resolvido_em = iniciado_em
             row.proximo_aviso_em = None
-        elif row.estado != 'resolvido':
+        elif row.estado not in ('resolvido', 'sem_cliente'):
+            # `sem_cliente`: a equipe escreveu numa conversa que ELA iniciou
+            # e o cliente nunca respondeu — não é atendimento em curso.
             row.grave = bool(row.grave or any(v.bot_acao != 'espera_humano' for v in vereditos))
             acompanhar = bool(vereditos) or _acompanhar_ate_resolver(row, iniciado_em)
             row.estado = 'em_atendimento' if acompanhar else 'respondido'
