@@ -2819,6 +2819,34 @@ def atendimento_painel():
     except Exception as exc:  # noqa: BLE001
         out['diagnostico'] = {'erro': _erro(exc)}
 
+    # Terceiro token: o do agente "Painel" (CHATWOOT_PAINEL_TOKEN), usado
+    # SO para ENVIAR pelo painel (`chatwoot.enviar_mensagem_painel`). O
+    # `diagnostico()` nao o cobre; com ele invalido a lista carrega e o
+    # envio falha com HTTP 401. GET /profile e read-only e valida o token.
+    if chatwoot.painel_disponivel():
+        try:
+            import requests as _requests
+            base_url = (current_app.config.get('CHATWOOT_URL') or '').strip().rstrip('/')
+            r = _requests.get(f'{base_url}/api/v1/profile',
+                              headers=chatwoot._painel_headers(), timeout=(5, 10))
+            perfil = {}
+            if r.status_code == 200:
+                try:
+                    perfil = r.json() if r.text else {}
+                except ValueError:
+                    perfil = {}
+            out['painel_token'] = {
+                'configurado': True, 'http': r.status_code,
+                'valido': r.status_code == 200,
+                'agente': (perfil.get('name') or '')[:60] if isinstance(perfil, dict) else '',
+                'disponibilidade': (perfil.get('availability_status')
+                                    if isinstance(perfil, dict) else None),
+            }
+        except Exception as exc:  # noqa: BLE001
+            out['painel_token'] = {'configurado': True, 'http': None, 'erro': _erro(exc)}
+    else:
+        out['painel_token'] = {'configurado': False}
+
     conv = (request.args.get('conv') or '').strip()
     if conv:
         try:
