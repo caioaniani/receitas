@@ -377,7 +377,7 @@ def _preview_registrar_desperdicio_lote(p, token):
             ('Motivo', motivo),
             ('Itens com match', n_ok),
             ('Nao encontrados', n_nao),
-            ('Total a baixar', f'-{total_qtd}'),
+            ('Quantidade informada', total_qtd),
             ('Observacao', p.get('observacao') or '—'),
         ]),
         _section(f'*Itens:*\n{resumo[:2500] or "(vazio)"}'),
@@ -458,7 +458,7 @@ def _preview_criar_retirada_sobras(p, token):
 
     def _fmt(it):
         nome = (it.get('resolvido') or {}).get('nome') or it.get('nome') or '?'
-        dest = it.get('destino') or nome
+        dest = it.get('destino_industria') or it.get('destino') or nome
         marker = '' if it.get('resolvido') else ' ⚠ sem match'
         return f"- {it.get('quantidade')}x {nome} → vira *{dest}*{marker}"
 
@@ -530,7 +530,8 @@ def build_preview(tipo_acao, params, token, explicacao=None):
     """Constroi Block Kit pra preview de write tool. Inclui explicacao."""
     builder = _PREVIEW_BUILDERS.get(tipo_acao)
     blocks = []
-    if explicacao:
+    opcoes = params.get('_opcoes_sobra')
+    if explicacao and not opcoes:
         blocks.append(_section(_md_pra_slack(explicacao)))
     if builder:
         blocks.extend(builder(params, token))
@@ -542,6 +543,28 @@ def build_preview(tipo_acao, params, token, explicacao=None):
                  and v not in (None, '')]
         blocks.append(_fields(pares))
         blocks.append(_botoes(token, 'Confirmar', 'Cancelar'))
+    if opcoes:
+        # A confirmação genérica poderia aceitar uma classificação errada
+        # do modelo. O gesto escolhe explicitamente o efeito no estoque.
+        from app.services.slack_sobras import ACAO_NOVA_SOBRA, ACAO_PREPARAR_RETIRADA
+        blocks = [b for b in blocks if b.get('type') != 'actions']
+        linhas = '\n'.join(
+            f"- *{i['retorno_nome']}*: saldo {i['saldo_retorno'] if i['saldo_retorno'] is not None else '?'} un; "
+            f"nova sobra acrescenta *+{i['quantidade']} un*."
+            for i in opcoes['conversoes'])
+        blocks.append(_section('*Esta quantidade é uma nova sobra ou já está no retorno?*\n'
+                               + linhas + '\n*Nova sobra* converte o produto fresco e soma ao retorno. '
+                               '*Preparar retirada* usa o retorno existente; a baixa ocorre na coleta.'))
+        botoes = _botoes(token, 'Registrar NOVA sobra', 'Cancelar')
+        botoes['elements'][0]['action_id'] = ACAO_NOVA_SOBRA
+        if opcoes['pode_retirar']:
+            botoes['elements'].insert(1, {
+                'type': 'button', 'text': {'type': 'plain_text', 'text': 'Preparar retirada'},
+                'action_id': ACAO_PREPARAR_RETIRADA, 'value': token})
+        else:
+            blocks.append(_section('Para retirar retorno existente, envie a loja e esses itens '
+                                   'em uma mensagem separada dos demais itens de sobra ou perda.'))
+        blocks.append(botoes)
     blocks.append(_ctx('_acao expira em 10min_'))
     return blocks
 

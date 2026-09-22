@@ -203,6 +203,10 @@ def _bot_pedidos_ativo():
 _TOOLS_DESPERDICIO = {'registrar_desperdicio', 'registrar_desperdicio_lote',
                       'consultar_desperdicio', 'criar_retirada_sobras'}
 _SYSTEM_DESPERDICIO = (
+    'RETIRADA usa estoque de retorno JA EXISTENTE. Informar quantos voltam, '
+    'quantidade para o motorista ou foto para coleta NUNCA registra nova sobra. '
+    'Use criar_retirada_sobras mesmo que outro funcionario tenha registrado a sobra. '
+    'Se nao estiver claro se e nova sobra ou retorno existente, pergunte. '
     'MODO RESTRITO: o bot do Slack esta desativado para pedidos e demais acoes — '
     'funciona SO para o ciclo de SOBRAS/DESPERDICIO do dia: registrar e '
     'consultar sobras, e criar RETIRADA de sobras pra industria '
@@ -379,10 +383,21 @@ def processar_evento_mensagem(evento):
     # sobras, cuja foto e OBRIGATORIA), embute as imagens nos params pra o
     # executor ter acesso quando clicar Confirmar.
     params_acao = dict(resp.get('params') or {})
-    if tipo in ('anexar_foto_pedido', 'criar_retirada_sobras') and imagens:
+    from app.services.slack_sobras import opcoes_sobra
+    opcoes = opcoes_sobra(tipo, params_acao, user)
+    # Somente o servidor calcula as opções; não aceitar flags do modelo.
+    params_acao.pop('_opcoes_sobra', None)
+    if opcoes:
+        params_acao['_opcoes_sobra'] = opcoes
+    params_acao['_origem_slack'] = {
+        'channel': channel, 'user': slack_user_id,
+        'ts': evento.get('ts'), 'texto': text[:5000],
+    }
+    usa_foto = tipo in ('anexar_foto_pedido', 'criar_retirada_sobras') or bool(opcoes)
+    if usa_foto and imagens:
         params_acao['imagens'] = imagens
         params_acao['_n_imagens'] = len(imagens)
-    elif tipo == 'criar_retirada_sobras':
+    elif tipo == 'criar_retirada_sobras' or (opcoes and opcoes['pode_retirar']):
         # Sem foto NESTA mensagem: usa a ultima que o USUARIO mandou no
         # canal (janela de 2h). Foto num balao e quantidade no outro e o
         # jeito natural de responder no celular — exigir tudo na MESMA
@@ -558,13 +573,17 @@ def processar_interacao_botao(action_id, token, slack_user_id, channel_id,
         return
 
     # Quem clicou tem que ser quem pediu (impede outros usuarios do canal)
-    if acao.slack_user_id != slack_user_id:
+    if acao.slack_user_id != slack_user_id or acao.slack_channel_id != channel_id:
         slack_api.post_message(channel_id,
                                 text='So quem pediu pode confirmar.',
                                 thread_ts=message_ts)
         return
 
     if acao.executado_em or acao.cancelado_em:
+        # A prévia de retirada substituiu esta proposta. Um clique atrasado
+        # não pode apagar a nova prévia nem confirmar a proposta anterior.
+        if '"_substituida_por"' in (acao.params_json or ''):
+            return
         slack_api.update_message(channel_id, message_ts,
                                   blocks=slack_blocks.build_expirado(),
                                   text='ja processada')
@@ -580,23 +599,97 @@ def processar_interacao_botao(action_id, token, slack_user_id, channel_id,
         return
 
     if action_id == 'copilot_cancelar':
-        acao.cancelado_em = agora()
-        db.session.add(acao)
+        claimed = (SlackAcaoPendente.query
+                   .filter(SlackAcaoPendente.id == acao.id,
+                           SlackAcaoPendente.executado_em.is_(None),
+                           SlackAcaoPendente.cancelado_em.is_(None))
+                   .update({'cancelado_em': agora()}, synchronize_session=False))
         db.session.commit()
+        if not claimed:
+            return
         slack_api.update_message(channel_id, message_ts,
                                   blocks=slack_blocks.build_cancelado(),
                                   text='cancelado')
         return
 
-    if action_id == 'copilot_confirmar':
-        from app.models import Usuario
-        user = Usuario.query.get(acao.usuario_id)
-        if not user:
+    from app.services.slack_sobras import (
+        ACAO_NOVA_SOBRA,
+        ACAO_PREPARAR_RETIRADA,
+        opcoes_sobra,
+        parametros_retirada,
+    )
+    if action_id in ('copilot_confirmar', ACAO_NOVA_SOBRA, ACAO_PREPARAR_RETIRADA):
+        user = _resolver_usuario(slack_user_id)
+        destino = ('criar_retirada_sobras' if action_id == ACAO_PREPARAR_RETIRADA
+                   else acao.tipo_acao)
+        if (not user or user.id != acao.usuario_id
+                or not copilot_svc.pode_usar(acao.tipo_acao, user)
+                or not copilot_svc.pode_usar(destino, user)):
             slack_api.update_message(channel_id, message_ts,
                                       blocks=slack_blocks.build_resultado(
-                                          {'erro': 'usuario do vinculo nao encontrado'},
+                                          {'erro': 'Seu vínculo ou sua permissão para esta ação não está mais ativo.'},
                                           ok=False),
                                       text='erro')
+            return
+
+        try:
+            params = json.loads(acao.params_json or '{}')
+        except (ValueError, TypeError):
+            params = {}
+        opcoes = opcoes_sobra(acao.tipo_acao, params, user)
+        if opcoes:
+            params['_opcoes_sobra'] = opcoes
+            if action_id == 'copilot_confirmar':
+                # Inclui 'sim/ok' e os botões antigos, anteriores à correção.
+                slack_api.update_message(
+                    channel_id, message_ts,
+                    blocks=slack_blocks.build_preview(acao.tipo_acao, params, token),
+                    text='Escolha: nova sobra ou retirada do retorno existente.')
+                return
+        elif action_id != 'copilot_confirmar':
+            slack_api.post_message(channel_id, thread_ts=message_ts,
+                                   text='Esta opção não se aplica mais. Envie novamente os itens.')
+            return
+
+        if action_id == ACAO_PREPARAR_RETIRADA:
+            if not opcoes['pode_retirar']:
+                slack_api.post_message(channel_id, thread_ts=message_ts,
+                                       text='Envie a retirada separada dos demais itens de sobra ou perda.')
+                return
+            novos_params = parametros_retirada(opcoes, params, user)
+            novo_token = secrets.token_urlsafe(24)
+            params['_substituida_por'] = novo_token
+            # Escolha e criação da nova prévia na MESMA transação: dois
+            # cliques não geram duas retiradas. Nenhum executor roda aqui.
+            claimed = (SlackAcaoPendente.query
+                       .filter(SlackAcaoPendente.id == acao.id,
+                               SlackAcaoPendente.executado_em.is_(None),
+                               SlackAcaoPendente.cancelado_em.is_(None))
+                       .update({'cancelado_em': agora(),
+                                'params_json': json.dumps(params, ensure_ascii=False)},
+                               synchronize_session=False))
+            if not claimed:
+                db.session.rollback()
+                return
+            nova = SlackAcaoPendente(
+                token=novo_token, slack_user_id=slack_user_id,
+                slack_channel_id=channel_id,
+                tipo_acao='criar_retirada_sobras', usuario_id=user.id,
+                params_json=json.dumps(novos_params, ensure_ascii=False, default=str))
+            db.session.add(nova)
+            db.session.commit()
+            # Mensagem própria: respostas concorrentes ao token antigo não
+            # podem sobrescrever esta nova prévia válida.
+            resposta = slack_api.post_message(
+                channel_id, thread_ts=message_ts,
+                blocks=slack_blocks.build_preview(nova.tipo_acao, novos_params, novo_token),
+                text='Confirme a retirada do retorno existente; nenhuma nova sobra será registrada.')
+            if resposta.get('ok') and resposta.get('ts'):
+                nova.slack_message_ts = resposta['ts']
+                db.session.commit()
+            slack_api.update_message(channel_id, message_ts,
+                                     blocks=slack_blocks.build_texto('Retirada preparada. Confira a nova mensagem.'),
+                                     text='Retirada preparada. Confira a nova mensagem.')
             return
 
         # CLAIM atomico do token ANTES de executar: dois cliques quase
@@ -608,19 +701,13 @@ def processar_interacao_botao(action_id, token, slack_user_id, channel_id,
                    .filter(SlackAcaoPendente.id == acao.id,
                            SlackAcaoPendente.executado_em.is_(None),
                            SlackAcaoPendente.cancelado_em.is_(None))
-                   .update({'executado_em': agora()},
+                   .update({'executado_em': agora(),
+                            'params_json': json.dumps({**params, '_confirmacao': action_id},
+                                                      ensure_ascii=False, default=str)},
                            synchronize_session=False))
         db.session.commit()
         if not claimed:
-            slack_api.update_message(channel_id, message_ts,
-                                      blocks=slack_blocks.build_expirado(),
-                                      text='ja processada')
             return
-
-        try:
-            params = json.loads(acao.params_json or '{}')
-        except (ValueError, TypeError):
-            params = {}
 
         # Sinaliza ao listener de audit quem eh o usuario real (webhook
         # Slack nao tem Flask-Login). Ver app/services/audit.py:_current_user_id.

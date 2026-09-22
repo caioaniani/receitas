@@ -5,6 +5,7 @@
 - /slack/install   GET   tela admin pra mapear slack_user → Usuario
 - /slack/vincular  POST  cria/edita SlackVinculo
 """
+import hashlib
 import json
 import logging
 
@@ -72,6 +73,13 @@ def events():
                 or conta_pagar_slack.canal_de_nf(canal)):
             return ('', 200)
 
+    # Slack pode entregar a mesma mensagem como message E app_mention, com
+    # event_ids diferentes. A unidade de trabalho é a mensagem original.
+    if event.get('ts') and canal:
+        identidade = json.dumps([payload.get('team_id'), canal, event['ts']])
+        chave = 'msg:' + hashlib.sha256(identidade.encode()).hexdigest()[:46]
+        if slack_bot._evento_visto(chave):
+            return ('', 200)
     slack_bot.disparar_evento(event)
     return ('', 200)
 
@@ -125,7 +133,9 @@ def interact():
         slack_bot.disparar_interacao_lembrete(action_id, token, slack_user_id,
                                                channel, message_ts)
         return ('', 200)
-    if action_id not in ('copilot_confirmar', 'copilot_cancelar'):
+    from app.services.slack_sobras import ACAO_NOVA_SOBRA, ACAO_PREPARAR_RETIRADA
+    if action_id not in ('copilot_confirmar', 'copilot_cancelar',
+                         ACAO_NOVA_SOBRA, ACAO_PREPARAR_RETIRADA):
         return ('', 200)
 
     slack_bot.disparar_interacao_botao(action_id, token, slack_user_id,

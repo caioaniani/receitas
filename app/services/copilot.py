@@ -541,7 +541,9 @@ TOOL_DEVOLVER_INDUSTRIA = {
 TOOL_CRIAR_RETIRADA_SOBRAS = {
     "name": "criar_retirada_sobras",
     "description": (
-        "Cria um PEDIDO DE RETIRADA de sobras reaproveitaveis da loja pra "
+        "Usa retorno JA EXISTENTE: nunca registrar_desperdicio para informar "
+        "quantos o motorista vai retirar, mesmo que outra pessoa tenha "
+        "registrado a sobra. Cria um PEDIDO DE RETIRADA da loja pra "
         "industria no dia seguinte (ex: croissants que vao virar Almond). "
         "EXIGE FOTO da sobra, mas foto e quantidade podem vir em MENSAGENS "
         "SEPARADAS: o sistema anexa automaticamente a foto da mensagem atual "
@@ -587,7 +589,7 @@ TOOL_REGISTRAR_DESPERDICIO = {
             "loja_nome": {"type": ["string", "null"], "description": "Nome da loja. Use loja_id quando souber."},
             "item_nome": {"type": "string", "description": "Nome da receita, produto ou MP descartado."},
             "quantidade": {"type": "integer", "minimum": 1},
-            "motivo": {"type": "string", "enum": ["validade", "nao_vendeu", "estragou", "caiu", "queimou", "outro"], "description": "Default 'validade'. Use 'nao_vendeu' quando o usuario disser 'sobra do dia', 'sobrou', 'nao vendeu'. Itens marcados como reaproveitaveis no cadastro NAO baixam estoque quando motivo='validade' OU 'nao_vendeu' (vence/sobra mas vira outra coisa: croissant tradicional vencido vira almond, sourdough tradicional sobra vira chapa). Outros motivos sempre baixam. Sinonimos: 'vencido'=validade, 'estragado'=estragou, 'queimado'=queimou."},
+            "motivo": {"type": "string", "enum": ["validade", "nao_vendeu", "estragou", "caiu", "queimou", "outro"], "description": "Default 'validade'. Use 'nao_vendeu' quando o usuario disser 'sobra do dia', 'sobrou', 'nao vendeu'. Com validade/nao_vendeu, reaproveitavel COM receita de retorno baixa o fresco e SOMA no retorno da loja. Sem receita de retorno, registra sem movimento. NUNCA usar para quantidade de retirada ja convertida. Outros motivos sempre baixam. Sinonimos: 'vencido'=validade, 'estragado'=estragou, 'queimado'=queimou."},
             "observacao": {"type": ["string", "null"]},
         },
         "required": ["item_nome", "quantidade"],
@@ -611,7 +613,7 @@ TOOL_REGISTRAR_DESPERDICIO_LOTE = {
         "properties": {
             "loja_id": {"type": ["integer", "null"]},
             "loja_nome": {"type": ["string", "null"], "description": "Nome da loja (ex: 'Ribeiro do Vale'). SEMPRE passe loja_nome OU loja_id — fuzzy match no servidor. Se o usuario nao mencionou a loja, NAO chame a tool: pergunte primeiro."},
-            "motivo": {"type": "string", "enum": ["validade", "nao_vendeu", "estragou", "caiu", "queimou", "outro"], "description": "Motivo unico pro lote inteiro. Default 'validade'. Use 'nao_vendeu' pra sobra do dia. Itens marcados como reaproveitaveis no cadastro NAO baixam estoque quando motivo='validade' OU 'nao_vendeu' (item vence/sobra mas vira outra coisa)."},
+            "motivo": {"type": "string", "enum": ["validade", "nao_vendeu", "estragou", "caiu", "queimou", "outro"], "description": "Motivo unico pro lote inteiro. Default 'validade'. Use 'nao_vendeu' pra sobra do dia. Com validade/nao_vendeu, reaproveitavel COM receita de retorno baixa o fresco e SOMA no retorno da loja. Sem receita de retorno, registra sem movimento. NUNCA usar para quantidade de retirada ja convertida."},
             "itens": {
                 "type": "array",
                 "items": {
@@ -1274,7 +1276,7 @@ TOOLS DISPONIVEIS — ACOES:
   * **caiu**: item caiu no chao.
   * **queimou**: queimado no forno. Sinonimo: 'queimado'.
   * **outro**: qualquer outro motivo.
-  **REGRA REAPROVEITAVEL**: alguns itens tem flag `reaproveitavel=true` (cadastrada pelo admin) — quando o motivo eh 'validade' OU 'nao_vendeu', o desperdicio eh REGISTRADO mas o estoque NAO eh baixado (item vai virar outra coisa). O servidor decide automaticamente — o copilot so passa o motivo certo.
+  **REGRA REAPROVEITAVEL**: alguns itens tem flag `reaproveitavel=true` (cadastrada pelo admin) — quando o motivo eh 'validade' OU 'nao_vendeu', COM receita de retorno, o registro BAIXA o fresco e SOMA a quantidade no retorno da loja. SEM receita de retorno, registra sem movimento. Quantidade para coleta/retirada usa criar_retirada_sobras: NUNCA registrar novamente como sobra, inclusive quando outro funcionario fez o registro anterior. O servidor decide automaticamente — o copilot so passa o motivo certo.
   Use quando o usuario disser 'venceu X', 'descartei Y', 'sobrou no balcao'. **USE APENAS PARA 1 ITEM.** Para LISTA (2+ itens), use registrar_desperdicio_lote SEMPRE. **SEMPRE preencha `loja_nome` com o que o usuario falou** (ex: 'nebraska', 'anesio'). O servidor faz fuzzy match com a lista de lojas. Se o usuario NAO mencionou loja e o user logado nao tem loja padrao, pergunte qual loja antes de chamar a tool.
 - registrar_desperdicio_lote: REGRA CRITICA — quando o usuario passar uma LISTA de itens vencidos/descartados ('anota essas sobras', '2 croissants vencidos, 3 pao frances, 1 nutella...'), CHAME ESTA TOOL UMA VEZ SO com todos os itens no array `itens`. NUNCA chame registrar_desperdicio multiplas vezes — o sistema ignora chamadas em paralelo. Motivo unico pro lote (default vencido). Mesma regra de loja: SEMPRE preencha loja_nome; se nao tiver, pergunte. **NUNCA re-envie itens ja registrados**: se um lote acabou de ser confirmado e o usuario acrescentar um item que faltou, chame a tool de novo APENAS com o item novo — repetir a lista inteira DUPLICA as perdas (aconteceu em 02/07/2026).
 - criar_venda_b2b: venda da INDUSTRIA pra cliente externo (hotel, restaurante). Baixa do FREEZER (EstoqueProducao), NAO de loja. B2B NAO TEM LOJA — nunca pergunte "qual loja". Use quando o usuario disser 'vendi pro hotel X', 'fatura essa venda pro restaurante Y'. Cliente_nome: passe como o usuario disse — servidor faz fuzzy match. Se nao achar, fica como avulso (ok); NAO fique consultando o cliente em loop, so crie. **data_entrega e OBRIGATORIA** (dia que vai pro padeiro produzir/separar) — se o usuario nao disser, pergunte "pra que dia e a entrega?". ESTADO do item: se o usuario disser "Croissant backup"/"Cinnamon Roll backup", o nome e a receita ("Croissant Tradicional", "Cinnamon Roll") e o estado e "backup" (idem "assado"); default cru. Preços: NAO preencha preco_unitario a nao ser que o usuario explicite — servidor pega do cadastro (Receita.preco_venda / Produto.preco_atacado) + desconto do cliente. Parcelas: omita se for a vista, ou liste {{vencimento, valor, forma_pagamento}}.
@@ -3820,11 +3822,6 @@ def executar_registrar_desperdicio_lote(params, user):
             produto_obj = Produto.query.get(item_id)
             componentes_cesta = componentes_de_cesta(produto_obj)
 
-        if reaproveita and not (obs_final or '').strip():
-            obs_final = '[reaproveitavel — nao baixou estoque]'
-        elif reaproveita:
-            obs_final = obs_final + ' [reaproveitavel]'
-
         desp = Desperdicio(
             loja_id=loja.id,
             receita_id=item_id if tipo_item == 'receita' else None,
@@ -3837,6 +3834,7 @@ def executar_registrar_desperdicio_lote(params, user):
         db.session.flush()
 
         if reaproveita:
+            conv = None
             ap = {'nome': nome_ok, 'tipo': tipo_item,
                   'quantidade': qtd, 'reaproveitavel': True}
             # Reaproveitavel COM receita de retorno: converte no estoque da
@@ -3859,6 +3857,8 @@ def executar_registrar_desperdicio_lote(params, user):
                         'qtd_sobra': qtd,
                         'destino': conv['destino'],
                     }
+            if not conv:
+                desp.observacao = ((obs_final + ' ') if obs_final else '') + '[reaproveitavel — nao baixou estoque]'
             aplicados.append(ap)
             continue
 

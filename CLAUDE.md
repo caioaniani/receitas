@@ -2093,6 +2093,24 @@ entregas:
   teste antigo do botao de QR foi atualizado pro contrato novo. Testes:
   secao "Tela do padeiro" em `tests/test_retirada_receber_manual.py`.
 
+**Proteção contra duplicação pelo bot (21/09/2026, dono: Ribeiro do Vale)**:
+proposta unitária/lote que converte fresco em retorno exige o botão
+**Registrar NOVA sobra**, separado de **Preparar retirada**. `slack_sobras`
+recalcula as opções pelo cadastro/motivo no servidor, inclusive no clique
+de tokens antigos; “sim/ok” e Confirmar genérico reapresentam a escolha sem
+movimentar. O saldo da loja aparece como informação: saldo existente nunca
+proíbe uma nova sobra legítima. Preparar retirada cancela atomicamente a
+proposta anterior e cria outra prévia com token próprio e foto preservada;
+somente a confirmação dessa prévia chama o executor canônico de retirada.
+Cada confirmação revalida vínculo ativo e permissão atual; preparar retirada
+também exige permissão para a operação de destino. A prévia da retirada usa
+mensagem própria para resistir a cliques concorrentes no token anterior.
+Lote misto não é filtrado silenciosamente: exige mensagem separada. Mesma
+mensagem Slack (`team_id`, canal, `ts`) recebida como message e app_mention
+é deduplicada além do event_id. Texto/identificador de origem ficam nos
+params da ação, sujeitos à retenção existente. Sem acerto histórico de saldo.
+Testes: `tests/test_slack_sobras_operacao.py`; operação no manual admin.
+
 **Fixes do primeiro uso real (02/07/2026 a noite, Nebraska — testes em
 `tests/test_slack_retirada_e_duplicata.py`)**:
 - A `retirada_sugerida` que o executor devolve MORRIA no caminho: o

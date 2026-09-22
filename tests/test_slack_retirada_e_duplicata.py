@@ -18,7 +18,9 @@ from unittest.mock import patch
 def _acao(app, admin_user, token='tok-claim', tipo='registrar_desperdicio_lote',
           params=None):
     from app.extensions import db
-    from app.models import SlackAcaoPendente
+    from app.models import SlackAcaoPendente, SlackVinculo
+    if not SlackVinculo.query.filter_by(slack_user_id='U123').first():
+        db.session.add(SlackVinculo(slack_user_id='U123', usuario_id=admin_user.id, ativo=True))
     acao = SlackAcaoPendente(
         token=token, slack_user_id='U123', slack_channel_id='C456',
         slack_message_ts='1000.000', tipo_acao=tipo,
