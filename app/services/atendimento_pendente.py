@@ -111,6 +111,11 @@ def preparar(conversa, historico, *, min_minutos=10):
             row.estado = 'sem_cliente'
             row.resolvido_em = base
             row.proximo_aviso_em = None
+            # A gravidade e a "mensagem do cliente" vieram do ALTA fantasma
+            # de abandono ("[ABANDONO 17min] "): zeradas, senão a resposta
+            # curta ao template ("Sim") reabria a cobrança grave.
+            row.grave = False
+            row.mensagem = ''
             db.session.commit()
         return None
     graves = VigiaVeredito.query.filter(
