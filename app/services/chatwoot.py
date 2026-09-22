@@ -313,6 +313,23 @@ def _mensagem_humana(m):
                      or (not _automatica(m) and atributos.get('external_echo'))))
 
 
+def _erro_de_entrega(m):
+    """Mensagem NOSSA que o canal (Meta) recusou: `status == 'failed'` e/ou
+    `content_attributes.external_error` (o Chatwoot grava o erro bruto ali,
+    ex. '131026: Message undeliverable' = número que não recebe WhatsApp).
+    Devolve o texto do erro; '' = entregue ou sem informação. Fonte única
+    de `erros_de_envio` e da anotação `entregue`/`erro_canal` do histórico
+    (caso 2429, 22/09/2026: quatro templates ao mesmo número falharam e a
+    equipe, sem ver a falha, clicou "Chamar" quatro vezes)."""
+    if not isinstance(m, dict):
+        return ''
+    ca = m.get('content_attributes') or {}
+    erro = ca.get('external_error') if isinstance(ca, dict) else None
+    if str(m.get('status', '')).lower() != 'failed' and not erro:
+        return ''
+    return str(erro or 'falha de envio (sem detalhe do canal)')[:300]
+
+
 def epoch_para_brt(ts):
     """`created_at` do Chatwoot (epoch UTC, segundos) -> datetime BRT naive
     (o relógio do resto do sistema, `app.utils.agora`). None se ilegível."""
