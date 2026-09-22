@@ -34,6 +34,9 @@ A autenticação da chave guardada no painel só é considerada concluída quand
 o transporte confirma isso. São suportadas as sequências chave/senha e
 senha/chave: a chave pode ser repetida após a senha somente quando o servidor
 solicitar essa continuação. A senha não é repetida automaticamente após recusa.
+Se essa chave também for aceita parcialmente e o servidor pedir senha novamente,
+a coleta atende essa continuação uma única vez. O fluxo termina após no máximo
+quatro etapas principais (chave, senha, chave, senha), sem reiniciar o ciclo.
 Um desafio interativo admite apenas uma resposta de senha, sem terminal ou OTP.
 A abertura do canal, a ativação do subsistema e a negociação SFTP têm
 diagnósticos separados, preservando a conferência da identidade do servidor.

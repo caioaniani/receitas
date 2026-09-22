@@ -95,7 +95,9 @@ class ErroEtapaAutenticacaoFiservSFTP(ErroAutenticacaoFiservSFTP):
         etapas = {
             'CHAVE_INICIAL': 'Chave inicial', 'SENHA': 'Etapa de senha',
             'DESAFIO_INTERATIVO': 'Desafio interativo',
+            'DESAFIO_APOS_CHAVE': 'Desafio após a confirmação da chave',
             'CHAVE_APOS_SENHA': 'Chave após a senha',
+            'SENHA_APOS_CHAVE': 'Senha após a confirmação da chave',
             'CONTINUACAO': 'Continuação da autenticação',
             'CONFIRMACAO_FINAL': 'Confirmação da autenticação',
             'AUTENTICACAO': 'Autenticação',
@@ -437,9 +439,10 @@ class _AutenticacaoEmMemoria:
                 raise ErroOperacaoFiservSFTP('CONEXAO', 'EOF')
             return transport.is_authenticated()
 
-        def autenticar_senha(metodos):
+        def autenticar_senha(metodos, etapa='SENHA'):
             __tracebackhide__ = True
             respondeu = False
+            etapa_desafio = 'DESAFIO_APOS_CHAVE' if etapa == 'SENHA_APOS_CHAVE' else 'DESAFIO_INTERATIVO'
 
             def responder(_titulo, _instrucoes, campos):
                 __tracebackhide__ = True
@@ -448,11 +451,11 @@ class _AutenticacaoEmMemoria:
                     return []
                 # Uma resposta de senha, nunca desafios adicionais/OTP nem stdin.
                 if respondeu:
-                    raise ErroEtapaAutenticacaoFiservSFTP('DESAFIO_INTERATIVO', 'DESAFIO_ADICIONAL')
+                    raise ErroEtapaAutenticacaoFiservSFTP(etapa_desafio, 'DESAFIO_ADICIONAL')
                 if len(campos) != 1:
-                    raise ErroEtapaAutenticacaoFiservSFTP('DESAFIO_INTERATIVO', 'DESAFIO_MULTIPLO')
+                    raise ErroEtapaAutenticacaoFiservSFTP(etapa_desafio, 'DESAFIO_MULTIPLO')
                 if campos[0][1]:
-                    raise ErroEtapaAutenticacaoFiservSFTP('DESAFIO_INTERATIVO', 'CAMPO_VISIVEL')
+                    raise ErroEtapaAutenticacaoFiservSFTP(etapa_desafio, 'CAMPO_VISIVEL')
                 respondeu = True
                 return [config.senha]
 
@@ -462,16 +465,16 @@ class _AutenticacaoEmMemoria:
                     return transport.auth_password(config.usuario, config.senha, fallback=False)
                 except paramiko.BadAuthenticationType as exc:
                     if 'keyboard-interactive' not in exc.allowed_types:
-                        raise ErroEtapaAutenticacaoFiservSFTP('SENHA', 'METODO_NAO_PERMITIDO') from None
+                        raise ErroEtapaAutenticacaoFiservSFTP(etapa, 'METODO_NAO_PERMITIDO') from None
                 except paramiko.AuthenticationException:
-                    raise ErroEtapaAutenticacaoFiservSFTP('SENHA', 'RECUSADA') from None
+                    raise ErroEtapaAutenticacaoFiservSFTP(etapa, 'RECUSADA') from None
             transport.auth_timeout = _prazo_restante(config, self._prazo)
             try:
                 return transport.auth_interactive(config.usuario, responder)
             except paramiko.BadAuthenticationType:
-                raise ErroEtapaAutenticacaoFiservSFTP('DESAFIO_INTERATIVO', 'METODO_NAO_PERMITIDO') from None
+                raise ErroEtapaAutenticacaoFiservSFTP(etapa_desafio, 'METODO_NAO_PERMITIDO') from None
             except paramiko.AuthenticationException:
-                raise ErroEtapaAutenticacaoFiservSFTP('DESAFIO_INTERATIVO', 'RECUSADA') from None
+                raise ErroEtapaAutenticacaoFiservSFTP(etapa_desafio, 'RECUSADA') from None
 
         try:
             proximos = autenticar_chave()
@@ -500,7 +503,7 @@ class _AutenticacaoEmMemoria:
         # somente a continuação publickey solicitada pelo próprio servidor.
         if 'publickey' in proximos:
             try:
-                autenticar_chave()
+                proximos = autenticar_chave()
             except paramiko.BadAuthenticationType:
                 raise ErroEtapaAutenticacaoFiservSFTP('CHAVE_APOS_SENHA', 'METODO_NAO_PERMITIDO') from None
             except paramiko.AuthenticationException:
@@ -508,8 +511,17 @@ class _AutenticacaoEmMemoria:
         else:
             codigo = 'METODO_NAO_SUPORTADO' if proximos else 'INCOMPLETA'
             raise ErroEtapaAutenticacaoFiservSFTP('CONTINUACAO', codigo)
+        if autenticado():
+            return
+        if not any(metodo in proximos for metodo in ('password', 'keyboard-interactive')):
+            codigo = 'METODO_NAO_SUPORTADO' if proximos else 'INCOMPLETA'
+            raise ErroEtapaAutenticacaoFiservSFTP('CHAVE_APOS_SENHA', codigo)
+        # A chave também pode ter sido aceita parcialmente. Atende uma única
+        # continuação de senha explicitamente solicitada após essa etapa; nunca
+        # repete uma senha recusada nem inicia outro ciclo de autenticação.
+        autenticar_senha(proximos, etapa='SENHA_APOS_CHAVE')
         if not autenticado():
-            raise ErroEtapaAutenticacaoFiservSFTP('CHAVE_APOS_SENHA', 'INCOMPLETA')
+            raise ErroEtapaAutenticacaoFiservSFTP('SENHA_APOS_CHAVE', 'INCOMPLETA')
 
 
 @contextmanager
