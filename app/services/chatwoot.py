@@ -243,14 +243,16 @@ def enviar_nota_privada(conversation_id, content):
         return {'ok': False, 'erro': str(exc)}
 
 
-def definir_status(conversation_id, status, tentativas=3):
+def definir_status(conversation_id, status, tentativas=3, critico=True):
     """Muda o status da conversa. 'open' = passa pro humano (sai do bot);
     'pending' = devolve pro bot; 'resolved' = encerra.
 
     Retry (default 3x, backoff 0.5s/1s) porque ESTE caminho e critico pro
     handoff: uma falha transitoria aqui deixava a conversa presa no bot e o
     cliente esperando (caso 23/06/2026). Devolve {'ok': bool, 'erro': str} —
-    o caller DEVE checar e NAO pode silenciar a falha."""
+    o caller DEVE checar e NAO pode silenciar a falha. `critico=False` =
+    caminho best-effort (o caller ja trata o retorno): a falha final sai
+    como WARNING, nao ERROR — politica de ruido do Sentry (17/08/2026)."""
     from app.services import instancia as _inst
     if not _inst.pode_falar_com_o_mundo('chatwoot'):
         return {'ok': False, 'suprimido_instancia': True, 'erro': 'instancia nao canonica — status nao alterado'}
