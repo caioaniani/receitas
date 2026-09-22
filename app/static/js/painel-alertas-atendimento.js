@@ -377,6 +377,10 @@
       evento.preventDefault();
       adiar();
     });
+    document.addEventListener('keydown', function (evento) {
+      // Diálogo não-modal não recebe `cancel`: Esc adia como o botão ×.
+      if (evento.key === 'Escape' && dialog.open) adiar();
+    });
     dialog.addEventListener('close', function () {
       botao.setAttribute('aria-expanded', 'false');
       atualizarErro();
