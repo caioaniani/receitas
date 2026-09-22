@@ -105,11 +105,14 @@ def test_preparar_cliente_que_responde_depois_volta_a_aguardar_sem_gravidade_fan
     from app.services import atendimento_pendente
     conversa = {'id': 2429, 'nome_contato': 'Cintia Tuyama', 'minutos_paradas': 20}
     with app.app_context():
-        _seed_2429()
-        atendimento_pendente.preparar(conversa, list(_SO_NOSSAS))
+        # Marcada `sem_cliente` num ciclo anterior (10 min atrás); segue assim
+        # enquanto só houver mensagens nossas.
+        _seed_2429(estado='sem_cliente', resolvido_em=agora() - timedelta(minutes=10))
+        assert atendimento_pendente.preparar(conversa, list(_SO_NOSSAS)) is None
         assert db.session.get(EsperaAtendimento, '2429').estado == 'sem_cliente'
+        # A cliente respondeu há 30 s: volta a ser espera normal.
         historico = list(_SO_NOSSAS) + [{'role': 'user', 'content': 'Oi, pode entregar de novo?',
-                                         'humano': False, 'created_at': time.time() + 60}]
+                                         'humano': False, 'created_at': time.time() - 30}]
         row = atendimento_pendente.preparar(conversa, historico, min_minutos=0)
         assert row is not None and row.estado == 'aguardando'
         # O ALTA de "abandono" da fase sem cliente não vira "Urgente" agora.
