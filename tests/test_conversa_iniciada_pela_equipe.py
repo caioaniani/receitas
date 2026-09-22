@@ -23,11 +23,12 @@ _SO_NOSSAS = [
 ]
 
 
-def _seed_2429(estado='aguardando'):
+def _seed_2429(estado='aguardando', resolvido_em=None):
     inicio = agora() - timedelta(minutes=78)
     db.session.add(EsperaAtendimento(
         conversa_id='2429', inicio_em=inicio, nome='Cintia Tuyama',
-        mensagem='[ABANDONO 17min] ', grave=True, estado=estado))
+        mensagem='[ABANDONO 17min] ', grave=True, estado=estado,
+        resolvido_em=resolvido_em))
     db.session.add(VigiaVeredito(
         criado_em=inicio, conv_id='2429', cliente='Cintia Tuyama',
         mensagem_cliente='[ABANDONO 17min] ', bot_acao=None, alerta=True,
