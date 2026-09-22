@@ -4808,6 +4808,75 @@ abria a conversa não tinha conversa nenhuma". DOIS defeitos independentes:
    no retorno) — a resposta do cliente ao template cai na fila da EQUIPE,
    não no bot. A linha real da 2429 se cura no ciclo seguinte do
    espera-humano. Testes: `tests/test_conversa_iniciada_pela_equipe.py`.
+   **2ª RODADA DA REVISÃO (mesmo dia, aplicados)**: (a) ALTA —
+   `sem_cliente` preservava `grave=True` e a "[ABANDONO 17min]" em
+   `mensagem`; um "Sim"/"Ok"/"Obrigada" ao template caía no ramo de
+   fechamento com a gravidade fantasma e virava "Caso grave ainda aberto"
+   a cada 15 min (reproduzido). Agora a marcação zera `grave`/`mensagem` e
+   `_acompanhar_ate_resolver` trata `sem_cliente` como terminal (igual a
+   `resolvido`). (b) `chatwoot.buscar_historico(incluir_autoria=True)`
+   paginava para trás só até uma resposta HUMANA — 20 mensagens cruas
+   nossas na 1ª página (caso grave em acompanhamento, notas, anexos)
+   escondiam a fala do cliente e `preparar` mataria uma espera legítima
+   como `sem_cliente`. Agora a fronteira é a FALA DO CLIENTE: pagina até o
+   início da conversa (`before` vazio) ou `_MAX_PAGINAS_HISTORICO`=20
+   páginas; com `somente_bot` humano continua bastando (devolve [] de
+   qualquer jeito). Único caminho `incluir_autoria` sem `somente_bot` é o
+   espera-humano — conversa normal não gasta página extra. (c) Corrida de
+   segundos: fala do cliente criada entre o GET do histórico e o
+   `agora()` da marcação ficava presa atrás de `inicio <= resolvido_em`
+   PARA SEMPRE; em `sem_cliente` toda fala é nova por construção — o guard
+   não vale e `resolvido_em` recua para `inicio − 1 s` (o invariante
+   `inicio_em > resolvido_em` do painel/`candidatos` se mantém; os ALTAs
+   fantasmas, anteriores à marcação, já ficaram fora de `graves`,
+   calculado antes do recuo). (d) `definir_status(..., critico=False)` no
+   toggle best-effort do "Chamar": falha final vira WARNING, não ERROR
+   (política de ruído do Sentry). (e) `aberta` chega ao painel nos três
+   endpoints de "Chamar" (`entregas/routes.py`) — `False` = ficou na fila
+   do BOT (token do bot ausente/Chatwoot lento): `painel_pedidos.html`
+   alerta, `painel.html` mostra toast. (f) o `pulou` do `avaliar_abandono`
+   não consome vaga de `max_por_ciclo` no cron (`seru_cron.
+   _run_vigia_abandono`) — 5 conversas da equipe deixavam o 6º abandono
+   real sem avaliação; o set `_avisados_abandono` segue marcando (anti
+   GET). DECISÃO REGISTRADA (o toggle vale para os TRÊS botões): o
+   "Chamar motoboy" também sai da fila do bot — o motoboy que responde
+   cai na fila humana e, sem resposta em 10 min, recebe a contenção "a
+   equipe já te responde" em vez de o bot de VENDAS responder a um
+   entregador; e "Chamar" numa conversa `pending` reusada silencia o bot
+   para aquele cliente (quem clicou quer falar com a pessoa). Reverter
+   qualquer um dos dois é ordem do dono. DESCARTADO com motivo: criar a
+   conversa já `open` (`POST /conversations` com `status`) — numa inbox
+   com Agent Bot o Chatwoot força `pending` no `before_create`
+   (`Conversation#determine_conversation_status`), então o toggle depois
+   do template é o caminho canônico, não o atalho. Testes novos na seção
+   "2ª rodada" de `tests/test_conversa_iniciada_pela_equipe.py` (resposta
+   curta, corrida, `/toggle_status` real com token do bot + nível do log,
+   paginação, cron).
+
+3. **O template NUNCA chegou — e ninguém via.** A sonda
+   `/api/claude/atendimento-painel?conv=2429` (`erros_de_envio`) mostrou
+   as 4 tentativas de "Chamar" (10:15:07, 10:15:40, 10:27:29, 11:56:02)
+   com `status='failed'` e `external_error` **"131026: Message
+   undeliverable"** (número que não recebe WhatsApp), o follow-up das
+   10:25 e o "ola" das 12:04 recusados por "janela de 24 h encerrada sem
+   modelo". Ou seja: a equipe reclicou "Chamar" quatro vezes porque a
+   tela dizia "Template enviado" e nada mostrava a recusa (a Meta responde
+   DEPOIS, por webhook — o `ok` do endpoint é "o Chatwoot aceitou"). Isso
+   também explica o follow-up do bot: `_mensagem_humana` NÃO conta
+   mensagem `failed` como humana (por desenho), então o gate
+   `somente_bot` não segurou — o fixture do teste usa `humano: False`
+   por isso. Fix: `chatwoot._erro_de_entrega(m)` é a fonte única
+   (`erros_de_envio` e o histórico); `buscar_historico` anota
+   `entregue: False` + `erro_canal` na mensagem nossa recusada (chaves
+   extras — quem monta prompt copia só role/content), e a thread do
+   painel (`painel.html`) mostra a bolha VERMELHA "⚠ Não entregue: <erro>"
+   e, quando a ÚLTIMA nossa falhou, o aviso no topo com a dica por código
+   (131026 = "este número não recebe WhatsApp, tente ligação/e-mail/
+   Instagram"; 24 h/modelo = "só o botão Chamar chega"). O toast do
+   "Chamar por telefone" passou a dizer "se aparecer ⚠ na conversa, não
+   chegou". Testes: `test_buscar_historico_anota_mensagem_recusada_pela_
+   meta` + `test_api_conversa_thread_repassa_falha_de_entrega`
+   (`tests/test_painel_testes.py`).
 
 Confirmação de passagem: a nota privada escrita na 2429 às 12:25 apareceu
 em `presenca_humana` (`nota_em` 12:25:38) — o Agent Bot RECEBE
