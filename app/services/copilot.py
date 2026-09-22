@@ -2088,7 +2088,7 @@ def _enriquecer_criar_pedido(tool_input):
         try:
             _d = datetime.strptime(tool_input['data_entrega'], '%Y-%m-%d').date()
             from app.services.pedido_merge import pedido_aberto_para_merge
-            _alvo = pedido_aberto_para_merge(loja_id, _d, 'confirmado')
+            _alvo = pedido_aberto_para_merge(loja_id, _d, 'confirmado', travar=False)
             merge_pedido_id = _alvo.id if _alvo else None
         except (ValueError, TypeError):
             merge_pedido_id = None
@@ -2852,6 +2852,8 @@ def executar_editar_pedido(params, user):
     pedido = PedidoLoja.query.get(pid)
     if not pedido:
         return {'ok': False, 'erro': f'Pedido {pid} nao encontrado.'}
+    from app.services.pedido_lock import reler_pedido_travado
+    pedido = reler_pedido_travado(pedido)
     if pedido.status not in ('pendente', 'confirmado'):
         return {'ok': False, 'erro': f'Pedido {pid} em status "{pedido.status}" — nao pode ser editado. Cancele e recrie.'}
 
@@ -3347,6 +3349,8 @@ def executar_mudar_status_pedido(params, user):
     p = PedidoLoja.query.get(pid)
     if not p:
         return {'ok': False, 'erro': f'Pedido #{pid} nao encontrado'}
+    from app.services.pedido_lock import reler_pedido_travado
+    p = reler_pedido_travado(p)
 
     transicoes = {
         'confirmar': ('pendente', 'confirmado'),

@@ -9,7 +9,7 @@ inventa a conta — ela ajusta a sugestao com contexto e justifica):
    e /pedidos-semana/estoque (modo='venda', 11/07/2026 a pedido do
    dono: base = motor VENDA+ESTOQUE com o `seguranca_pct` da tela,
    contraprova = MEDIA; itens identificados por `item_key` porque a
-   grade inclui MPs). Entrada = os dois motores + estoque + desperdicio
+   grade inclui MPs e produtos com estoque próprio). Entrada = os dois motores + estoque + desperdicio
    recente + calendario (feriados/vesperas ficam a cargo do modelo —
    nao existe tabela de datas especiais). Saida = quantidades por dia
    POR PRODUTO com motivo, que o JS preenche na grade EDITAVEL. Nada e
@@ -183,7 +183,7 @@ def sugerir_pedido_loja_ia(loja_id, *, horizonte_dias=7, janela_semanas=6,
     """Proposta da IA para o pedido de UMA loja, no formato da grade da
     tela de pedidos da semana. `modo` escolhe a BASE (o motor da tela que
     chamou): 'media' (/pedidos-semana/media, itens por `receita_id`) ou
-    'venda' (/pedidos-semana/estoque, itens por `item_key` — inclui MPs;
+    'venda' (/pedidos-semana/estoque, itens por `item_key` — inclui MPs e produtos;
     `seguranca_pct` e o colchao da tela). O outro motor entra como
     contraprova no contexto. Devolve
     {'itens': [{receita_id|item_key, por_dia, motivo, mudou, aviso}],
@@ -214,10 +214,10 @@ def sugerir_pedido_loja_ia(loja_id, *, horizonte_dias=7, janela_semanas=6,
 
     def _chave(p):
         # 'media': linhas so de receita (int); 'venda': item_key str
-        # ('<receita_id>' ou 'mp:<id>').
+        # ('<receita_id>', 'mp:<id>' ou 'prod:<id>').
         return p['item_key'] if id_campo == 'item_key' else p['receita_id']
 
-    # Contraprova do OUTRO motor, casada por receita_id (MP so existe na
+    # Contraprova do OUTRO motor, casada por receita_id (MP/produto so existe na
     # grade de venda — fica sem contraprova, o que e verdade).
     contra_loja = next((lj for lj in contra_grade['lojas']
                         if lj['loja_id'] == int(loja_id)), None)

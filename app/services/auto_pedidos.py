@@ -119,7 +119,7 @@ def _dias_protegidos(datas):
     (histórico antigo, absorção pelo próprio cron) não protege."""
     from app.constants import STATUS_PEDIDO_EDITAVEIS, STATUS_PEDIDO_ENTREGUES
     protegidos = set()
-    rows = (PedidoLoja.query
+    rows = (PedidoLoja.query.populate_existing()
             .filter(PedidoLoja.data_entrega.in_(datas))
             .all())
     for p in rows:
@@ -142,9 +142,9 @@ def _absorver_rascunhos_orfaos(datas):
     de colisão (edição de data movendo um pedido pra cima do rascunho,
     legado pré-fix, corrida): o rascunho é redundância de máquina e a dobra
     não pode esperar o próximo gesto humano (achado da revisão rodada 2).
-    Cancela os rascunhos e commita. Retorna o nº cancelado."""
+    Cancela os rascunhos sem liberar a trava da rodada. Retorna o nº cancelado."""
     from app.constants import STATUS_PEDIDO_ENTREGUES
-    rows = (PedidoLoja.query
+    rows = (PedidoLoja.query.populate_existing()
             .filter(PedidoLoja.data_entrega.in_(datas),
                     PedidoLoja.status != 'cancelado')
             .all())
@@ -163,7 +163,7 @@ def _absorver_rascunhos_orfaos(datas):
                 p_r.modificado_em = agora()
                 n += 1
     if n:
-        db.session.commit()
+        db.session.flush()
         logger.info('auto_pedidos: %d rascunho(s) redundante(s) absorvido(s) '
                     '(dia já tem pedido humano)', n)
     return n
@@ -174,7 +174,7 @@ def _rascunhos_por_dia(datas):
     o alvo canônico (mesma regra do rascunho_automatico_aberto)."""
     from app.services.pedido_merge import MARCADOR_RASCUNHO_AUTO
     out = {}
-    rows = (PedidoLoja.query
+    rows = (PedidoLoja.query.populate_existing()
             .filter(PedidoLoja.data_entrega.in_(datas),
                     PedidoLoja.status == 'pendente',
                     PedidoLoja.criado_por.is_(None),
@@ -213,8 +213,16 @@ def gerar_pedidos_automaticos():
     (`dias_pulados_corte`, `dias_pulados_humano`)."""
     from datetime import date as _date
 
+    from app.models import Loja
     from app.services import pedidos_semana, previsao_producao
     from app.services.pedido_corte import corte_ativo
+    from app.services.pedido_lock import travar_pedidos_lojas
+
+    # A mesma trava protege criação, edição, cancelamento e limpeza por zero.
+    # Mantê-la até o commit da grade impede que um gesto humano entre entre
+    # o snapshot de proteção e a alteração do pedido (inclusive dia vazio).
+    travar_pedidos_lojas(lid for (lid,) in db.session.query(Loja.id).all())
+    db.session.expire_all()
 
     hoje_d = hoje()
     inicio, fim = _janela_da_semana(hoje_d)
@@ -267,12 +275,14 @@ def gerar_pedidos_automaticos():
                     logger.warning(
                         'auto_pedidos: por_dia ilegível (loja=%s dia=%s '
                         'item=%s) — tratado como 0', loja_id, data_ent,
-                        prod.get('receita_id') or prod.get('materia_prima_id'))
+                        prod.get('item_key') or prod.get('receita_id')
+                        or prod.get('materia_prima_id') or prod.get('produto_id'))
                     qtd = 0
                 if qtd <= 0:
                     continue
                 itens.append({'receita_id': prod.get('receita_id'),
                               'materia_prima_id': prod.get('materia_prima_id'),
+                              'produto_id': prod.get('produto_id'),
                               'qtd': qtd})
             if itens:
                 grade_por_dia[(loja_id, data_ent)] = itens
@@ -294,15 +304,18 @@ def gerar_pedidos_automaticos():
             cancelados_zero += 1
             continue
         fks_grade = {(('r', it['receita_id']) if it.get('receita_id')
-                      else ('m', it['materia_prima_id']))
+                      else ('m', it['materia_prima_id']) if it.get('materia_prima_id')
+                      else ('p', it['produto_id']))
                      for it in itens_grade}
         for it_p in ped.itens:
             fk = (('r', it_p.receita_id) if it_p.receita_id
                   else ('m', it_p.materia_prima_id)
-                  if it_p.materia_prima_id else None)
+                  if it_p.materia_prima_id else ('p', it_p.produto_id)
+                  if it_p.produto_id else None)
             if fk is not None and fk not in fks_grade:
                 itens_grade.append({'receita_id': it_p.receita_id,
                                     'materia_prima_id': it_p.materia_prima_id,
+                                    'produto_id': it_p.produto_id,
                                     'qtd': 0})
 
     grade = [{'loja_id': k[0], 'data_entrega': k[1], 'itens': v}
@@ -350,48 +363,19 @@ def atualizar_plano_automatico():
 
     SÓ toca ordem criada pelo PRÓPRIO CRON (criado_por None): ordem enviada
     por humano nunca muda por caminho implícito (regra de 04/07/2026)."""
-    from app.models import PlanejamentoProducao
     from app.services.previsao_producao import (
         _ANT_INSUMO_MAX,
         cronograma_producao,
     )
-    from app.services.producao import enviar_plano_do_dia
 
     motor = (os.environ.get('AUTO_ENVIO_MOTOR') or 'vendas').strip()
-    # JANELA da rodada: amanhã .. amanhã + _ANT_INSUMO_MAX. Não é capricho —
-    # o croissant de D é escrito livre pela última vez em D-1-ant, e a MASSA
-    # dele mora na ordem de D-1. Se os dois dias forem escritos em rodadas
-    # diferentes, o descasamento volta deslocado de um dia. Escrevendo a
-    # janela inteira a partir de UM único cronograma, insumo e pai saem
-    # coerentes por construção.
+    # Insumo e pai precisam sair do mesmo cronograma. Só ordens já enviadas
+    # pelo motor são atualizadas; dias ausentes e ordens humanas são preservados.
     dias = [hoje() + timedelta(days=k) for k in range(1, _ANT_INSUMO_MAX + 2)]
     crono = cronograma_producao(horizonte_dias=7, janela_semanas=6,
                                 inicio_offset_dias=0,
                                 equilibrar=EQUILIBRAR_AUTO, motor=motor)
-    out = {'motor': motor, 'atualizadas': [], 'sem_ordem': [],
-           'ordem_humana': []}
-    for alvo in dias:
-        iso = alvo.isoformat()
-        plano = (PlanejamentoProducao.query
-                 .filter_by(data=alvo, origem='cronograma')
-                 .filter(PlanejamentoProducao.enviado_ao_padeiro.is_(True))
-                 .first())
-        if plano is None:
-            out['sem_ordem'].append(iso)
-            continue
-        if plano.criado_por is not None:
-            out['ordem_humana'].append(iso)     # ordem de humano: intocada
-            continue
-        plano2 = enviar_plano_do_dia(alvo, user_id=None, motor=motor,
-                                     equilibrar=EQUILIBRAR_AUTO, crono=crono)
-        n = len(getattr(plano2, 'itens', []) or []) if plano2 is not None else 0
-        out['atualizadas'].append({'data': iso, 'itens': n})
-    logger.info('auto_atualiza: %d ordem(ns) re-sincronizada(s) na mesma '
-                'rodada (%s..%s, motor=%s); sem ordem: %s; de humano: %s',
-                len(out['atualizadas']), dias[0].isoformat(),
-                dias[-1].isoformat(), motor, out['sem_ordem'],
-                out['ordem_humana'])
-    return out
+    return _executar_ordens(dias, crono, motor, 7, somente_enviadas=True)
 
 
 def _receitas_do_dia(crono, data_iso):
@@ -546,14 +530,7 @@ def enviar_ordens_da_semana(*, incluir_hoje=False, somente_pendentes=False):
     a validação de consumo. Dias independentes continuam; dependentes de
     insumos daquele dia ficam aguardando a correção. Resultado persistido
     em AppConfig para a tela informar o motivo, além do log do cron."""
-    from app.models import AppConfig, PlanejamentoProducao, Receita
-    from app.services.auto_envio_status import ler_status
     from app.services.previsao_producao import cronograma_producao
-    from app.services.producao import (
-        PlanoJaEnviadoError,
-        aprovar_plano_do_dia,
-        enviar_plano_do_dia,
-    )
     motor = (os.environ.get('AUTO_ENVIO_MOTOR') or 'vendas').strip()
     hoje_d = hoje()
     inicio, fim = _janela_da_semana(hoje_d)
@@ -566,8 +543,29 @@ def enviar_ordens_da_semana(*, incluir_hoje=False, somente_pendentes=False):
     crono = cronograma_producao(horizonte_dias=horizonte,
                                 janela_semanas=6, inicio_offset_dias=0,
                                 equilibrar=EQUILIBRAR_AUTO, motor=motor)
-    receitas = {r.id: r for r in Receita.query.all()}
+    dias = [inicio + timedelta(days=n) for n in range((fim - inicio).days + 1)]
+    return _executar_ordens(dias, crono, motor, horizonte,
+                            incluir_hoje=incluir_hoje,
+                            somente_pendentes=somente_pendentes)
 
+
+def _executar_ordens(dias, crono, motor, horizonte, *, incluir_hoje=False,
+                     somente_pendentes=False, somente_enviadas=False):
+    """Envio e atualização usam as mesmas transações e provas de preparo.
+
+    Cada dia inválido é desfeito e fica visível no status. Dias independentes
+    continuam; dependentes aguardam o preparo, inclusive na rodada das 19:05.
+    """
+    from app.models import AppConfig, PlanejamentoProducao, Receita
+    from app.services.auto_envio_status import ler_status
+    from app.services.producao import (
+        PlanoJaEnviadoError,
+        aprovar_plano_do_dia,
+        enviar_plano_do_dia,
+    )
+    hoje_d = hoje()
+    inicio, fim = min(dias), max(dias)
+    receitas = {r.id: r for r in Receita.query.all()}
     planos = {p.data: p for p in (
         PlanejamentoProducao.query
         .filter_by(origem='cronograma')
@@ -576,7 +574,8 @@ def enviar_ordens_da_semana(*, incluir_hoje=False, somente_pendentes=False):
 
     out = {'tentativa_em': agora().isoformat(), 'de': inicio.isoformat(),
            'ate': fim.isoformat(), 'motor': motor, 'enviadas': [],
-           'resincronizadas': [], 'puladas': [], 'vazias': [], 'falhas': []}
+           'resincronizadas': [], 'puladas': [], 'vazias': [], 'falhas': [],
+           'atualizadas': [], 'sem_ordem': [], 'ordem_humana': []}
     # Repetir a rodada ou virar o dia não corrige um envio que falhou.
     # Preserve também preparos passados: a UI oculta datas antigas, mas seus
     # dependentes não podem assumir que a massa foi preparada sem resolução.
@@ -598,6 +597,10 @@ def enviar_ordens_da_semana(*, incluir_hoje=False, somente_pendentes=False):
         iso = dia.isoformat()
         plano = planos.get(dia)
         enviado = plano is not None and plano.enviado_ao_padeiro is not False
+        if somente_enviadas and (plano is None or plano.enviado_ao_padeiro is not True):
+            out['sem_ordem'].append(iso)
+            dia += timedelta(days=1)
+            continue
         # Recuperação explícita de buracos: hoje só pode nascer se estiver
         # ausente. Nenhum envio anterior nem rascunho humano é reinterpretado.
         if plano is not None and (
@@ -608,6 +611,7 @@ def enviar_ordens_da_semana(*, incluir_hoje=False, somente_pendentes=False):
             continue
         if enviado and plano.criado_por is not None:
             out['puladas'].append(iso)     # ordem HUMANA: nunca tocada
+            out['ordem_humana'].append(iso)
             dia += timedelta(days=1)
             continue
         receita_ids = _receitas_do_dia(crono, iso)
@@ -648,6 +652,8 @@ def enviar_ordens_da_semana(*, incluir_hoje=False, somente_pendentes=False):
             out['vazias'].append(iso)      # grid sem nada a produzir no dia
         else:
             out['resincronizadas' if enviado else 'enviadas'].append(iso)
+            if somente_enviadas:
+                out['atualizadas'].append({'data': iso, 'itens': len(plano.itens or [])})
             if not enviado and falhas_por_dia:
                 from app.services.viennoiserie import quantidade_em_bolas
                 for item in plano.itens:

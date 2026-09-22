@@ -8,6 +8,7 @@ materia_prima_id, estado) — a mesma chave usada no recebimento
 """
 from app.extensions import db
 from app.models import PedidoItem, PedidoLoja
+from app.services.pedido_lock import reler_pedido_travado, travar_pedidos_lojas
 from app.utils import agora
 
 # Pedido so eh "mesclavel" enquanto aberto — depois de separado o estoque/QR
@@ -23,13 +24,16 @@ OBSERVACAO_RASCUNHO_AUTO = ('Gerado do histórico (rascunho) — revisar e '
                             'confirmar.')
 
 
-def pedido_aberto_para_merge(loja_id, data_entrega, status='confirmado'):
+def pedido_aberto_para_merge(loja_id, data_entrega, status='confirmado', *, travar=True):
     """Retorna o PedidoLoja aberto pra mesclar (mesma loja + data + status), ou
     None. So mescla em status mesclavel e com data_entrega definida. Pega o
-    mais antigo (menor id) como alvo canonico."""
+    mais antigo (menor id) como alvo canonico. `travar=False` serve apenas
+    para o preview; o executor sempre relê sob a trava antes de escrever."""
+    if travar:
+        travar_pedidos_lojas([loja_id])
     if status not in STATUS_MESCLAVEL or not data_entrega:
         return None
-    return (PedidoLoja.query
+    return (PedidoLoja.query.populate_existing()
             .filter_by(loja_id=loja_id, data_entrega=data_entrega, status=status)
             .order_by(PedidoLoja.id)
             .first())
@@ -39,9 +43,10 @@ def rascunho_automatico_aberto(loja_id, data_entrega):
     """Rascunho do CRON de auto-pedidos pra (loja, data): 'pendente', SEM
     autor humano (criado_por/modificado_por_id nulos) e com o marcador do
     gerar. Qualquer toque humano tira o pedido daqui (vira pedido normal)."""
+    travar_pedidos_lojas([loja_id])
     if not data_entrega:
         return None
-    return (PedidoLoja.query
+    return (PedidoLoja.query.populate_existing()
             .filter_by(loja_id=loja_id, data_entrega=data_entrega,
                        status='pendente')
             .filter(PedidoLoja.criado_por.is_(None),
@@ -68,6 +73,7 @@ def adotar_rascunho_automatico(pedido, itens, user_id, observacao=None):
     - status vira 'confirmado' e modificado_por_id protege o pedido do cron.
     NAO commita. Retorna {'substituidos', 'adicionados', 'mantidos'}.
     """
+    pedido = reler_pedido_travado(pedido)
     idx = {_chave(it): it for it in pedido.itens}
     por_fk = {}
     for it in pedido.itens:
@@ -149,6 +155,7 @@ def mesclar_itens(pedido, itens, modificado_por_id=None):
 
     Retorna {'adicionados': int, 'somados': int}.
     """
+    pedido = reler_pedido_travado(pedido)
     idx = {_chave(it): it for it in pedido.itens}
     adicionados = somados = 0
     for novo in itens:
@@ -183,6 +190,7 @@ def consolidar_loja_data(loja_id, data_entrega, status, modificado_por_id=None):
     Limpeza retroativa de duplicados que ja existiam antes da junção-na-criacao.
     NAO commita. Retorna (pedido_alvo|None, n_absorvidos).
     """
+    travar_pedidos_lojas([loja_id])
     if status not in STATUS_MESCLAVEL or not data_entrega:
         return None, 0
     pedidos = (PedidoLoja.query

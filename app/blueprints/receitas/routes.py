@@ -1070,27 +1070,26 @@ def nova():
 @admin_required
 def duplicar(id):
     original = Receita.query.get_or_404(id)
+    # Cadastro e regras operacionais seguem juntos: perder prazo, lote ou
+    # calendário na cópia muda o planejamento sem o usuário perceber.
+    # Lista explícita: não herda identidade, histórico, arquivamento,
+    # curadoria nem arquivos de imagem compartilhados com o original.
+    campos_copia = (
+        'categoria', 'familia', 'preco_venda', 'preco_loja', 'preco_site',
+        'preco_interno', 'rendimento_qtd', 'rendimento_unidade', 'peso_base',
+        'peso_unitario', 'perda_percentual', 'custo_embalagem', 'modo_preparo',
+        'observacao', 'descricao_atacado', 'estado_padrao', 'dias_producao',
+        'capacidade_amassadeira_g', 'sugerir_pedido_loja', 'lote_pedido',
+        'minimo_pedido', 'estoque_minimo_industria', 'lote_producao',
+        'producao_max_dia', 'fornada_especial', 'reaproveitavel',
+        'sub_na_amassadeira', 'estoque_nao_abate', 'sob_encomenda',
+        'antecedencia_max_dias', 'cobra_sobra_diaria', 'retorno_receita_id',
+    )
     copia = Receita(
         nome=f'Cópia de {original.nome}',
-        categoria=original.categoria,
-        preco_venda=original.preco_venda,
-        preco_loja=original.preco_loja,
-        preco_site=original.preco_site,
-        site_ativo=original.site_ativo,
-        rendimento_qtd=original.rendimento_qtd,
-        rendimento_unidade=original.rendimento_unidade,
-        peso_base=original.peso_base,
-        peso_unitario=original.peso_unitario,
-        perda_percentual=original.perda_percentual,
-        custo_embalagem=original.custo_embalagem,
-        modo_preparo=original.modo_preparo,
-        descricao_atacado=original.descricao_atacado,
-        # Sob encomenda D+2: a cópia de um item sob encomenda também nasce
-        # sob encomenda (21/07/2026).
-        sob_encomenda=original.sob_encomenda,
-        antecedencia_max_dias=original.antecedencia_max_dias,
-        producao_max_dia=original.producao_max_dia,
-        cobra_sobra_diaria=original.cobra_sobra_diaria,
+        # Preserva preço para revisão, mas não publica um novo item sozinho.
+        site_ativo=False,
+        **{campo: getattr(original, campo) for campo in campos_copia},
     )
     db.session.add(copia)
     db.session.flush()
@@ -1109,6 +1108,13 @@ def duplicar(id):
             sub_receita_id=ing.sub_receita_id,
         )
         db.session.add(novo_ing)
+
+    for etapa in original.etapas:
+        db.session.add(ReceitaEtapa(
+            receita_id=copia.id, ordem=etapa.ordem, nome=etapa.nome,
+            duracao_min=etapa.duracao_min, equipamento=etapa.equipamento,
+            ativa=etapa.ativa, descricao=etapa.descricao,
+        ))
 
     db.session.commit()
     flash(f'Receita duplicada: "{copia.nome}"', 'success')

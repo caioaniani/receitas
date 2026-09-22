@@ -11,12 +11,13 @@ from app.constants import STATUS_PEDIDO_EDITAVEIS as STATUS_EDITAVEIS
 from app.constants import STATUS_PEDIDO_ENTREGUES
 from app.extensions import db
 from app.models import PedidoItem, PedidoLoja
+from app.services.pedido_lock import protegido_do_motor, travar_pedidos_lojas
 from app.services.previsao_producao import invalidar_sugestao_cache
 from app.utils import agora, hoje
 
 
 class PedidoLoteInvalidoError(ValueError):
-    """A grade contém quantidade incompatível com o lote de item em g/ml."""
+    """A grade contém item inelegível ou quantidade incompatível com o lote."""
 
 
 def _validar_lotes_da_grade(pedidos):
@@ -29,6 +30,17 @@ def _validar_lotes_da_grade(pedidos):
     erros = violacoes_por_ids(itens)
     if erros:
         raise PedidoLoteInvalidoError(' '.join(erros))
+    from app.models import Produto
+    from app.services.cestas import produto_reposicao_direta
+
+    ids = {int(it['produto_id']) for ped in pedidos for it in (ped.get('itens') or [])
+           if it.get('produto_id') and int(it.get('qtd') or 0) > 0}
+    produtos = {p.id: p for p in Produto.query.filter(Produto.id.in_(ids)).all()} if ids else {}
+    for pid in ids:
+        if not produto_reposicao_direta(produtos.get(pid)):
+            raise PedidoLoteInvalidoError(
+                'A reposição direta exige produto ativo e sem composição. '
+                'Para cestas, configure a reposição dos componentes.')
 
 
 def criar_pedidos_rascunho(pedidos, user_id):
@@ -45,6 +57,7 @@ def criar_pedidos_rascunho(pedidos, user_id):
     Retorna {'criados': n, 'pulados_existentes': n, 'itens': n}.
     """
     pedidos = list(pedidos)
+    travar_pedidos_lojas(ped.get('loja_id') for ped in pedidos)
     _validar_lotes_da_grade(pedidos)
     criados = pulados = total_itens = 0
     hoje_d = hoje()
@@ -52,7 +65,7 @@ def criar_pedidos_rascunho(pedidos, user_id):
         loja_id = ped.get('loja_id')
         data_ent = ped.get('data_entrega')
         itens = [it for it in (ped.get('itens') or [])
-                 if (it.get('receita_id') or it.get('materia_prima_id'))
+                 if (it.get('receita_id') or it.get('materia_prima_id') or it.get('produto_id'))
                  and int(it.get('qtd') or 0) > 0]
         if not loja_id or not data_ent or not itens:
             continue
@@ -85,10 +98,12 @@ def criar_pedidos_rascunho(pedidos, user_id):
         for it in itens:
             rid = it.get('receita_id')
             mid = it.get('materia_prima_id')
+            pid = it.get('produto_id')
             db.session.add(PedidoItem(
                 pedido_id=pedido.id,
                 receita_id=int(rid) if rid else None,
                 materia_prima_id=int(mid) if mid else None,
+                produto_id=int(pid) if pid else None,
                 quantidade=int(it['qtd']),
             ))
             total_itens += 1
@@ -114,6 +129,14 @@ def _sincronizar_itens(pedido, itens, user_id):
     Carimba modificado_em/por (mesma trilha da rota /pedidos/<id>/editar; o
     AuditLog automatico captura as mudancas). Retorna (ajustados, ambiguos).
     """
+    # Defesa também para chamadores diretos: a decisão e a escrita pertencem
+    # à mesma transação, sob a mesma trava usada pelos gestos humanos.
+    travar_pedidos_lojas([pedido.loja_id])
+    if user_id is None:
+        db.session.refresh(pedido)
+        db.session.expire(pedido, ['itens'])
+        if protegido_do_motor(pedido):
+            return 0, 0
     por_chave = {}
     duplicados = set()
     for it in pedido.itens:
@@ -128,14 +151,16 @@ def _sincronizar_itens(pedido, itens, user_id):
     for it in itens:
         rid = it.get('receita_id')
         mid = it.get('materia_prima_id')
-        if not rid and not mid:
+        pid = it.get('produto_id')
+        if not rid and not mid and not pid:
             continue
-        chave = ('r', int(rid)) if rid else ('m', int(mid))
+        chave = ('r', int(rid)) if rid else ('m', int(mid)) if mid else ('p', int(pid))
         qtd = int(it.get('qtd') or 0)
         if chave in duplicados:
             atual_soma = sum(x.quantidade or 0 for x in pedido.itens
                              if (('r', x.receita_id) if x.receita_id else
-                                 ('m', x.materia_prima_id)) == chave)
+                                 ('m', x.materia_prima_id) if x.materia_prima_id else
+                                 ('p', x.produto_id)) == chave)
             if qtd != atual_soma:
                 ambiguos += 1
             continue
@@ -146,6 +171,7 @@ def _sincronizar_itens(pedido, itens, user_id):
                     pedido_id=pedido.id,
                     receita_id=int(rid) if rid else None,
                     materia_prima_id=int(mid) if mid else None,
+                    produto_id=int(pid) if pid else None,
                     quantidade=qtd,
                 ))
                 ajustados += 1
@@ -176,23 +202,27 @@ def aplicar_grade(pedidos, user_id):
              'itens_ambiguos', 'pulados_nao_editavel', 'pulados_multiplos'}.
     """
     pedidos = list(pedidos)
+    travar_pedidos_lojas(ped.get('loja_id') for ped in pedidos)
     _validar_lotes_da_grade(pedidos)
     hoje_d = hoje()
     out = {'criados': 0, 'itens': 0, 'atualizados': 0, 'itens_ajustados': 0,
            'itens_ambiguos': 0, 'pulados_nao_editavel': 0,
-           'pulados_multiplos': 0}
+           'pulados_multiplos': 0, 'pulados_humano': 0}
     for ped in pedidos:
         loja_id = ped.get('loja_id')
         data_ent = ped.get('data_entrega')
         itens = [it for it in (ped.get('itens') or [])
-                 if it.get('receita_id') or it.get('materia_prima_id')]
+                 if it.get('receita_id') or it.get('materia_prima_id') or it.get('produto_id')]
         if not loja_id or not data_ent or not itens:
             continue
-        existentes = (PedidoLoja.query
+        todos = (PedidoLoja.query.populate_existing()
                       .filter(PedidoLoja.loja_id == loja_id,
-                              PedidoLoja.data_entrega == data_ent,
-                              PedidoLoja.status != 'cancelado')
+                              PedidoLoja.data_entrega == data_ent)
                       .all())
+        if user_id is None and any(protegido_do_motor(p, hoje_d) for p in todos):
+            out['pulados_humano'] += 1
+            continue
+        existentes = [p for p in todos if p.status != 'cancelado']
         if data_ent > hoje_d:
             # Entrega antecipada (finalizado antes da data, ex: pedido de
             # emergencia da madrugada entregue no caminhao de hoje) nao e
@@ -215,10 +245,12 @@ def aplicar_grade(pedidos, user_id):
             for it in novos:
                 rid = it.get('receita_id')
                 mid = it.get('materia_prima_id')
+                pid = it.get('produto_id')
                 db.session.add(PedidoItem(
                     pedido_id=pedido.id,
                     receita_id=int(rid) if rid else None,
                     materia_prima_id=int(mid) if mid else None,
+                    produto_id=int(pid) if pid else None,
                     quantidade=int(it['qtd']),
                 ))
                 out['itens'] += 1

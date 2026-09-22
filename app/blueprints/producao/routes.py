@@ -518,7 +518,7 @@ def pedidos_semana_gerar():
               'Tente de novo pelo botão desejado.', 'warning')
         return _voltar()
 
-    agrupado = {}   # (loja_id, data) -> list[{receita_id|materia_prima_id, qtd}]
+    agrupado = {}   # (loja_id, data) -> list[{receita_id|produto_id|materia_prima_id, qtd}]
     for chave, valor in request.form.items():
         if not chave.startswith('qtd|'):
             continue
@@ -531,10 +531,11 @@ def pedidos_semana_gerar():
             qtd = int(valor or 0)
             data_ent = date.fromisoformat(data_s)
             # Item: int puro = receita (formato original); 'mp:<id>' =
-            # materia-prima (ex: pao de queijo congelado — a loja pede e a
-            # industria ENVIA sem produzir).
+            # materia-prima; 'prod:<id>' = produto estocado diretamente.
             if item_s.startswith('mp:'):
                 item = {'materia_prima_id': int(item_s[3:])}
+            elif item_s.startswith('prod:'):
+                item = {'produto_id': int(item_s[5:])}
             else:
                 item = {'receita_id': int(item_s)}
         except (TypeError, ValueError):

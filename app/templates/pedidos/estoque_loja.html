@@ -113,6 +113,18 @@
                             <option value="devolucao">Devolver à indústria</option>
                         </select>
                     </td>
+                    {% if regras_reposicao_bloqueadas.get(el.id) %}
+                    <td colspan="3" class="small text-muted align-middle">
+                        {{ regras_reposicao_bloqueadas[el.id] }}
+                        {# Mantém os índices das listas do formulário. O backend
+                           preserva estas regras antigas sem voltar a aplicá-las. #}
+                        <input type="hidden" name="minimo[]" value="{{ el.estoque_minimo or '' }}">
+                        <input type="hidden" name="diario[]" value="{{ el.pedido_minimo_diario or '' }}">
+                        {% if el.reposicao_por_venda_diaria %}
+                        <input type="hidden" name="venda_diaria[]" value="{{ el.id }}">
+                        {% endif %}
+                    </td>
+                    {% else %}
                     <td>
                         {# Config (piso da previsão de pedido), NÃO um movimento
                            de estoque — salvo pelo botão "Salvar mínimos". #}
@@ -136,6 +148,7 @@
                                {% if el.reposicao_por_venda_diaria %}checked{% endif %}
                                title="Produto fresco: repor diariamente pela média de venda do mesmo dia da semana, sem descontar estoque nem aplicar caixa/mínimo global.">
                     </td>
+                    {% endif %}
                 </tr>
     {% endmacro %}
 

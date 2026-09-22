@@ -928,6 +928,7 @@ def juntar_repetidos():
     """Limpeza retroativa: junta pedidos duplicados (mesma loja+status+data) do
     dia visto num so; os absorvidos viram 'cancelado'. (A criacao nova ja junta
     sozinha; isto eh pros que ja existiam antes do recurso.)"""
+    from app.services.pedido_lock import travar_pedidos_lojas
     from app.services.pedido_merge import STATUS_MESCLAVEL, consolidar_loja_data
     data_str = (request.form.get('data') or '').strip() or None
     hj = hoje()
@@ -941,6 +942,9 @@ def juntar_repetidos():
     grupos = {ch for ch, c in
               Counter((p.loja_id, p.status, p.data_entrega) for p in q.all()).items()
               if c > 1}
+    # O conjunto não tem ordem. Trave todas as lojas em ordem canônica antes
+    # da primeira releitura/mutação, como o motor e a grade de pedidos fazem.
+    travar_pedidos_lojas(loja_id for loja_id, _status, _data in grupos)
     juntados = 0
     for loja_id, status, d_ent in grupos:
         _alvo, absorvidos = consolidar_loja_data(loja_id, d_ent, status, current_user.id)

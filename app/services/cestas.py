@@ -137,6 +137,17 @@ def eh_cesta(produto):
     return bool(produto and produto.itens)
 
 
+def produto_reposicao_direta(produto):
+    """Produto ativo com saldo próprio pode entrar na reposição automática.
+
+    Cestas são montadas com os componentes: pedir o pai e os componentes
+    duplicaria a necessidade. Mesmo um componente do tipo Produto que tenha
+    composição é excluído aqui, pois seu pedido direto seria desmembrado no
+    envio, enquanto a venda dentro de outra cesta baixa o saldo atômico.
+    """
+    return bool(produto and produto.ativo and not eh_cesta(produto))
+
+
 def contar_produto_itens_orfaos():
     """Conta ProdutoItems orfaos (tipo definido mas FK NULL).
 

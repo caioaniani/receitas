@@ -508,8 +508,7 @@ def test_cancelamento_humano_nao_ressuscita(app, loja, admin_user,
 
 
 def test_sincronizar_do_cron_nao_apaga_carimbo_humano(app, loja, admin_user):
-    """Rodada 2 (corrida cron×adoção): o sync com user_id=None nunca zera um
-    carimbo humano existente — na corrida, a rodada seguinte protege."""
+    """O sync do cron preserva imediatamente a quantidade e o carimbo humano."""
     from app.services.pedidos_semana import _sincronizar_itens
     with app.app_context():
         r = _receita()
@@ -518,7 +517,7 @@ def test_sincronizar_do_cron_nao_apaga_carimbo_humano(app, loja, admin_user):
         db.session.commit()
         _sincronizar_itens(p, [{'receita_id': r.id, 'qtd': 30}], None)
         db.session.commit()
-        assert p.itens[0].quantidade == 30
+        assert p.itens[0].quantidade == 40
         assert p.modificado_por_id == admin_user.id  # carimbo sobrevive
 
 

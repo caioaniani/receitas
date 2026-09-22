@@ -49,6 +49,7 @@ from app.models import (
     VendaMapa,
     VendaMapaUso,
 )
+from app.services.pedido_lock import reler_pedido_travado, travar_pedidos_lojas
 from app.utils import agora
 from app.utils import hoje as hoje_brt
 
@@ -643,6 +644,8 @@ def editar(id):
     via REPLACE total — DELETE + INSERT da lista nova."""
     from app.constants import STATUS_PEDIDO_EDITAVEIS
     pedido = PedidoLoja.query.get_or_404(id)
+    if request.method == 'POST':
+        pedido = reler_pedido_travado(pedido)
     if pedido.status not in STATUS_PEDIDO_EDITAVEIS:
         flash(f'Pedido {pedido.status} nao pode ser editado. Cancele e recrie.', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
@@ -833,6 +836,7 @@ def detalhe(id):
 @operacional_pedido_required
 def confirmar(id):
     pedido = PedidoLoja.query.get_or_404(id)
+    pedido = reler_pedido_travado(pedido)
     pedido.status = 'confirmado'
     # Carimbo do gesto humano (10/08/2026, auto-pedidos): confirmar um
     # rascunho automático SEM mexer em item é revisão — o carimbo protege o
@@ -850,6 +854,7 @@ def confirmar(id):
 @operacional_pedido_required
 def separar(id):
     pedido = PedidoLoja.query.get_or_404(id)
+    pedido = reler_pedido_travado(pedido)
     if pedido.status not in ('pendente', 'confirmado'):
         flash('Pedido deve estar pendente ou confirmado para ser separado.', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
@@ -1370,6 +1375,7 @@ def _aplicar_voltar_status(pedido, usuario_id):
       separado          -> confirmado    (so status)
       confirmado        -> pendente      (so status)
     """
+    pedido = reler_pedido_travado(pedido)
     status_atual = pedido.status
     if status_atual in ('entregue', 'recebido'):
         from app.services.estoque_helpers import serializar_loja
@@ -1463,6 +1469,9 @@ def voltar_status_lote():
     revertidos = 0
     ignorados = 0
     try:
+        validos = [int(raw) for raw in ids if str(raw).isdigit()]
+        travar_pedidos_lojas(lid for (lid,) in db.session.query(PedidoLoja.loja_id)
+                            .filter(PedidoLoja.id.in_(validos)).all())
         for raw in ids:
             try:
                 pid = int(raw)
@@ -1489,6 +1498,7 @@ def voltar_status_lote():
 @gerente_required
 def cancelar(id):
     pedido = PedidoLoja.query.get_or_404(id)
+    pedido = reler_pedido_travado(pedido)
     loja_id = _loja_do_usuario()
     if loja_id and pedido.loja_id != loja_id:
         abort(403)
@@ -2186,9 +2196,17 @@ def estoque_loja():
     loja = Loja.query.get(loja_id) if loja_id else None
     itens = (EstoqueLoja.query.filter_by(loja_id=loja_id)
              .options(joinedload(EstoqueLoja.receita),
-                      joinedload(EstoqueLoja.produto),
+                      joinedload(EstoqueLoja.produto).selectinload(Produto.itens),
                       joinedload(EstoqueLoja.materia_prima))
              .all()) if loja_id else []
+    from app.services.cestas import produto_reposicao_direta
+    regras_reposicao_bloqueadas = {
+        el.id: ('Produto inativo: ative o cadastro para configurar a reposição.'
+                if el.produto and not el.produto.ativo else
+                'Cesta montada com componentes: configure a reposição de cada componente.')
+        for el in itens if el.produto_id and not el.receita_id
+        and not produto_reposicao_direta(el.produto)
+    }
     lojas = _lojas_operacionais()
     receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all() \
         if current_user.is_admin() else []
@@ -2242,7 +2260,8 @@ def estoque_loja():
     return render_template('pedidos/estoque_loja.html', loja=loja, itens=itens,
                            lojas=lojas, sel_loja=loja_id,
                            receitas=receitas, produtos=produtos, materias=materias,
-                           sugestoes=sugestoes, devolucoes=devolucoes)
+                           sugestoes=sugestoes, devolucoes=devolucoes,
+                           regras_reposicao_bloqueadas=regras_reposicao_bloqueadas)
 
 
 @pedidos_bp.route('/estoque-loja/balanco-template.xlsx')
@@ -3256,21 +3275,30 @@ def estoque_loja_minimos():
             return 'pula'
         return v if v > 0 else None
 
+    from app.services.cestas import produto_reposicao_direta
     alterados = 0
+    bloqueados = []
     for i, eid in enumerate(eids):
         el = els.get(eid)
         if not el or el.loja_id != loja_id:      # so a loja do form
             continue
         novo = _piso(minimos, i)
+        novo_d = _piso(diarios, i)
+        novo_venda_dia = eid in venda_diaria_ids
+        if (el.produto_id and not el.receita_id
+                and not produto_reposicao_direta(el.produto)):
+            if ((novo != 'pula' and novo != el.estoque_minimo)
+                    or (novo_d != 'pula' and novo_d != el.pedido_minimo_diario)
+                    or novo_venda_dia != bool(el.reposicao_por_venda_diaria)):
+                bloqueados.append(el.nome_item)
+            continue
         if novo != 'pula' and el.estoque_minimo != novo:
             el.estoque_minimo = novo
             alterados += 1
         # Pedido minimo DIARIO (piso incondicional — dono 17/08/2026).
-        novo_d = _piso(diarios, i)
         if novo_d != 'pula' and el.pedido_minimo_diario != novo_d:
             el.pedido_minimo_diario = novo_d
             alterados += 1
-        novo_venda_dia = eid in venda_diaria_ids
         if bool(el.reposicao_por_venda_diaria) != novo_venda_dia:
             el.reposicao_por_venda_diaria = novo_venda_dia
             alterados += 1
@@ -3280,6 +3308,10 @@ def estoque_loja_minimos():
               % (alterados, 'ajuste' if alterados == 1 else 'ajustes'), 'success')
     else:
         flash('Nenhuma regra de reposição alterada.', 'info')
+    if bloqueados:
+        flash('Regras não alteradas para: %s. Cestas usam as regras dos '
+              'componentes; produtos inativos precisam ser ativados primeiro.'
+              % ', '.join(bloqueados), 'warning')
     return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
 
 

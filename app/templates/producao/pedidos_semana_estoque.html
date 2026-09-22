@@ -162,6 +162,7 @@
                     <tr data-nome="{{ p.nome }}">
                         <td class="prod">{{ p.nome }}
                             {% if p.eh_mp %}<span class="badge bg-secondary" title="Matéria-prima comprada (a indústria envia, não produz)">MP</span>{% endif %}
+                            {% if p.eh_produto %}<span class="badge bg-secondary" title="Produto com estoque próprio, enviado pela indústria">produto</span>{% endif %}
                             {% if p.reposicao_por_venda_diaria %}
                             <span class="badge bg-success" title="Reposição fresca: a sugestão de cada dia segue a venda média daquele dia da semana, sem estoque acumulado ou caixa global.">fresco · venda/dia</span>
                             {% elif p.lote and p.lote > 1 %}<span class="badge bg-light text-dark border" title="Caixa (lote de pedido)">cx {{ p.lote }}</span>{% endif %}

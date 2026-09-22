@@ -171,3 +171,61 @@ def test_juntar_repetidos_route(app, admin_user, loja, catalogo, cliente):
 
     assert PedidoLoja.query.filter_by(loja_id=loja.id, status='confirmado').count() == 1
     assert PedidoLoja.query.filter_by(loja_id=loja.id, status='cancelado').count() == 1
+
+
+def test_juntar_repetidos_trava_todas_lojas_antes_de_consolidar(
+        app, admin_user, loja, catalogo, cliente, monkeypatch):
+    from app.extensions import db
+    from app.models import Loja, PedidoItem, PedidoLoja
+    from app.services import estoque_helpers, pedido_merge
+
+    outra = Loja(nome='Outra loja', ativa=True)
+    db.session.add(outra)
+    db.session.commit()
+    ids_lojas = sorted([loja.id, outra.id])
+    rid, d = catalogo['receita'].id, _amanha()
+    for lj in (outra, loja):
+        _seed_dups(lj, admin_user, rid, (10, 5), d)
+    eventos = []
+    monkeypatch.setattr(estoque_helpers, 'serializar_loja',
+                        lambda lid: eventos.append(('lock', lid)))
+    original = pedido_merge.consolidar_loja_data
+
+    def consolidar(*args, **kwargs):
+        # O helper faz a releitura dos pedidos. Nenhuma loja pode chegar aqui
+        # sem que a transação tenha adquirido antes o conjunto inteiro.
+        assert eventos[:2] == [('lock', lid) for lid in ids_lojas]
+        eventos.append(('consolidar', args[0]))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(pedido_merge, 'consolidar_loja_data', consolidar)
+    _login(cliente)
+    resposta = cliente.post('/padeiro/juntar-repetidos', data={'data': d.isoformat()})
+    assert resposta.status_code == 302
+    assert {e[1] for e in eventos if e[0] == 'consolidar'} == set(ids_lojas)
+    for lid in ids_lojas:
+        pedido = PedidoLoja.query.filter_by(loja_id=lid, status='confirmado').one()
+        assert PedidoItem.query.filter_by(pedido_id=pedido.id).one().quantidade == 15
+
+
+def test_preview_merge_de_varias_lojas_nao_adquire_travas(
+        app, admin_user, loja, catalogo, monkeypatch):
+    from app.extensions import db
+    from app.models import Loja
+    from app.services import estoque_helpers
+    from app.services.copilot import _enriquecer_criar_pedido
+
+    outra = Loja(nome='Outra loja', ativa=True)
+    db.session.add(outra)
+    db.session.commit()
+    d = _amanha()
+    pedidos = {lj.id: _seed_dups(lj, admin_user, catalogo['receita'].id, (10,), d)[0]
+               for lj in (outra, loja)}
+
+    def nao_travar(_lid):
+        pytest.fail('Um preview não deve manter travas entre lojas.')
+
+    monkeypatch.setattr(estoque_helpers, 'serializar_loja', nao_travar)
+    for lid in sorted(pedidos, reverse=True):
+        preview = _enriquecer_criar_pedido({'loja_id': lid, 'data_entrega': d.isoformat()})
+        assert preview['merge_pedido_id'] == pedidos[lid]

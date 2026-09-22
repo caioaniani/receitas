@@ -434,7 +434,7 @@ def _hist_vendas_receita_por_dow(hist_ini, hist_fim, com_loja=False):
     motor 'vendas' do cronograma (06/07/2026). Demanda unificada
     (VENDA_TIPOS_DEMANDA_COM_ESTORNO, estornos com o sinal de gravação de
     cada canal) + merma estrutural (MERMA_TIPOS_PROJECAO), líquido clampado
-    em 0 por (receita, data). MESMA fonte da sugestão de pedido por venda
+    em 0 por (loja, receita, data) antes de somar. MESMA fonte da sugestão de pedido por venda
     (Fase 0.1/1), agregada no nível da indústria: só linhas com receita_id
     (a indústria produz receitas; produto/MP ficam fora).
 
@@ -471,9 +471,14 @@ def _hist_vendas_receita_por_dow(hist_ini, hist_fim, com_loja=False):
             q = int(qtd or 0)
         else:
             q = VENDA_ESTORNO_SINAL_DEMANDA.get(tipo_mov, 1) * int(qtd or 0)
-        bruto[rid][d_mov] += q
-        if com_loja:
-            bruto_loja[rid][loja_id][d_mov] += q
+        bruto_loja[rid][loja_id][d_mov] += q
+    # Uma devolução em outra loja não elimina o consumo positivo desta.
+    # O líquido é limitado por loja/data antes da agregação, igual à fonte
+    # usada pelo calendário e pelo detalhamento da previsão.
+    for rid, lojas_d in bruto_loja.items():
+        for por_data in lojas_d.values():
+            for d_mov, qtd in por_data.items():
+                bruto[rid][d_mov] += max(0, qtd)
     qtd_dow = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     soma_total = defaultdict(int)
     datas_total = defaultdict(set)
@@ -495,6 +500,58 @@ def _hist_vendas_receita_por_dow(hist_ini, hist_fim, com_loja=False):
                 if v > 0:
                     por_loja[rid][d_mov.weekday()][loja_id][d_mov] += v
     return qtd_dow, soma_total, datas_total, por_loja
+
+
+def _fontes_historico_operacional(por_loja, hist_ini, hist_fim):
+    """Histórico agregado somente das lojas abertas no dia previsto.
+
+    Filtrar só os movimentos do mesmo dia não basta: o fallback residual
+    também carregaria vendas de lojas fechadas. Para cada dia da semana,
+    agregamos toda a série das lojas elegíveis antes de calcular a média e
+    o residual. Lojas diárias conservam exatamente a agregação anterior.
+    Demanda firme fica fora deste filtro: uma entrega explícita continua
+    sendo compromisso mesmo quando a loja não abre normalmente naquele dia.
+    """
+    import unicodedata
+
+    def operacional(loja):
+        nome = ''.join(c for c in unicodedata.normalize('NFKD', loja.nome or '')
+                       if not unicodedata.combining(c)).casefold()
+        return loja.ativa and 'industria' not in nome
+
+    lojas = {loja.id: loja for loja in Loja.query.all() if operacional(loja)}
+    dias_janela = (hist_fim - hist_ini).days + 1
+    elegiveis = {}
+    for dow in range(7):
+        dia = hist_ini + timedelta(days=(dow - hist_ini.weekday()) % 7)
+        elegiveis[dow] = {lid for lid, loja in lojas.items() if loja.funciona_em(dia)}
+    fontes = {}
+    for rid, historico in por_loja.items():
+        fontes[rid] = {}
+        for dow_alvo, ids in elegiveis.items():
+            agregado = defaultdict(lambda: defaultdict(int))
+            detalhe = defaultdict(dict)
+            for dow_hist, origem in historico.items():
+                for lid, datas in origem.items():
+                    if lid not in ids:
+                        continue
+                    detalhe[dow_hist][lid] = datas
+                    for data, qtd in datas.items():
+                        agregado[dow_hist][data] += qtd
+            soma = sum(sum(datas.values()) for datas in agregado.values())
+            fontes[rid][dow_alvo] = {
+                'agg': agregado, 'loja': detalhe, 'soma': soma,
+                'residual': _taxa_residual(agregado, soma, dias_janela),
+            }
+    return fontes
+
+
+def _previsto_operacional(fontes, rid, dia, hoje_d, datas_possiveis):
+    fonte = fontes.get(rid, {}).get(dia.weekday(), {})
+    return _previsto_dow(
+        fonte.get('agg', {}).get(dia.weekday()), hoje_d,
+        fonte.get('residual', 0.0),
+        datas_possiveis=datas_possiveis[dia.weekday()])
 
 
 def _padronizar_qtd(qtd, lote, minimo):
@@ -876,21 +933,24 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     datas_total = defaultdict(set)
     pedidos_hist = set()
     datas_hist_global = set()
+    historico_por_loja = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     hist_rows = (db.session.query(PedidoLoja.id, PedidoItem.receita_id,
                                   PedidoLoja.data_entrega,
-                                  PedidoItem.quantidade)
+                                  PedidoItem.quantidade, PedidoLoja.loja_id)
                  .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
                  .filter(PedidoItem.receita_id.isnot(None),
                          PedidoLoja.status != 'cancelado',
                          PedidoLoja.data_entrega >= hist_ini,
                          PedidoLoja.data_entrega <= hist_fim)
                  .all())
-    for pid, rid, data_ent, qtd in hist_rows:
+    for pid, rid, data_ent, qtd, lid in hist_rows:
         if data_ent is None:
             continue
         dow = data_ent.weekday()
         q = int(qtd or 0)
         qtd_dow[rid][dow][data_ent] += q
+        serie = historico_por_loja[rid][dow][lid]
+        serie[data_ent] = serie.get(data_ent, 0) + q
         soma_total[rid] += q
         datas_total[rid].add(data_ent)
         pedidos_hist.add(pid)
@@ -898,6 +958,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
 
     dias_calendario_janela = 7 * janela_semanas
     datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)   # denom da media
+
+    fontes_pedidos = _fontes_historico_operacional(historico_por_loja, hist_ini, hist_fim)
 
     # 4. Previsao: pra cada dia da janela de entrega da receita (deslocada pelo
     # lead), soma a media do dia-da-semana correspondente (com fallback pra taxa
@@ -911,20 +973,14 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     # do cronograma ja usava essa conta e podia acusar 'vai faltar' enquanto o
     # total do balanco dizia que nao). B2B e encomendas do site SOMAM
     # depois do max das lojas, pois nao fazem parte do historico.
-    residual_rate = {rid: _taxa_residual(qtd_dow.get(rid, {}), soma_total.get(rid, 0),
-                                         dias_calendario_janela)
-                     for rid in receitas}
     # Motor 'vendas'/'maior': curva de VENDA real por (receita, dow, data) —
     # mesma forma do historico de pedidos, entao a media por recencia e a
     # taxa residual funcionam identicas.
-    qtd_dow_v, soma_v, datas_v, residual_v = {}, {}, {}, {}
+    datas_v, fontes_vendas = {}, {}
     if motor in ('vendas', 'maior'):
-        qtd_dow_v, soma_v, datas_v = _hist_vendas_receita_por_dow(
-            hist_ini, hist_fim)
-        residual_v = {rid: _taxa_residual(qtd_dow_v.get(rid, {}),
-                                          soma_v.get(rid, 0),
-                                          dias_calendario_janela)
-                      for rid in receitas}
+        _, _, datas_v, vendas_por_loja = _hist_vendas_receita_por_dow(
+            hist_ini, hist_fim, com_loja=True)
+        fontes_vendas = _fontes_historico_operacional(vendas_por_loja, hist_ini, hist_fim)
 
     # Receitas de RETORNO (destino de retorno_receita_id) NAO sao produziveis
     # — o estoque delas entra por devolucao das lojas, nunca por fornada. No
@@ -941,8 +997,6 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     previsto = defaultdict(float)
     demanda_soma = defaultdict(float)
     for rid in receitas:
-        rid_dow = qtd_dow.get(rid, {})
-        rid_dow_v = qtd_dow_v.get(rid, {}) if motor != 'pedidos' else {}
         usa_p = (motor in ('pedidos', 'maior') and bool(datas_total.get(rid))
                  and rid not in retorno_ids)
         usa_v = (motor in ('vendas', 'maior') and bool(datas_v.get(rid))
@@ -954,13 +1008,10 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         for d in dias_rid:
             p_d = 0.0
             if (usa_p or usa_v) and _fornada_no_dia(rec_rid, d):
-                dow = d.weekday()
-                p_ped = _previsto_dow(
-                    rid_dow.get(dow), hoje_d, residual_rate[rid],
-                    datas_possiveis=datas_possiveis_dow[dow]) if usa_p else 0.0
-                p_ven = _previsto_dow(
-                    rid_dow_v.get(dow), hoje_d, residual_v.get(rid, 0.0),
-                    datas_possiveis=datas_possiveis_dow[dow]) if usa_v else 0.0
+                p_ped = _previsto_operacional(
+                    fontes_pedidos, rid, d, hoje_d, datas_possiveis_dow) if usa_p else 0.0
+                p_ven = _previsto_operacional(
+                    fontes_vendas, rid, d, hoje_d, datas_possiveis_dow) if usa_v else 0.0
                 p_d = max(p_ped, p_ven) if motor == 'maior' else (
                     p_ven if motor == 'vendas' else p_ped)
                 previsto[rid] += p_d
@@ -970,15 +1021,12 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     def _previsto_dia(rid, dia):
         if not _fornada_no_dia(receitas.get(rid), dia):
             return 0.0
-        dow = dia.weekday()
-        p_ped = _previsto_dow(
-            qtd_dow.get(rid, {}).get(dow), hoje_d, residual_rate.get(rid, 0.0),
-            datas_possiveis=datas_possiveis_dow[dow])
+        p_ped = _previsto_operacional(
+            fontes_pedidos, rid, dia, hoje_d, datas_possiveis_dow)
         if motor == 'pedidos':
             return p_ped
-        p_ven = _previsto_dow(
-            qtd_dow_v.get(rid, {}).get(dow), hoje_d, residual_v.get(rid, 0.0),
-            datas_possiveis=datas_possiveis_dow[dow])
+        p_ven = _previsto_operacional(
+            fontes_vendas, rid, dia, hoje_d, datas_possiveis_dow)
         return p_ven if motor == 'vendas' else max(p_ped, p_ven)
 
     # 4b. Saldo antes da primeira entrega que esta janela consegue produzir.
@@ -1214,6 +1262,7 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
     soma_loja_total = defaultdict(int)                     # loja -> q
     soma_total = 0
     datas_total = set()
+    historico_por_loja = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     hist_rows = (db.session.query(PedidoLoja.loja_id, PedidoLoja.data_entrega,
                                   PedidoItem.quantidade)
                  .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
@@ -1232,13 +1281,13 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
         soma_loja_total[loja_id] += q
         soma_total += q
         datas_total.add(data_ent)
+        serie = historico_por_loja[receita_id][dow][loja_id]
+        serie[data_ent] = serie.get(data_ent, 0) + q
 
     # 3. Estimado por (loja, dia). Previsto diario igual ao do balanco; rateio
-    #    normalizado entre as lojas OPERACIONAIS pra a grade fechar no previsto
-    #    (demanda de loja desativada/Industria nao fica orfa — redistribui
-    #    proporcional entre as operacionais de hoje).
-    soma_op_total = sum(soma_loja_total.get(l.id, 0) for l in lojas_op)
-    residual_rate = _taxa_residual(qtd_dow, soma_total, dias_calendario_janela)
+    #    entre lojas abertas no dia. Demanda de loja inativa/fechada não
+    #    é redistribuída às demais: usa a mesma fonte do balanço.
+    fontes = _fontes_historico_operacional(historico_por_loja, hist_ini, hist_fim)
     datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)
     estimado = defaultdict(lambda: defaultdict(float))  # loja_id -> data -> q
     for d in dias_futuros:
@@ -1249,13 +1298,16 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
         if not _fornada_no_dia(rec, d):
             continue
         dow = d.weekday()
-        previsto_dia = _previsto_dow(qtd_dow.get(dow), hoje_d, residual_rate,
-                                     datas_possiveis=datas_possiveis_dow[dow])
+        previsto_dia = _previsto_operacional(
+            fontes, receita_id, d, hoje_d, datas_possiveis_dow)
         if previsto_dia <= 0:
             continue
-        base_dow_op = sum(soma_loja_dow.get(l.id, {}).get(dow, 0)
-                          for l in lojas_op)
-        for loja in lojas_op:
+        elegiveis = {lid for lojas in fontes.get(receita_id, {}).get(dow, {}).get(
+            'loja', {}).values() for lid in lojas}
+        abertas = [loja for loja in lojas_op if loja.id in elegiveis]
+        base_dow_op = sum(soma_loja_dow.get(l.id, {}).get(dow, 0) for l in abertas)
+        soma_op_total = sum(soma_loja_total.get(l.id, 0) for l in abertas)
+        for loja in abertas:
             if base_dow_op:
                 share = soma_loja_dow.get(loja.id, {}).get(dow, 0) / base_dow_op
             elif soma_op_total:
@@ -1826,6 +1878,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     from math import ceil
 
     from app.models import EstoqueLoja, MovEstoqueLoja
+    from app.utils import agora
 
     horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
     janela_semanas = max(1, min(int(janela_semanas or 6), 26))
@@ -1852,15 +1905,27 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # congelado, comprado em saco e vendido via cones; a venda do cone baixa a
     # linha MP da loja). Opt-in de proposito: nem toda MP que passa por loja e
     # pedida pra industria. Token unico por item: receita = o proprio id (int,
-    # compat com o gerar existente); MP = 'mp:<id>' (o gerar reconhece o prefixo).
-    from app.models import MateriaPrima
+    # compat com o gerar existente); MP = 'mp:<id>'; Produto = 'prod:<id>'.
+    # Cestas nao entram como item direto: o estoque movimenta os componentes.
+    from sqlalchemy.orm import selectinload
+
+    from app.models import MateriaPrima, Produto
+    from app.services.cestas import produto_reposicao_direta
+
     mps = {m.id: m for m in MateriaPrima.query
            .filter(MateriaPrima.sugerir_pedido_loja.is_(True),
                    MateriaPrima.arquivada_em.is_(None)).all()}
+    produtos_diretos = {
+        p.id: p for p in Produto.query.filter(Produto.ativo.is_(True))
+        .options(selectinload(Produto.itens)).all()
+        if produto_reposicao_direta(p)
+    }
 
-    def _token(rid, mid):
+    def _token(rid, mid, pid):
         if rid is not None:
             return rid if rid in receitas else None
+        if pid is not None:
+            return f'prod:{pid}' if pid in produtos_diretos else None
         return f'mp:{mid}' if mid in mps else None
 
     # Consumo por (loja, item, dow, DATA) na janela: MovEstoqueLoja x
@@ -1877,22 +1942,37 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
         lambda: defaultdict(lambda: defaultdict(int))))
     merma_hist = defaultdict(lambda: defaultdict(
         lambda: defaultdict(lambda: defaultdict(int))))
+    venda_hoje = defaultdict(lambda: defaultdict(int))
+    merma_hoje = defaultdict(lambda: defaultdict(int))
     tipos_consumo = VENDA_TIPOS_DEMANDA_COM_ESTORNO + MERMA_TIPOS_PROJECAO
-    for loja_id, rid, mid, tipo_mov, data_mov, qtd in (db.session.query(
+    for loja_id, rid, mid, pid, tipo_mov, data_mov, qtd in (db.session.query(
             EstoqueLoja.loja_id, EstoqueLoja.receita_id,
-            EstoqueLoja.materia_prima_id, MovEstoqueLoja.tipo,
+            EstoqueLoja.materia_prima_id, EstoqueLoja.produto_id,
+            MovEstoqueLoja.tipo,
             MovEstoqueLoja.data, MovEstoqueLoja.quantidade)
             .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
             .filter(db.or_(EstoqueLoja.receita_id.isnot(None),
-                           EstoqueLoja.materia_prima_id.isnot(None)),
+                           EstoqueLoja.materia_prima_id.isnot(None),
+                           EstoqueLoja.produto_id.isnot(None)),
                     MovEstoqueLoja.tipo.in_(tipos_consumo),
                     MovEstoqueLoja.data >= datetime.combine(hist_ini, time.min),
-                    MovEstoqueLoja.data <= datetime.combine(hist_fim, time.max))
+                    MovEstoqueLoja.data <= agora())
             .all()):
-        tok = _token(rid, mid)
+        tok = _token(rid, mid, pid)
         if tok is None or data_mov is None:
             continue
         d_mov = data_mov.date()
+        if d_mov == hoje_d:
+            # O saldo atual ja sofreu estas baixas. Hoje so falta consumir
+            # a parte da previsao ainda nao realizada; a media historica
+            # continua encerrando ontem, sem aprender com um dia parcial.
+            if tipo_mov in MERMA_TIPOS_PROJECAO:
+                merma_hoje[loja_id][tok] += int(qtd or 0)
+            else:
+                venda_hoje[loja_id][tok] += (
+                    VENDA_ESTORNO_SINAL_DEMANDA.get(tipo_mov, 1)
+                    * int(qtd or 0))
+            continue
         if tipo_mov in MERMA_TIPOS_PROJECAO:
             merma_hist[loja_id][tok][d_mov.weekday()][d_mov] += int(qtd or 0)
         else:
@@ -1914,18 +1994,20 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # `quantidade_recebida` quando houve conferencia parcial.
     entrega_hist = defaultdict(lambda: defaultdict(
         lambda: defaultdict(lambda: defaultdict(int))))
-    for loja_id, rid, mid, data_ent, qtd, qtd_recebida in (db.session.query(
+    for loja_id, rid, mid, pid, data_ent, qtd, qtd_recebida in (db.session.query(
             PedidoLoja.loja_id, PedidoItem.receita_id,
-            PedidoItem.materia_prima_id, PedidoLoja.data_entrega,
+            PedidoItem.materia_prima_id, PedidoItem.produto_id,
+            PedidoLoja.data_entrega,
             PedidoItem.quantidade, PedidoItem.quantidade_recebida)
             .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoLoja.status.in_(STATUS_PEDIDO_ENTREGUES),
                     PedidoLoja.data_entrega >= hist_ini,
                     PedidoLoja.data_entrega <= hist_fim,
                     db.or_(PedidoItem.receita_id.isnot(None),
-                           PedidoItem.materia_prima_id.isnot(None)))
+                           PedidoItem.materia_prima_id.isnot(None),
+                           PedidoItem.produto_id.isnot(None)))
             .all()):
-        tok = _token(rid, mid)
+        tok = _token(rid, mid, pid)
         if tok is None or data_ent is None:
             continue
         recebido = qtd if qtd_recebida is None else qtd_recebida
@@ -1950,15 +2032,16 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # dia da semana, sem carregar estoque nem aplicar mínimo global. A caixa
     # é livre para unidades; múltiplos obrigatórios em g/ml seguem respeitados.
     venda_diaria_loja = defaultdict(lambda: defaultdict(bool))
-    for loja_id, rid, mid, q, qres, emin, pdia, venda_dia in (db.session.query(
+    for loja_id, rid, mid, pid, q, qres, emin, pdia, venda_dia in (db.session.query(
             EstoqueLoja.loja_id, EstoqueLoja.receita_id,
-            EstoqueLoja.materia_prima_id,
+            EstoqueLoja.materia_prima_id, EstoqueLoja.produto_id,
             EstoqueLoja.quantidade, EstoqueLoja.quantidade_reservada,
             EstoqueLoja.estoque_minimo, EstoqueLoja.pedido_minimo_diario,
             EstoqueLoja.reposicao_por_venda_diaria)
             .filter(db.or_(EstoqueLoja.receita_id.isnot(None),
-                           EstoqueLoja.materia_prima_id.isnot(None))).all()):
-        tok = _token(rid, mid)
+                           EstoqueLoja.materia_prima_id.isnot(None),
+                           EstoqueLoja.produto_id.isnot(None))).all()):
+        tok = _token(rid, mid, pid)
         if tok is None:
             continue
         estoque_atual[loja_id][tok] += max(0, int(q or 0) - int(qres or 0))
@@ -1976,17 +2059,18 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # sumiria da tela. Incluimos pra MOSTRAR TODOS com sugestao 0 (decisao do
     # dono) — nada e esquecido; o operador preenche na mao o que faltar.
     pede_receitas = defaultdict(set)
-    for loja_id, rid_p, mid_p in (db.session.query(
+    for loja_id, rid_p, mid_p, pid_p in (db.session.query(
             PedidoLoja.loja_id, PedidoItem.receita_id,
-            PedidoItem.materia_prima_id)
+            PedidoItem.materia_prima_id, PedidoItem.produto_id)
             .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(db.or_(PedidoItem.receita_id.isnot(None),
-                           PedidoItem.materia_prima_id.isnot(None)),
+                           PedidoItem.materia_prima_id.isnot(None),
+                           PedidoItem.produto_id.isnot(None)),
                     PedidoLoja.status != 'cancelado',
                     PedidoLoja.data_entrega >= hist_ini,
                     PedidoLoja.data_entrega <= hist_fim)
             .distinct().all()):
-        tok = _token(rid_p, mid_p)
+        tok = _token(rid_p, mid_p, pid_p)
         if tok is not None:
             pede_receitas[loja_id].add(tok)
 
@@ -2013,6 +2097,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     ja_tem = defaultdict(set)
     status_dia = defaultdict(lambda: defaultdict(list))
     pedido_existente = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    entrega_pendente = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     _rows_horizonte = (db.session.query(
             PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoLoja.status,
             PedidoLoja.criado_por, PedidoLoja.modificado_por_id,
@@ -2046,30 +2131,23 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
         status_dia[loja_id][data_ent.isoformat()].append(status_p)
     # As entregas ja pedidas entram desde HOJE (nao so da janela): com
     # "A partir de" no futuro, a simulacao pre-janela precisa creditar o que
-    # chega antes do inicio (ver dias_pre_janela abaixo). Na faixa PRE-janela
-    # so entra pedido AINDA NAO entregue: o que ja virou entregue/recebido ja
-    # esta dentro do estoque atual da loja (entrada_pedido no recebimento) —
-    # creditar de novo contaria em dobro e sub-pediria (achado de revisao
-    # 11/07/2026). Dentro da janela o comportamento segue identico (a celula
-    # travada mostra o pedido do dia, entregue ou nao).
-    from app.constants import STATUS_PEDIDO_FINALIZADOS
-    _status_entregues = tuple(s for s in STATUS_PEDIDO_FINALIZADOS
-                              if s != 'cancelado')
-    for loja_id, data_ent, rid_e, mid_e, qtd_e in (db.session.query(
+    # chega antes do inicio (ver dias_pre_janela abaixo). Pedido entregue ou
+    # recebido ja esta no estoque atual: aparece em ja_pedido, mas nunca e
+    # creditado novamente na simulacao, inclusive quando a janela inclui hoje.
+    for loja_id, data_ent, rid_e, mid_e, pid_e, qtd_e, status_e in (db.session.query(
             PedidoLoja.loja_id, PedidoLoja.data_entrega,
-            PedidoItem.receita_id, PedidoItem.materia_prima_id,
-            PedidoItem.quantidade)
+            PedidoItem.receita_id, PedidoItem.materia_prima_id, PedidoItem.produto_id,
+            PedidoItem.quantidade, PedidoLoja.status)
             .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoLoja.status != 'cancelado',
                     _cond_sem_entrega_antecipada(hoje_d),
                     db.or_(PedidoItem.receita_id.isnot(None),
-                           PedidoItem.materia_prima_id.isnot(None)),
+                           PedidoItem.materia_prima_id.isnot(None),
+                           PedidoItem.produto_id.isnot(None)),
                     PedidoLoja.data_entrega >= hoje_d,
-                    PedidoLoja.data_entrega <= horizonte_fim,
-                    db.or_(PedidoLoja.data_entrega >= inicio_d,
-                           PedidoLoja.status.notin_(_status_entregues)))
+                    PedidoLoja.data_entrega <= horizonte_fim)
             .all()):
-        tok = _token(rid_e, mid_e)
+        tok = _token(rid_e, mid_e, pid_e)
         if data_ent is None or tok is None:
             continue
         # (loja, dia) substituivel: TODO pedido do dia e rascunho do cron —
@@ -2077,6 +2155,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
         if (loja_id, data_ent.isoformat()) in _dias_sub:
             continue
         pedido_existente[loja_id][data_ent.isoformat()][tok] += int(qtd_e or 0)
+        if status_e not in STATUS_PEDIDO_ENTREGUES:
+            entrega_pendente[loja_id][data_ent.isoformat()][tok] += int(qtd_e or 0)
 
     # Dias entre HOJE e o inicio da janela ("A partir de" no futuro). O saldo
     # inicial da simulacao NAO pode ser o estoque de hoje: a loja consome (e
@@ -2089,19 +2169,21 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                  'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
                  'dow': d.weekday()} for d in dias_futuros]
 
-    # Catalogo unificado da tela: receitas + MPs marcadas (checkbox).
-    # Cada entrada: (token, nome, lote, minimo, fornada_especial, rid, mid).
+    # Catalogo unificado da tela: receitas, MPs marcadas e Produtos simples.
+    # Entrada: (token, nome, lote, minimo, fornada_especial, rid, mid, pid).
     # MP tambem tem caixa/piso desde 02/07 (colunas lote_pedido/minimo_pedido
     # em MateriaPrima — ex: pao de queijo comprado em saco nao sai picado).
     catalogo = [(rid, rec.nome, int(rec.lote_pedido or 0),
                  int(rec.minimo_pedido or 0),
-                 bool(getattr(rec, 'fornada_especial', False)), rid, None)
+                 bool(getattr(rec, 'fornada_especial', False)), rid, None, None)
                 for rid, rec in receitas.items()]
     for mid, m in mps.items():
         catalogo.append((f'mp:{mid}', m.nome,
                          int(getattr(m, 'lote_pedido', None) or 0),
                          int(getattr(m, 'minimo_pedido', None) or 0),
-                         False, None, mid))
+                         False, None, mid, None))
+    for pid, p in produtos_diretos.items():
+        catalogo.append((f'prod:{pid}', p.nome, 0, 0, False, None, None, pid))
     catalogo.sort(key=lambda c: (c[1] or '').lower())
 
     def _media_dow(por_dow, dow_i):
@@ -2111,12 +2193,22 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
         return _media_recencia(por_data, hoje_d,
                                datas_possiveis=datas_possiveis_dow[dow_i])
 
+    def _consumo_restante(loja_id, tok, dia, venda, merma):
+        if dia != hoje_d:
+            return venda + merma
+        # Estorno de outro dia pode deixar o liquido negativo; nao cria
+        # demanda extra. Venda acima da media tambem nao cobre merma ainda
+        # prevista (e vice-versa).
+        vendido = max(0, venda_hoje.get(loja_id, {}).get(tok, 0))
+        perdido = max(0, merma_hoje.get(loja_id, {}).get(tok, 0))
+        return max(0.0, venda - vendido) + max(0.0, merma - perdido)
+
     lojas_out = []
     for loja in lojas_op:
         ja_tem_loja = ja_tem.get(loja.id, set())
         pede_loja = pede_receitas.get(loja.id, set())
         produtos = []
-        for tok, nome_item, caixa, minimo, fe, rid, mid in catalogo:
+        for tok, nome_item, caixa, minimo, fe, rid, mid, pid in catalogo:
             v_dows = venda_hist.get(loja.id, {}).get(tok)
             m_dows = merma_hist.get(loja.id, {}).get(tok)
             est0 = estoque_atual.get(loja.id, {}).get(tok, 0)
@@ -2152,9 +2244,10 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                         or (fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL)):
                     consumo_pre = 0.0
                 else:
-                    consumo_pre = (_media_dow(v_dows, d.weekday())
-                                   + _media_dow(m_dows, d.weekday()))
-                entrega_pre = pedido_existente.get(loja.id, {}).get(
+                    consumo_pre = _consumo_restante(
+                        loja.id, tok, d, _media_dow(v_dows, d.weekday()),
+                        _media_dow(m_dows, d.weekday()))
+                entrega_pre = entrega_pendente.get(loja.id, {}).get(
                     d.isoformat(), {}).get(tok, 0)
                 estoque = max(0.0, estoque + entrega_pre - consumo_pre)
             # No modo fresco, qualquer saldo anterior é deliberadamente
@@ -2165,16 +2258,15 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             venda_total = 0.0
             teste_ruptura_dias = []
             for i, d in enumerate(dias_futuros):
-                if not loja.funciona_em(d):
+                if (not loja.funciona_em(d)
+                        or (fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL)):
                     # Piso diario vale nos dias em que a loja abre. Fechada,
                     # nao pede nem consome o saldo projetado; uma entrega
                     # ja encomendada continua valendo (inclusive humana).
                     if not venda_diaria:
-                        estoque += pedido_existente.get(loja.id, {}).get(
+                        estoque += entrega_pendente.get(loja.id, {}).get(
                             d.isoformat(), {}).get(tok, 0)
                     continue
-                if fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL:
-                    continue                      # fornada especial: nao vende
                 venda_d = _media_dow(v_dows, d.weekday())
                 venda_observada_d = venda_d
                 # Piso nao pode virar teto. Danishes e fornadas frescas usam
@@ -2190,7 +2282,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                     if teste_ruptura:
                         teste_ruptura_dias.append(d.isoformat())
                 merma_d = _media_dow(m_dows, d.weekday())
-                consumo_d = venda_d + merma_d     # o que baixa o estoque no dia
+                consumo_d = _consumo_restante(loja.id, tok, d, venda_d, merma_d)
                 # Coluna Venda/sem mostra o realizado; a unidade de descoberta
                 # afeta apenas a sugestao, nao reescreve o historico exibido.
                 venda_total += venda_observada_d
@@ -2202,7 +2294,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                     # nao a sugestao — senao os dias seguintes herdariam uma
                     # reposicao que nao vai existir (sub-pedido) ou ignorariam a
                     # entrega real (super-pedido).
-                    entrega = pedido_existente.get(loja.id, {}).get(
+                    entrega = entrega_pendente.get(loja.id, {}).get(
                         d.isoformat(), {}).get(tok, 0)
                     por_dia[i] = 0
                     if not venda_diaria:
@@ -2271,8 +2363,9 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             # mesmo com sugestao 0 (decisao do dono: nada some da tela). So pula
             # o que nem venda, nem estoque, nem pedido tem (ja filtrado acima).
             produtos.append({
-                'receita_id': rid, 'materia_prima_id': mid,
+                'receita_id': rid, 'materia_prima_id': mid, 'produto_id': pid,
                 'item_key': str(tok), 'eh_mp': mid is not None,
+                'eh_produto': pid is not None,
                 'nome': nome_item,
                 'media_semanal': round(venda_total * 7.0 / horizonte_dias, 1),
                 'estoque_atual': est0,
@@ -2676,9 +2769,10 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     # historico por (receita, dow) pra o previsto (curva diaria)
     qtd_dow = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     soma_total = defaultdict(int)
-    for rid, data_ent, qtd in (db.session.query(
+    historico_por_loja = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+    for rid, data_ent, qtd, lid in (db.session.query(
             PedidoItem.receita_id, PedidoLoja.data_entrega,
-            PedidoItem.quantidade)
+            PedidoItem.quantidade, PedidoLoja.loja_id)
             .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoItem.receita_id.isnot(None),
                     PedidoLoja.status != 'cancelado',
@@ -2689,34 +2783,28 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         dow = data_ent.weekday()
         qtd_dow[rid][dow][data_ent] += int(qtd or 0)
         soma_total[rid] += int(qtd or 0)
+        serie = historico_por_loja[rid][dow][lid]
+        serie[data_ent] = serie.get(data_ent, 0) + int(qtd or 0)
 
     datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)   # denom da media
-    residual_rate = {rid: _taxa_residual(qtd_dow.get(rid, {}), soma_total.get(rid, 0),
-                                         dias_calendario_janela)
-                     for rid in soma_total}
+    fontes_pedidos = _fontes_historico_operacional(historico_por_loja, hist_ini, hist_fim)
     # Motor 'vendas'/'maior': curva diaria a partir da VENDA real — mesma
     # fonte usada pelo balanco acima (os totais e a curva ficam coerentes).
-    qtd_dow_v, soma_v, residual_v = {}, {}, {}
+    fontes_vendas, soma_v = {}, {}
     if motor in ('vendas', 'maior'):
-        qtd_dow_v, soma_v, _datas_v = _hist_vendas_receita_por_dow(
-            hist_ini, hist_fim)
-        residual_v = {rid: _taxa_residual(qtd_dow_v.get(rid, {}),
-                                          soma_v.get(rid, 0),
-                                          dias_calendario_janela)
-                      for rid in soma_v}
+        _, soma_v, _, vendas_por_loja = _hist_vendas_receita_por_dow(
+            hist_ini, hist_fim, com_loja=True)
+        fontes_vendas = _fontes_historico_operacional(vendas_por_loja, hist_ini, hist_fim)
 
     def _previsto_dia(rid, dia):
         if not _fornada_no_dia(receitas.get(rid), dia):
             return 0.0
-        dow = dia.weekday()
-        p_ped = _previsto_dow(
-            qtd_dow[rid].get(dow), hoje_d, residual_rate.get(rid, 0.0),
-            datas_possiveis=datas_possiveis_dow[dow])
+        p_ped = _previsto_operacional(
+            fontes_pedidos, rid, dia, hoje_d, datas_possiveis_dow)
         if motor == 'pedidos':
             return p_ped
-        p_ven = _previsto_dow(
-            qtd_dow_v.get(rid, {}).get(dow), hoje_d, residual_v.get(rid, 0.0),
-            datas_possiveis=datas_possiveis_dow[dow])
+        p_ven = _previsto_operacional(
+            fontes_vendas, rid, dia, hoje_d, datas_possiveis_dow)
         return p_ven if motor == 'vendas' else max(p_ped, p_ven)
 
     dias_prod = [inicio_d + timedelta(days=i) for i in range(horizonte_dias)]
@@ -3220,8 +3308,9 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                 peso_dia = _demanda_planejada(
                     firme_origem[rid].get(entrega, {}),
                     float(_previsto_dia(rid, entrega)))
-                peso_hist = max(float(soma_total.get(rid, 0) or 0),
-                                float(soma_v.get(rid, 0) or 0))
+                peso_hist = max(
+                    float(fontes_pedidos.get(rid, {}).get(entrega.weekday(), {}).get('soma', 0)),
+                    float(fontes_vendas.get(rid, {}).get(entrega.weekday(), {}).get('soma', 0)))
                 pesos_bateladas[rid, dia_prod] = peso_dia or peso_hist or 1.0
 
     # Receitas que so existem como edicao manual (override) e nao tem demanda
@@ -3550,6 +3639,10 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
     if motor in ('vendas', 'maior'):
         fontes['vendas'] = _fonte_vendas()
 
+    for fonte in fontes.values():
+        fonte['calendario'] = _fontes_historico_operacional(
+            {rec.id: fonte['loja']}, hist_ini, hist_fim)[rec.id]
+
     # Mesma fonte do balanço e da curva: detalhe não pode esconder B2B/site.
     deliv_fim = inicio_d + timedelta(days=horizonte_dias - 1 + L)
     _firme_total, firme_origem = _demanda_firme_por_dia(
@@ -3582,8 +3675,8 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
         entrega = prod_d + timedelta(days=L)
         dow = entrega.weekday()
         # Um candidato por fonte; no 'maior' vale o que vencer no dia.
-        candidatos = [(_calc_previsto(f, dow, entrega), nome_m, f)
-                      for nome_m, f in fontes.items()]
+        candidatos = [(_calc_previsto(f['calendario'][dow], dow, entrega),
+                       nome_m, f['calendario'][dow]) for nome_m, f in fontes.items()]
         (previsto, fonte), origem, f_vence = max(
             candidatos, key=lambda c: c[0][0])
 
