@@ -215,15 +215,22 @@
       var vencido = alertas.some(function (alerta) {
         return (adiados.get(alerta.chave) || 0) <= Date.now();
       });
-      // Nunca por cima de quem está atendendo (conversa aberta ou rascunho).
-      // Caso real 22/09/2026: o aviso reabria 20 s depois do "Abrir conversa"
-      // (a outra pendência seguia vencida) e, na TV, onde ninguém clica,
-      // cobria o painel inteiro. O gesto manual (botão "!") continua abrindo.
-      if (!manual && (!vencido || haRascunho() || threadAberta() || document.hidden)) return;
-      // Não-modal de propósito: o painel atrás continua utilizável (pedidos
-      // do dia na TV, lista e caixa de resposta do atendimento). A posição
-      // flutuante, sobre a coluna de atendimento, vem do CSS.
+      // Nunca por cima de quem está atendendo (conversa aberta ou rascunho,
+      // com atividade recente). Caso real 22/09/2026: o aviso reabria 20 s
+      // depois do "Abrir conversa" (a outra pendência seguia vencida) e, na
+      // TV, onde ninguém clica, cobria o painel inteiro. O gesto manual
+      // (botão "!") continua abrindo.
+      if (!manual && (!vencido || atendendo() || document.hidden)) return;
+      // Não-modal de propósito: a coluna de pedidos e a caixa de resposta
+      // seguem utilizáveis (a lista fica atrás do cartão até × / Esc / abrir
+      // uma conversa). A posição flutuante vem do CSS.
+      var ativo = document.activeElement;
       dialog.show();
+      // Abertura automática não rouba o foco de quem digita em outro lugar
+      // (ex.: no painel de pedidos); o `autofocus` do × só vale no gesto manual.
+      if (!manual && ativo && ativo !== document.body && typeof ativo.focus === 'function') {
+        try { ativo.focus(); } catch (_) { /* elemento pode ter sumido */ }
+      }
       botao.setAttribute('aria-expanded', 'true');
       avisoLocal.hidden = true;
       atualizarErro();
