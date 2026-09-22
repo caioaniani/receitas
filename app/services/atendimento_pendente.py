@@ -94,6 +94,21 @@ def preparar(conversa, historico, *, min_minutos=10):
     base = agora()
     conv_id = str(conversa['id'])
     row = db.session.get(EsperaAtendimento, conv_id)
+    from app.services.chatbot import cliente_ja_falou
+    if not cliente_ja_falou(historico):
+        # Conversa iniciada pela EQUIPE ("Chamar cliente") em que o cliente
+        # nunca escreveu: não existe espera. Estado terminal `sem_cliente`
+        # tira a linha do painel e da cobrança (`alertas_painel`/
+        # `candidatos` só olham aguardando/em_atendimento) e fecha o
+        # episódio (`resolvido_em`) para o ALTA fantasma de abandono não
+        # reabrir a gravidade. Se o cliente responder um dia, o ramo abaixo
+        # volta a 'aguardando'. Caso 2429 (22/09/2026).
+        if row and row.estado in ('aguardando', 'em_atendimento'):
+            row.estado = 'sem_cliente'
+            row.resolvido_em = base
+            row.proximo_aviso_em = None
+            db.session.commit()
+        return None
     graves = VigiaVeredito.query.filter(
         VigiaVeredito.conv_id == conv_id, VigiaVeredito.alerta.is_(True),
         VigiaVeredito.gravidade == 'alta',
