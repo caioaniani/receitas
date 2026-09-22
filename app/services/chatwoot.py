@@ -276,8 +276,8 @@ def definir_status(conversation_id, status, tentativas=3, critico=True):
         if tentativa < tentativas:
             import time as _t
             _t.sleep(0.5 * tentativa)
-    logger.error('chatwoot definir_status FALHOU apos %d tentativas: %s',
-                 tentativas, ultimo_erro)
+    (logger.error if critico else logger.warning)(
+        'chatwoot definir_status FALHOU apos %d tentativas: %s', tentativas, ultimo_erro)
     return {'ok': False, 'erro': ultimo_erro}
 
 
