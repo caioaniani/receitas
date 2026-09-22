@@ -4,7 +4,8 @@ e o da TV não abre"): o modal reabria 20 s depois do "Abrir conversa"
 (a outra pendência seguia vencida), voltava por cima da conversa a cada
 5 min e, na TV, onde ninguém clica, cobria o painel inteiro.
 
-Roda o JS REAL no node com um DOM mínimo (padrão de test_kits_cliente_js).
+Roda o JS REAL no node com um DOM mínimo (padrão de test_kits_cliente_js):
+relógio, timers e MutationObserver simulados, sem rede.
 """
 import shutil
 import subprocess
@@ -17,7 +18,7 @@ _SCRIPT = Path(__file__).resolve().parents[1] / 'app' / 'static' / 'js' / 'paine
 _HARNESS = r'''
 const vm = require('node:vm'), fs = require('node:fs'), assert = require('node:assert/strict');
 let clock = 1700000000000;
-const timeouts = [], intervals = [], dispatched = [];
+const timeouts = [], intervals = [], dispatched = [], winHandlers = {}, observadores = [];
 function element(extra = {}) {
   const classes = new Set();
   return {textContent:'', value:'', hidden:false, disabled:false, open:false, handlers:{}, children:[],
@@ -51,16 +52,18 @@ const raiz = element({dataset:{url:'/entregas/api/atendimento/alertas'},
   querySelector(sel) {const m = sel.match(/^\[data-pa-([a-z-]+)\]$/); return m ? partes[m[1]] : null;}});
 const thread = element({id:'at-thread'}); thread.classList.add('hidden');
 const compose = element({id:'compose-texto', tagName:'TEXTAREA'});
+const body = element({tagName:'BODY'});
 const docHandlers = {};
-const document = {readyState:'complete', hidden:false, body:element({tagName:'BODY'}),
+const document = {readyState:'complete', hidden:false, body, activeElement:body,
   getElementById(id) {return {'painel-alertas-atendimento':raiz, 'at-thread':thread, 'compose-texto':compose}[id] || null;},
   querySelector() {return null;},
   createElement(tag) {return element({tagName:tag.toUpperCase()});},
   addEventListener(n, f) {(docHandlers[n] ||= []).push(f);},
   dispatchEvent(ev) {dispatched.push(ev); (docHandlers[ev.type] || []).forEach(f => f(ev)); return true;}};
 const storage = {};
-const window = {addEventListener() {}, location:{origin:'https://gestao.local'},
-  sessionStorage:{getItem(k) {return storage[k] ?? null;}, setItem(k, v) {storage[k] = String(v);}}};
+const window = {addEventListener(n, f) {(winHandlers[n] ||= []).push(f);}, location:{origin:'https://gestao.local'},
+  sessionStorage:{getItem(k) {return storage[k] ?? null;}, setItem(k, v) {storage[k] = String(v);}},
+  MutationObserver:function (cb) {this.cb = cb; this.observe = () => observadores.push(this);}};
 let payload = {alertas:[]};
 const sandbox = {document, window, console,
   Date:{now:() => clock},
@@ -86,22 +89,27 @@ const alerta = (conv, extra = {}) => ({chave:'c' + conv, conv_id:conv, cliente:'
   motivo:'Cliente aguardando uma resposta da equipe.', mensagem:'oi', grave:false,
   estado:'aguardando', ha_minutos:30, ...extra});
 const botaoAbrir = i => partes.lista.children[i].children.find(c => c.tagName === 'BUTTON');
+const abrirThread = () => {thread.classList.remove('hidden'); observadores.forEach(o => o.cb());};
+const fecharThread = () => {thread.classList.add('hidden'); observadores.forEach(o => o.cb());};
+const esc = () => (docHandlers.keydown || []).forEach(f => f({key:'Escape'}));
+const atividade = () => (winHandlers.click || []).forEach(f => f({isTrusted:true, repeat:false}));
 (async () => {
   await settle();  // consulta inicial sem pendências: fechado
   assert.equal(dialog.open, false);
+  assert.equal(observadores.length, 1, 'observa a thread da coluna da direita');
   payload = {alertas:[alerta(2429, {grave:true}), alerta(2430)]};
   await poll();
   assert.equal(dialog.open, true, 'pendência nova abre o aviso');
   assert.equal(chamadas.showModal, 0, 'nunca modal: o painel atrás continua utilizável (TV)');
   assert.equal(chamadas.show, 1);
   assert.equal(partes.lista.children.length, 2);
-  // "Abrir conversa" é botão, não link: fecha o aviso, dispara o evento que o
-  // painel usa pra abrir a thread na lateral e adia TODAS as pendências.
+  // "Abrir conversa" é botão, não link: fecha o aviso, adia SÓ a pendência
+  // clicada e dispara o evento que o painel usa pra abrir a thread na lateral.
   botaoAbrir(0).fire('click');
   const abrir = dispatched.find(ev => ev.type === 'atendimento:abrir');
   assert.ok(abrir && abrir.detail.conv_id === 2429, 'abre a conversa na coluna da direita');
   assert.equal(dialog.open, false);
-  thread.classList.remove('hidden');  // o painel abriu a thread na coluna da direita
+  abrirThread();  // o painel abriu a thread na coluna da direita
   await poll();
   assert.equal(dialog.open, false, 'regressão 22/09: a pendência não clicada reabria o aviso no poll seguinte');
   payload = {alertas:[alerta(2429, {grave:true}), alerta(2430), alerta(2431, {grave:true})]};
@@ -109,15 +117,26 @@ const botaoAbrir = i => partes.lista.children[i].children.find(c => c.tagName ==
   assert.equal(dialog.open, false, 'pendência NOVA não abre por cima de quem está atendendo');
   await vencer(6 * 60 * 1000);
   assert.equal(dialog.open, false, 'adiamento vencido também não abre por cima da conversa aberta');
-  thread.classList.add('hidden');  // voltou pra lista
-  await poll();
-  assert.equal(dialog.open, true, 'de volta à lista, a cobrança continua');
+  fecharThread();  // "Voltar"
+  assert.equal(dialog.open, true, 'de volta à lista, as pendências não clicadas cobram NA HORA');
   assert.equal(partes.lista.children.length, 3);
-  // Esc adia como o botão × (diálogo não-modal não recebe `cancel`).
-  (docHandlers.keydown || []).forEach(f => f({key:'Escape'}));
+  esc();  // Esc adia como o × (diálogo não-modal não recebe `cancel`)
   assert.equal(dialog.open, false);
-  // O botão "!" (gesto manual) abre mesmo com conversa aberta.
-  thread.classList.remove('hidden');
+  // Conversa aberta pela LISTA com o cartão na frente: o cartão sai da frente.
+  partes.botao.fire('click');  // gesto manual abre mesmo com tudo adiado
+  assert.equal(dialog.open, true);
+  abrirThread();
+  assert.equal(dialog.open, false, 'thread aberta por qualquer caminho tira o cartão da frente');
+  // TV: conversa esquecida aberta e ninguém mexe há mais de 10 min → o cartão
+  // volta (não-modal, os pedidos seguem visíveis) em vez de silenciar por dias.
+  await vencer(11 * 60 * 1000);
+  assert.equal(dialog.open, true, 'TV: conversa esquecida aberta não silencia o cartão para sempre');
+  // Alguém mexe (atividade) e fecha: enquanto atende, segue quieto.
+  atividade();
+  esc();
+  assert.equal(dialog.open, false);
+  await vencer(6 * 60 * 1000);
+  assert.equal(dialog.open, false, 'com atividade recente e conversa aberta, segue quieto');
   partes.botao.fire('click');
   assert.equal(dialog.open, true, 'gesto manual continua abrindo');
   assert.equal(chamadas.showModal, 0);
