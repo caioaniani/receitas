@@ -479,6 +479,9 @@ def api_atendimento_chamar_cliente():
         'ok': bool(res.get('ok')),
         'conversation_id': res.get('conversation_id'),
         'nova': bool(res.get('nova')),
+        # False = o template saiu, mas a conversa FICOU na fila do bot
+        # (toggle pra `open` falhou) — o painel avisa (revisão 22/09/2026).
+        'aberta': bool(res.get('aberta')),
         'nome': nome,
         'erro': res.get('erro'),
     }), (200 if res.get('ok') else 502)
