@@ -518,6 +518,7 @@ def api_atendimento_chamar_telefone():
         'ok': bool(res.get('ok')),
         'conversation_id': res.get('conversation_id'),
         'nova': bool(res.get('nova')),
+        'aberta': bool(res.get('aberta')),
         'nome': nome,
         'erro': res.get('erro'),
     }), (200 if res.get('ok') else 502)
