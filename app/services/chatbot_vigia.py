@@ -842,11 +842,19 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
     if not disponivel():
         return {'pulou': 'vigia desligado'}
 
+    # Conversa iniciada pela EQUIPE (template do "Chamar cliente") em que o
+    # cliente nunca escreveu: não há o que abandonar — ele nunca entrou.
+    # Caso 2429 (22/09/2026): o "ABANDONO" virou ALTA + WhatsApp e
+    # alimentou a espera-humana "Urgente" a manhã inteira numa conversa
+    # vazia. Fonte única `chatbot.cliente_ja_falou`.
+    from app.services.chatbot import cliente_ja_falou, texto_da_mensagem
+    if not cliente_ja_falou(historico):
+        return {'pulou': 'conversa iniciada pela equipe — cliente nunca escreveu'}
+
     # Conversa que e so marcacao de story do IG: nao ha cliente esperando
     # nem venda em risco — nao gasta modelo nem alerta (dono, 06/07/2026).
     # Fonte unica `texto_da_mensagem`: turno so-imagem conta como a ultima
     # fala (nao se pula pra um texto anterior que pode ser a mencao).
-    from app.services.chatbot import texto_da_mensagem
     ultima_user = next((m for m in reversed(historico or [])
                         if m.get('role') == 'user' and texto_da_mensagem(m)),
                        None)
