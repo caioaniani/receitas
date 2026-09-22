@@ -110,6 +110,7 @@ def _migrate(app):
         _seed_piso_dinamico_especiais(app)
         _seed_minimo_cinnamon(app)
         _seed_regras_reposicao_lojas(app)
+        _seed_minimos_viennoiserie_todas_lojas(app)
         _seed_antecedencia_brioche(app)
         _seed_teto_producao_brioche(app)
         _seed_minis_sanduiche(app)
@@ -1135,6 +1136,61 @@ def _seed_minimo_cinnamon(app):
             db.session.rollback()
         except Exception:  # noqa: BLE001
             pass
+
+
+def _seed_minimos_viennoiserie_todas_lojas(app):
+    """22/09/2026: mínimo de 2 danishes de cada sabor e 2 choconanas por loja.
+
+    Inclui lojas com dias restritos; o motor respeita `Loja.funciona_em`.
+    Complementa as regras anteriores, antes limitadas a lojas diárias e à
+    Ribeiro do Vale. Depois deste ajuste único, a tela de reposição manda.
+    """
+    import unicodedata
+    try:
+        from app.models import AppConfig, EstoqueLoja, Loja, Receita
+        chave = 'seed_minimos_viennoiserie_todas_lojas_2026_09_22'
+        if AppConfig.get(chave):
+            return
+
+        def _norm(texto):
+            texto = unicodedata.normalize('NFKD', texto or '')
+            return ' '.join(''.join(c for c in texto if not unicodedata.combining(c)).casefold().split())
+
+        def _eh_danish(receita):
+            nome = _norm(receita.nome)
+            return ('mini' not in nome.split() and (
+                nome == 'danish' or nome.startswith('danish ')
+                or _norm(receita.categoria) in ('danish', 'danishes')))
+
+        receitas = Receita.query.filter(
+            Receita.arquivada_em.is_(None), Receita.sugerir_pedido_loja.isnot(False),
+            Receita.sob_encomenda.isnot(True)).all()
+        danishes = [r for r in receitas if _eh_danish(r)]
+        choconanas = [r for r in receitas if _norm(r.nome) == 'choconana']
+        lojas = [loja for loja in Loja.query.filter_by(ativa=True).all()
+                 if 'industria' not in _norm(loja.nome)]
+        if not lojas or not danishes or not choconanas:
+            raise ValueError('Cadastre lojas operacionais, danishes e Choconana antes de aplicar os mínimos.')
+        setados, mantidos = 0, 0
+        for loja in lojas:
+            for receita in danishes + choconanas:
+                el = EstoqueLoja.query.filter_by(loja_id=loja.id, receita_id=receita.id).first()
+                if el is None:
+                    el = EstoqueLoja(loja_id=loja.id, receita_id=receita.id, quantidade=0)
+                    db.session.add(el)
+                if int(el.pedido_minimo_diario or 0) >= 2:
+                    mantidos += 1
+                else:
+                    el.pedido_minimo_diario = 2
+                    setados += 1
+        AppConfig.set(chave, f'setados={setados} mantidos={mantidos} lojas={len(lojas)} '
+                            f'danishes={len(danishes)} choconanas={len(choconanas)}')
+        db.session.commit()
+        logger.info('Mínimos diários de danishes/Choconana: %d ajustados, %d preservados, %d lojas',
+                    setados, mantidos, len(lojas))
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        logger.warning('migrate skip (mínimos viennoiserie todas as lojas): %s', exc)
 
 
 def _seed_regras_reposicao_lojas(app):

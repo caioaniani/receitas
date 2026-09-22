@@ -2148,7 +2148,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             for d in dias_pre_janela:
                 # Fornada especial nao vende fora de sab/dom, mas uma
                 # entrega agendada num dia comum ainda credita o saldo.
-                if fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL:
+                if (not loja.funciona_em(d)
+                        or (fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL)):
                     consumo_pre = 0.0
                 else:
                     consumo_pre = (_media_dow(v_dows, d.weekday())
@@ -2164,6 +2165,14 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             venda_total = 0.0
             teste_ruptura_dias = []
             for i, d in enumerate(dias_futuros):
+                if not loja.funciona_em(d):
+                    # Piso diario vale nos dias em que a loja abre. Fechada,
+                    # nao pede nem consome o saldo projetado; uma entrega
+                    # ja encomendada continua valendo (inclusive humana).
+                    if not venda_diaria:
+                        estoque += pedido_existente.get(loja.id, {}).get(
+                            d.isoformat(), {}).get(tok, 0)
+                    continue
                 if fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL:
                     continue                      # fornada especial: nao vende
                 venda_d = _media_dow(v_dows, d.weekday())
