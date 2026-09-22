@@ -26,7 +26,9 @@ from app.models.fiserv import ArquivoFiservRecebido, EventoFiserv, IntegracaoFis
 from app.services.fiserv_integracao import (
     ColetaEmAndamento,
     coleta_disponivel,
+    consultar_arquivos_disponiveis,
     obter_chave_apresentada,
+    receber_arquivo_selecionado,
     trava,
 )
 from app.services.fiserv_segredos import (
@@ -35,7 +37,15 @@ from app.services.fiserv_segredos import (
     cifrar_json,
     decifrar_bytes,
 )
-from app.services.fiserv_sftp import HOST_PADRAO, HOSTS_PERMITIDOS, ConfigFiservSFTP, ErroFiservSFTP
+from app.services.fiserv_sftp import (
+    HOST_PADRAO,
+    HOSTS_PERMITIDOS,
+    ConfigFiservSFTP,
+    ErroEtapaAutenticacaoFiservSFTP,
+    ErroFiservSFTP,
+    ErroOperacaoFiservSFTP,
+    MetadadosArquivoFiserv,
+)
 from app.utils import agora
 
 
@@ -62,7 +72,12 @@ def _assinador():
     return URLSafeTimedSerializer(current_app.config['SECRET_KEY'], salt='fiserv-host-owner-v1')
 
 
-def _painel(proposta=None, confirmacao=None):
+def _assinador_arquivo():
+    __tracebackhide__ = True
+    return URLSafeTimedSerializer(current_app.config['SECRET_KEY'], salt='fiserv-arquivo-owner-v1')
+
+
+def _painel(proposta=None, confirmacao=None, remotos=None):
     __tracebackhide__ = True
     registro = db.session.get(IntegracaoFiserv, 1)
     # Nunca enviar ORM da configuração ou ciphertext ao template.
@@ -78,7 +93,7 @@ def _painel(proposta=None, confirmacao=None):
     return render_template(
         'fiserv/index.html', estado=estado, pagina=pagina,
         hosts=sorted(HOSTS_PERMITIDOS), host_padrao=HOST_PADRAO,
-        proposta=proposta, confirmacao=confirmacao,
+        proposta=proposta, confirmacao=confirmacao, remotos=remotos,
         coleta_disponivel=coleta_disponivel(),
         chave_persistente=bool(os.environ.get('SECRET_KEY')),
     )
@@ -215,6 +230,64 @@ def pausar():
         flash('Coleta automática pausada.', 'info')
     except ColetaEmAndamento:
         flash('A coleta atual ainda está em andamento. Aguarde e pause novamente.', 'warning')
+    return redirect(url_for('fiserv.index'))
+
+
+def _informar_erro_consulta(exc):
+    __tracebackhide__ = True
+    db.session.rollback()
+    if isinstance(exc, (ErroOperacaoFiservSFTP, ErroEtapaAutenticacaoFiservSFTP)):
+        # Categoria fixa, sem texto remoto e sem prometer uma nova tentativa.
+        flash(f'Não foi possível concluir a consulta. [{exc.etapa}/{exc.codigo}] '
+              'A coleta automática continua pausada.', 'warning')
+    elif isinstance(exc, (ErroFiservSFTP, ErroSegredoFiserv, ColetaEmAndamento)):
+        flash(str(exc), 'warning')
+    else:
+        flash('Não foi possível concluir a consulta. Nenhuma nova coleta automática foi solicitada.', 'warning')
+        current_app.logger.error('Consulta Fiserv não concluída; detalhes privados omitidos.')
+
+
+@fiserv_bp.post('/arquivos-remotos')
+@limiter.limit('3 per minute')
+def consultar_arquivos():
+    __tracebackhide__ = True
+    try:
+        versao, arquivos = consultar_arquivos_disponiveis()
+        total_paginas = max(1, (len(arquivos) + 19) // 20)
+        pagina = min(max(request.form.get('pagina_remota', 1, type=int), 1), total_paginas)
+        nonce = session.setdefault('fiserv_arquivos_nonce', secrets.token_urlsafe(24))
+        itens = []
+        for arquivo in arquivos[(pagina - 1) * 20:pagina * 20]:
+            token = _assinador_arquivo().dumps({
+                'owner_id': current_user.id, 'nonce': nonce, 'versao': versao,
+                'nome': arquivo.nome, 'tamanho': arquivo.tamanho, 'mtime': arquivo.modificado_em,
+            })
+            itens.append({'nome': arquivo.nome, 'tamanho': arquivo.tamanho, 'selecao': token})
+        return _painel(remotos={'itens': itens, 'total': len(arquivos),
+                               'pagina': pagina, 'paginas': total_paginas})
+    except Exception as exc:
+        _informar_erro_consulta(exc)
+        return redirect(url_for('fiserv.index'))
+
+
+@fiserv_bp.post('/receber-arquivo')
+@limiter.limit('3 per minute')
+def receber_arquivo():
+    __tracebackhide__ = True
+    try:
+        selecao = _assinador_arquivo().loads(request.form.get('selecao', ''), max_age=600)
+        if (not isinstance(selecao, dict) or selecao.get('owner_id') != current_user.id
+                or not session.get('fiserv_arquivos_nonce')
+                or selecao.get('nonce') != session['fiserv_arquivos_nonce']):
+            raise BadData('Seleção inválida.')
+        esperado = MetadadosArquivoFiserv(nome=selecao['nome'], tamanho=selecao['tamanho'],
+                                         modificado_em=selecao['mtime'])
+        receber_arquivo_selecionado(esperado, selecao['versao'], current_user.id)
+        flash('Arquivo recebido e guardado no sistema. A coleta automática continua pausada.', 'success')
+    except (BadData, KeyError, TypeError):
+        flash('A seleção expirou ou é inválida. Consulte os arquivos disponíveis novamente.', 'warning')
+    except Exception as exc:
+        _informar_erro_consulta(exc)
     return redirect(url_for('fiserv.index'))
 
 

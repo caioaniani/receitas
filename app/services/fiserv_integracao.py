@@ -32,7 +32,9 @@ from app.services.fiserv_sftp import (
     ErroFiservSFTP,
     ErroOperacaoFiservSFTP,
     ErroPersistenciaFiservSFTP,
+    baixar_arquivo,
     coletar_lote_pendente,
+    listar_arquivos,
 )
 from app.services.instancia import BRANCH_PRODUCAO
 from app.utils import agora
@@ -130,7 +132,7 @@ def obter_chave_apresentada(host):
             transporte.close()
 
 
-def _config_coleta(registro):
+def _config_coleta(registro, *, duracao_maxima_segundos=120):
     __tracebackhide__ = True
     dados = decifrar_json(registro.acesso_cifrado)
     chave = carregar_chave(base64.b64decode(dados['chave_base64'], validate=True), dados.get('passphrase'))
@@ -138,8 +140,84 @@ def _config_coleta(registro):
         usuario=dados['usuario'], host=dados['host'], chave_privada=chave,
         senha=dados.get('senha'), known_hosts_text=dados['known_hosts_text'],
         max_arquivos=10000, max_bytes_arquivo=16 * 1024 * 1024,
-        max_bytes_total=64 * 1024 * 1024, duracao_maxima_segundos=120,
+        max_bytes_total=64 * 1024 * 1024, duracao_maxima_segundos=duracao_maxima_segundos,
     )
+
+
+def _guardar_arquivo(registro, arquivo):
+    """Guarda por arquivo antes do CLOSE; retorna (id persistido, novo)."""
+    __tracebackhide__ = True
+    remoto = FiservArquivoRemoto.query.filter_by(
+        nome=arquivo.metadados.nome, versao_configuracao=registro.versao,
+    ).first()
+    if remoto is None:
+        remoto = FiservArquivoRemoto(nome=arquivo.metadados.nome,
+                                    versao_configuracao=registro.versao)
+        db.session.add(remoto)
+    remoto.tamanho = arquivo.metadados.tamanho
+    remoto.modificado_remoto = arquivo.metadados.modificado_em
+    remoto.sha256 = arquivo.sha256
+    remoto.conferido_em = agora()
+    with db.session.no_autoflush:
+        recebido = ArquivoFiservRecebido.query.filter_by(sha256=arquivo.sha256).first()
+    novo = recebido is None
+    if novo:
+        recebido = ArquivoFiservRecebido(
+            nome=arquivo.metadados.nome, sha256=arquivo.sha256,
+            tamanho=arquivo.metadados.tamanho,
+            modificado_remoto=arquivo.metadados.modificado_em,
+            conteudo_cifrado=cifrar_bytes(arquivo.conteudo),
+            versao_configuracao=registro.versao,
+        )
+        db.session.add(recebido)
+    db.session.commit()
+    return recebido.id, novo
+
+
+def _registro_consulta():
+    __tracebackhide__ = True
+    if not coleta_disponivel():
+        raise ErroFiservSFTP('A consulta não está disponível neste ambiente.')
+    registro = db.session.get(IntegracaoFiserv, 1)
+    if registro is None:
+        raise ErroFiservSFTP('Configure o acesso antes de consultar os arquivos.')
+    if registro.ativa or registro.coleta_solicitada:
+        raise ErroFiservSFTP('Pause a coleta automática antes de conferir um arquivo específico.')
+    return registro
+
+
+def consultar_arquivos_disponiveis():
+    """Consulta isolada do owner, sem ativar nem solicitar coleta automática."""
+    __tracebackhide__ = True
+    with trava():
+        registro = _registro_consulta()
+        arquivos = listar_arquivos(_config_coleta(registro, duracao_maxima_segundos=45))
+        return registro.versao, arquivos
+
+
+def receber_arquivo_selecionado(esperado, versao, usuario_id):
+    """Recebe só a seleção validada no POST, mantendo o automático pausado."""
+    __tracebackhide__ = True
+    with trava():
+        registro = _registro_consulta()
+        if registro.versao != versao:
+            raise ErroFiservSFTP('O acesso foi alterado. Consulte a lista de arquivos novamente.')
+        arquivo_id = None
+        novo = False
+
+        def receber(arquivo):
+            __tracebackhide__ = True
+            nonlocal arquivo_id, novo
+            arquivo_id, novo = _guardar_arquivo(registro, arquivo)
+
+        baixar_arquivo(esperado.nome, _config_coleta(registro, duracao_maxima_segundos=45),
+                       esperado=esperado, ao_receber=receber)
+        if arquivo_id is None:
+            raise ErroPersistenciaFiservSFTP()
+        db.session.add(EventoFiserv(acao='arquivo_recebido_manual', usuario_id=usuario_id,
+                                   arquivos_novos=int(novo)))
+        db.session.commit()
+        return arquivo_id
 
 
 def _registrar_falha(registro_id, pausar, mensagem):
@@ -181,31 +259,8 @@ def executar_ciclo():
                 def receber(arquivo):
                     __tracebackhide__ = True
                     nonlocal novos
-                    remoto = FiservArquivoRemoto.query.filter_by(
-                        nome=arquivo.metadados.nome, versao_configuracao=registro.versao,
-                    ).first()
-                    if remoto is None:
-                        remoto = FiservArquivoRemoto(nome=arquivo.metadados.nome,
-                                                    versao_configuracao=registro.versao)
-                        db.session.add(remoto)
-                    remoto.tamanho = arquivo.metadados.tamanho
-                    remoto.modificado_remoto = arquivo.metadados.modificado_em
-                    remoto.sha256 = arquivo.sha256
-                    remoto.conferido_em = agora()
-                    with db.session.no_autoflush:
-                        existe = ArquivoFiservRecebido.query.filter_by(sha256=arquivo.sha256).first()
-                    if existe is None:
-                        db.session.add(ArquivoFiservRecebido(
-                            nome=arquivo.metadados.nome, sha256=arquivo.sha256,
-                            tamanho=arquivo.metadados.tamanho,
-                            modificado_remoto=arquivo.metadados.modificado_em,
-                            conteudo_cifrado=cifrar_bytes(arquivo.conteudo),
-                            versao_configuracao=registro.versao,
-                        ))
-                    # Arquivo e metadados são atômicos; uma falha posterior não
-                    # descarta os arquivos íntegros recebidos antes do CLOSE.
-                    db.session.commit()
-                    if existe is None:
+                    _, novo = _guardar_arquivo(registro, arquivo)
+                    if novo:
                         novos += 1
 
                 _, mais_pendentes = coletar_lote_pendente(

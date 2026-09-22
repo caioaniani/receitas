@@ -62,6 +62,20 @@ ser homologados com amostra real, pois os PDFs não definem o envelope externo
 completamente. Não confundir posições de recebíveis com novas entradas de caixa,
 nem somar venda, parcela, resumo e liquidação da mesma operação.
 
+Com o automático pausado, **Conferir arquivos na Fiserv** lista nomes e tamanhos
+diretamente do acesso salvo, em páginas de 20 arquivos ordenados por nome. Isso
+permite comparar com o mesmo arquivo do WinSCP, sem presumir que o primeiro da
+lista corresponde ao download que o owner realizou. **Receber este arquivo**
+baixa somente a seleção e a preserva cifrada pelo mesmo callback do agendador,
+inclusive antes do CLOSE. Consultar ou receber um arquivo não ativa, agenda ou
+altera o resultado do ciclo automático; falhas não agendam novas tentativas.
+As duas ações exigem owner, CSRF, instância de coleta autorizada, limitador e a
+mesma trava do agendador. A seleção é assinada por dez minutos e vinculada ao
+owner, à sessão, à versão do acesso e aos metadados conferidos antes do OPEN.
+A lista não é guardada em cookie e não inclui credenciais. O POST tem prazo
+de rede de 45 segundos, inferior ao timeout HTTP; permanecem os limites de
+arquivo e de listagem. Mensagens mostram somente categorias locais de erro.
+
 ## Segredos e criptografia
 
 O formulário usa HTTPS/cookie de sessão, CSRF e limite total de 96 KiB antes do

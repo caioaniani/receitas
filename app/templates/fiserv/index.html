@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set atualizar_coleta = estado and coleta_disponivel and not proposta and (estado.solicitada or estado.estado == 'coletando') %}
+{% set atualizar_coleta = estado and coleta_disponivel and not proposta and remotos is none and (estado.solicitada or estado.estado == 'coletando') %}
 {% block title %}Recebimentos Fiserv{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
@@ -27,6 +27,35 @@
     </div>
   {% else %}<p class="mb-0">Configure o acesso abaixo para começar. Somente o owner pode acessar esta área.</p>{% endif %}
 </div></div>
+
+{% if estado and not proposta %}
+<div class="card mb-4"><div class="card-body">
+  <h2 class="h5">Conferir arquivos na Fiserv</h2>
+  <p class="text-muted">Consulte os arquivos disponíveis e receba um arquivo específico usando o acesso já salvo. Para essa conferência, a coleta automática precisa estar pausada.</p>
+  <form method="post" action="{{ url_for('fiserv.consultar_arquivos') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-outline-primary" {% if estado.ativa or estado.solicitada or not coleta_disponivel %}disabled{% endif %}>Consultar arquivos disponíveis</button>
+  </form>
+  {% if remotos is not none %}
+    <p class="mt-3">{{ remotos.total }} arquivo(s) disponível(is). Página {{ remotos.pagina }} de {{ remotos.paginas }}.</p>
+    {% if remotos.itens %}
+    <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Arquivo</th><th>Tamanho</th><th></th></tr></thead><tbody>
+    {% for arquivo in remotos.itens %}<tr>
+      <td class="text-break">{{ arquivo.nome }}</td><td>{{ (arquivo.tamanho / 1024)|round(1) }} KB</td>
+      <td><form method="post" action="{{ url_for('fiserv.receber_arquivo') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="selecao" value="{{ arquivo.selecao }}"><button class="btn btn-sm btn-outline-primary">Receber este arquivo</button></form></td>
+    </tr>{% endfor %}
+    </tbody></table></div>
+    {% endif %}
+    {% if remotos.paginas > 1 %}
+    <form class="d-flex align-items-end gap-2" method="post" action="{{ url_for('fiserv.consultar_arquivos') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div><label class="form-label" for="pagina_remota">Página</label><input class="form-control" type="number" name="pagina_remota" id="pagina_remota" min="1" max="{{ remotos.paginas }}" value="{{ remotos.pagina }}" required></div>
+      <button class="btn btn-outline-secondary">Ir para página</button>
+    </form>
+    {% endif %}
+  {% endif %}
+</div></div>
+{% endif %}
 
 <div class="card mb-4"><div class="card-body">
   <h2 class="h5">{{ 'Substituir acesso' if estado else 'Configurar recebimento automático' }}</h2>

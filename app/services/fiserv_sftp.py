@@ -957,13 +957,17 @@ def listar_arquivos(config: ConfigFiservSFTP | None = None) -> list[MetadadosArq
         return _listar(sftp, _pasta_disponivel(sftp, config, prazo), config, prazo)
 
 
-def baixar_arquivo(nome: str, config: ConfigFiservSFTP | None = None) -> ArquivoFiserv:
+def baixar_arquivo(nome: str, config: ConfigFiservSFTP | None = None, *,
+                   esperado=None, ao_receber=None) -> ArquivoFiserv:
     """Baixa um nome simples de /available para memória; não grava nem remove."""
     __tracebackhide__ = True
     _nome_seguro(nome)
+    if ao_receber is not None and not callable(ao_receber):
+        raise ErroConfiguracaoFiservSFTP(invalidos=('ao_receber',))
     config = config or ConfigFiservSFTP.from_env()
     with _conectar(config) as (sftp, prazo):
-        return _baixar(sftp, _pasta_disponivel(sftp, config, prazo), nome, config, prazo)
+        return _baixar(sftp, _pasta_disponivel(sftp, config, prazo), nome, config, prazo,
+                      esperado=esperado, ao_receber=ao_receber)
 
 
 def coletar_arquivos(config: ConfigFiservSFTP | None = None) -> list[ArquivoFiserv]:
