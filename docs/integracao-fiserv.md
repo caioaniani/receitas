@@ -106,20 +106,24 @@ após a leitura e a validação completas, antes do CLOSE normal do handle. Uma
 falha no arquivo seguinte não descarta os anteriores. Falhas de persistência
 têm classificação local própria, pausam a coleta e não viram erros de rede.
 
+Arquivo regular e metadados válidos, conferidos por LSTAT e realpath, são
+obrigatórios antes do OPEN. A transferência segue a sequência do download
+do WinSCP: OPEN, FSTAT opcional e READ pelo handle, sem intercalar consultas
+LSTAT/REALPATH pelo nome enquanto o arquivo está aberto. A versão anterior
+intercalava essas consultas; essa diferença não está prevista no guia da
+Fiserv. A compatibilidade do gateway com a sequência anterior não foi
+confirmada. Não se ignoram erros de permissão, rede ou ausência em OPEN/READ.
 Quando FSTAT retorna status SFTP 4 (falha genérica) ou 8 (operação não
-suportada), a leitura usa LSTAT e realpath antes de abrir, após abrir e ao final
-da leitura, ainda com o handle aberto. Arquivo regular e metadados válidos são
-obrigatórios antes do OPEN. Depois do OPEN, somente ENOENT nas consultas de
-caminho admite continuar pelo handle: rename/unlink pode retirar o caminho
-sem invalidar a leitura já aberta. Metadados observados continuam exigindo
-tamanho e mtime iguais, mesmo se o realpath seguinte indicar ausência. Não se
-ignoram ENOTDIR, permissão, rede ou ausência em OPEN/READ/FSTAT; FSTAT válido e
-divergente é recusado. O recebimento exige exatamente o tamanho anunciado e
+suportada), usa os metadados conferidos antes do OPEN. FSTAT válido e divergente
+é recusado e é repetido no mesmo handle após a leitura quando suportado.
+O recebimento exige exatamente o tamanho anunciado e
 todos os limites. Lê somente os bytes esperados, sem uma requisição adicional
 após o tamanho informado: caixas de entrega podem encerrar o handle no último
 byte. Retorno vazio precoce, excesso de bytes ou qualquer erro durante os bytes
-esperados interrompem o arquivo. Crescimento observável nos metadados finais
-também é recusado; o tamanho anunciado depende do servidor confiável.
+esperados interrompem o arquivo. Crescimento observável no FSTAT final
+também é recusado. Sem FSTAT, o tamanho anunciado e a estabilidade do conteúdo
+dependem do servidor confiável: não se detecta toda troca ou crescimento
+posterior aos metadados anteriores ao OPEN.
 Não há consultas de caminho após CLOSE. Uma falha no encerramento não substitui
 uma falha anterior de leitura, validação ou armazenamento.
 Somente o código numérico do status é preservado, sem texto remoto. Como no

@@ -849,30 +849,13 @@ def _listar(sftp, pasta, config, prazo):
     return sorted(arquivos, key=lambda arquivo: arquivo.nome)
 
 
-def _verificar_arquivo(sftp, caminho, nome, config, prazo, *, permitir_ausente=False):
+def _verificar_arquivo(sftp, caminho, nome, config, prazo):
     __tracebackhide__ = True
-    ausente = object()
-
-    def consultar(operacao):
-        __tracebackhide__ = True
-        try:
-            return operacao(caminho)
-        except OSError as exc:
-            # Um handle já aberto pode continuar legível após rename/unlink.
-            # ENOTDIR, permissão e rede não equivalem à ausência do caminho.
-            if permitir_ausente and exc.errno == errno.ENOENT:
-                return ausente
-            raise
-
     _timeout(sftp, config, prazo)
-    atributos = _executar_sftp('ARQUIVO_LSTAT', consultar, sftp.lstat)
-    if atributos is ausente:
-        return None
+    atributos = _executar_sftp('ARQUIVO_LSTAT', sftp.lstat, caminho)
     metadados = _metadados(nome, atributos, config)
     _timeout(sftp, config, prazo)
-    normalizado = _executar_sftp('ARQUIVO_REALPATH', consultar, sftp.normalize)
-    if normalizado is ausente:
-        return metadados
+    normalizado = _executar_sftp('ARQUIVO_REALPATH', sftp.normalize, caminho)
     if normalizado != caminho:
         raise ErroSegurancaFiservSFTP('Arquivo remoto não pode redirecionar para outro caminho.')
     return metadados
@@ -888,7 +871,7 @@ def _metadados_arquivo_aberto(remoto, nome, config):
             return remoto.stat()
         except _ErroStatusSFTP as exc:
             # Alguns servidores permitem OPEN/READ, mas não FSTAT. FAILURE
-            # não prova falta de suporte: apenas permite conferir pelo caminho.
+            # não prova falta de suporte: usamos os metadados pré-abertura.
             # Outros códigos, desconexão ou erros genéricos nunca são ignorados.
             if exc.codigo_status in (4, 8):
                 return indisponivel
@@ -929,10 +912,11 @@ def _baixar(sftp, pasta, nome, config, prazo, esperado=None, *, ao_receber=None)
     with _arquivo_remoto(sftp, caminho) as remoto:
         _timeout(sftp, config, prazo)
         aberto = _metadados_arquivo_aberto(remoto, nome, config)
-        caminho_aberto = _verificar_arquivo(sftp, caminho, nome, config, prazo, permitir_ausente=True)
-        if ((aberto is not None and aberto != antes)
-                or (caminho_aberto is not None and caminho_aberto != antes)):
+        if aberto is not None and aberto != antes:
             raise ErroSegurancaFiservSFTP('Arquivo Fiserv mudou antes da leitura; tente novamente.')
+        # Segue a sequência de download do WinSCP: OPEN, FSTAT opcional e
+        # READ pelo handle. Não intercalar LSTAT/REALPATH pelo nome enquanto
+        # a transferência está aberta em uma caixa de arquivos virtual.
         # Caixas de entrega podem invalidar o handle ao entregar o último byte.
         # Não pedir além do tamanho anunciado: BufferedFile.read tentaria
         # completar esse pedido extra e perderia o bloco recebido se a resposta
@@ -948,13 +932,10 @@ def _baixar(sftp, pasta, nome, config, prazo, esperado=None, *, ao_receber=None)
                 raise ErroLimiteFiservSFTP('Arquivo Fiserv excedeu o tamanho informado durante a leitura.')
         _timeout(sftp, config, prazo)
         depois = _metadados_arquivo_aberto(remoto, nome, config) if aberto is not None else None
-        # Conferir enquanto o handle está aberto: caixas de arquivos podem
-        # retirar o caminho durante a leitura ou quando o download é encerrado.
-        # SFTP v3 não oferece OPEN_NOFOLLOW; detectamos trocas observáveis, sem
-        # autenticar o conteúdo de um servidor comprometido. O pin é obrigatório.
-        final = _verificar_arquivo(sftp, caminho, nome, config, prazo, permitir_ausente=True)
-        if (len(conteudo) != antes.tamanho or (depois is not None and depois != antes)
-                or (final is not None and final != antes)):
+        # Valida o mesmo handle; o caminho pode não representar mais o arquivo
+        # aberto. Sem FSTAT, confiamos nos metadados conferidos antes do OPEN
+        # e no servidor fixado, sem prometer detectar toda troca de conteúdo.
+        if len(conteudo) != antes.tamanho or (depois is not None and depois != antes):
             raise ErroSegurancaFiservSFTP('Arquivo Fiserv mudou durante a leitura; tente novamente.')
         dados = bytes(conteudo)
         arquivo = ArquivoFiserv(metadados=antes, conteudo=dados, sha256=hashlib.sha256(dados).hexdigest())
