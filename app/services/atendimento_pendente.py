@@ -165,7 +165,12 @@ def preparar(conversa, historico, *, min_minutos=10):
     if _e_mencao_story(texto) or _e_fechamento(texto, elogio=True):
         return row if _acompanhar_ate_resolver(row, base, min_minutos) else None
     inicio = _instante(ultima, base - timedelta(minutes=conversa.get('minutos_paradas', 0)))
-    if row and row.resolvido_em and inicio <= row.resolvido_em:
+    # `sem_cliente` foi decidido com um histórico SEM fala do cliente, então
+    # qualquer fala dele é nova por construção — o guard abaixo não vale
+    # (uma mensagem criada nos segundos entre o GET do histórico e o
+    # `agora()` da marcação ficaria presa para sempre atrás de
+    # `resolvido_em`; revisão 22/09/2026).
+    if row and row.resolvido_em and inicio <= row.resolvido_em and row.estado != 'sem_cliente':
         return None
     if row is None:
         row = EsperaAtendimento(conversa_id=conv_id, inicio_em=inicio, estado='aguardando')
