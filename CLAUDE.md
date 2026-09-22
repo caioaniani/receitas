@@ -241,6 +241,18 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   (180 dias = vida inteira da loja → "0 recorrentes", falso por desenho).
   Achado do 1º uso (13/09, 3 meses de loja): 793 clientes, 103 com 2+
   compras (13%) = 21,7% do faturamento; 9 com 6+.
+- `GET /api/claude/atendimento-painel?conv=<id>` (22/09/2026, caso "não
+  consigo acessar meu chat, e o da TV não abre"): reproduz DO SERVIDOR o
+  que a coluna Atendimento do /entregas/painel consome
+  (`chatwoot.listar_conversas` open/pending com `estrito=True` e o tempo
+  gasto), a latência CRUA do `GET /conversations` com timeout largo
+  (separa "lento demais para o 3+5 s de `chatwoot._consultar_conversas`"
+  de "Chatwoot fora"), `chatwoot.diagnostico()` (servidor/tokens/inboxes)
+  e a validade do TERCEIRO token (`CHATWOOT_PAINEL_TOKEN`, só de ENVIO
+  pelo painel — `GET /profile`); `?conv=` traz `erros_de_envio` (erro bruto
+  da Meta). COBERTURA: não enxerga sessão web nem o navegador da TV — o
+  caso real era o aviso de pendências do próprio painel + uma pendência
+  fantasma (seção "Painel: aviso de pendências..." abaixo), não o servidor.
 - Testes: `tests/test_claude_api.py`.
 
 ## Cockpit do dono — briefing diario + home + manual (16/07/2026)
