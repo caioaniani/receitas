@@ -103,6 +103,15 @@ banco: nomes diferentes ou reenvio do mesmo conteúdo não duplicam o arquivo.
 Mudanças de conteúdo preservam a revisão anterior; não são lançamentos novos.
 Arquivo cifrado e metadados são gravados na mesma transação por arquivo.
 
+Quando FSTAT retorna status SFTP 4 (falha genérica) ou 8 (operação não
+suportada), a leitura usa as verificações obrigatórias LSTAT e realpath antes
+de abrir, após abrir e após fechar. Continua exigindo arquivo regular, tamanho
+e mtime estáveis, bytes exatos e limites. Isso não mascara erros de READ,
+permissão, arquivo ausente ou conexão; um FSTAT válido e divergente é recusado.
+Somente o código numérico do status é preservado, sem texto remoto. Como no
+fluxo anterior, verificações de metadados detectam trocas observáveis, mas não
+autenticam o conteúdo de um servidor comprometido nem toda troca transitória.
+
 Watchdog encerra o transporte quando o prazo da coleta vence, inclusive durante
 a abertura SFTP. Resolução DNS e leitura local de arquivos pela API legada não
 são canceláveis pelo watchdog; limites do sistema operacional também se aplicam.

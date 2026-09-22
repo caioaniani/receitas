@@ -137,6 +137,8 @@ class ErroOperacaoFiservSFTP(ErroConexaoFiservSFTP):
             'TIMEOUT': 'tempo de resposta excedido', 'DNS': 'endereço não resolvido',
             'EOF': 'conexão encerrada antes da conclusão', 'SSH': 'falha de protocolo SSH',
             'SFTP': 'falha de protocolo SFTP', 'IO_SEM_CODIGO': 'falha sem código SFTP',
+            'SFTP_FAILURE': 'resposta de falha do servidor SFTP',
+            'SFTP_OP_UNSUPPORTED': 'operação não suportada pelo servidor SFTP',
             'IO_AUSENTE': 'recurso não encontrado', 'IO_CONEXAO': 'conexão interrompida',
             'IO_OUTRO': 'falha de entrada ou saída', 'VALOR_INVALIDO': 'resposta inválida',
             'OUTRO': 'falha não identificada',
@@ -183,6 +185,8 @@ def _erro_operacao(exc, etapa):
         codigo = 'SFTP'
     elif isinstance(exc, paramiko.SSHException):
         codigo = 'SSH'
+    elif isinstance(exc, _ErroStatusSFTP):
+        codigo = {4: 'SFTP_FAILURE', 8: 'SFTP_OP_UNSUPPORTED'}.get(exc.codigo_status, 'SFTP')
     elif isinstance(exc, OSError):
         if exc.errno is None:
             codigo = 'IO_SEM_CODIGO'
@@ -209,6 +213,36 @@ def _executar_sftp(etapa, operacao, *args, **kwargs):
         raise
     except (OSError, ValueError, EOFError, paramiko.SSHException, paramiko.SFTPError) as exc:
         raise _erro_operacao(exc, etapa) from None
+
+
+class _ErroStatusSFTP(OSError):
+    """Preserva somente o código do protocolo, nunca o texto remoto."""
+
+    def __init__(self, codigo):
+        self.codigo_status = codigo
+        super().__init__('O servidor retornou uma falha SFTP.')
+
+
+def _cliente_sftp(canal):
+    from paramiko import SFTPClient
+
+    class ClienteSFTPComStatus(SFTPClient):
+        def _convert_status(self, mensagem):
+            __tracebackhide__ = True
+            codigo = mensagem.get_int()
+            # Paramiko transforma tanto FAILURE (4) quanto OP_UNSUPPORTED (8)
+            # em IOError(texto). Preserve o código sem carregar o texto privado.
+            if codigo == 0:
+                return
+            if codigo == 1:
+                raise EOFError('Fim do arquivo remoto.')
+            if codigo == 2:
+                raise OSError(errno.ENOENT, 'Recurso remoto não encontrado.')
+            if codigo == 3:
+                raise OSError(errno.EACCES, 'Permissão remota negada.')
+            raise _ErroStatusSFTP(codigo)
+
+    return ClienteSFTPComStatus(canal)
 
 
 @dataclass(frozen=True, repr=False, init=False)
@@ -693,7 +727,7 @@ def _conectar(config):
         canal.invoke_subsystem('sftp')
         canal.settimeout(verificar_prazo())
         etapa = 'NEGOCIACAO_SFTP'
-        sftp = paramiko.SFTPClient(canal)
+        sftp = _cliente_sftp(canal)
         etapa = 'OPERACAO'
         verificar_prazo()
         _timeout(sftp, config, prazo)
@@ -817,6 +851,26 @@ def _verificar_arquivo(sftp, caminho, nome, config, prazo):
     return metadados
 
 
+def _metadados_arquivo_aberto(remoto, nome, config):
+    __tracebackhide__ = True
+    indisponivel = object()
+
+    def consultar():
+        __tracebackhide__ = True
+        try:
+            return remoto.stat()
+        except _ErroStatusSFTP as exc:
+            # Alguns servidores permitem OPEN/READ, mas não FSTAT. FAILURE
+            # não prova falta de suporte: apenas permite conferir pelo caminho.
+            # Outros códigos, desconexão ou erros genéricos nunca são ignorados.
+            if exc.codigo_status in (4, 8):
+                return indisponivel
+            raise
+
+    atributos = _executar_sftp('ARQUIVO_FSTAT', consultar)
+    return None if atributos is indisponivel else _metadados(nome, atributos, config)
+
+
 def _baixar(sftp, pasta, nome, config, prazo, esperado=None):
     __tracebackhide__ = True  # Não enviar conteúdo bancário em eventos de exceção.
     caminho = posixpath.join(pasta, _nome_seguro(nome))
@@ -829,8 +883,9 @@ def _baixar(sftp, pasta, nome, config, prazo, esperado=None):
     _timeout(sftp, config, prazo)
     with _executar_sftp('ARQUIVO_OPEN', sftp.open, caminho, 'rb', bufsize=0) as remoto:
         _timeout(sftp, config, prazo)
-        aberto = _metadados(nome, _executar_sftp('ARQUIVO_FSTAT', remoto.stat), config)
-        if aberto != antes or _verificar_arquivo(sftp, caminho, nome, config, prazo) != antes:
+        aberto = _metadados_arquivo_aberto(remoto, nome, config)
+        if ((aberto is not None and aberto != antes)
+                or _verificar_arquivo(sftp, caminho, nome, config, prazo) != antes):
             raise ErroSegurancaFiservSFTP('Arquivo Fiserv mudou antes da leitura; tente novamente.')
         while True:
             _timeout(sftp, config, prazo)
@@ -841,12 +896,13 @@ def _baixar(sftp, pasta, nome, config, prazo, esperado=None):
             if len(conteudo) > antes.tamanho or len(conteudo) > config.max_bytes_arquivo:
                 raise ErroLimiteFiservSFTP('Arquivo Fiserv excedeu o tamanho informado durante a leitura.')
         _timeout(sftp, config, prazo)
-        depois = _metadados(nome, _executar_sftp('ARQUIVO_FSTAT', remoto.stat), config)
+        depois = _metadados_arquivo_aberto(remoto, nome, config) if aberto is not None else None
     # SFTP v3 não oferece OPEN_NOFOLLOW: as verificações antes/depois recusam
     # links e trocas observáveis, mas não autenticam o conteúdo de um servidor
     # comprometido. A confiança no host provisionado continua obrigatória.
     final = _verificar_arquivo(sftp, caminho, nome, config, prazo)
-    if len(conteudo) != antes.tamanho or depois != antes or final != antes:
+    if (len(conteudo) != antes.tamanho or (depois is not None and depois != antes)
+            or final != antes):
         raise ErroSegurancaFiservSFTP('Arquivo Fiserv mudou durante a leitura; tente novamente.')
     dados = bytes(conteudo)
     return ArquivoFiserv(metadados=antes, conteudo=dados, sha256=hashlib.sha256(dados).hexdigest())
