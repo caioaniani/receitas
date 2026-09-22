@@ -22,6 +22,7 @@ import hashlib
 import logging
 import os
 import posixpath
+import socket
 import stat
 import sys
 import threading
@@ -86,6 +87,32 @@ class ErroAutenticacaoFiservSFTP(ErroConexaoFiservSFTP):
     """Credenciais recusadas: requer revisão, sem retentativa automática de rede."""
 
 
+class ErroOperacaoFiservSFTP(ErroConexaoFiservSFTP):
+    """Diagnóstico operacional fechado: não recebe a mensagem do servidor."""
+
+    def __init__(self, etapa, codigo):
+        etapas = {
+            'CONEXAO': 'conexão SSH', 'ABERTURA_SFTP': 'abertura SFTP',
+            'PASTA_LSTAT': 'consulta da pasta', 'PASTA_REALPATH': 'validação da pasta',
+            'LISTAGEM': 'listagem dos arquivos', 'ARQUIVO_LSTAT': 'consulta do arquivo',
+            'ARQUIVO_REALPATH': 'validação do arquivo', 'ARQUIVO_OPEN': 'abertura do arquivo',
+            'ARQUIVO_FSTAT': 'consulta do arquivo aberto', 'ARQUIVO_READ': 'leitura do arquivo',
+            'ENCERRAMENTO': 'encerramento da conexão', 'OPERACAO': 'operação SFTP',
+        }
+        codigos = {
+            'TIMEOUT': 'tempo de resposta excedido', 'DNS': 'endereço não resolvido',
+            'EOF': 'conexão encerrada antes da conclusão', 'SSH': 'falha de protocolo SSH',
+            'SFTP': 'falha de protocolo SFTP', 'IO_SEM_CODIGO': 'falha sem código SFTP',
+            'IO_AUSENTE': 'recurso não encontrado', 'IO_CONEXAO': 'conexão interrompida',
+            'IO_OUTRO': 'falha de entrada ou saída', 'VALOR_INVALIDO': 'resposta inválida',
+            'OUTRO': 'falha não identificada',
+        }
+        self.etapa = etapa if etapa in etapas else 'OPERACAO'
+        self.codigo = codigo if codigo in codigos else 'OUTRO'
+        super().__init__(f'Falha na {etapas[self.etapa]}: {codigos[self.codigo]}. '
+                         f'[{self.etapa}/{self.codigo}] Nova tentativa em uma hora.')
+
+
 class ErroAcessoFiservSFTP(ErroFiservSFTP):
     """Falha remota identificada por código fixo, sem texto do servidor."""
 
@@ -97,6 +124,56 @@ class ErroAcessoFiservSFTP(ErroFiservSFTP):
         }
         self.codigo = codigo
         super().__init__(mensagens[codigo])
+
+
+def _erro_operacao(exc, etapa):
+    __tracebackhide__ = True
+    paramiko = _carregar_paramiko()
+    if isinstance(exc, paramiko.BadHostKeyException):
+        return ErroSegurancaFiservSFTP('A chave do servidor Fiserv não corresponde à chave confiável.')
+    if isinstance(exc, paramiko.AuthenticationException):
+        return ErroAutenticacaoFiservSFTP('A autenticação SFTP Fiserv foi recusada; revise as credenciais.')
+    if isinstance(exc, OSError) and etapa not in ('CONEXAO', 'ABERTURA_SFTP'):
+        if exc.errno in (errno.EACCES, errno.EPERM):
+            return ErroAcessoFiservSFTP('SEM_PERMISSAO')
+        if etapa.startswith('PASTA_') and exc.errno in (errno.ENOENT, errno.ENOTDIR):
+            return ErroAcessoFiservSFTP('PASTA_AUSENTE')
+    if isinstance(exc, socket.gaierror):
+        codigo = 'DNS'
+    elif isinstance(exc, TimeoutError):
+        codigo = 'TIMEOUT'
+    elif isinstance(exc, EOFError):
+        codigo = 'EOF'
+    elif isinstance(exc, paramiko.SFTPError):
+        codigo = 'SFTP'
+    elif isinstance(exc, paramiko.SSHException):
+        codigo = 'SSH'
+    elif isinstance(exc, OSError):
+        if exc.errno is None:
+            codigo = 'IO_SEM_CODIGO'
+        elif exc.errno in (errno.ENOENT, errno.ENOTDIR):
+            codigo = 'IO_AUSENTE'
+        elif exc.errno in (errno.ECONNRESET, errno.ECONNREFUSED, errno.ECONNABORTED,
+                           errno.EPIPE, errno.ENETUNREACH, errno.EHOSTUNREACH):
+            codigo = 'IO_CONEXAO'
+        else:
+            codigo = 'IO_OUTRO'
+    elif isinstance(exc, ValueError):
+        codigo = 'VALOR_INVALIDO'
+    else:
+        codigo = 'OUTRO'
+    return ErroOperacaoFiservSFTP(etapa, codigo)
+
+
+def _executar_sftp(etapa, operacao, *args, **kwargs):
+    __tracebackhide__ = True
+    paramiko = _carregar_paramiko()
+    try:
+        return operacao(*args, **kwargs)
+    except ErroFiservSFTP:
+        raise
+    except (OSError, ValueError, EOFError, paramiko.SSHException, paramiko.SFTPError) as exc:
+        raise _erro_operacao(exc, etapa) from None
 
 
 @dataclass(frozen=True, repr=False, init=False)
@@ -310,7 +387,7 @@ def _conectar(config):
     paramiko = _carregar_paramiko()
     cliente = None
     sftp = None
-    etapa = 'conectar'
+    etapa = 'CONEXAO'
     temporizador = None
     prazo_expirado = threading.Event()
     trava_fechamento = threading.Lock()
@@ -381,31 +458,28 @@ def _conectar(config):
         # O timer pode ter vencido durante DNS/chave, antes de haver transporte
         # para fechar; nesse caso não abre SFTP com um timer já consumido.
         verificar_prazo()
-        etapa = 'abrir_sftp'
+        etapa = 'ABERTURA_SFTP'
         sftp = cliente.open_sftp()
-        etapa = 'ler_arquivos'
+        etapa = 'OPERACAO'
         verificar_prazo()
         _timeout(sftp, config, prazo)
         yield sftp, prazo
         verificar_prazo()
+    except ErroOperacaoFiservSFTP:
+        if prazo_expirado.is_set():
+            raise ErroLimiteFiservSFTP(_MENSAGEM_PRAZO) from None
+        raise
     except ErroFiservSFTP:
         raise
     except (OSError, ValueError, EOFError, paramiko.SSHException, paramiko.SFTPError) as exc:
         if prazo_expirado.is_set():
             raise ErroLimiteFiservSFTP(_MENSAGEM_PRAZO) from None
-        if isinstance(exc, paramiko.BadHostKeyException):
-            raise ErroSegurancaFiservSFTP('A chave do servidor Fiserv não corresponde à chave confiável.') from None
-        if isinstance(exc, paramiko.AuthenticationException):
-            raise ErroAutenticacaoFiservSFTP('A autenticação SFTP Fiserv foi recusada; revise as credenciais.') from None
         # Recusa administrativa/tipo de canal desconhecido exigem revisão.
         # Falha de conexão ou falta de recursos (2/4) continuam transitórias.
-        if (etapa == 'abrir_sftp' and isinstance(exc, paramiko.ChannelException)
+        if (etapa == 'ABERTURA_SFTP' and isinstance(exc, paramiko.ChannelException)
                 and exc.code in (1, 3)):
             raise ErroAcessoFiservSFTP('SFTP_INDISPONIVEL') from None
-        if (etapa == 'ler_arquivos' and isinstance(exc, OSError)
-                and exc.errno in (errno.EACCES, errno.EPERM)):
-            raise ErroAcessoFiservSFTP('SEM_PERMISSAO') from None
-        raise ErroConexaoFiservSFTP('Não foi possível concluir a leitura SFTP Fiserv.') from None
+        raise _erro_operacao(exc, etapa) from None
     finally:
         # Fechar ambos mesmo se um falhar; nunca expor mensagens do transporte.
         # Uma falha de encerramento não substitui a causa original da falha.
@@ -428,7 +502,7 @@ def _conectar(config):
         if prazo_expirado.is_set() and not erro_em_curso:
             raise ErroLimiteFiservSFTP(_MENSAGEM_PRAZO) from None
         if erro_fechamento and not erro_em_curso:
-            raise ErroConexaoFiservSFTP('Não foi possível encerrar a conexão SFTP Fiserv.') from None
+            raise ErroOperacaoFiservSFTP('ENCERRAMENTO', 'OUTRO') from None
 
 
 def _nome_seguro(nome):
@@ -443,21 +517,14 @@ def _nome_seguro(nome):
 
 def _pasta_disponivel(sftp, config, prazo):
     __tracebackhide__ = True
-    try:
-        _timeout(sftp, config, prazo)
-        atributos = sftp.lstat(PASTA_REMOTA)
-        if not isinstance(atributos.st_mode, int) or not stat.S_ISDIR(atributos.st_mode):
-            raise ErroSegurancaFiservSFTP('/available precisa ser um diretório real, sem link simbólico.')
-        _timeout(sftp, config, prazo)
-        if sftp.normalize(PASTA_REMOTA) != PASTA_REMOTA:
-            raise ErroSegurancaFiservSFTP('/available não pode redirecionar para outro diretório.')
-        return PASTA_REMOTA
-    except OSError as exc:
-        if exc.errno in (errno.ENOENT, errno.ENOTDIR):
-            raise ErroAcessoFiservSFTP('PASTA_AUSENTE') from None
-        if exc.errno in (errno.EACCES, errno.EPERM):
-            raise ErroAcessoFiservSFTP('SEM_PERMISSAO') from None
-        raise
+    _timeout(sftp, config, prazo)
+    atributos = _executar_sftp('PASTA_LSTAT', sftp.lstat, PASTA_REMOTA)
+    if not isinstance(atributos.st_mode, int) or not stat.S_ISDIR(atributos.st_mode):
+        raise ErroSegurancaFiservSFTP('/available precisa ser um diretório real, sem link simbólico.')
+    _timeout(sftp, config, prazo)
+    if _executar_sftp('PASTA_REALPATH', sftp.normalize, PASTA_REMOTA) != PASTA_REMOTA:
+        raise ErroSegurancaFiservSFTP('/available não pode redirecionar para outro diretório.')
+    return PASTA_REMOTA
 
 
 def _metadados(nome, atributos, config):
@@ -474,10 +541,12 @@ def _metadados(nome, atributos, config):
 
 
 def _listar(sftp, pasta, config, prazo):
+    __tracebackhide__ = True
+    paramiko = _carregar_paramiko()
     arquivos = []
     nomes = set()
     _timeout(sftp, config, prazo)
-    entradas = sftp.listdir_iter(pasta, read_aheads=1)
+    entradas = _executar_sftp('LISTAGEM', sftp.listdir_iter, pasta, read_aheads=1)
     try:
         for indice, atributos in enumerate(entradas):
             _timeout(sftp, config, prazo)
@@ -490,6 +559,10 @@ def _listar(sftp, pasta, config, prazo):
             if isinstance(atributos.st_mode, int) and stat.S_ISDIR(atributos.st_mode):
                 continue  # Não percorre subdiretórios; eles também contam para o limite.
             arquivos.append(_metadados(nome, atributos, config))
+    except ErroFiservSFTP:
+        raise
+    except (OSError, ValueError, EOFError, paramiko.SSHException, paramiko.SFTPError) as exc:
+        raise _erro_operacao(exc, 'LISTAGEM') from None
     finally:
         entradas.close()
     _prazo_restante(config, prazo)
@@ -498,9 +571,9 @@ def _listar(sftp, pasta, config, prazo):
 
 def _verificar_arquivo(sftp, caminho, nome, config, prazo):
     _timeout(sftp, config, prazo)
-    metadados = _metadados(nome, sftp.lstat(caminho), config)
+    metadados = _metadados(nome, _executar_sftp('ARQUIVO_LSTAT', sftp.lstat, caminho), config)
     _timeout(sftp, config, prazo)
-    if sftp.normalize(caminho) != caminho:
+    if _executar_sftp('ARQUIVO_REALPATH', sftp.normalize, caminho) != caminho:
         raise ErroSegurancaFiservSFTP('Arquivo remoto não pode redirecionar para outro caminho.')
     return metadados
 
@@ -515,21 +588,21 @@ def _baixar(sftp, pasta, nome, config, prazo, esperado=None):
         raise ErroSegurancaFiservSFTP('Arquivo Fiserv mudou após a listagem; tente novamente.')
     conteudo = bytearray()
     _timeout(sftp, config, prazo)
-    with sftp.open(caminho, 'rb', bufsize=0) as remoto:
+    with _executar_sftp('ARQUIVO_OPEN', sftp.open, caminho, 'rb', bufsize=0) as remoto:
         _timeout(sftp, config, prazo)
-        aberto = _metadados(nome, remoto.stat(), config)
+        aberto = _metadados(nome, _executar_sftp('ARQUIVO_FSTAT', remoto.stat), config)
         if aberto != antes or _verificar_arquivo(sftp, caminho, nome, config, prazo) != antes:
             raise ErroSegurancaFiservSFTP('Arquivo Fiserv mudou antes da leitura; tente novamente.')
         while True:
             _timeout(sftp, config, prazo)
-            bloco = remoto.read(min(_BLOCO, antes.tamanho - len(conteudo) + 1))
+            bloco = _executar_sftp('ARQUIVO_READ', remoto.read, min(_BLOCO, antes.tamanho - len(conteudo) + 1))
             if not bloco:
                 break
             conteudo.extend(bloco)
             if len(conteudo) > antes.tamanho or len(conteudo) > config.max_bytes_arquivo:
                 raise ErroLimiteFiservSFTP('Arquivo Fiserv excedeu o tamanho informado durante a leitura.')
         _timeout(sftp, config, prazo)
-        depois = _metadados(nome, remoto.stat(), config)
+        depois = _metadados(nome, _executar_sftp('ARQUIVO_FSTAT', remoto.stat), config)
     # SFTP v3 não oferece OPEN_NOFOLLOW: as verificações antes/depois recusam
     # links e trocas observáveis, mas não autenticam o conteúdo de um servidor
     # comprometido. A confiança no host provisionado continua obrigatória.

@@ -29,6 +29,7 @@ from app.services.fiserv_sftp import (
     ErroAutenticacaoFiservSFTP,
     ErroConexaoFiservSFTP,
     ErroFiservSFTP,
+    ErroOperacaoFiservSFTP,
     coletar_lote_pendente,
 )
 from app.services.instancia import BRANCH_PRODUCAO
@@ -216,6 +217,10 @@ def executar_ciclo():
                 # A classe aceita somente códigos e mensagens fixos; nunca a
                 # resposta privada do servidor ou os dados do acesso.
                 _registrar_falha(1, True, str(exc))
+                return 0
+            except ErroOperacaoFiservSFTP as exc:
+                # Etapa e motivo são allowlists locais, sem texto remoto.
+                _registrar_falha(1, False, str(exc))
                 return 0
             except ErroConexaoFiservSFTP:
                 _registrar_falha(1, False, 'Conexão indisponível no momento. Nova tentativa automática em uma hora.')

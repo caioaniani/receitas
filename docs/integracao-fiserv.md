@@ -24,6 +24,12 @@ abertura do canal SFTP também têm mensagens próprias, sem expor a resposta do
 servidor. Indisponibilidade de conexão permite nova
 tentativa em uma hora. Pausar e solicitar novamente são ações explícitas.
 
+Falhas transitórias informam a etapa e uma categoria fixa entre colchetes,
+por exemplo `PASTA_LSTAT/IO_SEM_CODIGO`. Isso distingue conexão, abertura SFTP,
+consulta da pasta, listagem e leitura sem guardar texto da exceção remota,
+nome de usuário, caminhos de chaves ou conteúdo dos arquivos. As categorias
+não inferem senha incorreta a partir de uma falha genérica de protocolo.
+
 Os arquivos recebidos são preservados cifrados e podem ser baixados pelo owner.
 Este estágio recebe o EDI original: **não normaliza ou soma os valores no caixa**.
 Os cinco leiautes (vendas, pagamentos, recebíveis, PIX e voucher) ainda precisam
