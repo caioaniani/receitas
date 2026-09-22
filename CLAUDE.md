@@ -4740,6 +4740,66 @@ para poder passar o número, como está a segurança nisso?". Auditoria
   que um humano pode ter assumido.
 - Testes: `tests/test_entrega_candidata.py` (16 casos).
 
+### Painel: aviso de pendências NÃO bloqueia + conversa iniciada pela equipe não é espera (22/09/2026)
+
+Caso real: atendente (Micaela) — "não consigo acessar meu chat, e o da TV
+não abre"; a foto da TV mostrava o `<dialog>` "Cliente precisa de
+atendimento" (`app/static/js/painel-alertas-atendimento.js`, criado em
+18/09 no f84fdfd0) por cima do /entregas/painel, com a thread da cliente
+já aberta atrás; depois: "aparecia que tinha chat, e quando o pessoal
+abria a conversa não tinha conversa nenhuma". DOIS defeitos independentes:
+
+1. **O aviso reabria sozinho e era modal.** "Abrir conversa" NUNCA foi
+   link: é `<button>` que fecha o aviso e dispara `atendimento:abrir` →
+   `abrirThread` na coluna da direita (`painel.html`). Mas `showModal()`
+   deixava o painel inteiro inerte; `mostrar(false)` roda em TODO poll de
+   20 s e no vencimento do adiamento, e o guard só olhava rascunho/aba
+   oculta — não conversa aberta; "Abrir conversa" adiava SÓ o alerta
+   clicado, então com 2 pendências a outra seguia "vencida" e o aviso
+   voltava em ≤20 s por cima da conversa recém-aberta (exatamente a foto);
+   na TV ninguém clica e o aviso ficava o dia inteiro cobrindo pedidos e
+   atendimento. Fix: `dialog.show()` NÃO-MODAL + `.pa-at-dialog[open]`
+   fixo no topo da coluna de atendimento (pedidos da TV seguem visíveis),
+   guard `threadAberta()` (nunca abre sozinho com `#at-thread` visível; o
+   botão "!" manual continua abrindo), "Abrir conversa" adia TODAS as
+   pendências por 5 min, Esc adia como o × (não-modal não recebe
+   `cancel`). Cobrança até resolver, som e adiamento de 5 min INTACTOS: ao
+   voltar à lista, o aviso volta no poll seguinte. ARMADILHA: o painel
+   NÃO recarrega sozinho após deploy — TV e PCs com a página aberta só
+   recebem JS/CSS novo com F5 (`?v=` é hash de conteúdo, mas viaja no
+   HTML). Teste: `tests/test_painel_alertas_js.py` (JS real no node; FALHA
+   contra a versão antiga — conferido).
+
+2. **Conversa iniciada pela EQUIPE virava "abandono" + "Urgente".** A
+   pendência apontava para a 2429, aberta pelo botão "Chamar" (template)
+   às 10:15 — a cliente nunca escreveu ali (respondeu por OUTRO canal, na
+   2431, onde ficou 22 min sem resposta humana). Inbox com Agent Bot cria
+   toda conversa em `pending` (e `chatwoot._conversa_aberta_do_contato`
+   reusa pending também), então: follow-up do bot às 10:25
+   ("[FOLLOWUP 9min]"), vigia "[ABANDONO 17min]" às 10:45 (ALTA +
+   WhatsApp), `registrar_alerta` → `EsperaAtendimento` grave → "Urgente —
+   aguardando 78 min" no painel e cobrança ao dono a cada 15-20 min até o
+   meio-dia, tudo numa conversa vazia. Fix, fonte única
+   `chatbot.cliente_ja_falou(historico)` (há `role == 'user'`?):
+   `chatbot_vigia.avaliar_abandono` pula sem gastar modelo;
+   `chatbot.followup_conversas_paradas` pula; `atendimento_pendente.
+   preparar` marca a linha `sem_cliente` (estado TERMINAL: fora de
+   `alertas_painel`/`candidatos`; `resolvido_em` fecha o episódio para o
+   ALTA fantasma não devolver a gravidade; se o cliente responder um dia,
+   o ramo de reabertura volta a 'aguardando' com `grave=False`);
+   `confirmar_acao_painel('responder')` NÃO reabre `sem_cliente` (a equipe
+   digitando "ola" na conversa que ela mesma abriu não é atendimento em
+   curso; 'resolved' segue resolvendo); e `chatwoot.
+   iniciar_conversa_whatsapp` passa a conversa para `open` logo após o
+   template (`definir_status(..., tentativas=1)`, best-effort, `aberta`
+   no retorno) — a resposta do cliente ao template cai na fila da EQUIPE,
+   não no bot. A linha real da 2429 se cura no ciclo seguinte do
+   espera-humano. Testes: `tests/test_conversa_iniciada_pela_equipe.py`.
+
+Confirmação de passagem: a nota privada escrita na 2429 às 12:25 apareceu
+em `presenca_humana` (`nota_em` 12:25:38) — o Agent Bot RECEBE
+`message_created` de nota privada (a hipótese de 21/09 está provada).
+
 ## Contas a Pagar (NF/boleto via Slack → IA → Dropbox → banco)
 
 Feature de 2026-05-23. Funcionarios postam foto de NF/boleto em canais Slack de
