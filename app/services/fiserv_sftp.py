@@ -17,6 +17,7 @@ qualquer dessas etapas, um prazo vencido impede iniciar a operação seguinte.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import logging
 import os
@@ -40,7 +41,8 @@ HOSTS_PERMITIDOS = frozenset({
 })
 HOST_PADRAO = 'prod-gw-lac.firstdataclients.com'
 PORTA = 6522
-PASTA_REMOTA = 'Available'
+# Caminho absoluto confirmado no acesso Fiserv. SFTP distingue maiúsculas.
+PASTA_REMOTA = '/available'
 _BLOCO = 64 * 1024
 _LOG_TRANSPORTE = __name__ + '.ssh'
 _MENSAGEM_PRAZO = 'A coleta Fiserv ultrapassou o tempo máximo permitido.'
@@ -82,6 +84,19 @@ class ErroConexaoFiservSFTP(ErroFiservSFTP):
 
 class ErroAutenticacaoFiservSFTP(ErroConexaoFiservSFTP):
     """Credenciais recusadas: requer revisão, sem retentativa automática de rede."""
+
+
+class ErroAcessoFiservSFTP(ErroFiservSFTP):
+    """Falha remota identificada por código fixo, sem texto do servidor."""
+
+    def __init__(self, codigo):
+        mensagens = {
+            'PASTA_AUSENTE': 'A pasta /available não foi encontrada no acesso Fiserv. Confira a liberação da pasta com a Fiserv.',
+            'SEM_PERMISSAO': 'A Fiserv negou permissão para listar ou ler os arquivos. Confira a liberação desse acesso com a Fiserv.',
+            'SFTP_INDISPONIVEL': 'A conexão SSH foi estabelecida, mas a Fiserv recusou abrir o acesso SFTP aos arquivos.',
+        }
+        self.codigo = codigo
+        super().__init__(mensagens[codigo])
 
 
 @dataclass(frozen=True, repr=False, init=False)
@@ -295,6 +310,7 @@ def _conectar(config):
     paramiko = _carregar_paramiko()
     cliente = None
     sftp = None
+    etapa = 'conectar'
     temporizador = None
     prazo_expirado = threading.Event()
     trava_fechamento = threading.Lock()
@@ -365,7 +381,9 @@ def _conectar(config):
         # O timer pode ter vencido durante DNS/chave, antes de haver transporte
         # para fechar; nesse caso não abre SFTP com um timer já consumido.
         verificar_prazo()
+        etapa = 'abrir_sftp'
         sftp = cliente.open_sftp()
+        etapa = 'ler_arquivos'
         verificar_prazo()
         _timeout(sftp, config, prazo)
         yield sftp, prazo
@@ -379,6 +397,14 @@ def _conectar(config):
             raise ErroSegurancaFiservSFTP('A chave do servidor Fiserv não corresponde à chave confiável.') from None
         if isinstance(exc, paramiko.AuthenticationException):
             raise ErroAutenticacaoFiservSFTP('A autenticação SFTP Fiserv foi recusada; revise as credenciais.') from None
+        # Recusa administrativa/tipo de canal desconhecido exigem revisão.
+        # Falha de conexão ou falta de recursos (2/4) continuam transitórias.
+        if (etapa == 'abrir_sftp' and isinstance(exc, paramiko.ChannelException)
+                and exc.code in (1, 3)):
+            raise ErroAcessoFiservSFTP('SFTP_INDISPONIVEL') from None
+        if (etapa == 'ler_arquivos' and isinstance(exc, OSError)
+                and exc.errno in (errno.EACCES, errno.EPERM)):
+            raise ErroAcessoFiservSFTP('SEM_PERMISSAO') from None
         raise ErroConexaoFiservSFTP('Não foi possível concluir a leitura SFTP Fiserv.') from None
     finally:
         # Fechar ambos mesmo se um falhar; nunca expor mensagens do transporte.
@@ -416,19 +442,22 @@ def _nome_seguro(nome):
 
 
 def _pasta_disponivel(sftp, config, prazo):
-    _timeout(sftp, config, prazo)
-    atributos = sftp.lstat(PASTA_REMOTA)
-    if not isinstance(atributos.st_mode, int) or not stat.S_ISDIR(atributos.st_mode):
-        raise ErroSegurancaFiservSFTP('Available precisa ser um diretório real, sem link simbólico.')
-    _timeout(sftp, config, prazo)
-    home = sftp.normalize('.')
-    if not isinstance(home, str) or not home.startswith('/') or posixpath.normpath(home) != home:
-        raise ErroSegurancaFiservSFTP('Diretório remoto Fiserv inválido.')
-    esperado = posixpath.join(home, PASTA_REMOTA)
-    _timeout(sftp, config, prazo)
-    if sftp.normalize(PASTA_REMOTA) != esperado:
-        raise ErroSegurancaFiservSFTP('Available não pode redirecionar para outro diretório.')
-    return esperado
+    __tracebackhide__ = True
+    try:
+        _timeout(sftp, config, prazo)
+        atributos = sftp.lstat(PASTA_REMOTA)
+        if not isinstance(atributos.st_mode, int) or not stat.S_ISDIR(atributos.st_mode):
+            raise ErroSegurancaFiservSFTP('/available precisa ser um diretório real, sem link simbólico.')
+        _timeout(sftp, config, prazo)
+        if sftp.normalize(PASTA_REMOTA) != PASTA_REMOTA:
+            raise ErroSegurancaFiservSFTP('/available não pode redirecionar para outro diretório.')
+        return PASTA_REMOTA
+    except OSError as exc:
+        if exc.errno in (errno.ENOENT, errno.ENOTDIR):
+            raise ErroAcessoFiservSFTP('PASTA_AUSENTE') from None
+        if exc.errno in (errno.EACCES, errno.EPERM):
+            raise ErroAcessoFiservSFTP('SEM_PERMISSAO') from None
+        raise
 
 
 def _metadados(nome, atributos, config):
@@ -453,7 +482,7 @@ def _listar(sftp, pasta, config, prazo):
         for indice, atributos in enumerate(entradas):
             _timeout(sftp, config, prazo)
             if indice >= config.max_arquivos:
-                raise ErroLimiteFiservSFTP('Available excede o limite de entradas por coleta.')
+                raise ErroLimiteFiservSFTP('/available excede o limite de entradas por coleta.')
             nome = _nome_seguro(atributos.filename)
             if nome in nomes:
                 raise ErroSegurancaFiservSFTP('A listagem Fiserv contém nomes repetidos.')
@@ -512,7 +541,7 @@ def _baixar(sftp, pasta, nome, config, prazo, esperado=None):
 
 
 def listar_arquivos(config: ConfigFiservSFTP | None = None) -> list[MetadadosArquivoFiserv]:
-    """Lista arquivos regulares diretamente em Available, sem baixar conteúdo."""
+    """Lista arquivos regulares diretamente em /available, sem baixar conteúdo."""
     __tracebackhide__ = True
     config = config or ConfigFiservSFTP.from_env()
     with _conectar(config) as (sftp, prazo):
@@ -520,7 +549,7 @@ def listar_arquivos(config: ConfigFiservSFTP | None = None) -> list[MetadadosArq
 
 
 def baixar_arquivo(nome: str, config: ConfigFiservSFTP | None = None) -> ArquivoFiserv:
-    """Baixa um nome simples de Available para memória; não grava nem remove."""
+    """Baixa um nome simples de /available para memória; não grava nem remove."""
     __tracebackhide__ = True
     _nome_seguro(nome)
     config = config or ConfigFiservSFTP.from_env()

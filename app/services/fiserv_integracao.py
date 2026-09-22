@@ -25,6 +25,7 @@ from app.services.fiserv_sftp import (
     HOSTS_PERMITIDOS,
     PORTA,
     ConfigFiservSFTP,
+    ErroAcessoFiservSFTP,
     ErroAutenticacaoFiservSFTP,
     ErroConexaoFiservSFTP,
     ErroFiservSFTP,
@@ -210,6 +211,11 @@ def executar_ciclo():
                 return novos
             except ErroAutenticacaoFiservSFTP:
                 _registrar_falha(1, True, 'A Fiserv recusou o acesso. Confira as credenciais antes de solicitar nova coleta.')
+                return 0
+            except ErroAcessoFiservSFTP as exc:
+                # A classe aceita somente códigos e mensagens fixos; nunca a
+                # resposta privada do servidor ou os dados do acesso.
+                _registrar_falha(1, True, str(exc))
                 return 0
             except ErroConexaoFiservSFTP:
                 _registrar_falha(1, False, 'Conexão indisponível no momento. Nova tentativa automática em uma hora.')

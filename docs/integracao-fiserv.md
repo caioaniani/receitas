@@ -18,8 +18,10 @@ arquivos na Fiserv e não altera pagamentos ou saldos.
 4. Salvar e iniciar. O job atende a solicitação no próximo minuto; após sucesso,
    coleta a cada hora. A página mostra tentativas, sucesso, arquivos e falhas.
 
-Uma falha de autenticação, configuração ou identidade do servidor pausa a
-coleta até intervenção do owner. Indisponibilidade de conexão permite nova
+Uma falha de autenticação, configuração, identidade do servidor ou permissão
+de leitura pausa a coleta até intervenção do owner. Pasta ausente e recusa de
+abertura do canal SFTP também têm mensagens próprias, sem expor a resposta do
+servidor. Indisponibilidade de conexão permite nova
 tentativa em uma hora. Pausar e solicitar novamente são ações explícitas.
 
 Os arquivos recebidos são preservados cifrados e podem ser baixados pelo owner.
@@ -53,7 +55,9 @@ transações. Frames que manuseiam segredos não expõem variáveis locais.
 ## Coleta e idempotência
 
 Hosts permitidos: `prod-gw-lac.firstdataclients.com` e
-`prod2-gw-lac.firstdataclients.com`; porta 6522; pasta fixa `Available`.
+`prod2-gw-lac.firstdataclients.com`; porta 6522; pasta fixa absoluta `/available`.
+O caminho foi confirmado no acesso real pelo WinSCP: é minúsculo e independe
+do diretório inicial da conta. Não tentar `Available` nem outros diretórios.
 A chave pública aprovada é fixada na configuração. Conexões seguintes usam
 RejectPolicy; mudança da chave não é aceita automaticamente. Credenciais são
 carregadas em memória, sem arquivo temporário.
