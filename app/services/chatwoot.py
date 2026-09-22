@@ -1299,4 +1299,16 @@ def iniciar_conversa_whatsapp(telefone, nome, params,
         # atendente ve a conversa) + o erro cru pra corrigir o template.
         return {'ok': False, 'conversation_id': conv_id, 'nova': nova,
                 'erro': res['erro']}
-    return {'ok': True, 'conversation_id': conv_id, 'nova': nova, 'erro': None}
+    # A conversa é da EQUIPE: sai da fila do bot. Inbox com Agent Bot cria
+    # toda conversa em `pending` (e a busca acima reusa pending também), e
+    # aí o bot manda follow-up, o vigia acusa "abandono" e a espera-humana
+    # cobra "Urgente" numa conversa em que o cliente nunca escreveu (caso
+    # 2429, 22/09/2026). `open` = humano é dono; a resposta do cliente ao
+    # template cai na fila da equipe, não no bot. Best-effort, 1 tentativa:
+    # o template já saiu, e a regra `chatbot.cliente_ja_falou` segura os
+    # três consumidores mesmo se este toggle falhar.
+    aberta = bool(definir_status(conv_id, 'open', tentativas=1).get('ok'))
+    if not aberta:
+        logger.warning('iniciar_conversa_whatsapp: conversa %s nao foi para open', conv_id)
+    return {'ok': True, 'conversation_id': conv_id, 'nova': nova, 'erro': None,
+            'aberta': aberta}
