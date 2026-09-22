@@ -933,11 +933,16 @@ def _baixar(sftp, pasta, nome, config, prazo, esperado=None, *, ao_receber=None)
         if ((aberto is not None and aberto != antes)
                 or (caminho_aberto is not None and caminho_aberto != antes)):
             raise ErroSegurancaFiservSFTP('Arquivo Fiserv mudou antes da leitura; tente novamente.')
-        while True:
+        # Caixas de entrega podem invalidar o handle ao entregar o último byte.
+        # Não pedir além do tamanho anunciado: BufferedFile.read tentaria
+        # completar esse pedido extra e perderia o bloco recebido se a resposta
+        # seguinte fosse ENOENT, em vez de EOF. Erros durante bytes esperados
+        # continuam sendo falhas; metadados observáveis são conferidos abaixo.
+        while len(conteudo) < antes.tamanho:
             _timeout(sftp, config, prazo)
-            bloco = _executar_sftp('ARQUIVO_READ', remoto.read, min(_BLOCO, antes.tamanho - len(conteudo) + 1))
+            bloco = _executar_sftp('ARQUIVO_READ', remoto.read, min(_BLOCO, antes.tamanho - len(conteudo)))
             if not bloco:
-                break
+                raise ErroSegurancaFiservSFTP('Arquivo Fiserv terminou antes do tamanho informado.')
             conteudo.extend(bloco)
             if len(conteudo) > antes.tamanho or len(conteudo) > config.max_bytes_arquivo:
                 raise ErroLimiteFiservSFTP('Arquivo Fiserv excedeu o tamanho informado durante a leitura.')

@@ -114,7 +114,12 @@ caminho admite continuar pelo handle: rename/unlink pode retirar o caminho
 sem invalidar a leitura já aberta. Metadados observados continuam exigindo
 tamanho e mtime iguais, mesmo se o realpath seguinte indicar ausência. Não se
 ignoram ENOTDIR, permissão, rede ou ausência em OPEN/READ/FSTAT; FSTAT válido e
-divergente é recusado. O recebimento exige EOF, bytes exatos e todos os limites.
+divergente é recusado. O recebimento exige exatamente o tamanho anunciado e
+todos os limites. Lê somente os bytes esperados, sem uma requisição adicional
+após o tamanho informado: caixas de entrega podem encerrar o handle no último
+byte. Retorno vazio precoce, excesso de bytes ou qualquer erro durante os bytes
+esperados interrompem o arquivo. Crescimento observável nos metadados finais
+também é recusado; o tamanho anunciado depende do servidor confiável.
 Não há consultas de caminho após CLOSE. Uma falha no encerramento não substitui
 uma falha anterior de leitura, validação ou armazenamento.
 Somente o código numérico do status é preservado, sem texto remoto. Como no
