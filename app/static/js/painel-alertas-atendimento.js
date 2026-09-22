@@ -201,8 +201,15 @@
       var vencido = alertas.some(function (alerta) {
         return (adiados.get(alerta.chave) || 0) <= Date.now();
       });
-      if (!manual && (!vencido || haRascunho() || document.hidden)) return;
-      dialog.showModal();
+      // Nunca por cima de quem está atendendo (conversa aberta ou rascunho).
+      // Caso real 22/09/2026: o aviso reabria 20 s depois do "Abrir conversa"
+      // (a outra pendência seguia vencida) e, na TV, onde ninguém clica,
+      // cobria o painel inteiro. O gesto manual (botão "!") continua abrindo.
+      if (!manual && (!vencido || haRascunho() || threadAberta() || document.hidden)) return;
+      // Não-modal de propósito: o painel atrás continua utilizável (pedidos
+      // do dia na TV, lista e caixa de resposta do atendimento). A posição
+      // flutuante, sobre a coluna de atendimento, vem do CSS.
+      dialog.show();
       botao.setAttribute('aria-expanded', 'true');
       avisoLocal.hidden = true;
       atualizarErro();
