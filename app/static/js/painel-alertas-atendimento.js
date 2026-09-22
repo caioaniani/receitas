@@ -271,10 +271,10 @@
       abrir.addEventListener('click', function () {
         var alerta = alertas.find(function (atual) { return atual.chave === chave; });
         if (!alerta) return;
-        // Abrir uma conversa = a equipe está agindo: adia TODAS as pendências
-        // por 5 minutos. Adiar só a clicada deixava a outra "vencida" e o
-        // aviso voltava no poll seguinte, por cima da conversa recém-aberta.
-        adiar();
+        // Adia só a pendência clicada: quem segura o cartão enquanto a
+        // conversa está aberta é `atendendo()`; ao voltar à lista, as outras
+        // pendências voltam a cobrar na hora (revisão 22/09/2026).
+        adiar(alerta.conv_id);
         document.dispatchEvent(new CustomEvent('atendimento:abrir', {
           detail: { conv_id: alerta.conv_id, nome: alerta.cliente }
         }));
