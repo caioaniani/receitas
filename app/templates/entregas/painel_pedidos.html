@@ -1103,6 +1103,13 @@
             msg = 'sua sessão expirou — recarregue a página (F5) e tente de novo.';
           }
           window.alert('Atenção: ' + msg);
+        } else if (d.aberta === false) {
+          // Template saiu, mas o Chatwoot não tirou a conversa da fila do
+          // bot (revisão 22/09/2026): a equipe precisa saber que o bot
+          // pode responder antes dela.
+          window.alert('Atenção: a mensagem saiu, mas a conversa continua na fila do BOT '
+                       + '(não consegui passar para a equipe). Abra a conversa à direita e '
+                       + 'responda por lá.');
         }
         if (!abriu) { btn.disabled = false; btn.innerHTML = orig; }
       })
