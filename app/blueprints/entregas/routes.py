@@ -569,6 +569,7 @@ def api_atendimento_chamar_motorista():
         'ok': bool(res.get('ok')),
         'conversation_id': res.get('conversation_id'),
         'nova': bool(res.get('nova')),
+        'aberta': bool(res.get('aberta')),
         'nome': f'Motoboy {nome}'.strip(),
         'erro': res.get('erro'),
     }), (200 if res.get('ok') else 502)
