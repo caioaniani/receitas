@@ -110,7 +110,7 @@ body.pa-at-painel .barra-teste { min-height: 52px; padding-right: 190px; }
 }
 @media (max-width: 600px) {
   .pa-at-indicador { right: 8px; max-width: calc(100vw - 16px); }
-  .pa-at-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  .pa-at-dialog[open] { top: 54px; right: 8px; width: calc(100vw - 16px); max-height: calc(100dvh - 62px); }
   .pa-at-cabecalho { padding: 16px 12px; gap: 8px; }
   .pa-at-cabecalho h2 { font-size: 20px; }
   .pa-at-sinal-grande { width: 28px; height: 28px; font-size: 20px; }
