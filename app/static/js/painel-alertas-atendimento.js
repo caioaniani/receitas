@@ -126,6 +126,8 @@
       }));
       // O vencimento é absoluto: os polls de 20s não reiniciam a contagem.
       var quando = Math.max(Date.now(), proximoSomEm, elegivelEm);
+      // Quem está atendendo não leva bipe; reavalia em 1 min.
+      if (atendendo()) quando = Math.max(quando, Date.now() + 60 * 1000);
       timerSom = setTimeout(tocarSom, Math.max(0, quando - Date.now()));
     }
 
@@ -135,7 +137,7 @@
         return (adiados.get(alerta.chave) || 0) <= Date.now();
       });
       if (suspenso || document.hidden || !audioCtx || audioCtx.state !== 'running'
-          || !elegivel || proximoSomEm > Date.now()) {
+          || !elegivel || proximoSomEm > Date.now() || atendendo()) {
         agendarSom();
         return;
       }
