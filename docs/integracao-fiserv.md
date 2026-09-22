@@ -101,19 +101,30 @@ FiservArquivoRemoto mantém metadados por versão da configuração; registros s
 mudança são revalidados pelo conteúdo após 24 horas. O SHA256 tem unicidade no
 banco: nomes diferentes ou reenvio do mesmo conteúdo não duplicam o arquivo.
 Mudanças de conteúdo preservam a revisão anterior; não são lançamentos novos.
-Arquivo cifrado e metadados são gravados na mesma transação por arquivo.
+Arquivo cifrado e metadados são gravados na mesma transação por arquivo, logo
+após a leitura e a validação completas, antes do CLOSE normal do handle. Uma
+falha no arquivo seguinte não descarta os anteriores. Falhas de persistência
+têm classificação local própria, pausam a coleta e não viram erros de rede.
 
 Quando FSTAT retorna status SFTP 4 (falha genérica) ou 8 (operação não
-suportada), a leitura usa as verificações obrigatórias LSTAT e realpath antes
-de abrir, após abrir e após fechar. Continua exigindo arquivo regular, tamanho
-e mtime estáveis, bytes exatos e limites. Isso não mascara erros de READ,
-permissão, arquivo ausente ou conexão; um FSTAT válido e divergente é recusado.
+suportada), a leitura usa LSTAT e realpath antes de abrir, após abrir e ao final
+da leitura, ainda com o handle aberto. Arquivo regular e metadados válidos são
+obrigatórios antes do OPEN. Depois do OPEN, somente ENOENT nas consultas de
+caminho admite continuar pelo handle: rename/unlink pode retirar o caminho
+sem invalidar a leitura já aberta. Metadados observados continuam exigindo
+tamanho e mtime iguais, mesmo se o realpath seguinte indicar ausência. Não se
+ignoram ENOTDIR, permissão, rede ou ausência em OPEN/READ/FSTAT; FSTAT válido e
+divergente é recusado. O recebimento exige EOF, bytes exatos e todos os limites.
+Não há consultas de caminho após CLOSE. Uma falha no encerramento não substitui
+uma falha anterior de leitura, validação ou armazenamento.
 Somente o código numérico do status é preservado, sem texto remoto. Como no
 fluxo anterior, verificações de metadados detectam trocas observáveis, mas não
 autenticam o conteúdo de um servidor comprometido nem toda troca transitória.
 
 Watchdog encerra o transporte quando o prazo da coleta vence, inclusive durante
-a abertura SFTP. Resolução DNS e leitura local de arquivos pela API legada não
+a abertura SFTP. Pode interromper o transporte durante um commit: a persistência
+antes do CLOSE normal não garante precedência sobre todo encerramento abrupto.
+Resolução DNS e leitura local de arquivos pela API legada não
 são canceláveis pelo watchdog; limites do sistema operacional também se aplicam.
 O formulário de produção usa somente credenciais em memória.
 

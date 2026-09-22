@@ -31,12 +31,14 @@ from app.services.fiserv_sftp import (
     ErroEtapaAutenticacaoFiservSFTP,
     ErroFiservSFTP,
     ErroOperacaoFiservSFTP,
+    ErroPersistenciaFiservSFTP,
     coletar_lote_pendente,
 )
 from app.services.instancia import BRANCH_PRODUCAO
 from app.utils import agora
 
 _LOCK_ID = 718420621
+_MENSAGEM_ARMAZENAMENTO = 'Não foi possível armazenar a coleta. Solicite uma nova tentativa.'
 logger = logging.getLogger(__name__)
 
 
@@ -174,9 +176,11 @@ def executar_ciclo():
                     FiservArquivoRemoto.conferido_em > agora() - timedelta(hours=24),
                 ).all()
                 conhecidos = {(item.nome, item.tamanho, item.modificado_remoto) for item in conferidos}
-                arquivos, mais_pendentes = coletar_lote_pendente(conhecidos, _config_coleta(registro))
                 novos = 0
-                for arquivo in arquivos:
+
+                def receber(arquivo):
+                    __tracebackhide__ = True
+                    nonlocal novos
                     remoto = FiservArquivoRemoto.query.filter_by(
                         nome=arquivo.metadados.nome, versao_configuracao=registro.versao,
                     ).first()
@@ -198,10 +202,15 @@ def executar_ciclo():
                             conteudo_cifrado=cifrar_bytes(arquivo.conteudo),
                             versao_configuracao=registro.versao,
                         ))
-                        novos += 1
                     # Arquivo e metadados são atômicos; uma falha posterior não
-                    # descarta os arquivos íntegros já recebidos neste lote.
+                    # descarta os arquivos íntegros recebidos antes do CLOSE.
                     db.session.commit()
+                    if existe is None:
+                        novos += 1
+
+                _, mais_pendentes = coletar_lote_pendente(
+                    conhecidos, _config_coleta(registro), ao_receber=receber,
+                )
                 registro.ativa = True
                 registro.coleta_solicitada = mais_pendentes
                 registro.estado = 'conectado'
@@ -230,13 +239,17 @@ def executar_ciclo():
             except ErroConexaoFiservSFTP:
                 _registrar_falha(1, False, 'Conexão indisponível no momento. Nova tentativa automática em uma hora.')
                 return 0
+            except ErroPersistenciaFiservSFTP:
+                _registrar_falha(1, True, _MENSAGEM_ARMAZENAMENTO)
+                logger.error('Falha no armazenamento Fiserv; detalhes privados omitidos.')
+                return 0
             except (ErroFiservSFTP, ErroSegredoFiserv, KeyError, ValueError):
                 # Credenciais/host incorretos não são repetidos automaticamente:
                 # evita tentativas sucessivas que bloqueariam a conta na Fiserv.
                 _registrar_falha(1, True, 'Coleta interrompida. Confira o acesso e a identificação do servidor antes de tentar novamente.')
                 return 0
             except Exception:
-                _registrar_falha(1, True, 'Não foi possível armazenar a coleta. Solicite uma nova tentativa.')
+                _registrar_falha(1, True, _MENSAGEM_ARMAZENAMENTO)
                 logger.error('Falha no armazenamento Fiserv; detalhes privados omitidos.')
                 return 0
     except ColetaEmAndamento:

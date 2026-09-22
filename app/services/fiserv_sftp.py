@@ -79,6 +79,13 @@ class ErroLimiteFiservSFTP(ErroFiservSFTP):
     pass
 
 
+class ErroPersistenciaFiservSFTP(ErroFiservSFTP):
+    """Falha local ao guardar um arquivo, sem detalhes da operação privada."""
+
+    def __init__(self):
+        super().__init__('Não foi possível guardar o arquivo Fiserv recebido.')
+
+
 class ErroConexaoFiservSFTP(ErroFiservSFTP):
     pass
 
@@ -842,11 +849,31 @@ def _listar(sftp, pasta, config, prazo):
     return sorted(arquivos, key=lambda arquivo: arquivo.nome)
 
 
-def _verificar_arquivo(sftp, caminho, nome, config, prazo):
+def _verificar_arquivo(sftp, caminho, nome, config, prazo, *, permitir_ausente=False):
+    __tracebackhide__ = True
+    ausente = object()
+
+    def consultar(operacao):
+        __tracebackhide__ = True
+        try:
+            return operacao(caminho)
+        except OSError as exc:
+            # Um handle já aberto pode continuar legível após rename/unlink.
+            # ENOTDIR, permissão e rede não equivalem à ausência do caminho.
+            if permitir_ausente and exc.errno == errno.ENOENT:
+                return ausente
+            raise
+
     _timeout(sftp, config, prazo)
-    metadados = _metadados(nome, _executar_sftp('ARQUIVO_LSTAT', sftp.lstat, caminho), config)
+    atributos = _executar_sftp('ARQUIVO_LSTAT', consultar, sftp.lstat)
+    if atributos is ausente:
+        return None
+    metadados = _metadados(nome, atributos, config)
     _timeout(sftp, config, prazo)
-    if _executar_sftp('ARQUIVO_REALPATH', sftp.normalize, caminho) != caminho:
+    normalizado = _executar_sftp('ARQUIVO_REALPATH', consultar, sftp.normalize)
+    if normalizado is ausente:
+        return metadados
+    if normalizado != caminho:
         raise ErroSegurancaFiservSFTP('Arquivo remoto não pode redirecionar para outro caminho.')
     return metadados
 
@@ -871,7 +898,25 @@ def _metadados_arquivo_aberto(remoto, nome, config):
     return None if atributos is indisponivel else _metadados(nome, atributos, config)
 
 
-def _baixar(sftp, pasta, nome, config, prazo, esperado=None):
+@contextmanager
+def _arquivo_remoto(sftp, caminho):
+    __tracebackhide__ = True
+    remoto = _executar_sftp('ARQUIVO_OPEN', sftp.open, caminho, 'rb', bufsize=0)
+    try:
+        yield remoto
+    finally:
+        erro_em_curso = sys.exc_info()[0] is not None
+        try:
+            _executar_sftp('ENCERRAMENTO', remoto.close)
+        except ErroFiservSFTP:
+            if not erro_em_curso:
+                raise
+        except Exception:
+            if not erro_em_curso:
+                raise ErroOperacaoFiservSFTP('ENCERRAMENTO', 'OUTRO') from None
+
+
+def _baixar(sftp, pasta, nome, config, prazo, esperado=None, *, ao_receber=None):
     __tracebackhide__ = True  # Não enviar conteúdo bancário em eventos de exceção.
     caminho = posixpath.join(pasta, _nome_seguro(nome))
     antes = _verificar_arquivo(sftp, caminho, nome, config, prazo)
@@ -881,11 +926,12 @@ def _baixar(sftp, pasta, nome, config, prazo, esperado=None):
         raise ErroSegurancaFiservSFTP('Arquivo Fiserv mudou após a listagem; tente novamente.')
     conteudo = bytearray()
     _timeout(sftp, config, prazo)
-    with _executar_sftp('ARQUIVO_OPEN', sftp.open, caminho, 'rb', bufsize=0) as remoto:
+    with _arquivo_remoto(sftp, caminho) as remoto:
         _timeout(sftp, config, prazo)
         aberto = _metadados_arquivo_aberto(remoto, nome, config)
+        caminho_aberto = _verificar_arquivo(sftp, caminho, nome, config, prazo, permitir_ausente=True)
         if ((aberto is not None and aberto != antes)
-                or _verificar_arquivo(sftp, caminho, nome, config, prazo) != antes):
+                or (caminho_aberto is not None and caminho_aberto != antes)):
             raise ErroSegurancaFiservSFTP('Arquivo Fiserv mudou antes da leitura; tente novamente.')
         while True:
             _timeout(sftp, config, prazo)
@@ -897,15 +943,24 @@ def _baixar(sftp, pasta, nome, config, prazo, esperado=None):
                 raise ErroLimiteFiservSFTP('Arquivo Fiserv excedeu o tamanho informado durante a leitura.')
         _timeout(sftp, config, prazo)
         depois = _metadados_arquivo_aberto(remoto, nome, config) if aberto is not None else None
-    # SFTP v3 não oferece OPEN_NOFOLLOW: as verificações antes/depois recusam
-    # links e trocas observáveis, mas não autenticam o conteúdo de um servidor
-    # comprometido. A confiança no host provisionado continua obrigatória.
-    final = _verificar_arquivo(sftp, caminho, nome, config, prazo)
-    if (len(conteudo) != antes.tamanho or (depois is not None and depois != antes)
-            or final != antes):
-        raise ErroSegurancaFiservSFTP('Arquivo Fiserv mudou durante a leitura; tente novamente.')
-    dados = bytes(conteudo)
-    return ArquivoFiserv(metadados=antes, conteudo=dados, sha256=hashlib.sha256(dados).hexdigest())
+        # Conferir enquanto o handle está aberto: caixas de arquivos podem
+        # retirar o caminho durante a leitura ou quando o download é encerrado.
+        # SFTP v3 não oferece OPEN_NOFOLLOW; detectamos trocas observáveis, sem
+        # autenticar o conteúdo de um servidor comprometido. O pin é obrigatório.
+        final = _verificar_arquivo(sftp, caminho, nome, config, prazo, permitir_ausente=True)
+        if (len(conteudo) != antes.tamanho or (depois is not None and depois != antes)
+                or (final is not None and final != antes)):
+            raise ErroSegurancaFiservSFTP('Arquivo Fiserv mudou durante a leitura; tente novamente.')
+        dados = bytes(conteudo)
+        arquivo = ArquivoFiserv(metadados=antes, conteudo=dados, sha256=hashlib.sha256(dados).hexdigest())
+        if ao_receber is not None:
+            try:
+                # Guarda durável por arquivo antes do CLOSE normal, sem esperar
+                # que todos os demais downloads do lote também terminem.
+                ao_receber(arquivo)
+            except Exception:
+                raise ErroPersistenciaFiservSFTP() from None
+    return arquivo
 
 
 def listar_arquivos(config: ConfigFiservSFTP | None = None) -> list[MetadadosArquivoFiserv]:
@@ -940,16 +995,20 @@ def coletar_arquivos(config: ConfigFiservSFTP | None = None) -> list[ArquivoFise
         return [_baixar(sftp, pasta, item.nome, config, prazo, esperado=item) for item in metadados]
 
 
-def coletar_lote_pendente(conhecidos, config=None, max_baixas=20):
+def coletar_lote_pendente(conhecidos, config=None, max_baixas=20, *, ao_receber=None):
     """Lote incremental: históricos conhecidos não ocupam o limite de download.
 
     ``conhecidos`` contém tuplas (nome, tamanho, mtime) conferidas recentemente.
     O chamador deve expirar esse cache e revalidar conteúdo periodicamente.
     Retorna (arquivos, há_mais_pendentes); todos os acessos continuam só leitura.
+    ``ao_receber``, se fornecido, deve guardar cada arquivo completo antes que
+    seu handle seja fechado normalmente. Uma falha interrompe o restante do lote.
     """
     __tracebackhide__ = True
     if type(max_baixas) is not int or not 1 <= max_baixas <= 100:
         raise ErroConfiguracaoFiservSFTP(invalidos=('max_baixas',))
+    if ao_receber is not None and not callable(ao_receber):
+        raise ErroConfiguracaoFiservSFTP(invalidos=('ao_receber',))
     config = config or ConfigFiservSFTP.from_env()
     with _conectar(config) as (sftp, prazo):
         pasta = _pasta_disponivel(sftp, config, prazo)
@@ -964,5 +1023,6 @@ def coletar_lote_pendente(conhecidos, config=None, max_baixas=20):
                 raise ErroLimiteFiservSFTP('Arquivo Fiserv excede o limite total de bytes por coleta.')
             lote.append(item)
             tamanho += item.tamanho
-        arquivos = [_baixar(sftp, pasta, item.nome, config, prazo, esperado=item) for item in lote]
+        arquivos = [_baixar(sftp, pasta, item.nome, config, prazo, esperado=item,
+                           ao_receber=ao_receber) for item in lote]
         return arquivos, len(pendentes) > len(lote)
