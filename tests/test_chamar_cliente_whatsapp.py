@@ -180,12 +180,14 @@ def test_endpoint_chama_e_devolve_conv_id(app, admin_user):
     _login(client, admin_user)
     with patch('app.services.chatwoot.iniciar_conversa_whatsapp',
                return_value={'ok': True, 'conversation_id': 900,
-                             'nova': True, 'erro': None}) as m:
+                             'nova': True, 'erro': None, 'aberta': True}) as m:
         r = client.post('/entregas/api/atendimento/chamar-cliente',
                         json={'codigo': 'ABC123'})
     assert r.status_code == 200
     d = r.get_json()
     assert d['ok'] is True and d['conversation_id'] == 900 and d['nome'] == 'Simone'
+    # `aberta` chega ao painel (False = ficou na fila do bot; o front avisa)
+    assert d['aberta'] is True
     # passou telefone + nome + params [nome, codigo] pro serviço
     args, kwargs = m.call_args
     assert args[0] == '11999998888' and args[1] == 'Simone'
