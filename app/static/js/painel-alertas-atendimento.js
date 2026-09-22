@@ -409,27 +409,42 @@
       atualizarErro();
     });
     document.addEventListener('atendimento:atualizado', function () { consultar(true); });
-    document.addEventListener('input', function (evento) {
-      if (evento.target && evento.target.id === 'compose-texto' && !haRascunho()) mostrar(false);
-    });
     document.addEventListener('compositionstart', function (evento) {
       if (evento.target && evento.target.id === 'compose-texto') compondo = true;
     });
     document.addEventListener('compositionend', function (evento) {
-      if (evento.target && evento.target.id === 'compose-texto') {
-        compondo = false;
-        mostrar(false);
-      }
+      if (evento.target && evento.target.id === 'compose-texto') compondo = false;
     });
+    // A thread abre/fecha por vários caminhos (lista, vigia, "Chamar",
+    // "Voltar", resolver): abriu com o cartão na frente → o cartão sai da
+    // frente; voltou à lista → cobra na hora, sem esperar o poll.
+    var threadEl = document.getElementById('at-thread');
+    if (threadEl && typeof window.MutationObserver === 'function') {
+      new window.MutationObserver(function () {
+        if (threadAberta()) {
+          if (dialog.open) fechar();
+          pararSom();
+        } else {
+          mostrar(false);
+        }
+        agendarSom();
+      }).observe(threadEl, { attributes: true, attributeFilter: ['class'] });
+    }
     ['click', 'pointerdown', 'keydown', 'touchend'].forEach(function (tipo) {
       window.addEventListener(tipo, function (evento) {
-        if (evento.isTrusted && !evento.repeat) armarSom();
+        if (evento.isTrusted && !evento.repeat) {
+          ultimaAtividade = Date.now();
+          armarSom();
+        }
       }, { passive: true });
     });
     window.addEventListener('message', function (evento) {
       var painel = document.querySelector('#pane-painel iframe');
       if (evento.origin !== window.location.origin || !painel || evento.source !== painel.contentWindow) return;
-      if (evento.data && evento.data.tipo === 'painel-audio-armado') armarSom();
+      if (evento.data && evento.data.tipo === 'painel-audio-armado') {
+        ultimaAtividade = Date.now();
+        armarSom();
+      }
     });
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) pararSom();
