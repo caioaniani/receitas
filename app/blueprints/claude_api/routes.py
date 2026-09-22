@@ -2752,3 +2752,77 @@ def chatwoot_thread():
 
     return jsonify(ok=True, conv=conv, total=len(msgs),
                    duplicatas=duplicatas, mensagens=msgs)
+
+
+@claude_api_bp.route('/atendimento-painel')
+@_claude_auth_required
+def atendimento_painel():
+    """Sonda da coluna "Atendimento" do /entregas/painel (22/09/2026).
+
+    Caso real: atendente avisou "não consigo acessar meu chat, e o da TV
+    não abre". O container de desenvolvimento não alcança o host do
+    Chatwoot (proxy corta) e a coluna do painel exige sessão web — de fora
+    não dava pra saber se a listagem que o painel consome estava falhando.
+    Reproduz DO SERVIDOR o que o painel chama (`chatwoot.listar_conversas`
+    com `estrito=True`, open e pending, com o tempo gasto), mede a latência
+    CRUA do `GET /conversations` com timeout largo (distingue "lento demais
+    para o timeout de 3+5 s do painel" de "Chatwoot fora"), roda
+    `chatwoot.diagnostico()` (servidor/tokens/inboxes, sem segredos — a
+    mesma bateria do /admin/debug-chatwoot) e, com `?conv=<id>`, os erros
+    de envio do canal Meta (`chatwoot.erros_de_envio`). Read-only estrito;
+    a amostra da listagem sai sem nome de contato nem texto.
+    """
+    import time as _time
+
+    from app.services import chatwoot
+
+    def _erro(exc):
+        return f'{type(exc).__name__}: {str(exc)[:200]}'
+
+    out = {'ok': True, 'listagem': {}, 'listagem_crua': None, 'diagnostico': None}
+    for st in ('open', 'pending'):
+        t0 = _time.monotonic()
+        try:
+            cs = chatwoot.listar_conversas(status=st, limite=40, estrito=True)
+            out['listagem'][st] = {
+                'ok': True, 'ms': int((_time.monotonic() - t0) * 1000), 'n': len(cs),
+                'amostra': [{'id': c.get('id'), 'status': c.get('status'),
+                             'canal': c.get('canal'), 'ultima_em': c.get('ultima_em'),
+                             'nao_lidas': c.get('nao_lidas')} for c in cs[:8]],
+            }
+        except Exception as exc:  # noqa: BLE001 — sonda nunca 500
+            out['listagem'][st] = {'ok': False, 'ms': int((_time.monotonic() - t0) * 1000),
+                                   'erro': _erro(exc)}
+
+    # Latência crua da MESMA chamada, com timeout largo: se aqui responde
+    # 200 em 9 s, o painel (3+5 s, `chatwoot._consultar_conversas`) falha
+    # por tempo, não por indisponibilidade.
+    if chatwoot.disponivel():
+        t0 = _time.monotonic()
+        try:
+            import requests as _requests
+            r = _requests.get(f'{chatwoot._base()}/conversations',
+                              headers=chatwoot._headers(),
+                              params={'status': 'open', 'page': 1}, timeout=(5, 25))
+            out['listagem_crua'] = {'http': r.status_code,
+                                    'ms': int((_time.monotonic() - t0) * 1000),
+                                    'bytes': len(r.content or b'')}
+        except Exception as exc:  # noqa: BLE001
+            out['listagem_crua'] = {'http': None,
+                                    'ms': int((_time.monotonic() - t0) * 1000),
+                                    'erro': _erro(exc)}
+    else:
+        out['listagem_crua'] = {'http': None, 'erro': 'CHATWOOT_API_TOKEN nao configurado'}
+
+    try:
+        out['diagnostico'] = chatwoot.diagnostico()
+    except Exception as exc:  # noqa: BLE001
+        out['diagnostico'] = {'erro': _erro(exc)}
+
+    conv = (request.args.get('conv') or '').strip()
+    if conv:
+        try:
+            out['erros_envio'] = chatwoot.erros_de_envio(conv, limite=10)
+        except Exception as exc:  # noqa: BLE001
+            out['erros_envio'] = {'ok': False, 'erro': _erro(exc)}
+    return jsonify(out)
