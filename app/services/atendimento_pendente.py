@@ -186,6 +186,11 @@ def preparar(conversa, historico, *, min_minutos=10):
     elif row.estado in ('resolvido', 'respondido', 'sem_cliente'):
         if row.estado in ('resolvido', 'sem_cliente'):
             row.grave = False
+        if row.estado == 'sem_cliente' and row.resolvido_em and inicio <= row.resolvido_em:
+            # Mantém o invariante `inicio_em > resolvido_em` que o painel e
+            # `candidatos` usam; os ALTAs fantasmas (anteriores à marcação)
+            # já ficaram fora de `graves` acima, calculado com o valor antigo.
+            row.resolvido_em = inicio - timedelta(seconds=1)
         row.inicio_em = inicio
         row.proximo_aviso_em = None
         row.estado = 'aguardando'
