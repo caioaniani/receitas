@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% set atualizar_coleta = estado and coleta_disponivel and not proposta and (estado.solicitada or estado.estado == 'coletando') %}
 {% block title %}Recebimentos Fiserv{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
@@ -15,6 +16,7 @@
     {% set rotulos = {'aguardando': 'Aguardando primeira coleta', 'coletando': 'Coleta em andamento', 'conectado': 'Conectado', 'erro': 'Precisa de atenção', 'pausado': 'Pausado'} %}
     <p><strong>{{ rotulos.get(estado.estado, 'Em preparação') }}</strong> · {{ 'Automático ativo' if estado.ativa else 'Automático ainda não ativo' }}</p>
     {% if estado.mensagem %}<p>{{ estado.mensagem }}</p>{% endif %}
+    {% if atualizar_coleta %}<p id="fiserv-atualizacao" class="text-muted small" role="status">O resultado da coleta aparecerá aqui automaticamente.</p>{% endif %}
     <dl class="row mb-3">
       <dt class="col-sm-4">Última tentativa</dt><dd class="col-sm-8">{{ estado.ultima_tentativa.strftime('%d/%m/%Y às %H:%M') if estado.ultima_tentativa else 'Ainda não realizada' }}</dd>
       <dt class="col-sm-4">Última coleta concluída</dt><dd class="col-sm-8">{{ estado.ultimo_sucesso.strftime('%d/%m/%Y às %H:%M') if estado.ultimo_sucesso else 'Ainda não realizada' }}</dd>
@@ -68,4 +70,30 @@
   <nav class="d-flex gap-2" aria-label="Páginas de arquivos">{% if pagina.has_prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fiserv.index', pagina=pagina.prev_num) }}">Anteriores</a>{% endif %}{% if pagina.has_next %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fiserv.index', pagina=pagina.next_num) }}">Próximos</a>{% endif %}</nav>
   {% else %}<p class="mb-0">Ainda não há arquivos recebidos.</p>{% endif %}
 </div></div>
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+{% if atualizar_coleta %}
+<script>
+(() => {
+  let editando = false;
+  const pausarAtualizacao = () => {
+    editando = true;
+    document.getElementById('fiserv-atualizacao').textContent = 'Atualização automática pausada enquanto você edita. Use Atualizar para conferir a coleta.';
+  };
+  ['input', 'change', 'submit'].forEach(evento => {
+    document.addEventListener(evento, pausarAtualizacao, {once: true, capture: true});
+  });
+  const atualizar = () => {
+    if (editando) return;
+    if (document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) {
+      window.setTimeout(atualizar, 15000);
+      return;
+    }
+    window.location.replace({{ url_for('fiserv.index', pagina=pagina.page)|tojson }});
+  };
+  window.setTimeout(atualizar, 15000);
+})();
+</script>
+{% endif %}
 {% endblock %}

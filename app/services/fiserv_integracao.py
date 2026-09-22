@@ -28,6 +28,7 @@ from app.services.fiserv_sftp import (
     ErroAcessoFiservSFTP,
     ErroAutenticacaoFiservSFTP,
     ErroConexaoFiservSFTP,
+    ErroEtapaAutenticacaoFiservSFTP,
     ErroFiservSFTP,
     ErroOperacaoFiservSFTP,
     coletar_lote_pendente,
@@ -210,6 +211,10 @@ def executar_ciclo():
                 db.session.add(EventoFiserv(acao='coleta_concluida', arquivos_novos=novos))
                 db.session.commit()
                 return novos
+            except ErroEtapaAutenticacaoFiservSFTP as exc:
+                # Somente etapa e motivo locais; não inclui resposta do servidor.
+                _registrar_falha(1, True, str(exc))
+                return 0
             except ErroAutenticacaoFiservSFTP:
                 _registrar_falha(1, True, 'A Fiserv recusou o acesso. Confira as credenciais antes de solicitar nova coleta.')
                 return 0

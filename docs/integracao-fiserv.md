@@ -38,6 +38,13 @@ Um desafio interativo admite apenas uma resposta de senha, sem terminal ou OTP.
 A abertura do canal, a ativação do subsistema e a negociação SFTP têm
 diagnósticos separados, preservando a conferência da identidade do servidor.
 
+Falhas de autenticação também distinguem a etapa da chave, senha, desafio
+interativo e confirmação final, usando apenas códigos locais e mensagens
+fixas. A recusa de uma etapa não é apresentada como prova de senha incorreta.
+Enquanto uma coleta está pendente ou em andamento, o painel atualiza o resultado
+a cada 15 segundos. A atualização para ao editar qualquer campo e não é ativada
+no formulário que recebe as credenciais, preservando o preenchimento do owner.
+
 Os arquivos recebidos são preservados cifrados e podem ser baixados pelo owner.
 Este estágio recebe o EDI original: **não normaliza ou soma os valores no caixa**.
 Os cinco leiautes (vendas, pagamentos, recebíveis, PIX e voucher) ainda precisam
