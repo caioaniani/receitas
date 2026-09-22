@@ -1150,6 +1150,19 @@ def texto_da_mensagem(m):
     return c
 
 
+def cliente_ja_falou(historico):
+    """True se há ao menos uma fala do CLIENTE (`role == 'user'`) no
+    histórico. Conversa INICIADA PELA EQUIPE ("Chamar cliente": template +
+    mensagens nossas) sem nenhuma fala dele não é conversa do bot nem
+    espera de atendimento. Caso 2429 (22/09/2026): a conversa nasceu na
+    fila do bot, levou follow-up, virou "ABANDONO" (ALTA + WhatsApp) e
+    cobrança "Urgente" no painel a manhã inteira — e quando a equipe abria,
+    "não tinha conversa nenhuma". Fonte única para follow-up, vigia de
+    abandono e espera-humana."""
+    return any(isinstance(m, dict) and m.get('role') == 'user'
+               for m in (historico or []))
+
+
 def salvar_historico(conv_id, historico, resposta, *, handoff=False,
                      contato_key=None):
     """Persiste o turno no nosso banco: o historico efetivo (que JA inclui a
