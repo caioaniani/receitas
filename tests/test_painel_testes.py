@@ -229,6 +229,20 @@ def test_api_conversa_thread(app, monkeypatch):
     assert [m['content'] for m in j['mensagens']] == ['tem cesta?', 'temos sim!']
 
 
+def test_api_conversa_thread_repassa_falha_de_entrega(app, monkeypatch):
+    """Bolha "⚠ Não entregue" (caso 2429, 22/09/2026): a thread repassa
+    `entregue`/`erro_canal` que `buscar_historico` anota da Meta."""
+    from app.services import chatwoot
+    monkeypatch.setattr(
+        chatwoot, 'buscar_historico',
+        lambda cid, **k: [{'role': 'assistant', 'content': 'Olá', 'entregue': False,
+                           'erro_canal': '131026: Message undeliverable'}])
+    c = _staff(app)
+    j = c.get('/entregas/api/atendimento/conversa/2429').get_json()
+    assert j['mensagens'][0]['entregue'] is False
+    assert '131026' in j['mensagens'][0]['erro_canal']
+
+
 def test_debug_owner_mostra_contagem_por_status(app, monkeypatch):
     """Debug owner-only: lista quantas conversas vem em cada status."""
     from app.services import chatwoot
