@@ -1039,6 +1039,7 @@ def test_atendimento_painel_falha_da_listagem_fica_visivel_sem_500(app, monkeypa
         raise chatwoot.ChatwootConsultaError('Atendimento indisponível')
     monkeypatch.setattr(chatwoot, 'listar_conversas', _boom)
     monkeypatch.setattr(chatwoot, 'disponivel', lambda: False)
+    monkeypatch.setattr(chatwoot, 'painel_disponivel', lambda: False)
     monkeypatch.setattr(chatwoot, 'diagnostico', lambda: {'servidor_http': None})
     r = app.test_client().get('/api/claude/atendimento-painel',
                               headers={'Authorization': f'Bearer {TOKEN}'})
@@ -1046,7 +1047,33 @@ def test_atendimento_painel_falha_da_listagem_fica_visivel_sem_500(app, monkeypa
     d = r.get_json()
     assert d['listagem']['open']['ok'] is False
     assert 'ChatwootConsultaError' in d['listagem']['open']['erro']
+    # Falha RAPIDA (401 etc.) nao e "estourou o tempo": o diagnostico roda.
+    assert d['diagnostico'] == {'servidor_http': None}
     assert 'erros_envio' not in d
+
+
+def test_atendimento_painel_listagens_estouradas_omitem_o_resto(app, monkeypatch):
+    """Orcamento de tempo: com o Chatwoot pendurado, as duas listagens
+    demoram >15 s cada e o diagnostico/perfil sao OMITIDOS (senao a sonda
+    passaria do --timeout 120 do gunicorn e morreria sem resposta)."""
+    from app.services import chatwoot
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    relogio = iter([0.0, 16.5, 20.0, 36.5])  # (t0, t1) por listagem, em segundos
+
+    def _boom(status='open', limite=40, estrito=False):
+        raise chatwoot.ChatwootConsultaError('Atendimento indisponível')
+    monkeypatch.setattr(chatwoot, 'listar_conversas', _boom)
+    monkeypatch.setattr(chatwoot, 'disponivel', lambda: False)
+    monkeypatch.setattr(chatwoot, 'painel_disponivel', lambda: True)
+    monkeypatch.setattr(chatwoot, 'diagnostico',
+                        lambda: (_ for _ in ()).throw(AssertionError('nao deveria rodar')))
+    monkeypatch.setattr('time.monotonic', lambda: next(relogio))
+    r = app.test_client().get('/api/claude/atendimento-painel',
+                              headers={'Authorization': f'Bearer {TOKEN}'})
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d['listagem']['open']['ms'] == 16500 and d['listagem']['pending']['ms'] == 16500
+    assert 'pulado' in d['diagnostico'] and 'pulado' in d['painel_token']
 
 
 def test_atendimento_painel_exige_token(app):
