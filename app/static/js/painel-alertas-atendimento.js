@@ -86,6 +86,12 @@
       return compondo || Boolean(compose && compose.value.length);
     }
 
+    function threadAberta() {
+      // Conversa aberta na coluna da direita = alguém está atendendo.
+      var thread = document.getElementById('at-thread');
+      return Boolean(thread && !thread.classList.contains('hidden'));
+    }
+
     function pararSom() {
       clearTimeout(timerSom);
       timerSom = null;
