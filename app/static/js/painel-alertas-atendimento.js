@@ -87,9 +87,23 @@
     }
 
     function threadAberta() {
-      // Conversa aberta na coluna da direita = alguém está atendendo.
+      // Conversa aberta na coluna da direita.
       var thread = document.getElementById('at-thread');
       return Boolean(thread && !thread.classList.contains('hidden'));
+    }
+
+    // "Alguém está atendendo" = conversa aberta OU rascunho, COM atividade
+    // recente nesta página. Sem a janela de atividade, uma thread esquecida
+    // aberta na TV (a própria foto do caso) silenciaria o cartão por dias, e
+    // um rascunho deixado ao clicar "Voltar" o bloquearia para sempre
+    // (revisão 22/09/2026).
+    var ultimaAtividade = Date.now();
+    var inatividadeMs = 10 * 60 * 1000;
+    function atividadeRecente() {
+      return Date.now() - ultimaAtividade < inatividadeMs;
+    }
+    function atendendo() {
+      return atividadeRecente() && (threadAberta() || haRascunho());
     }
 
     function pararSom() {
