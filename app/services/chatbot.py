@@ -2119,6 +2119,8 @@ def followup_conversas_paradas():
             conv_id, incluir_autoria=True, somente_bot=True)
         if not historico:
             continue
+        if not cliente_ja_falou(historico):
+            continue  # conversa iniciada pela equipe: o bot não cutuca quem nunca falou com ele
         if _tem_encaminhamento_humano(carregar_historico(conv_id)):
             continue  # um encaminhamento humano não vence por tempo
         # Ultima mensagem tem que ser NOSSA (cliente silencioso).
