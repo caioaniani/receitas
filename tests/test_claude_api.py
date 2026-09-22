@@ -990,3 +990,63 @@ def test_alertas_debug_expoe_envios_automacoes_e_mapas(app):
          if x['seru_company_name'] == 'O PAO TESTE'][0]
     assert m['confirmado_em'] is None
     assert 'pdv_vigia_ultima_assinatura' in d['pdv_vigia']
+
+
+# ── /atendimento-painel (22/09/2026, caso "não consigo acessar meu chat") ──
+
+def test_atendimento_painel_reproduz_listagem_diagnostico_e_erros_de_envio(app, monkeypatch):
+    from app.services import chatwoot
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    chamadas = []
+
+    def _listar(status='open', limite=40, estrito=False):
+        chamadas.append((status, limite, estrito))
+        return [{'id': 7, 'contato': 'Fulana PII', 'preview': 'texto PII',
+                 'status': status, 'canal': 'Channel::Whatsapp',
+                 'ultima_em': 1700000000, 'nao_lidas': 2}]
+    monkeypatch.setattr(chatwoot, 'listar_conversas', _listar)
+    # Sem token configurado a sonda pula o GET cru (nada de rede no teste).
+    monkeypatch.setattr(chatwoot, 'disponivel', lambda: False)
+    monkeypatch.setattr(chatwoot, 'diagnostico', lambda: {'servidor_http': 200, 'saudavel': True})
+    monkeypatch.setattr(chatwoot, 'erros_de_envio',
+                        lambda conv, limite=10: {'ok': True, 'conv': conv,
+                                                 'qtd_falhas': 0, 'falhas': []})
+    r = app.test_client().get('/api/claude/atendimento-painel?conv=7',
+                              headers={'Authorization': f'Bearer {TOKEN}'})
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d['ok'] is True
+    # Exatamente o que o painel chama: estrito=True, open e pending.
+    assert ('open', 40, True) in chamadas and ('pending', 40, True) in chamadas
+    aberta = d['listagem']['open']
+    assert aberta['ok'] is True and aberta['n'] == 1 and aberta['amostra'][0]['id'] == 7
+    # A amostra NAO carrega nome nem texto do contato.
+    assert 'contato' not in aberta['amostra'][0] and 'preview' not in aberta['amostra'][0]
+    assert d['listagem_crua']['http'] is None
+    assert d['diagnostico']['servidor_http'] == 200
+    assert d['erros_envio']['ok'] is True and d['erros_envio']['conv'] == '7'
+
+
+def test_atendimento_painel_falha_da_listagem_fica_visivel_sem_500(app, monkeypatch):
+    from app.services import chatwoot
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+
+    def _boom(status='open', limite=40, estrito=False):
+        raise chatwoot.ChatwootConsultaError('Atendimento indisponível')
+    monkeypatch.setattr(chatwoot, 'listar_conversas', _boom)
+    monkeypatch.setattr(chatwoot, 'disponivel', lambda: False)
+    monkeypatch.setattr(chatwoot, 'diagnostico', lambda: {'servidor_http': None})
+    r = app.test_client().get('/api/claude/atendimento-painel',
+                              headers={'Authorization': f'Bearer {TOKEN}'})
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d['listagem']['open']['ok'] is False
+    assert 'ChatwootConsultaError' in d['listagem']['open']['erro']
+    assert 'erros_envio' not in d
+
+
+def test_atendimento_painel_exige_token(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    r = app.test_client().get('/api/claude/atendimento-painel',
+                              headers={'Authorization': 'Bearer errado'})
+    assert r.status_code == 401
