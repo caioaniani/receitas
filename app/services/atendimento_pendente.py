@@ -64,7 +64,11 @@ def _instante(mensagem, fallback):
 
 def _acompanhar_ate_resolver(row, base, min_minutos=10):
     """Resposta não apaga um alerta; atendimento rápido sem alerta não vira incidente."""
-    if not row or row.estado == 'resolvido':
+    # `sem_cliente` é terminal como `resolvido`: sem fala do cliente não há
+    # episódio a acompanhar (revisão 22/09/2026 — sem isto, um "Sim"/"Ok"
+    # ao template caía no ramo de fechamento com `grave` e virava
+    # "Caso grave ainda aberto" a cada 15 min).
+    if not row or row.estado in ('resolvido', 'sem_cliente'):
         return False
     if row.grave or row.estado == 'em_atendimento' or row.proximo_aviso_em:
         return True
