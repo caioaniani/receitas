@@ -337,11 +337,17 @@ def _run_vigia_abandono(app):
                     if not historico:
                         continue
                     try:
-                        chatbot_vigia.avaliar_abandono(
+                        res = chatbot_vigia.avaliar_abandono(
                             historico, conv_id=conv_id,
                             nome_contato=c.get('nome_contato') or '',
                             minutos_sem_resposta=c.get('minutos_paradas', min_minutos))
-                        avaliadas += 1
+                        # Conversa PULADA sem avaliar (iniciada pela equipe,
+                        # menção de story...) não gasta a vaga do ciclo: o
+                        # teto freia WhatsApp/modelo, não GETs (revisão
+                        # 22/09/2026). O set em memória abaixo segue
+                        # marcando — anti-spam de GET até o próximo boot.
+                        if not (isinstance(res, dict) and res.get('pulou')):
+                            avaliadas += 1
                     except Exception:
                         logger.exception('vigia abandono falhou conv=%s', conv_id)
                     # Marca como avisado mesmo se o vigia decidiu silenciar — anti-spam.
