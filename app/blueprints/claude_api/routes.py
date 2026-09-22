@@ -2815,21 +2815,34 @@ def atendimento_painel():
     else:
         out['listagem_crua'] = {'http': None, 'erro': 'CHATWOOT_API_TOKEN nao configurado'}
 
-    try:
-        out['diagnostico'] = chatwoot.diagnostico()
-    except Exception as exc:  # noqa: BLE001
-        out['diagnostico'] = {'erro': _erro(exc)}
+    # Orcamento de tempo (revisao 22/09/2026): com o Chatwoot pendurado, as
+    # duas listagens (2 tentativas de 3+5 s cada) + a crua ja passam de
+    # 40 s; rodar ainda `diagnostico()` (4 chamadas de 8 s) e o perfil
+    # estouraria o `--timeout 120` do gunicorn e a sonda morreria sem
+    # resposta. Se as DUAS listagens falharam por tempo, o resto e omitido
+    # de proposito — o diagnostico ja esta dado.
+    estourou = bool(out['listagem']) and all(
+        not v.get('ok') and v.get('ms', 0) >= 15000 for v in out['listagem'].values())
+    if estourou:
+        out['diagnostico'] = {'pulado': 'as duas listagens estouraram o tempo — Chatwoot nao '
+                                        'responde; diagnostico omitido para caber no timeout'}
+    else:
+        try:
+            out['diagnostico'] = chatwoot.diagnostico()
+        except Exception as exc:  # noqa: BLE001
+            out['diagnostico'] = {'erro': _erro(exc)}
 
     # Terceiro token: o do agente "Painel" (CHATWOOT_PAINEL_TOKEN), usado
     # SO para ENVIAR pelo painel (`chatwoot.enviar_mensagem_painel`). O
     # `diagnostico()` nao o cobre; com ele invalido a lista carrega e o
     # envio falha com HTTP 401. GET /profile e read-only e valida o token.
-    if chatwoot.painel_disponivel():
+    if estourou:
+        out['painel_token'] = {'pulado': 'listagens estouraram o tempo'}
+    elif chatwoot.painel_disponivel():
         try:
-            import requests as _requests
             base_url = (current_app.config.get('CHATWOOT_URL') or '').strip().rstrip('/')
             r = _requests.get(f'{base_url}/api/v1/profile',
-                              headers=chatwoot._painel_headers(), timeout=(5, 10))
+                              headers=chatwoot._painel_headers(), timeout=(3, 6))
             perfil = {}
             if r.status_code == 200:
                 try:
