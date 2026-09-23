@@ -1016,21 +1016,26 @@ def _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente,
     }
 
 
-def consultar_pedido(numero, *, telefone_contato=None, cpf_cliente=None):
+def consultar_pedido(numero, *, telefone_contato=None, cpf_cliente=None,
+                     email_cliente=None):
     """Status + DATA DE ENTREGA de um pedido pelo número — ou, SEM número,
-    pelos pedidos recentes do telefone do canal (fail-closed).
+    pelos pedidos recentes do telefone do canal ou do e-mail informado
+    (fail-closed).
 
     Com número: procura PRIMEIRO no NOSSO banco (PedidoOnline, opao.online);
     se o número não for de lá, cai pro VNDA (site antigo, em paralelo na
     transição).
 
     AUTORIZACAO (nos dois): exige que o solicitante seja o dono — match por
-    telefone do canal (Chatwoot) OU CPF informado. Sem isso devolve
-    autorizacao_necessaria (NAO expoe que o pedido existe)."""
+    telefone do canal (Chatwoot), CPF ou e-mail informado (site). Sem isso
+    devolve autorizacao_necessaria (NAO expoe ao modelo que o pedido
+    existe; a nota interna do handoff registra)."""
     code = str(numero or '').strip()
     if not code:
-        return _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente)
-    nativo = _consultar_pedido_online(code, telefone_contato, cpf_cliente)
+        return _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente,
+                                              email_cliente)
+    nativo = _consultar_pedido_online(code, telefone_contato, cpf_cliente,
+                                      email_cliente)
     if nativo is not None:
         return nativo
     return _consultar_pedido_vnda(code, telefone_contato, cpf_cliente)
