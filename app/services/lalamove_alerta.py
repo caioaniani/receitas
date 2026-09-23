@@ -244,7 +244,11 @@ def _executar_rede(app, veredito_id, texto, conv_id, telefone_cliente):
         try:
             numero = loja_alerta._numero_destino()
             if numero:
-                res = zapi.enviar_texto(numero, texto, critico=True)
+                critico = _critico_permitido()
+                if not critico:
+                    texto += ('\n(alerta além do limite de críticos desta hora — '
+                              'os demais seguem no painel de entregas)')
+                res = zapi.enviar_texto(numero, texto, critico=critico)
                 enviado = bool(isinstance(res, dict) and res.get('ok'))
             else:
                 logger.info('lalamove_alerta: sem numero de destino do dono')
