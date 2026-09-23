@@ -233,7 +233,11 @@ def test_resposta_humana_anterior_ao_alerta_nao_resolve(app):
         assert _pendentes_ids() == [v.id]
 
 
-def test_conversa_resolvida_no_chatwoot_resolve_pelo_candidatos(app):
+def test_conversa_resolvida_no_chatwoot_nao_fecha_o_alerta(app):
+    """Conversa `resolved` no Chatwoot encerra a ESPERA (episódio da
+    conversa), mas NÃO o alerta ALTA: o status não diz quem resolveu — o
+    próprio bot marca resolved num "obrigada" — e a spec só aceita resposta
+    humana ou motivo por escrito (revisão 23/09/2026)."""
     from unittest.mock import patch
 
     from app.models import EsperaAtendimento, VigiaAlertaResolucao
@@ -248,11 +252,12 @@ def test_conversa_resolvida_no_chatwoot_resolve_pelo_candidatos(app):
                       return_value={'id': 800, 'status': 'resolved'}), \
                 patch('app.services.presenca_humana.encerrar'):
             atendimento_pendente.candidatos()
-        assert _pendentes_ids() == []
-        assert VigiaAlertaResolucao.query.filter_by(veredito_id=v.id).one().via == 'conversa_resolvida'
+        assert EsperaAtendimento.query.get('800').estado == 'resolvido'
+        assert _pendentes_ids() == [v.id]
+        assert VigiaAlertaResolucao.query.filter_by(veredito_id=v.id).first() is None
 
 
-def test_webhook_status_resolved_resolve_alertas(app):
+def test_webhook_status_resolved_nao_fecha_o_alerta(app):
     from app.models import VigiaAlertaResolucao
     with app.app_context():
         app.config['CHATWOOT_BOT_SECRET'] = 'seg'
@@ -265,7 +270,16 @@ def test_webhook_status_resolved_resolve_alertas(app):
                                             'conversation': {'id': 900, 'status': 'resolved'}})
     assert r.status_code == 200
     with app.app_context():
-        assert VigiaAlertaResolucao.query.filter_by(veredito_id=vid).one().via == 'conversa_resolvida'
+        assert VigiaAlertaResolucao.query.filter_by(veredito_id=vid).first() is None
+        assert _pendentes_ids() == [vid]
+
+
+def test_via_conversa_resolvida_nao_existe(app):
+    from app.services import chatbot_vigia
+    with app.app_context():
+        v = _alerta()
+        with pytest.raises(ValueError):
+            chatbot_vigia.resolver_alertas([v.id], via='conversa_resolvida')
 
 
 # ── briefing do dono ───────────────────────────────────────────────────
