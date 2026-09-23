@@ -143,13 +143,14 @@
                  maxlength="150"
                  value="{{ form.get('nome_destinatario', '') }}">
         </label>
-        <label>Telefone de quem vai receber (opcional)
+        <label>Telefone de quem vai receber
           <input type="tel" name="telefone_destinatario" inputmode="tel"
                  placeholder="Ex: (11) 97777-6666"
                  value="{{ form.get('telefone_destinatario', '') }}">
-          <small class="text-muted">Usamos só pro <strong>entregador</strong>
-            ligar na hora de entregar. Dúvidas sobre o pedido a gente resolve
-            com <strong>você</strong>, no seu número acima.</small>
+          <small class="text-muted">Obrigatório: é por ele que o
+            <strong>entregador</strong> fala com quem recebe na hora da entrega.
+            Dúvidas sobre o pedido a gente resolve com <strong>você</strong>,
+            no seu número acima.</small>
         </label>
       </div>
       </div>{# /entrega-quem #}
