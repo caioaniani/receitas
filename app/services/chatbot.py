@@ -508,6 +508,127 @@ def _pede_ligacao(texto):
     return _algum_hit_nao_negado(t, _hits_ligacao(t), nua_veta=False)
 
 
+# FALHA OPERACIONAL EM CURSO (dono 23/09/2026: "o bot nao pode exigir
+# credencial antes de socorrer"): o cliente esta SEM o produto / sem
+# resposta AGORA — nao recebeu, o motoboy foi embora, veio errado, ninguem
+# responde. Handoff DETERMINISTICO na primeira mensagem que relata isso,
+# sem pedir CPF/numero/e-mail (a autorizacao serve pra REVELAR dados do
+# pedido, nunca pra decidir se a pessoa recebe ajuda) e sem a macro de
+# espera. Ancorado como os demais detectores: objeto de ENTREGA ou ancora
+# temporal ("ainda nao recebi", "ate agora nada"), verbo no PASSADO
+# (hipotese "se nao receber" e "e se vier errado?" nao casam), negacao
+# escopada ("nunca recebi nada errado de voces", "nao veio errado" vetam) e
+# objetos que o bot resolve sozinho ficam FORA ("nao recebi o link/e-mail/
+# cardapio" e duvida comum).
+_OBJ_ENTREGA = (r'(?:(?:meu|minha|meus|minhas|o|a|os|as|nosso|nossa|esse|essa|'
+                r'este|esta|do|da)\s+)?'
+                r'(?:pedido|encomenda|cesta|caixa|box|entrega|compra|produto|'
+                r'mercadoria|p[aã]es|p[aã]o|croissant\w*|sourdough|brioche|'
+                r'kit|presente|nada)')
+_OBJ_NAO_ENTREGA = (r'(?:link|e-?mail|email|c[oó]digo|pix|boleto|qr|nota|nf|'
+                    r'cupom|comprovante|confirma[çc][aã]o|card[aá]pio|'
+                    r'catalogo|cat[aá]logo|mensagem|senha|promo\w*|'
+                    r'or[çc]amento|tabela|foto|imagem|pdf|arquivo)')
+_VERBO_NAO_CHEGOU = (r'(?:recebi|recebemos|chegou|chegaram|veio|vieram|'
+                     r'entregaram|foi\s+entregu[eo]|foram\s+entregu[eo]s)')
+_FALHA_OPERACIONAL_PATTERNS = [
+    # "ainda nao recebi" / "ate agora nao chegou" / "nunca chegou" — ancora
+    # temporal ANTES; sem objeto que o bot resolve sozinho logo depois
+    re.compile(
+        r'(?i)\b(?:ainda|at[eé]\s+(?:agora|hoje|o\s+momento)|nunca|'
+        r'at[eé]\s+o\s+momento)\s+n[aã]o\s+' + _VERBO_NAO_CHEGOU +
+        r'\b(?!\s+(?:(?:[oa]s?|meu|minha|nenhum\w*|seu|sua|esse|essa)\s+)?'
+        + _OBJ_NAO_ENTREGA + r'\b)'),
+    # "nao recebi meu pedido" / "nao chegou nada" — objeto de entrega DEPOIS
+    re.compile(
+        r'(?i)\bn[aã]o\s+' + _VERBO_NAO_CHEGOU + r'\s+(?:\w+\s+){0,2}?'
+        + _OBJ_ENTREGA + r'\b'),
+    # "meu pedido nao chegou (ainda)" / "a cesta nunca chegou" — objeto ANTES
+    re.compile(
+        r'(?i)\b' + _OBJ_ENTREGA.replace('|nada)', ')') +
+        r'\s+(?:\w+\s+){0,4}?(?:n[aã]o\s+' + _VERBO_NAO_CHEGOU +
+        r'|nunca\s+chegou|ainda\s+n[aã]o\s+chegou|n[aã]o\s+entregaram)\b'),
+    re.compile(r'(?i)\bnunca\s+chegou\b|\bn[aã]o\s+entregaram\b|'
+               r'\bn[aã]o\s+(?:foi|foram)\s+entregu\w+\b|'
+               r'\bentrega\s+n[aã]o\s+(?:aconteceu|foi\s+feita|ocorreu|rolou)\b'),
+    # motoboy/entregador foi embora, nao apareceu, sumiu, nao achou
+    re.compile(
+        r'(?i)\b(?:motoboy|entregador\w*|motorista|lalamove|moto)\b'
+        r'[^.!?\n]{0,40}?\b(?:foi\s+embora|foram\s+embora|n[aã]o\s+(?:apareceu|'
+        r'veio|chegou|subiu|tocou|ligou|esperou|encontr\w+|achou|entregou)|'
+        r'sumiu|desistiu|cancelou|devolveu|levou\s+(?:de\s+)?volta)\b'),
+    # veio errado / faltando / incompleto / estragado — verbo no PASSADO
+    re.compile(
+        r'(?i)\b(?:veio|vieram|chegou|chegaram|recebi|recebemos|entregaram|'
+        r'mandaram|trouxeram)\s+(?:\w+\s+){0,2}?'
+        r'(?:errad[oa]s?|trocad[oa]s?|faltando|incomplet[oa]s?|quebrad[oa]s?|'
+        r'estragad[oa]s?|amassad[oa]s?|mofad[oa]s?|azed[oa]s?|queimad[oa]s?|'
+        r'cru[a]?s?|outro\s+pedido|o\s+pedido\s+de\s+outr[oa]|pela\s+metade)\b'),
+    re.compile(r'(?i)\bpedido\s+(?:veio\s+|chegou\s+)?(?:errado|trocado|incompleto)\b|'
+               r'\b(?:est[aá]|t[aá]|veio|chegou)\s+faltando\b|'
+               r'\bfalt(?:ou|aram)\s+(?:\w+\s+){0,3}?(?:pedido|cesta|caixa|p[aã]o|'
+               r'p[aã]es|item|itens|produto|croissant\w*|brioche|sourdough|'
+               r'mini\w*|metade)\b'),
+    # sem resposta / ninguem responde / nao consigo falar com ninguem
+    re.compile(
+        r'(?i)\bningu[eé]m\s+(?:me\s+)?(?:responde|respondeu|atende|atendeu|'
+        r'retorna|retornou|d[aá]\s+retorno|deu\s+retorno)\b|'
+        r'\b(?:estou|t[oô]|to|fiquei|continuo|sigo)\s+sem\s+(?:resposta|retorno)\b|'
+        r'\bsem\s+(?:resposta|retorno)\s+(?:de\s+voc[eê]s|at[eé]\s+agora|'
+        r'desde|h[aá]\s+\d|faz\s+\d|o\s+dia\s+(?:todo|inteiro))\b|'
+        r'\bn[aã]o\s+(?:consigo|consegui|estou\s+conseguindo|t[oô]\s+conseguindo)'
+        r'\s+(?:falar|contato)\s+com\s+(?:ningu[eé]m|voc[eê]s|a\s+loja|a\s+padaria)\b|'
+        r'\bn[aã]o\s+(?:recebi|tive|obtive)\s+(?:nenhuma\s+|nenhum\s+)?'
+        r'(?:resposta|retorno)\b|'
+        r'\b(?:estou|t[oô]|to)\s+(?:tentando|ligando)\b[^.!?\n]{0,30}\b'
+        r'(?:ningu[eé]m|sem\s+(?:resposta|sucesso)|n[aã]o\s+atend\w+)\b'),
+    # atraso: pedido/entrega atrasado, passou do horario e nada
+    re.compile(
+        r'(?i)\b(?:pedido|entrega|encomenda|cesta)\s+(?:\w+\s+){0,3}?'
+        r'(?:atrasad[oa]|atrasou|atrasando)\b|'
+        r'\b(?:j[aá]\s+)?passou\s+(?:d[oa]\s+)?(?:hor[aá]rio|hora|prazo|janela)\b'
+        r'[^.!?\n]{0,40}\b(?:nada|n[aã]o\s+chegou|n[aã]o\s+veio|ningu[eé]m)\b|'
+        r'\b(?:hor[aá]rio|prazo|janela)\s+(?:j[aá]\s+)?passou\b'
+        r'[^.!?\n]{0,40}\b(?:nada|n[aã]o\s+chegou|n[aã]o\s+veio)\b'),
+]
+# Hipotese/condicao na ORACAO do hit ("se nao chegar", "caso venha errado",
+# "e se vier errado?") nao e falha em curso.
+_HIPOTESE_FALHA = re.compile(r'(?i)(?:^|\W)(?:e\s+)?(?:se|caso|quando)\s+\S*$')
+TEXTO_FALHA_OPERACIONAL = (
+    'Sinto muito por isso! Já estou passando seu caso agora pra nossa '
+    'equipe resolver com você.')
+
+
+def falha_operacional(texto):
+    """True quando a FALA do cliente relata falha operacional EM CURSO:
+    nao recebeu / nao chegou, motoboy foi embora, veio errado ou faltando,
+    ninguem responde, passou do horario e nada. Fonte unica das tres
+    camadas: Camada 1 do `responder` (handoff forcado), turno vazio do
+    modelo, contencao do espera-humano (`chatbot_vigia`) e desarme do
+    detector de venda em risco."""
+    t = _texto_para_deteccao(texto)
+    if len(t) < 6 or _SINAL_VENDA_EM_CURSO.search(t):
+        return False
+    hits = []
+    for p in _FALHA_OPERACIONAL_PATTERNS:
+        for m in p.finditer(t):
+            antes = _oracao_antes(t, m.start())
+            if _HIPOTESE_FALHA.search(antes):
+                continue
+            hits.append((m.start(), m.end()))
+    return _algum_hit_nao_negado(t, hits, nua_veta=True)
+
+
+def trecho_falha_operacional(texto):
+    """Trecho curto da fala que casou (pro motivo do handoff); '' se nada."""
+    t = _texto_para_deteccao(texto)
+    for p in _FALHA_OPERACIONAL_PATTERNS:
+        m = p.search(t)
+        if m:
+            return t[m.start():m.end()][:80]
+    return ''
+
+
 # Motivo que o BOT escreve ao transferir porque o cliente PEDIU humano
 # ("cliente pediu atendente", "solicitou falar com uma pessoa"). E a
 # terceira pessoa do `_quer_humano` (que le a FALA do cliente). Usado pela
