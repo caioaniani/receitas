@@ -311,6 +311,53 @@ def test_banner_do_painel_mostra_o_alerta(cfg, admin_user):
     assert 'Lalamove' in d['vigia']['ultimo']['motivo']
 
 
+def test_canceled_depois_de_completed_nao_alerta(cfg):
+    """Evento fora de ordem (CANCELED chegando após COMPLETED) ou pedido já
+    entregue: alertar "não entregue" mentiria."""
+    from app.services import lalamove_alerta
+    app = cfg
+    with app.app_context():
+        _pedido('LAL013', status='entregue')
+        e = _corrida('LAL013', 'ord-13', status='COMPLETED')
+        with patch('app.services.zapi.enviar_texto') as zap:
+            res = lalamove_alerta.tratar_encerramento(e, 'CANCELED', 'COMPLETED', {})
+        assert res == {'ok': True, 'ignorado': 'ja_entregue'}
+        zap.assert_not_called()
+        assert _vereditos() == []
+
+
+def test_contencao_nao_sai_na_conversa_aberta_pelo_alerta(cfg):
+    """A conversa que o alerta pôs em `open` NÃO pode receber "atendimento
+    em alta demanda" no cron seguinte (contrato: sem mensagem automática ao
+    cliente); a cobrança ao dono sai, dizendo que é corrida encerrada."""
+    from app.services import chatbot_vigia, lalamove_alerta
+    app = cfg
+    with app.app_context():
+        _pedido('LAL014')
+        e = _corrida('LAL014', 'ord-14')
+        _conversa_local(5150)
+        with patch('app.services.lalamove_alerta._POOL', _PoolInline()), \
+                patch('app.services.zapi.enviar_texto', return_value={'ok': True}), \
+                patch('app.services.chatwoot.definir_status', return_value={'ok': True}):
+            lalamove_alerta.tratar_encerramento(e, 'CANCELED', 'ON_GOING', {})
+        # o vigia ainda alerta ALTA nessa conversa (o dedupe de 2h ignora o
+        # veredito operacional da Lalamove)
+        assert chatbot_vigia._alerta_alta_recente('5150') is False
+        assert chatbot_vigia.alerta_lalamove_recente('5150') is True
+        base = {'id': 5150, 'nome_contato': 'Caio', 'minutos_paradas': 15}
+        hist = [{'role': 'user', 'content': 'Oi, vocês têm cesta de café?'}]
+        with patch('app.services.chatbot_vigia._numero_destino',
+                   return_value='5511999990000'), \
+                patch('app.services.chatwoot.listar_conversas_paradas', return_value=[base]), \
+                patch('app.services.chatwoot.buscar_historico', return_value=hist), \
+                patch('app.services.chatwoot.enviar_mensagem') as contem, \
+                patch('app.services.zapi.enviar_texto', return_value={'ok': True}) as alerta:
+            chatbot_vigia.alertar_clientes_esperando_humano()
+        contem.assert_not_called()
+        alerta.assert_called_once()
+        assert 'Lalamove' in alerta.call_args[0][1]
+
+
 def test_motivo_do_payload_parse_liberal():
     from app.services.lalamove_alerta import MOTIVO_DESCONHECIDO, motivo_do_payload
     assert motivo_do_payload({'data': {'order': {'cancelReason': 'X'}}}) == 'X'
