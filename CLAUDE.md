@@ -5097,6 +5097,34 @@ prompt mandava pedir número/CPF ANTES de transferir uma reclamação.
    template e não colide com o padrão). Sem override de propósito (a spec
    não previu; reenviar antes da hora é ordem do dono). Testes:
    `tests/test_template_dedupe.py`.
+8. **Conversas do mesmo pedido amarradas** (spec do dono de 22/09/2026,
+   caso E3862E49: 2429 WhatsApp de saída + 2431 Instagram da compradora +
+   2432 WhatsApp do marido, e a equipe respondia numa sem saber das
+   outras). Tabela NOVA `ConversaPedido` (`app/models/integracoes.py`,
+   unique `(conv_id, pedido_code)`, `origem` bot|socorro|chamar|lalamove;
+   via `db.create_all`). Serviço `app/services/conversa_pedido.py`:
+   `vincular` (sessão ISOLADA `Session(db.engine)`, best-effort — roda
+   dentro do turno do bot e de rotas com transação própria),
+   `conversas_do_pedido`, `alertar_mudanca_status(pedido_code, status,
+   detalhe)` (thread `_POOL`; testes trocam por inline): para cada
+   conversa vinculada ainda open/pending no Chatwoot (`consultar_conversa`,
+   1 GET cada) → `enviar_nota_privada` com o status novo e a lista das
+   OUTRAS abertas (canal do `meta.channel` + link); resolvida não recebe;
+   `enviar_mensagem` nunca (há teste). Pontos de vínculo: loop de tools do
+   `chatbot.responder` (`_vincular_pedido_da_conversa`: `numero` autorizado
+   OU `_pedido_existente` de `bot_tools._nao_autorizado` — chave interna
+   removida antes do tool_result como a `_nota_interna`; lista
+   `pedidos_recentes` NÃO vincula), `_localizar_pedido_para_socorro`
+   (origem 'socorro', ganhou `conversa_id`), `api_atendimento_chamar_
+   cliente` (origem 'chamar', também quando o template falhou mas a
+   conversa existe) e `lalamove_alerta._executar_rede` (origem 'lalamove';
+   a nota roda em linha na mesma thread, sem 2ª thread). Gancho de status:
+   `loja_entrega.avancar_status_entrega` DEPOIS do commit e do e-mail
+   (best-effort; cobre painel, Lalamove ON_GOING/COMPLETED e webhook) e o
+   encerramento Lalamove (rótulo "CORRIDA LALAMOVE CANCELADA/…" + motivo).
+   Fora de propósito: `entrega_candidata` (candidata pela rua é palpite,
+   "conferir antes de agir" — não vira vínculo) e cancelamento do pedido
+   (spec fala de status de ENTREGA). Testes: `tests/test_conversa_pedido.py`.
 CRÍTICA DE COMPLETUDE (workflow de 6 leitores + crítico) — aplicados:
 `chatbot_auditor._TRACKING_PREFIXES` ganhou `'[LALAMOVE'` (o veredito
 operacional não entra na taxa de contenção); `chatbot_vigia.
