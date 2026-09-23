@@ -5,6 +5,7 @@ import io
 import json
 import os
 import secrets
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from flask import (
@@ -109,6 +110,52 @@ def _painel(proposta=None, confirmacao=None, remotos=None):
 @fiserv_bp.get('')
 def index():
     return _painel()
+
+
+@fiserv_bp.get('/resumo')
+def resumo():
+    __tracebackhide__ = True
+    from app.services.fiserv_financeiro import obter_painel
+    filtros = {chave: request.args.get(chave, '').strip()
+               for chave in ('inicio', 'fim', 'tipo', 'documento')}
+    try:
+        inicio = date.fromisoformat(filtros['inicio']) if filtros['inicio'] else None
+        fim = date.fromisoformat(filtros['fim']) if filtros['fim'] else None
+        if inicio and fim and inicio > fim:
+            raise ValueError
+        if filtros['tipo'] not in {'', 'S', 'P', 'R', 'PIX', 'V'} or len(filtros['documento']) > 30:
+            raise ValueError
+    except ValueError:
+        flash('Confira as datas e os filtros selecionados.', 'warning')
+        return redirect(url_for('fiserv.resumo'))
+    painel = obter_painel(inicio=inicio, fim=fim, tipo=filtros['tipo'] or None,
+                          documento=filtros['documento'] or None)
+    registro = db.session.get(IntegracaoFiserv, 1)
+    pendencias_recebimento = PendenciaFiserv.query.filter_by(
+        versao_configuracao=registro.versao if registro else 0,
+    ).count()
+    return render_template('fiserv/resumo.html', painel=painel, filtros=filtros,
+                           pendencias_recebimento=pendencias_recebimento,
+                           automatico=bool(registro and registro.ativa))
+
+
+@fiserv_bp.post('/processar')
+@limiter.limit('2 per minute')
+def processar():
+    __tracebackhide__ = True
+    from app.services.fiserv_financeiro import ErroProcessamentoFiserv, processar_pendentes
+    try:
+        resultado = processar_pendentes(max_arquivos=20, prazo=25)
+        if resultado.get('ocupada'):
+            flash('Há uma coleta ou leitura em andamento. Aguarde a próxima atualização.', 'info')
+        else:
+            flash(f"Leitura concluída: {resultado['processados']} arquivo(s) processado(s), "
+                  f"{resultado['duplicados']} repetido(s) e {resultado['erros']} para conferência.",
+                  'warning' if resultado['erros'] else 'success')
+    except ErroProcessamentoFiserv:
+        db.session.rollback()
+        flash('Não foi possível concluir a leitura. Os originais continuam guardados.', 'warning')
+    return redirect(url_for('fiserv.resumo'))
 
 
 @fiserv_bp.post('/servidor')

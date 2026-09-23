@@ -150,7 +150,7 @@
 
 {% macro financeiro(variant) %}
 {% if current_user.is_owner %}
-{{ _lnk(variant, url_for('fiserv.index'), 'Recebimentos Fiserv', request.path.startswith('/financeiro/fiserv'), title='Configure o acesso privado e acompanhe a coleta de arquivos', icon='bi-bank') }}
+{{ _lnk(variant, url_for('fiserv.resumo'), 'Recebimentos Fiserv', request.path.startswith('/financeiro/fiserv'), title='Vendas, taxas, pagamentos e recebíveis da adquirente', icon='bi-bank') }}
 {% endif %}
 {{ _lnk(variant, url_for('cobrancas.visao_geral'), 'Cobranças', request.path.startswith('/cobrancas'), title='A receber, NF + boleto, envios e pagamentos', icon='bi-receipt', primary=true) }}
 {{ _lnk(variant, url_for('contas_pagar.lista'), 'Contas a Pagar', request.path in ['/contas-pagar/', '/contas-pagar'], primary=true, title='Confira vencimentos e registre pagamentos', icon='bi-calendar-check') }}

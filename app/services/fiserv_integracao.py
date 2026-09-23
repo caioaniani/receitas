@@ -407,3 +407,14 @@ def rodar_agendado(app):
             logger.error('Ciclo Fiserv não concluído; confira o painel privado.')
         finally:
             db.session.remove()
+        # A leitura dos originais guardados é independente da conexão SFTP.
+        # Uma falha de download não impede interpretar arquivos já recebidos.
+        if coleta_disponivel():
+            from app.services.fiserv_financeiro import processar_pendentes
+            try:
+                processar_pendentes(max_arquivos=20, prazo=30)
+            except Exception:
+                db.session.rollback()
+                logger.error('Leitura financeira Fiserv não concluída; confira o painel privado.')
+            finally:
+                db.session.remove()

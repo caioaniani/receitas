@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Recebimentos Fiserv{% endblock %}
+{% set categorias = {'vendas': 'Vendas em cartões', 'pagamentos': 'Pagamentos informados pela adquirente', 'antecipacoes': 'Antecipações', 'ajustes': 'Ajustes', 'suspensos': 'Pagamentos suspensos', 'cancelamentos': 'Cancelamentos', 'chargebacks': 'Contestações', 'recebiveis': 'Recebíveis conhecidos', 'agenda': 'Agenda de recebimentos', 'deducoes': 'Deduções', 'contratos': 'Contratos de recebíveis', 'pix_pos': 'Pix nas maquininhas', 'pix_tef': 'Pix no TEF', 'pix_psp': 'Movimentação Pix', 'voucher': 'Vouchers'} %}
+{% set metricas = {'bruto': 'Bruto', 'taxa': 'Taxas', 'comissao': 'Comissão', 'liquido': 'Líquido', 'antecipacao': 'Custo da antecipação', 'previsto': 'Previsto', 'liquidado': 'Liquidado', 'atualizado': 'Valor atual', 'livre': 'Livre para negociação', 'alocado': 'Alocado', 'ajuste': 'Ajuste', 'movimento': 'Movimento líquido'} %}
+{% set tipos = {'S': 'Vendas', 'P': 'Pagamentos', 'R': 'Recebíveis', 'PIX': 'Pix', 'V': 'Vouchers'} %}
+{% macro moeda(valor) %}{{ valor|brl if valor is not none else 'Não informado' }}{% endmacro %}
+{% macro dia(valor) %}{{ valor.strftime('%d/%m/%Y') if valor else '—' }}{% endmacro %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+  <div><h1 class="h3 mb-1">Recebimentos Fiserv</h1><p class="text-muted mb-0">Vendas, taxas e recebíveis dos arquivos da adquirente.</p></div>
+  <div class="d-flex flex-wrap gap-2"><a class="btn btn-outline-secondary" href="{{ url_for('fiserv.index') }}">Conexão e arquivos</a><a class="btn btn-primary" href="{{ url_for('fiserv.resumo', **filtros) }}">Atualizar</a></div>
+</div>
+<div class="card mb-4"><div class="card-body">
+  <div class="d-flex flex-wrap justify-content-between gap-2">
+    <p class="mb-2"><strong>{{ 'Coleta automática ativa' if automatico else 'Coleta automática pausada' }}</strong><br><span class="text-muted">{{ painel.arquivos.processados }} arquivo(s) interpretado(s) · {{ painel.arquivos.duplicados }} repetido(s) · {{ painel.arquivos.pendentes }} aguardando leitura</span></p>
+    {% if painel.arquivos.pendentes %}<form method="post" action="{{ url_for('fiserv.processar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-primary">Ler arquivos recebidos</button></form>{% endif %}
+  </div>
+  {% if pendencias_recebimento or painel.arquivos.erros or painel.total_conflitos or painel.arquivos.pendentes or painel.avisos %}<div class="alert alert-warning mb-2"><strong>Os valores disponíveis são parciais.</strong> {{ pendencias_recebimento }} arquivo(s) ainda não recebido(s), {{ painel.arquivos.erros }} com leitura pendente de conferência e {{ painel.total_conflitos }} conflito(s). Confira também os arquivos aguardando leitura e as observações abaixo. Os originais continuam disponíveis em <a href="{{ url_for('fiserv.index') }}">Conexão e arquivos</a>.</div>{% endif %}
+  <p class="small text-muted mb-0">Cada quadro representa uma etapa diferente. Uma venda pode aparecer depois como pagamento ou recebível; esses quadros não devem ser somados. O recebível mostra a última posição conhecida. A confirmação na conta bancária depende do extrato do banco.</p>
+</div></div>
+<form method="get" class="card mb-4"><div class="card-body row g-3 align-items-end">
+  <div class="col-sm-6 col-lg-2"><label class="form-label" for="inicio">De</label><input class="form-control" id="inicio" name="inicio" type="date" value="{{ filtros.inicio }}"></div>
+  <div class="col-sm-6 col-lg-2"><label class="form-label" for="fim">Até</label><input class="form-control" id="fim" name="fim" type="date" value="{{ filtros.fim }}"></div>
+  <div class="col-sm-6 col-lg-3"><label class="form-label" for="tipo">Informação</label><select class="form-select" id="tipo" name="tipo"><option value="">Todas</option>{% for chave, rotulo in tipos.items() %}<option value="{{ chave }}" {% if filtros.tipo == chave %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}</select></div>
+  <div class="col-sm-6 col-lg-3"><label class="form-label" for="documento">Estabelecimento / documento</label><select class="form-select" id="documento" name="documento"><option value="">Todos</option>{% for documento in painel.documentos %}<option value="{{ documento }}" {% if filtros.documento == documento %}selected{% endif %}>{{ documento }}</option>{% endfor %}</select></div>
+  <div class="col-lg-2"><button class="btn btn-primary w-100">Filtrar</button></div>
+  <p class="small text-muted mb-0">Datas das vendas e capturas; para pagamentos e recebíveis, datas previstas ou efetivas informadas no arquivo.</p>
+</div></form>
+{% if painel.avisos %}<details class="mb-4"><summary class="text-warning-emphasis">Observações da leitura ({{ painel.avisos|length }})</summary><ul class="mt-2">{% for aviso in painel.avisos %}<li>{{ aviso }}</li>{% endfor %}</ul></details>{% endif %}
+{% if painel.arquivos_erros %}<details class="card mb-4"><summary class="card-header">Arquivos que precisam de conferência</summary><div class="card-body"><p class="text-muted small">O arquivo original foi preservado. Nenhum valor desse arquivo entrou no painel.</p><ul class="mb-0">{% for arquivo in painel.arquivos_erros %}<li><a href="{{ url_for('fiserv.visualizar', arquivo_id=arquivo.arquivo_id) }}">Ver arquivo {{ arquivo.arquivo_id }}</a> · <code>{{ arquivo.codigo }}</code></li>{% endfor %}</ul></div></details>{% endif %}
+<div class="row g-3 mb-4">
+{% for categoria, dados in painel.categorias.items() if dados.quantidade %}
+  <div class="col-md-6 col-xl-4"><section class="card h-100"><div class="card-body">
+    <h2 class="h5">{{ categorias.get(categoria, categoria) }}</h2><p class="text-muted small">{{ dados.quantidade }} registro(s){% if dados.sem_identidade %} · {{ dados.sem_identidade }} sem identificação suficiente{% endif %}</p>
+    <dl class="row mb-0">{% for metrica, valor in dados.metricas.items() %}{% if valor is not none %}<dt class="col-7 fw-normal">{{ metricas.get(metrica, metrica) }}</dt><dd class="col-5 text-end fw-semibold">{{ moeda(valor) }}</dd>{% endif %}{% endfor %}</dl>
+    {% if not dados.metricas.values()|reject('none')|list %}<p class="text-muted mb-0">Sem valores consolidados para este filtro.</p>{% endif %}
+  </div></section></div>
+{% else %}<div class="col-12"><div class="alert alert-info">Ainda não há valores interpretados para este filtro. Os arquivos recebidos são lidos automaticamente; você também pode iniciar a leitura pelo botão acima.</div></div>{% endfor %}
+</div>
+{% if painel.conflitos %}<details class="card mb-4"><summary class="card-header">Registros que precisam de conferência</summary><div class="card-body"><p>Foram recebidas versões divergentes sem uma ordem de atualização segura. Esses valores não entram nos totais.</p>{% for conflito in painel.conflitos %}<p class="mb-1">{{ categorias.get(conflito.categoria, 'Registro') }}{% for arquivo_id in conflito.arquivos %} · <a href="{{ url_for('fiserv.visualizar', arquivo_id=arquivo_id) }}">Arquivo {{ arquivo_id }}</a>{% endfor %}</p>{% endfor %}</div></details>{% endif %}
+<section class="card"><div class="card-body">
+  <h2 class="h5">Detalhamento e origem</h2><p class="text-muted small">Mostrando até 200 de {{ painel.total_linhas }} registro(s). Use os filtros para restringir o período. Linhas informativas ficam fora dos totais.</p>
+  <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Data</th><th>Previsto / pagamento</th><th>Informação</th><th>Bandeira / produto</th><th>Valores</th><th>Situação</th><th>Origem</th></tr></thead><tbody>
+  {% for linha in painel.linhas %}<tr>
+    <td class="text-nowrap">{{ dia(linha.data_evento) }}</td><td class="text-nowrap">{{ dia(linha.data_vencimento) }}</td>
+    <td>{{ categorias.get(linha.categoria, linha.categoria) }}{% if linha.estabelecimento %}<div class="small text-muted">{{ linha.estabelecimento }}</div>{% endif %}</td>
+    <td>{{ linha.bandeira or '—' }}{% if linha.produto %}<div class="small text-muted">{{ linha.produto }}</div>{% endif %}</td>
+    <td>{% for metrica, valor in linha.valores.items() %}{% if valor is not none %}<div class="text-nowrap small">{{ metricas.get(metrica, metrica) }}: {{ moeda(valor) }}</div>{% endif %}{% endfor %}</td>
+    <td><span class="small">{{ linha.status or 'Informado no arquivo' }}</span>{% if not linha.incluir_totais %}<div class="small text-muted">Informativo</div>{% endif %}</td>
+    <td><a href="{{ url_for('fiserv.visualizar', arquivo_id=linha.arquivo_id) }}">Arquivo</a></td>
+  </tr>{% else %}<tr><td colspan="7" class="text-muted">Nenhum registro neste período.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div></section>
+{% endblock %}

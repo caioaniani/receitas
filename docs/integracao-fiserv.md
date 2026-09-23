@@ -56,11 +56,40 @@ a cada 15 segundos. A atualização para ao editar qualquer campo e não é ativ
 no formulário que recebe as credenciais, preservando o preenchimento do owner.
 
 Os arquivos recebidos são preservados cifrados e podem ser baixados pelo owner.
-Este estágio recebe o EDI original: **não normaliza ou soma os valores no caixa**.
-Os cinco leiautes (vendas, pagamentos, recebíveis, PIX e voucher) ainda precisam
-ser homologados com amostra real, pois os PDFs não definem o envelope externo
-completamente. Não confundir posições de recebíveis com novas entradas de caixa,
-nem somar venda, parcela, resumo e liquidação da mesma operação.
+O painel **Recebimentos Fiserv**, em `/financeiro/fiserv/resumo`, interpreta vendas,
+pagamentos, recebíveis, Pix e vouchers em quadros separados. A leitura é local e
+independente do SFTP: arquivos já guardados continuam sendo interpretados mesmo
+quando um download falha. O agendador lê lotes de até 20 arquivos; o owner também
+pode iniciar a leitura dos pendentes no painel. O GET apenas consulta resultados.
+Não há lançamentos automáticos no caixa, baixas de pedidos ou duplicação das
+vendas SERU. Pagamento informado pela adquirente não substitui a conciliação com
+o extrato da conta bancária.
+
+O envelope JSON e as grafias dos cinco tipos foram conferidos em arquivos reais
+da versão 7.6.0, além dos manuais 7.5 e 7.7. Campos monetários decimais são lidos
+com Decimal; o espelho `*Field`, quando presente, tem 15 dígitos em centavos e
+deve coincidir com o valor em reais. Não se arredonda divergência silenciosamente.
+Campos ausentes permanecem ausentes. Status ou formatos não confirmados ficam
+informativos ou geram uma pendência de interpretação, sem fabricar valores.
+
+Cada arquivo tem uma interpretação por versão do parser, com observações
+imutáveis. Reenvios byte a byte são filtrados na coleta; documentos financeiros
+semanticamente repetidos reutilizam as observações. Correções são ordenadas pela
+data da fonte, não pela ordem de download. Empates divergentes ficam fora dos
+totais e aparecem para conferência. Resumos e detalhes da mesma composição nunca
+são somados juntos. Recebíveis são posições por unidade, não novas entradas a
+cada atualização; coleções explicitamente vazias substituem as anteriores e
+coleções ausentes as preservam. O painel usa o termo "recebíveis conhecidos",
+pois os arquivos parciais não comprovam a posição completa da conta.
+
+Pix POS/TEF e voucher representam capturas; Pix PSP representa movimentos com
+direção própria. Transações recusadas não entram nas capturas aprovadas.
+Vendas, pagamentos, agenda e recebíveis não têm um total geral somado.
+Os filtros usam a data do fato ou a data do pagamento/recebível e mostram até
+200 linhas, com acesso ao original correspondente. Falhas de recebimento,
+interpretação e conflitos permanecem visíveis, tornando explícita a cobertura
+parcial. Novas versões do parser podem interpretar novamente os originais sem
+baixá-los outra vez. Testes e amostras financeiras permanecem privados.
 
 Com o automático pausado, **Arquivos disponíveis na Fiserv** lista nomes e tamanhos
 diretamente do acesso salvo, em páginas de 20 arquivos ordenados por nome. Isso
