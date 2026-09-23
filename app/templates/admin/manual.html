@@ -87,6 +87,14 @@
                 equipe com o contexto, sem interrogatório. O <strong>e-mail da compra</strong>
                 passou a localizar e autorizar pedido como o CPF; CPF que não confere porque o
                 cadastro não tem CPF vira transferência com nota, nunca "não localizei".</li>
+            <li><strong>Bot não encerra conversa com reclamação em aberto</strong> (caso E3862E49,
+                22/09/2026): "obrigada"/"ok" só vira conversa <em>resolvida</em> quando não há
+                reclamação ou falha de entrega sem resposta de alguém da equipe depois dela. Se o
+                cliente reclamou e só o bot falou, o "obrigada" deixa a conversa na
+                <strong>fila da equipe</strong> (aberta), em silêncio, com nota privada dizendo o
+                motivo — nunca resolvida. A resposta humana dada dentro do Chatwoot conta (o
+                sistema confere lá antes de decidir). Vale para o bot, para o turno em que o modelo
+                emudece e para a vassoura que recupera conversas paradas.</li>
             <li><strong>Corrida Lalamove cancelada, expirada ou recusada</strong> (23/09/2026):
                 o sistema registra o status na corrida, abre um alerta ALTA no
                 <a href="/entregas/painel">painel de entregas</a> (banner + som, como os do vigia,
