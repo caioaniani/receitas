@@ -248,10 +248,13 @@ def criar_ordem(quotation_id, sender_stop_id, recipient_stop_id,
     remetente_nome = _cfg('LALAMOVE_REMETENTE_NOME') or 'O Pão Padaria Artesanal'
     remetente_fone = _fone_e164(_cfg('LALAMOVE_REMETENTE_FONE')
                                 or _cfg('ZAPI_BOT_DONO_NUMERO'))
-    fone_dest = _fone_e164(telefone_destino) or remetente_fone
     if not remetente_fone:
         return {'ok': False, 'erro': 'configure LALAMOVE_REMETENTE_FONE no '
                                      'Railway (telefone da filial)'}
+    fone_dest, aviso = _contato_destinatario(telefone_destino, remetente_fone)
+    remarks = (observacao or '').strip()
+    if aviso:
+        remarks = f'{remarks} — {aviso}' if remarks else aviso
     payload = {'data': {
         'quotationId': quotation_id,
         'sender': {'stopId': sender_stop_id, 'name': remetente_nome,
@@ -259,7 +262,7 @@ def criar_ordem(quotation_id, sender_stop_id, recipient_stop_id,
         'recipients': [{'stopId': recipient_stop_id,
                         'name': (destinatario or 'Cliente')[:64],
                         'phone': fone_dest,
-                        'remarks': (observacao or '')[:500]}],
+                        'remarks': remarks[:500]}],
         'isPODEnabled': False,
     }}
     status, corpo = _request('POST', '/v3/orders', payload)
@@ -267,10 +270,13 @@ def criar_ordem(quotation_id, sender_stop_id, recipient_stop_id,
         return _erro_api(status, corpo, 'criação de ordem')
     d = corpo.get('data') or {}
     preco = d.get('priceBreakdown') or {}
+    if aviso:
+        logger.warning('lalamove criar_ordem: %s (contato da corrida = filial)', aviso)
     return {'ok': True, 'order_id': d.get('orderId'),
             'status': d.get('status') or 'ASSIGNING_DRIVER',
             'share_link': d.get('shareLink'),
-            'valor': preco.get('total'), 'moeda': preco.get('currency')}
+            'valor': preco.get('total'), 'moeda': preco.get('currency'),
+            'aviso': aviso}
 
 
 def adicionar_priority_fee(order_id, valor):
