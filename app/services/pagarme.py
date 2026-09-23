@@ -138,19 +138,16 @@ def _telefone_br(raw):
     operadora ('015 11 96421-8592') -> Pagar.me montou +5501511964218592
     (16 digitos) -> recusou -> venda de R$426 falhou.
     """
-    d = _so_digitos(raw)
-    # Codigo de pais 55 na frente (deixa um local plausivel) -> remove.
-    if d.startswith('55') and len(d) >= 12:
-        d = d[2:]
-    # Prefixo de tronco/operadora: '0' (e ate 2 digitos de operadora) -> remove.
-    if d.startswith('0'):
-        d = d[1:]
-        if len(d) >= 12:          # ainda longo: tinha codigo de operadora (2 dig)
-            d = d[2:]
-    # Esperado: DDD(2) + 8/9 digitos.
-    if len(d) not in (10, 11):
+    # Classificador canônico (app.utils, 23/09/2026): mesma regra do tronco
+    # '0'/operadora e do DDD 55 de Santa Maria de sempre, mais a recusa de
+    # número INTERNACIONAL ('+1 475-292-9850' montava +5514752929850, um
+    # telefone BR inventado no customer do Pagar.me).
+    from app.utils import TEL_BR_CELULAR, TEL_BR_FIXO, classificar_telefone
+    c = classificar_telefone(raw)
+    if c['tipo'] not in (TEL_BR_CELULAR, TEL_BR_FIXO):
         return None
-    return d[:2], d[2:]
+    n = c['nacional']
+    return n[:2], n[2:]
 
 
 def _payload_customer(pedido):
