@@ -55,12 +55,19 @@ def itens_para_usuario(usuario, categorias_receitas):
     if usuario.pode_cadastrar_funcionarios() and capacidade('web_rh'):
         adicionar('Funcionários', 'rh.funcionarios', 'Equipe', 'people',
                   aliases=['cadastro de pessoas'])
+    from app.services.acesso_pedidos_loja import tem_liberacao
+    pedidos_individuais = tem_liberacao(usuario)
+    if pedidos_individuais:
+        adicionar('Pedidos para a indústria', 'pedidos.lista', 'Lojas', 'cart',
+                  aliases=['reposição', 'pedidos da minha loja'], principal=True)
+        adicionar('Novo pedido para a indústria', 'pedidos.novo', 'Lojas',
+                  'plus-circle')
     if usuario.somente_treino:
         return itens
 
     adicionar('Hoje', 'main.index', icon='house', aliases=['início', 'home'],
               principal=True)
-    if capacidade('web_pedidos'):
+    if capacidade('web_pedidos') and not pedidos_individuais:
         adicionar('Pedidos das lojas', 'pedidos.lista', 'Lojas', 'cart',
                   aliases=['reposição das lojas'], principal=True)
         adicionar('Novo pedido para a loja', 'pedidos.novo', 'Lojas',

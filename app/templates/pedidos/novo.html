@@ -5,6 +5,7 @@
 
 {% block content %}
 <h1 class="page-title mb-3"><i class="bi bi-cart-plus"></i> Novo Pedido</h1>
+{% if loja_pedidos_industria %}<p class="text-muted">Pedido para a indústria · <strong>{{ loja_pedidos_industria.nome }}</strong></p>{% endif %}
 
 <form method="POST" id="form-pedido">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

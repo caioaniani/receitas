@@ -23,6 +23,8 @@ from app.decorators import (
     gerente_required,
     operacional_pedido_required,
     owner_required,
+    pedido_detalhe_required,
+    pedido_edicao_required,
     pedidos_required,
     producao_required,
     relatorio_pedidos_required,
@@ -133,6 +135,11 @@ def _preco_interno_item(it):
 # mas nao recebe pedidos, nao tem PDV, nao tem estoque de venda. Use em
 # qualquer dropdown operacional (pedidos, estoque de loja, precos).
 def _lojas_operacionais():
+    from app.services.acesso_pedidos_loja import ENDPOINTS, loja_liberada
+    individual = (loja_liberada(current_user)
+                  if request.endpoint in ENDPOINTS else None)
+    if individual:
+        return [individual]
     return (Loja.query
             .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
             .order_by(Loja.nome)
@@ -145,8 +152,16 @@ def _loja_do_usuario():
     Admin e gerente: None (podem ver/atuar em qualquer loja).
     Outros papeis: forca a loja vinculada ao usuario.
     """
+    from app.services.acesso_pedidos_loja import ENDPOINTS, loja_liberada
+    individual = (loja_liberada(current_user)
+                  if request.endpoint in ENDPOINTS else None)
+    if individual:
+        return individual.id
     if current_user.is_admin() or current_user.is_gerente():
         return None
+    if (current_user.papel == 'funcionario' and not current_user.loja_id
+            and request.endpoint in ENDPOINTS):
+        abort(403)
     return current_user.loja_id
 
 
@@ -413,6 +428,13 @@ def lista():
         PedidoLoja.criado_em.desc())
     query = _aplica_loja(query)
     pedidos = query.limit(100).all()
+    from app.services.acesso_pedidos_loja import loja_liberada
+    individual = loja_liberada(current_user)
+    if individual:
+        return render_template('pedidos/reposicao.html', pedidos=pedidos,
+                               pedido=None, loja=individual,
+                               abas=STATUS_PEDIDO_ABAS, aba_atual=aba,
+                               contagens=contagens)
     # Constroi mapa pedido_id → nome do motorista (do QR de saida usado)
     motoristas = {}
     for p in pedidos:
@@ -437,7 +459,7 @@ def novo():
     # Admin e gerente escolhem qualquer loja no form; demais papeis sao
     # forcados pra propria loja e precisam ter uma vinculada.
     pode_qualquer_loja = current_user.is_admin() or current_user.is_gerente()
-    if not pode_qualquer_loja and not current_user.loja_id:
+    if not pode_qualquer_loja and not loja_id:
         flash('Vincule sua conta a uma loja para criar pedidos.', 'warning')
         return redirect(url_for('pedidos.lista'))
 
@@ -453,7 +475,8 @@ def novo():
                         else (loja_id or current_user.loja_id))
         except (TypeError, ValueError):
             sel_loja = 0
-        if not pode_qualquer_loja and sel_loja != current_user.loja_id:
+        if (not pode_qualquer_loja and request.form.get('loja_id')
+                and request.form.get('loja_id', type=int) != loja_id):
             abort(403)
         # Loja precisa existir e estar ativa
         if not sel_loja or not Loja.query.filter_by(id=sel_loja, ativa=True).first():
@@ -634,7 +657,7 @@ def novo():
 
 @pedidos_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
-@operacional_pedido_required
+@pedido_edicao_required
 def editar(id):
     """Edita pedido em status pendente/confirmado.
 
@@ -644,6 +667,10 @@ def editar(id):
     via REPLACE total — DELETE + INSERT da lista nova."""
     from app.constants import STATUS_PEDIDO_EDITAVEIS
     pedido = PedidoLoja.query.get_or_404(id)
+    from app.services.acesso_pedidos_loja import loja_liberada
+    individual = loja_liberada(current_user)
+    if individual and pedido.loja_id != individual.id:
+        abort(403)
     if request.method == 'POST':
         pedido = reler_pedido_travado(pedido)
     if pedido.status not in STATUS_PEDIDO_EDITAVEIS:
@@ -808,13 +835,18 @@ def editar(id):
 
 @pedidos_bp.route('/<int:id>')
 @login_required
-@gerente_required
+@pedido_detalhe_required
 def detalhe(id):
     from app.models import Driver, PedidoItemFoto
     pedido = PedidoLoja.query.get_or_404(id)
     loja_id = _loja_do_usuario()
     if loja_id and pedido.loja_id != loja_id:
         abort(403)
+    from app.services.acesso_pedidos_loja import loja_liberada
+    individual = loja_liberada(current_user)
+    if individual:
+        return render_template('pedidos/reposicao.html', pedido=pedido,
+                               loja=individual)
     drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
 
     # Fotos de conferencia (saida = industria/motorista, entrega = loja),

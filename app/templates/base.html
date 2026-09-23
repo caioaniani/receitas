@@ -159,6 +159,9 @@
         </a>
         {% endif %}
         {% if not so_observador %}
+        {% if loja_pedidos_industria %}
+        <a href="{{ url_for('pedidos.lista') }}" class="sidebar-link {{ 'active' if request.path.startswith('/pedidos') }}">Pedidos para a indústria</a>
+        {% endif %}
         <a href="{{ url_for('treino.home') }}"
            class="sidebar-link {% if request.path.startswith('/treino') and not request.path.startswith('/treino/gestor') %}active{% endif %}">
             🎮 Treinamento

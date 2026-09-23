@@ -119,8 +119,58 @@ def usuarios():
         delegados_nf = set()
     lojas = (Loja.query.filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
              .order_by(Loja.nome).all())
+    registro_pedidos = None
+    loja_pedidos = None
+    loja_pedidos_configurada = None
+    bloqueio_pedidos = None
+    if selecionado and current_user.is_owner:
+        from app.models import AcessoPedidosLoja
+        from app.services.acesso_pedidos_loja import loja_liberada
+
+        registro_pedidos = db.session.get(AcessoPedidosLoja, selecionado.id)
+        loja_pedidos = loja_liberada(selecionado)
+        if registro_pedidos:
+            loja_pedidos_configurada = db.session.get(Loja, registro_pedidos.loja_id)
+        if selecionado.papel != 'funcionario' or selecionado.is_dono():
+            bloqueio_pedidos = 'Esta liberação individual é destinada a contas com perfil Funcionário.'
+        elif not selecionado.funcionario:
+            bloqueio_pedidos = 'Vincule esta conta ao cadastro da pessoa no RH para liberar os pedidos.'
+        elif not selecionado.funcionario.ativo:
+            bloqueio_pedidos = 'O cadastro desta pessoa no RH está inativo. A liberação exige um cadastro ativo.'
     return render_template('auth/usuarios.html', usuarios=usuarios, lojas=lojas,
-                           delegados_nf=delegados_nf, selecionado=selecionado)
+                           delegados_nf=delegados_nf, selecionado=selecionado,
+                           registro_pedidos=registro_pedidos, loja_pedidos=loja_pedidos,
+                           loja_pedidos_configurada=loja_pedidos_configurada,
+                           bloqueio_pedidos=bloqueio_pedidos)
+
+
+@auth_bp.route('/usuarios/<int:id>/pedidos-industria', methods=['POST'])
+@login_required
+@owner_required
+def delegar_pedidos_industria(id):
+    from app.services import acesso_pedidos_loja
+
+    usuario = Usuario.query.get_or_404(id)
+    acao = request.form.get('acao')
+    if acao not in ('liberar', 'revogar'):
+        abort(400)
+    try:
+        if acao == 'revogar':
+            acesso_pedidos_loja.revogar(usuario, current_user)
+            mensagem = f'Permissão individual de pedidos para a indústria removida de {usuario.nome}.'
+        else:
+            loja_id = request.form.get('loja_id', type=int)
+            if not loja_id:
+                raise ValueError('Selecione a loja cujos pedidos a pessoa poderá criar e editar.')
+            acesso_pedidos_loja.salvar(usuario, loja_id, current_user)
+            mensagem = f'Pedidos para a indústria liberados para {usuario.nome} na loja escolhida.'
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+    else:
+        flash(mensagem, 'success')
+    return _voltar_ao_usuario(usuario)
 
 
 @auth_bp.route('/usuarios/<int:id>/nf-b2b', methods=['POST'])
@@ -236,6 +286,16 @@ def excluir_usuario(id):
     if u.is_owner and not current_user.is_owner:
         flash('So o owner pode excluir o owner.', 'danger')
         return redirect(url_for('auth.usuarios'))
+
+    from app.models import AcessoPedidosLoja
+    if AcessoPedidosLoja.query.filter(
+            (AcessoPedidosLoja.usuario_id == u.id)
+            | (AcessoPedidosLoja.concedido_por_id == u.id)
+            | (AcessoPedidosLoja.atualizado_por_id == u.id)).first():
+        flash('Esta conta possui histórico de permissões de pedidos. '
+              'Mantenha o cadastro para preservar esse histórico; '
+              'a permissão individual pode ser removida na tela de acesso.', 'warning')
+        return _voltar_ao_usuario(u)
 
     Atribuicao.query.filter_by(usuario_id=u.id).delete()
     db.session.delete(u)

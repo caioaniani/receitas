@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/auth-acesso.css') }}?v={{ static_v.get('css/auth-acesso.css', '1') }}">
 <h1 class="page-title mb-2"><i class="bi bi-shield-lock" aria-hidden="true"></i> Permissões de acesso</h1>
 <p class="fs-5 fw-bold mb-2">{{ selecionado.nome }}</p>
-<p class="text-muted">Confira o perfil e a restrição de treinamento desta conta.</p>
+<p class="text-muted">Escolha o que esta pessoa pode fazer no sistema.</p>
 <div class="d-flex gap-2 flex-wrap mb-4">
     {% if current_user.is_dono() and selecionado.funcionario %}<a class="btn btn-outline-secondary" href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', ativos='0', pessoa=selecionado.funcionario.id, _anchor='acesso-' ~ selecionado.funcionario.id) }}">Voltar ao cadastro da pessoa</a>{% endif %}
     <a class="btn btn-outline-secondary" href="{{ url_for('auth.usuarios') }}">Ver todos os usuários</a>
@@ -79,6 +79,50 @@
         </form>
     </div>
 </div>
+{% endif %}
+
+{% if selecionado and current_user.is_owner %}
+<section class="card mb-4 users-orders-access" aria-labelledby="pedidos-industria-titulo" id="pedidos-industria">
+    <div class="card-body">
+        <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+            <h2 id="pedidos-industria-titulo" class="h4 mb-0"><i class="bi bi-basket" aria-hidden="true"></i> Pedidos para a indústria</h2>
+            {% if loja_pedidos %}<span class="badge bg-success">Liberado</span>{% else %}<span class="badge bg-secondary">Não liberado</span>{% endif %}
+        </div>
+        <p class="mb-2">Permite criar pedidos e editar os pedidos pendentes ou confirmados somente da loja escolhida.</p>
+        <p class="small text-muted mb-3">O acesso ao treinamento continua disponível. Esta permissão não libera produção, financeiro ou expedição.</p>
+        {% if loja_pedidos %}
+        <p class="mb-3"><strong>Loja liberada:</strong> {{ loja_pedidos.nome }}</p>
+        {% elif registro_pedidos and registro_pedidos.ativo %}
+        <div class="alert alert-warning">A permissão cadastrada{% if loja_pedidos_configurada %} para {{ loja_pedidos_configurada.nome }}{% endif %} não está válida no momento. Confira o cadastro da pessoa e selecione uma loja ativa.</div>
+        {% endif %}
+        {% if bloqueio_pedidos %}
+        <p class="text-muted mb-3">{{ bloqueio_pedidos }}</p>
+        {% else %}
+        <form method="POST" action="{{ url_for('auth.delegar_pedidos_industria', id=selecionado.id) }}" class="users-orders-access-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="voltar_acesso" value="{{ selecionado.id }}">
+            <input type="hidden" name="acao" value="liberar">
+            <div class="users-orders-access-store">
+                <label for="pedidos-industria-loja" class="form-label fw-semibold">Loja dos pedidos</label>
+                <select id="pedidos-industria-loja" name="loja_id" class="form-select" required aria-describedby="pedidos-industria-ajuda">
+                    <option value="">Selecione uma loja</option>
+                    {% for loja in lojas %}<option value="{{ loja.id }}"{% if registro_pedidos and registro_pedidos.loja_id == loja.id %} selected{% endif %}>{{ loja.nome }}</option>{% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">{{ 'Salvar loja' if loja_pedidos else 'Liberar pedidos desta loja' }}</button>
+        </form>
+        <p id="pedidos-industria-ajuda" class="small text-muted mt-2 mb-0">A pessoa encontrará a opção “Pedidos para a indústria” ao entrar no sistema.</p>
+        {% endif %}
+        {% if registro_pedidos and registro_pedidos.ativo %}
+        <form method="POST" action="{{ url_for('auth.delegar_pedidos_industria', id=selecionado.id) }}" class="mt-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="voltar_acesso" value="{{ selecionado.id }}">
+            <input type="hidden" name="acao" value="revogar">
+            <button type="submit" class="btn btn-outline-danger">Remover permissão</button>
+        </form>
+        {% endif %}
+    </div>
+</section>
 {% endif %}
 
 <!-- Lista de usuarios -->

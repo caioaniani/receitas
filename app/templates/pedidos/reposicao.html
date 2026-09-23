@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Pedidos para a indústria{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+        <h1 class="page-title mb-2">{{ 'Pedido #' ~ pedido.id if pedido else 'Pedidos para a indústria' }}</h1>
+        <p class="text-muted mb-0">{{ loja.nome }}</p>
+    </div>
+    {% if pedido %}
+    <a href="{{ url_for('pedidos.lista') }}" class="btn btn-outline-secondary">Voltar aos pedidos</a>
+    {% else %}
+    <a href="{{ url_for('pedidos.novo') }}" class="btn btn-primary">Novo pedido</a>
+    {% endif %}
+</div>
+<p class="text-muted">Você pode criar pedidos e editar itens e quantidades enquanto estiverem pendentes ou confirmados, respeitando o horário de corte da produção.</p>
+{% if pedido %}
+<div class="card mb-3"><div class="card-body">
+    <div class="d-flex gap-4 flex-wrap">
+        <div><span class="text-muted d-block">Entrega</span><strong>{{ pedido.data_entrega.strftime('%d/%m/%Y') if pedido.data_entrega else 'A definir' }}</strong></div>
+        <div><span class="text-muted d-block">Situação</span><strong>{{ pedido.status|replace('_', ' ')|capitalize }}</strong></div>
+    </div>
+    {% if pedido.observacao %}<p class="mt-3 mb-0">{{ pedido.observacao }}</p>{% endif %}
+</div></div>
+<div class="table-responsive">
+    <table class="table table-bordered bg-white">
+        <thead><tr><th>Produto</th><th class="text-center">Quantidade</th><th>Observação</th></tr></thead>
+        <tbody>{% for item in pedido.itens %}
+            <tr><td>{{ item.nome_item_com_estado }}</td><td class="text-center">{{ item.quantidade }}</td><td>{{ item.observacao or '—' }}</td></tr>
+        {% endfor %}</tbody>
+    </table>
+</div>
+{% if pedido.status in ('pendente', 'confirmado') %}
+<a class="btn btn-primary" href="{{ url_for('pedidos.editar', id=pedido.id) }}">Editar pedido</a>
+{% endif %}
+{% else %}
+<ul class="nav nav-tabs mb-3 flex-wrap" aria-label="Situação dos pedidos">
+    {% for slug, label, _ in abas %}
+    <li class="nav-item"><a class="nav-link {{ 'active' if slug == aba_atual }}" href="{{ url_for('pedidos.lista', aba=slug) }}"{% if slug == aba_atual %} aria-current="page"{% endif %}>{{ label }} <span class="badge bg-secondary">{{ contagens.get(slug, 0) }}</span></a></li>
+    {% endfor %}
+</ul>
+<div class="row g-3">
+{% for p in pedidos %}
+    <div class="col-md-6 col-xl-4"><div class="card h-100"><div class="card-body">
+        <div class="d-flex justify-content-between gap-2"><strong>Pedido #{{ p.id }}</strong><span class="badge bg-secondary">{{ p.status|replace('_', ' ') }}</span></div>
+        <p class="mt-2 mb-1">Entrega: <strong>{{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else 'A definir' }}</strong></p>
+        <p class="text-muted">{{ p.itens|length }} item(ns)</p>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-secondary" href="{{ url_for('pedidos.detalhe', id=p.id) }}">Ver pedido</a>
+            {% if p.status in ('pendente', 'confirmado') %}<a class="btn btn-primary" href="{{ url_for('pedidos.editar', id=p.id) }}">Editar pedido</a>{% endif %}
+        </div>
+    </div></div></div>
+{% else %}
+    <p class="text-muted">Nenhum pedido nesta situação.</p>
+{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

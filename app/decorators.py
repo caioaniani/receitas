@@ -151,7 +151,34 @@ def pedidos_required(f):
     (padrão: todos os papéis menos padeiro)."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not _pode_cap('web_pedidos'):
+        from flask import request
+
+        from app.services import acesso_pedidos_loja
+        individual = (request.endpoint in acesso_pedidos_loja.ENDPOINTS
+                      and acesso_pedidos_loja.tem_liberacao(current_user))
+        if not individual and not _pode_cap('web_pedidos'):
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
+def pedido_edicao_required(f):
+    """Liberação individual só para edição; não concede operação de status."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        from app.services.acesso_pedidos_loja import tem_liberacao
+        if not tem_liberacao(current_user) and not _pode_cap('web_pedido_operar'):
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
+def pedido_detalhe_required(f):
+    """Consulta de um pedido, com o escopo da loja validado pela rota."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        from app.services.acesso_pedidos_loja import tem_liberacao
+        if not tem_liberacao(current_user) and not _pode_cap('web_estoque_loja'):
             abort(403)
         return f(*args, **kwargs)
     return decorated

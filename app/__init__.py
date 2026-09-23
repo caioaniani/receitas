@@ -205,7 +205,21 @@ def create_app(config_class=None):
         from flask_login import current_user
 
         from app.models import Atribuicao, MateriaPrima, Receita, Usuario
+        from app.services.acesso_pedidos_loja import loja_liberada
         from app.services.busca_navegacao import itens_para_usuario
+
+        loja_individual = (loja_liberada(current_user)
+                           if current_user.is_authenticated else None)
+        if (current_user.is_authenticated and loja_individual
+                and current_user.somente_treino):
+            # A reposição precisa do seletor de itens, não dos custos de MP
+            # nem dos dados globais da equipe embutidos na navegação.
+            return dict(
+                sidebar_categorias={}, mp_info={}, mp_nomes=[],
+                receita_nomes=[], produto_nomes=[], funcionarios=[],
+                busca_navegacao=itens_para_usuario(current_user, {}),
+                loja_pedidos_industria=loja_individual,
+            )
 
         # Relatório externo não pode receber catálogo/custos no HTML/JS,
         # nem em páginas de senha ou erro. Esconder a sidebar não basta.
@@ -318,6 +332,7 @@ def create_app(config_class=None):
 
         return dict(
             sidebar_categorias=categorias,
+            loja_pedidos_industria=loja_individual,
             busca_navegacao=itens_para_usuario(current_user, categorias),
             mp_info=mp_data['info'],
             mp_nomes=mp_data['nomes'],
@@ -522,10 +537,14 @@ def create_app(config_class=None):
                    'checklist.envio_status', 'checklist.comprovante'}
             and current_user.pode_checklist()
         )
+        from app.services import acesso_pedidos_loja
+        acesso_pedidos = (ep in acesso_pedidos_loja.ENDPOINTS
+                          and acesso_pedidos_loja.tem_liberacao(current_user))
         if (getattr(current_user, 'somente_treino', False)
                 and not ep.startswith('treino.')
                 and not acesso_equipe
                 and not acesso_checklist
+                and not acesso_pedidos
                 and not acesso_cadastro_funcionarios):
             return redirect(url_for('treino.home'))
         return None

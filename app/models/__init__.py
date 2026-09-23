@@ -1,5 +1,6 @@
 """Re-exporta tudo dos sub-modulos. Compat com `from app.models import X`."""
 
+from app.models.acesso_pedidos_loja import *  # noqa: F401, F403
 from app.models.auth import *  # noqa: F401, F403
 from app.models.avisos import *  # noqa: F401, F403
 from app.models.b2b import *  # noqa: F401, F403
