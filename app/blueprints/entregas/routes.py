@@ -832,9 +832,10 @@ def api_painel_vigia_reconhecer():
 @login_required
 def api_painel_vigia_resolver():
     """Botao "Resolver" do drawer: fecha o caso de um alerta ALTA com MOTIVO
-    por escrito (obrigatorio). JSON {ids:[...], motivo:'...'}. As outras
-    duas formas de resolver sao automaticas: resposta humana na conversa
-    depois do alerta e conversa resolvida."""
+    por escrito (obrigatorio). JSON {ids:[...], motivo:'...'}. A OUTRA forma
+    de resolver e automatica: resposta humana na conversa depois do alerta
+    (pelo painel ou pelo Chatwoot). Conversa resolvida NAO resolve o alerta
+    por si (regra estrita do item 9)."""
     from app.services import chatbot_vigia
     dados = request.get_json(silent=True) or {}
     ids = dados.get('ids') or []
