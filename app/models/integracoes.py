@@ -115,7 +115,14 @@ class ConversaPedido(db.Model):
     clica "Chamar cliente" e quando a Lalamove abre a conversa. Na mudanca
     de status da entrega, `conversa_pedido.alertar_mudanca_status` deixa
     nota PRIVADA em cada conversa aberta listando as outras — nunca
-    mensagem ao cliente. Tabela nova via `db.create_all`."""
+    mensagem ao cliente. Tabela nova via `db.create_all`.
+
+    `autorizada` (revisao de 23/09/2026): False quando o contato perguntou
+    pelo pedido SEM prova de posse (`autorizacao_necessaria` — um terceiro,
+    um stalker, o entregador). A conversa fica listada pra equipe com o
+    rotulo "NAO autorizada", mas NAO recebe a nota com o status da entrega:
+    o status e informacao do pedido, e escreve-lo na conversa de quem nao
+    provou posse e o que a politica do bot proibe."""
     __tablename__ = 'conversa_pedido'
     __table_args__ = (db.UniqueConstraint('conv_id', 'pedido_code',
                                           name='uq_conversa_pedido'),)
@@ -124,6 +131,7 @@ class ConversaPedido(db.Model):
     conv_id = db.Column(db.String(50), nullable=False, index=True)
     pedido_code = db.Column(db.String(40), nullable=False, index=True)
     origem = db.Column(db.String(20))   # bot | socorro | chamar | lalamove
+    autorizada = db.Column(db.Boolean, nullable=False, default=True)
     criado_em = db.Column(db.DateTime, default=agora, nullable=False)
 
 
