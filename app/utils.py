@@ -65,6 +65,120 @@ def normalizar_telefone(numero):
     return ''.join(c for c in (numero or '') if c.isdigit())
 
 
+# DDDs reais (ANATEL). '20', '23'… não existem — número com DDD inválido
+# é erro de digitação na certa. Fonte única (23/09/2026): o portal Wi-Fi,
+# o pré-cadastro e o classificador abaixo leem daqui.
+DDDS_BRASIL = frozenset({
+    '11', '12', '13', '14', '15', '16', '17', '18', '19',
+    '21', '22', '24', '27', '28',
+    '31', '32', '33', '34', '35', '37', '38',
+    '41', '42', '43', '44', '45', '46', '47', '48', '49',
+    '51', '53', '54', '55',
+    '61', '62', '63', '64', '65', '66', '67', '68', '69',
+    '71', '73', '74', '75', '77', '79',
+    '81', '82', '83', '84', '85', '86', '87', '88', '89',
+    '91', '92', '93', '94', '95', '96', '97', '98', '99',
+})
+
+# Tipos devolvidos por `classificar_telefone`.
+TEL_BR_CELULAR = 'br_celular'
+TEL_BR_FIXO = 'br_fixo'
+TEL_INTERNACIONAL = 'internacional'
+TEL_INVALIDO = 'invalido'
+
+# Máximo do E.164 (código do país + número). Acima disso é lixo colado.
+_E164_MAX_DIGITOS = 15
+
+
+def _classificar_nacional(n, out):
+    """Parte BR (sem o 55): DDD real + 9 dígitos (celular) ou 8 (fixo)."""
+    if len(n) not in (10, 11):
+        return out
+    ddd, sub = n[:2], n[2:]
+    if ddd not in DDDS_BRASIL or len(set(sub)) <= 1:   # DDD falso / 99999-9999
+        return out
+    if len(n) == 11:
+        if sub[0] != '9':
+            return out
+        out.update(tipo=TEL_BR_CELULAR, e164='+55' + n, ddd=ddd, nacional=n)
+    elif sub[0] in '2345':
+        out.update(tipo=TEL_BR_FIXO, e164='+55' + n, ddd=ddd, nacional=n)
+    elif sub[0] in '6789':
+        # Celular no formato ANTIGO (antes do 9º dígito, ANATEL 2012-2016):
+        # o número real hoje tem o 9 na frente — é a mesma migração que
+        # `telefone_chave` colapsa, na direção contrária.
+        n = ddd + '9' + sub
+        out.update(tipo=TEL_BR_CELULAR, e164='+55' + n, ddd=ddd, nacional=n)
+    return out
+
+
+def classificar_telefone(bruto):
+    """Classifica um telefone digitado/armazenado SEM inventar número.
+
+    Devolve {'tipo', 'e164', 'ddd', 'nacional', 'digitos', 'internacional_explicito'}:
+    - ``br_celular``: DDD real + 9 + 8 dígitos → e164 '+55DDD9XXXXXXXX'.
+    - ``br_fixo``: DDD real + 8 dígitos começando em 2-5 → e164 '+55DDD…'.
+    - ``internacional``: '+'/'00' seguido de DDI ≠ 55, 12-15 dígitos sem o 55,
+      ou 11 dígitos no plano norte-americano (1 + área 2-9) — e164 '+<dígitos>'.
+    - ``invalido``: vazio, curto, DDD inexistente, 11 dígitos sem o 9, etc.
+      e164 None.
+
+    Regras que já custaram venda/contato e NÃO podem regredir:
+    - DDD 55 (Santa Maria/RS) sem código de país ('55 96421-8592', 11
+      dígitos) é BR — só 12/13 dígitos começando em 55 perdem o 55.
+    - Tronco '0' e código de operadora ('015 11 96421-8592', incidente
+      Pagar.me 22/06/2026) são descartados como antes.
+    - '+1 475-292-9850' é internacional — NUNCA vira '+5514752929850'
+      (caso 23/09/2026: template de WhatsApp saía pra número inventado).
+    """
+    s = str(bruto or '').strip()
+    d = normalizar_telefone(s)
+    out = {'tipo': TEL_INVALIDO, 'e164': None, 'ddd': None, 'nacional': None,
+           'digitos': d, 'internacional_explicito': False}
+    if not d:
+        return out
+    explicito = s.startswith('+') or s.startswith('00')
+    if s.startswith('00'):
+        d = d[2:]
+    if explicito:
+        if d.startswith('55') and len(d) in (12, 13):
+            return _classificar_nacional(d[2:], out)
+        if d.startswith('55') and len(d) in (10, 11):
+            # '+55 96421-8592': o '+' foi tique do cliente, é DDD 55 local.
+            return _classificar_nacional(d, out)
+        if not d.startswith('55') and 8 <= len(d) <= _E164_MAX_DIGITOS:
+            out.update(tipo=TEL_INTERNACIONAL, e164='+' + d,
+                       internacional_explicito=True)
+        return out
+    if d.startswith('0'):
+        d = d[1:]
+        if len(d) >= 12:           # ainda longo: tinha código de operadora
+            d = d[2:]
+    if d.startswith('55') and len(d) in (12, 13):
+        return _classificar_nacional(d[2:], out)
+    if len(d) in (10, 11):
+        r = _classificar_nacional(d, out)
+        if r['tipo'] != TEL_INVALIDO:
+            return r
+        # 11 dígitos que não cabem no plano BR (3º dígito ≠ 9) e cabem no
+        # norte-americano: '14752929850' = +1 (475) 292-9850. Outros DDIs
+        # sem o '+' ficam inválidos — sem o sinal não dá pra afirmar.
+        if len(d) == 11 and d[0] == '1' and d[1] in '23456789':
+            out.update(tipo=TEL_INTERNACIONAL, e164='+' + d)
+        return out
+    if 12 <= len(d) <= _E164_MAX_DIGITOS:
+        out.update(tipo=TEL_INTERNACIONAL, e164='+' + d)
+    return out
+
+
+def telefone_e164_whatsapp(numero):
+    """E.164 SÓ de celular BR (o único destino que recebe WhatsApp); None
+    pra fixo/internacional/inválido — quem precisa do motivo usa
+    `classificar_telefone`."""
+    c = classificar_telefone(numero)
+    return c['e164'] if c['tipo'] == TEL_BR_CELULAR else None
+
+
 def telefone_chave(numero):
     """Chave canonica pra casar telefones brasileiros salvos em formatos
     diferentes (com/sem +55, com/sem o 9o digito de celular).
