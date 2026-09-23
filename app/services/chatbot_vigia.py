@@ -1672,6 +1672,22 @@ def resolver_alertas(ids, *, via, usuario_id=None, motivo=None, momento=None,
     return n
 
 
+def alertas_em_aberto_da_conversa(conv_id):
+    """Ha alerta ALTA sem resolucao nesta conversa? (EXISTS barato — usado
+    pelo relogio da espera humana antes de gastar um GET no historico de
+    conversa resolvida.)"""
+    from app.extensions import db
+    from app.models import VigiaVeredito
+    if conv_id is None:
+        return False
+    return bool(db.session.query(
+        VigiaVeredito.query
+        .filter(VigiaVeredito.conv_id == str(conv_id),
+                VigiaVeredito.alerta.is_(True),
+                VigiaVeredito.gravidade == 'alta',
+                _sem_resolucao()).exists()).scalar())
+
+
 def resolver_alertas_da_conversa(conv_id, *, via, ate=None, usuario_id=None,
                                  motivo=None, commit=True):
     """Resolve os alertas ALTA em aberto de UMA conversa criados ate `ate`
