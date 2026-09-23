@@ -1151,6 +1151,58 @@ def _texto_handoff_com_horario(texto):
     return aviso + base
 
 
+def _reclamacao_sem_resposta_humana(historico):
+    """True se ha reclamacao/falha operacional em alguma fala do CLIENTE
+    (nao herdada) e NENHUMA fala HUMANA da equipe (`humano=True`, autoria
+    do Chatwoot) depois da ULTIMA reclamacao. Fonte do item 7 (dono,
+    22-23/09/2026, caso E3862E49): o bot marcava `resolved` num "obrigada"
+    com a reclamacao ainda sem ninguem da equipe ter falado."""
+    from app.services.chatbot_vigia import _SINAIS_RECLAMACAO
+    ultima_reclamacao = None
+    for i, m in enumerate(historico or []):
+        if not isinstance(m, dict) or m.get('herdada'):
+            continue
+        if m.get('role') == 'user':
+            c = str(m.get('content') or '')
+            if c.strip() and (falha_operacional(c) or _SINAIS_RECLAMACAO.search(c)):
+                ultima_reclamacao = i
+    if ultima_reclamacao is None:
+        return False
+    return not any(isinstance(m, dict) and m.get('role') != 'user'
+                   and m.get('humano') is True
+                   for m in (historico or [])[ultima_reclamacao + 1:])
+
+
+def pode_encerrar(historico):
+    """Encerramento AUTOMATICO (resolved sem fala) so quando o ultimo turno
+    do cliente e fechamento E nao ha reclamacao sem resposta humana. Vale
+    para a Camada 1, para a tool `encerrar_conversa` do modelo e para o
+    turno vazio — e, por eles, para o webhook e a vassoura."""
+    from app.services.chatbot_vigia import _e_fechamento
+    ultima = next((m for m in reversed(historico or [])
+                   if isinstance(m, dict) and m.get('role') == 'user'), None)
+    if not _e_fechamento(str((ultima or {}).get('content') or '')):
+        return False
+    return not _reclamacao_sem_resposta_humana(historico)
+
+
+MOTIVO_FILA_RECLAMACAO = ('reclamação em aberto sem resposta humana — conversa '
+                          'mantida na fila da equipe (não resolvida)')
+
+
+def _resp_fila_silenciosa(motivo, tools_usadas=None, tools_resumo=None):
+    """Handoff SEM texto: a conversa vai para `open` (fila da equipe) e o
+    cliente nao recebe nada — usado quando o bot encerraria mas ha
+    reclamacao em aberto (item 7). Nao passa por `_resp_handoff` de
+    proposito: o aviso de fora-horario transformaria o silencio em fala."""
+    out = {'acao': 'handoff', 'texto': '', 'motivo': motivo}
+    if tools_usadas is not None:
+        out['tools_usadas'] = list(tools_usadas)
+    if tools_resumo is not None:
+        out['tools_resumo'] = list(tools_resumo)
+    return out
+
+
 def _resp_encerrar(motivo, tools_usadas=None, tools_resumo=None):
     """Constroi o dict de encerramento: SEM texto, status=resolved no Chatwoot.
     Cliente nao recebe mensagem — caller (crm/routes.py) muda o status da conversa."""
