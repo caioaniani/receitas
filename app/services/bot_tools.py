@@ -792,7 +792,11 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente,
     cpf_pedido = ''
     if not autorizado_como:
         from app.services.fiscal_online import documento
-        cpf_pedido = documento(p) if p.cliente_id else ''
+        # `documento` le o CPF CONGELADO da compra (FiscalPedidoOnline) e
+        # so depois o do cadastro — pedido sem `cliente_id` (importado)
+        # com CPF fiscal era classificado "cadastro sem CPF" (revisao
+        # 23/09/2026, achado M12).
+        cpf_pedido = documento(p)
         if cpf_d and cpf_pedido and cpf_d == cpf_pedido:
             autorizado_como = 'cpf'
     if not autorizado_como and _email_confere(p, email_cliente):
