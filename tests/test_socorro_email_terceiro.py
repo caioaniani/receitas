@@ -405,6 +405,11 @@ def test_nota_interna_nunca_chega_ao_modelo(app):
     ('cliente quer cesta para a mãe', False),           # venda, sem identificação
     ('mãe comprou, quer cotar frete de outra cesta', False),  # venda em curso
     ('cliente perguntou o horário da loja', False),
+    # venda disfarçada de terceiro (revisão 23/09/2026): preço, entrega
+    # em X, comprar outra — o handoff preguiçoso que o enforcement barra
+    ('a mãe do cliente comprou uma cesta semana passada e ele quer saber os preços', False),
+    ('filha da cliente quer saber se tem entrega na rua augusta', False),
+    ('mãe comprou, quer comprar outra cesta igual', False),
 ])
 def test_motivo_terceiro_pelo_titular(motivo, esperado):
     from app.services.chatbot import _handoff_excecao, motivo_terceiro_pelo_titular
