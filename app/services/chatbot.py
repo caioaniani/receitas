@@ -546,8 +546,12 @@ _FALHA_OPERACIONAL_PATTERNS = [
     # "meu pedido nao chegou (ainda)" / "a cesta nunca chegou" — objeto ANTES
     re.compile(
         r'(?i)\b' + _OBJ_ENTREGA.replace('|nada)', ')') +
-        r'\s+(?:\w+\s+){0,4}?(?:n[aã]o\s+' + _VERBO_NAO_CHEGOU +
+        r'\s+(?:\w+\s+){0,6}?(?:n[aã]o\s+' + _VERBO_NAO_CHEGOU +
         r'|nunca\s+chegou|ainda\s+n[aã]o\s+chegou|n[aã]o\s+entregaram)\b'),
+    # "nao chegou ate agora" / "nao recebi ainda" — ancora temporal DEPOIS
+    re.compile(
+        r'(?i)\bn[aã]o\s+' + _VERBO_NAO_CHEGOU +
+        r'\s+(?:ainda|at[eé]\s+(?:agora|hoje|o\s+momento))\b'),
     re.compile(r'(?i)\bnunca\s+chegou\b|\bn[aã]o\s+entregaram\b|'
                r'\bn[aã]o\s+(?:foi|foram)\s+entregu\w+\b|'
                r'\bentrega\s+n[aã]o\s+(?:aconteceu|foi\s+feita|ocorreu|rolou)\b'),
