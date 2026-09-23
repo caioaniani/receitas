@@ -188,12 +188,18 @@ def test_frase_de_venda_vai_pro_modelo(app, texto):
     ('cliente não recebeu o link de pagamento', False),
     ('cliente quer saber o frete pra Moema', False),
     ('cliente não reclamou de nada, só quer o cardápio', False),
+    # hipótese/pergunta de processo no motivo NÃO é falha em curso
+    ('cliente pergunta o que acontece se o pedido não chegou no horário', False),
+    ('dúvida se o motoboy liga quando ninguém atende', False),
+    ('cliente quer saber se entregam quando ninguém responde o interfone', False),
 ])
 def test_enforcement_libera_falha_operacional_no_motivo(motivo, esperado):
     from app.services.chatbot import _handoff_excecao, motivo_excecao_legitima
     assert _handoff_excecao({'motivo': motivo}) is esperado
     if esperado:
         assert motivo_excecao_legitima(motivo) is True
+    else:
+        assert motivo_excecao_legitima(motivo) is False
 
 
 def test_contencao_nao_sai_sobre_reclamacao_mas_dono_e_avisado(app):
