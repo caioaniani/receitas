@@ -722,6 +722,12 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     if telefone_destinatario_erro:
         erros.append('Revise o telefone de quem vai receber: informe apenas '
                      'um número com DDD.')
+    elif e_presente and not telefone_destinatario:
+        # Obrigatório desde 23/09/2026 (dono): sem ele a corrida da Lalamove
+        # saía com o telefone da PADARIA como contato de quem recebe e o
+        # entregador não tinha como achar a pessoa na porta.
+        erros.append('Informe o telefone de quem vai receber: o entregador '
+                     'precisa falar com essa pessoa na hora da entrega.')
 
     if dias_disponibilidade is None:
         itens, avisos = montar_itens(itens_raw)
