@@ -515,6 +515,10 @@ def api_atendimento_chamar_cliente():
         template_dedupe.registrar(p.telefone_cliente, template, p.codigo,
                                   conversation_id=res.get('conversation_id'),
                                   usuario_id=current_user.id)
+    if res.get('conversation_id'):
+        # Item 8: a conversa aberta pela equipe fica amarrada ao pedido.
+        from app.services import conversa_pedido
+        conversa_pedido.vincular(res.get('conversation_id'), p.codigo, 'chamar')
     return jsonify({
         'ok': bool(res.get('ok')),
         'conversation_id': res.get('conversation_id'),
