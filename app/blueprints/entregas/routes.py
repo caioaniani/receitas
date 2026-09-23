@@ -136,6 +136,25 @@ def _endereco_online(p):
     return base
 
 
+def _telefones_meta(p):
+    """Tipo de cada telefone do card (23/09/2026): o painel marca número
+    internacional/fixo/inválido (não recebe WhatsApp — o botão Chamar vai
+    recusar) e avisa quando o presente NÃO tem telefone de quem recebe (o
+    entregador só teria o da padaria)."""
+    from app.utils import classificar_telefone
+    tel_entrega = p.telefone_destinatario or p.telefone_cliente or ''
+    return {
+        'telefone_tipo': (classificar_telefone(tel_entrega)['tipo']
+                          if tel_entrega else None),
+        'telefone_comprador_tipo': (
+            classificar_telefone(p.telefone_cliente)['tipo']
+            if (p.telefone_cliente or '').strip() else None),
+        'sem_telefone_destinatario': bool(
+            (p.nome_destinatario or '').strip()
+            and not (p.telefone_destinatario or '').strip()),
+    }
+
+
 def _serializar_pedido_online(p, detalhes=True):
     """PedidoOnline -> dict no formato do painel (igual VNDA/local).
 
