@@ -1186,6 +1186,13 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
                    f'Cliente: {nome} (conversa #{conv_id})\n'
                    f'Assunto: {ultima}\nJá houve resposta humana, mas a conversa continua aberta.'
                    + (f'\n\n{link}' if link else ''))
+        # Relato de PROBLEMA (nao recebeu, veio errado, sem resposta): o dono
+        # precisa saber que e reclamacao e que a contencao automatica NAO
+        # sai pra esse cliente (dono 23/09/2026).
+        reclamacao = reclamacao_no_historico(historico)
+        if reclamacao:
+            msg += ('\n\n🚨 Relato de PROBLEMA/reclamação — a mensagem automática '
+                    'de espera NÃO foi enviada; alguém precisa responder a pessoa.')
         msg += '\n\nVou lembrar novamente em 15 minutos até a conversa ser marcada como resolvida.'
         # CLAIM-FIRST (20/08/2026): o registro É o dedupe, então ele fica
         # COMMITADO antes do envio. O que isso cobre de verdade: o processo
