@@ -287,15 +287,20 @@ def test_pedido_sem_pedido_online_ainda_alerta(cfg):
 
 
 def test_banner_do_painel_mostra_o_alerta(cfg, admin_user):
+    """Sem request anônima antes da logada (armadilha do `g._login_user`
+    compartilhado no conftest): o serviço é chamado direto, o painel via HTTP."""
+    from app.services import lalamove_alerta
     app = cfg
     with app.app_context():
         _pedido('LAL011')
-        _corrida('LAL011', 'ord-11')
+        e = _corrida('LAL011', 'ord-11')
+        with patch('app.services.lalamove_alerta._POOL', _PoolInline()), \
+                patch('app.services.zapi.enviar_texto', return_value={'ok': True}), \
+                patch('app.services.chatwoot._buscar_contato', return_value=None):
+            res = lalamove_alerta.tratar_encerramento(
+                e, 'CANCELED', 'ON_GOING', {'data': {'order': {'orderId': 'ord-11'}}})
+        assert res['ok'] is True and res['veredito_id']
     c = app.test_client()
-    with patch('app.services.lalamove_alerta._POOL', _PoolInline()), \
-            patch('app.services.zapi.enviar_texto', return_value={'ok': True}), \
-            patch('app.services.chatwoot._buscar_contato', return_value=None):
-        _webhook(c, 'ord-11', 'CANCELED')
     with c.session_transaction() as sess:
         sess['_user_id'] = str(admin_user.id)
         sess['_fresh'] = True
