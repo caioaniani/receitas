@@ -33,8 +33,25 @@ POSITIVOS = [
     'não consigo falar com ninguém', 'não recebi nenhuma resposta',
     'Bom dia, meu pedido de ontem não chegou', 'recebi outro pedido, não é o meu',
     'pedido veio incompleto', 'não recebi o pedido nem o e-mail',
+    # formas canônicas que ficavam de fora (revisão 23/09/2026)
+    'nunca recebi meu pedido', 'paguei e não recebi', 'meu pedido está incompleto',
+    'o pedido tá errado', 'não veio ninguém', 'só veio metade do pedido',
+    'já são 11h e nada do pedido', 'meu pedido não chegou?',
+    'não recebi o pedido; perguntei na portaria e nada',
 ]
 NEGATIVOS = [
+    # venda / dúvida comum que virava handoff antes do modelo (revisão 23/09/2026)
+    'não recebi o link do pedido', 'a confirmação do pedido não chegou',
+    'não recebi o comprovante do pedido', 'não recebi a nota do pedido',
+    'não recebi o pix do pedido', 'o boleto não veio no pedido',
+    'meu pedido não chegou no e-mail, como pago?', 'não recebi o cupom da compra',
+    'não recebi nada de vocês ainda, quando mandam o link?',
+    'to tentando fazer o pedido no site e sem sucesso',
+    'to tentando pagar no site e não vai, sem sucesso',
+    'não consigo falar com vocês por telefone, qual o número?',
+    'o sourdough não chegou na loja da Ribeiro hoje?',
+    'ninguém atende o telefone da loja, qual o horário?',
+    'o croissant não veio recheado?',
     'quero 2 cestas, se não receber até as 10 eu cancelo',
     'pode deixar na portaria se eu não receber?',
     'não recebi o cardápio, pode mandar de novo?',
