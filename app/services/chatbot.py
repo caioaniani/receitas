@@ -1085,14 +1085,16 @@ _SINAL_VENDA_EM_CURSO = re.compile(
     r'(?i)\b(frete|cotar|cota[çc][aã]o|or[çc]amento|novo pedido|'
     r'fechar o pedido|carrinho|'
     # Revisao 23/09/2026: "quer saber os precos", "tem entrega na rua X",
-    # "quer comprar outra cesta", "tentando pagar no site", "manda o link",
-    # "qual o numero/horario" sao venda/duvida comum — nem falha em curso
-    # nem terceiro pelo titular (o bypass do enforcement que existe pra
-    # barrar).
+    # "quer comprar outra cesta", "tentando pagar no site" sao venda no
+    # MOTIVO — nem falha em curso nem terceiro pelo titular (o bypass do
+    # enforcement que existe pra barrar). "link", "cardapio" e "qual o
+    # numero/telefone/horario" SAIRAM na 2ª rodada: "entregador na
+    # portaria, ninguem atende, quer saber qual o telefone do cliente" e
+    # "cliente nao recebeu o pedido e pede o link de rastreio" sao falha
+    # real (o link/cardapio ja e vetado como OBJETO pelo lookahead).
     r'pre[çc]os?|quanto\s+(?:custa|fica|sai)|quer(?:o|em|ia|emos)?\s+comprar|'
     r'tem\s+entrega|voc[eê]s\s+entregam|fazer\s+(?:o\s+|um\s+|meu\s+)?pedido|'
-    r'como\s+(?:fa[çc]o\s+pra\s+|eu\s+|que\s+)?pag\w+|link|card[aá]pio|'
-    r'qual\s+(?:o|[eé]\s+o)\s+(?:n[uú]mero|hor[aá]rio|telefone|valor|endere[çc]o)|'
+    r'como\s+(?:fa[çc]o\s+pra\s+|eu\s+|que\s+)?pag\w+|'
     r'(?:tentando|consigo|consegui)\s+(?:pagar|comprar|finalizar))\b')
 
 
