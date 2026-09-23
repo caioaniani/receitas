@@ -721,7 +721,7 @@ def api_painel():
         vigia_resumo = chatbot_vigia.alertas_pendentes_resumo()
     except Exception:  # noqa: BLE001
         current_app.logger.exception('painel: resumo de alertas do vigia falhou')
-        vigia_resumo = {'pendentes': 0, 'ultimo': None}
+        vigia_resumo = {'pendentes': 0, 'nao_reconhecidos': 0, 'ultimo': None}
     # Token CSRF FRESCO a cada poll (20s). O painel da cozinha fica aberto o
     # dia todo; o token gerado no load da página expira em 1h (default do
     # Flask-WTF) e os POSTs de status passam a levar 400 SILENCIOSO — o
