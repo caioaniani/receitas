@@ -756,10 +756,13 @@ def _nao_autorizado(p, cpf_d, cpf_pedido, email_cliente):
         partes.append('CPF informado NAO confere com o do pedido')
     if _norm_email(email_cliente):
         partes.append('e-mail informado NAO confere')
+    # `_pedido_existente`: so pro vinculo conversa<->pedido (item 8) —
+    # removido antes de ir ao modelo, como a `_nota_interna`.
     return {'erro': 'autorizacao_necessaria',
             'instrucao': (_AUTORIZACAO_SEM_CPF_INSTRUCAO if sem_cpf
                           else _AUTORIZACAO_INSTRUCAO),
-            '_nota_interna': '; '.join(partes)}
+            '_nota_interna': '; '.join(partes),
+            '_pedido_existente': p.codigo}
 
 
 def _consultar_pedido_online(code, telefone_contato, cpf_cliente,
