@@ -1671,14 +1671,20 @@ def _resumo_tool(nome, out):
     if nome == 'consultar_pedido':
         if d.get('numero'):
             return (f'consultar_pedido: pedido {d["numero"]} localizado e '
-                    f'AUTORIZADO (telefone deste canal ou CPF conferido) — '
+                    f'AUTORIZADO (telefone deste canal, CPF ou e-mail conferido'
+                    f'{" — " + d["autorizado_como"] if d.get("autorizado_como") else ""}) — '
                     f'status {d.get("status") or "?"}')
         if d.get('pedidos_recentes'):
             return (f'consultar_pedido: {len(d["pedidos_recentes"])} pedidos '
                     'recentes deste telefone (lista pro cliente escolher)')
         if d.get('erro') == 'autorizacao_necessaria':
+            # `_nota_interna` (bot_tools._nao_autorizado): codigo, status e
+            # por que nao autorizou — NUNCA vai ao modelo (o responder a
+            # remove antes do tool_result); chega a equipe pela nota
+            # privada do handoff (23/09/2026).
+            nota = str(d.get('_nota_interna') or '').strip()
             return ('consultar_pedido: pedido existe mas NAO autorizado '
-                    '(bot pediu CPF)')
+                    '(bot pediu CPF/e-mail)' + (f' — {nota[:200]}' if nota else ''))
         return f'consultar_pedido: {_erro_curto(d.get("erro")) or "sem resultado"}'
     if d.get('erro'):
         return f'{nome}: erro ({_erro_curto(d["erro"])})'
