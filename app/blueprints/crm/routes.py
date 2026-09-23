@@ -700,7 +700,11 @@ def bot_webhook():
                     # handoff depois da checagem acima, mantem silencio. Status
                     # ainda vai pra `open` (idempotente, garante a fila), sem
                     # 2º registro de handoff nem outra fala ao cliente.
+                    # A fila SILENCIOSA (reclamacao em aberto, item 7) nao passa
+                    # por aqui: trocar o texto vazio pelo TEXTO_HANDOFF_REPETIDO
+                    # seria falar com o cliente — e o contrato e nao falar.
                     if (resultado.get('acao') == 'handoff'
+                            and not resultado.get('fila_silenciosa')
                             and chatbot.handoff_recente(conv_id)):
                         logger.info('crm bot handoff REPETIDO suavizado '
                                     'conv=%s (motivo=%s)', conv_id,
