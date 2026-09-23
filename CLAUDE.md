@@ -5037,6 +5037,40 @@ prompt mandava pedir número/CPF ANTES de transferir uma reclamação.
    EXCEÇÕES mantidas: encerrar por LOOP bot-a-bot e o resolve do número
    ignorado (`CHATBOT_NUMEROS_IGNORADOS`) não passam pela guarda — não
    são cliente. Testes: `tests/test_encerrar_reclamacao_aberta.py`.
+9. **Reconhecer alerta do Vigia SILENCIA, não resolve** (spec do dono de
+   22/09/2026, caso E3862E49 — o clique no banner tirava o ALTA da fila
+   para sempre, sem ninguém tratar). Tabela NOVA `VigiaAlertaResolucao`
+   (`app/models/integracoes.py`, `veredito_id` unique, `via`, `motivo`,
+   `usuario_id`, via `db.create_all`): `VigiaVeredito.reconhecido_em`
+   passou a significar só "som parou". `chatbot_vigia._query_pendentes`
+   (chatbot_vigia.py) = ALTA SEM resolução na janela (reconhecido
+   CONTINUA); `alertas_pendentes_resumo` devolve `pendentes` (banner e
+   contador) e `nao_reconhecidos` (klaxon) — `ultimo` prefere o que ainda
+   toca; `reconhecer_pendentes` só carimba os ainda não reconhecidos;
+   `resolver_alertas(ids, via=, motivo=, usuario_id=, momento=,
+   commit=)` com `VIAS_RESOLUCAO = resposta_humana | conversa_resolvida
+   | manual` (manual EXIGE motivo; resolver implica silenciar;
+   idempotente por veredito); `resolver_alertas_da_conversa(conv_id,
+   via=, ate=)` resolve só os criados ATÉ o instante da resposta — ALTA
+   posterior é caso novo. Resolução AUTOMÁTICA: `atendimento_pendente.
+   confirmar_acao_painel` (responder/resolver pelo painel — antes só
+   reconhecia), `atendimento_pendente.preparar` (`_resolver_alertas_
+   respondidos`: última fala humana das `efetivas` do histórico com
+   autoria, cobre resposta dada dentro do Chatwoot), `candidatos()`
+   (conversa `resolved`) e o webhook `conversation_status_changed`
+   resolved (crm/routes.py, best-effort). Rota nova `POST /entregas/api/
+   painel/vigia/resolver` {ids, motivo} (400 sem motivo/ids). Front
+   `painel_pedidos.html`: banner segue `pendentes` e ganha a classe
+   `silenciado` (sem piscar/som) quando `nao_reconhecidos == 0`;
+   `reconhecerAlertas` não esconde mais o banner; drawer com badges NOVO/
+   silenciado/resolvido, botão "✔ Resolver" (prompt do motivo) e a linha
+   da resolução (via/hora/motivo). `briefing_dono` conta "sem resolução".
+   A fila v2 do painel (`atendimento_pendente.alertas_painel`, "Cliente
+   precisa de atendimento") já era independente do reconhecimento e NÃO
+   mudou; a cobrança de espera-humana ao dono também não — resolver um
+   ALTA com motivo NÃO resolve a `EsperaAtendimento` da conversa (decisão
+   de 17-18/09 mantida). Testes: `tests/test_vigia_reconhecer_vs_
+   resolver.py` + `test_vigia_painel.py` atualizado (reconhecido conta).
 CRÍTICA DE COMPLETUDE (workflow de 6 leitores + crítico) — aplicados:
 `chatbot_auditor._TRACKING_PREFIXES` ganhou `'[LALAMOVE'` (o veredito
 operacional não entra na taxa de contenção); `chatbot_vigia.
