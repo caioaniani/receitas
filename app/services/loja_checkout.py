@@ -507,6 +507,13 @@ def _normalizar_telefone_checkout(valor):
     digitos = _so_digitos(bruto)
     if not digitos or len(digitos) > TELEFONE_MAX_DIGITOS:
         return '', 'Revise o telefone: informe apenas um número com DDD.'
+    # Número INTERNACIONAL guarda o '+' (ex.: '+14752929850'): sem ele os
+    # dígitos ficam indistinguíveis de um BR mal digitado, e o painel /
+    # Chamar / Lalamove não têm como saber que não é WhatsApp (23/09/2026).
+    from app.utils import TEL_INTERNACIONAL, classificar_telefone
+    c = classificar_telefone(bruto)
+    if c['tipo'] == TEL_INTERNACIONAL and c['e164']:
+        return c['e164'], None
     return digitos, None
 
 
