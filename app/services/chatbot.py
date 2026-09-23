@@ -798,7 +798,8 @@ def pediu_humano(mensagem_cliente=None, motivo=None):
 _MOTIVO_FALHA_OPERACIONAL = re.compile(
     r'(?i)\b(?:falha\s+operacional|'
     r'n[aã]o\s+(?:recebeu|receberam|chegou|chegaram|foi\s+entregu\w+|'
-    r'entregaram)\b(?!\s+(?:(?:[oa]s?|nenhum\w*|seu|sua)\s+)?'
+    r'entregaram)\b(?!\s+(?:ainda\s+|at[eé]\s+agora\s+)?'
+    r'(?:(?:[oa]s?|nenhum\w*|seu|sua)\s+)?'
     + _OBJ_NAO_ENTREGA + r'\b)|nunca\s+chegou|'
     r'(?:veio|chegou|recebeu|entregaram)\s+(?:errad[oa]|quebrad[oa]|estragad[oa]|'
     r'diferente|faltando|incomplet[oa]|amassad[oa]|trocad[oa])|'
