@@ -164,4 +164,10 @@ def webhook():
     if status == 'COMPLETED':
         from app.services.loja_entrega import avancar_status_entrega
         avancar_status_entrega(e.pedido_code, 'entregue')
+    # Encerrada SEM entrega (CANCELED/EXPIRED/REJECTED): alerta ALTA no
+    # painel + WhatsApp crítico ao dono + conversa do cliente pra equipe.
+    # Nunca marca entregue nem mexe no status do pedido (23/09/2026).
+    from app.services import lalamove_alerta
+    if status in lalamove_alerta.STATUS_SEM_ENTREGA:
+        lalamove_alerta.tratar_encerramento(e, status, anterior, dados)
     return jsonify(ok=True)
