@@ -550,8 +550,18 @@ def api_atendimento_chamar_telefone():
                         'telefone_recusado': True}), 400
     nome = (data.get('nome') or '').strip() or 'Cliente'
     sobre = (data.get('sobre') or '').strip() or 'no site'
+    # Dedupe por (numero, template, assunto) em 60 min — item 10, 22/09/2026.
+    from app.services import template_dedupe
+    template = (current_app.config.get('CHATWOOT_WHATSAPP_TEMPLATE') or '').strip()
+    repetido = template_dedupe.envio_recente(telefone, template, sobre)
+    if repetido is not None:
+        return jsonify(template_dedupe.resposta_bloqueio(repetido, nome=nome)), 409
     res = cw_svc.iniciar_conversa_whatsapp(telefone, nome,
                                            params=[nome, sobre])
+    if res.get('ok'):
+        template_dedupe.registrar(telefone, template, sobre,
+                                  conversation_id=res.get('conversation_id'),
+                                  usuario_id=current_user.id)
     return jsonify({
         'ok': bool(res.get('ok')),
         'conversation_id': res.get('conversation_id'),
