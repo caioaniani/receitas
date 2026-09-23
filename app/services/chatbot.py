@@ -717,6 +717,21 @@ def pediu_humano(mensagem_cliente=None, motivo=None):
 # proposito: 'humano|atendente|pessoa' soltos ficam fora (esses passam pelo
 # `pediu_humano`, que exige a construcao de pedido — "cesta para 1 pessoa"
 # nao pode sair da metrica).
+# Falha operacional NO MOTIVO escrito pelo bot (3ª pessoa) — fonte unica do
+# enforcement (`_handoff_excecao`) e da metrica do auditor
+# (`motivo_excecao_legitima`), que divergiam: "cliente nao recebeu o pedido"
+# passava no auditor e levava a recusa do enforcement (23/09/2026).
+_MOTIVO_FALHA_OPERACIONAL = re.compile(
+    r'(?i)\b(?:falha\s+operacional|'
+    r'n[aã]o\s+(?:recebeu|receberam|chegou|chegaram|foi\s+entregu\w+|'
+    r'entregaram)|nunca\s+chegou|'
+    r'(?:veio|chegou|recebeu|entregaram)\s+(?:errad[oa]|quebrad[oa]|estragad[oa]|'
+    r'diferente|faltando|incomplet[oa]|amassad[oa]|trocad[oa])|'
+    r'pedido\s+(?:errado|incompleto|trocado|atrasado)|'
+    r'entrega\s+(?:n[aã]o\s+chegou|parada|atrasada|n[aã]o\s+aconteceu)|'
+    r'sem\s+(?:resposta|retorno)|ningu[eé]m\s+(?:responde|atende|retorna)|'
+    r'(?:motoboy|entregador\w*|motorista)\s+(?:foi\s+embora|n[aã]o\s+apareceu|'
+    r'sumiu|n[aã]o\s+veio|desistiu))\b')
 _MOTIVO_EXCECAO_LEGITIMA = re.compile(
     r'(?i)\b(?:al[eé]rg\w*|intoler[aâ]nc\w*|'
     r'reclama\w*|'
