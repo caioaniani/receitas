@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
-VERSAO_PARSER = 1
+VERSAO_PARSER = 2
 METRICAS = frozenset({
     'bruto', 'taxa', 'comissao', 'liquido', 'antecipacao', 'previsto',
     'liquidado', 'atualizado', 'livre', 'alocado', 'ajuste', 'movimento',
@@ -120,7 +120,10 @@ def valor_monetario(registro, *nomes):
             if not re.fullmatch(r'-?\d{15}', bruto):
                 raise ErroLayoutFiserv('VALOR_INVALIDO')
             espelho = dinheiro(Decimal(bruto) / 100)
-            if valor is not None and valor != espelho:
+            # O espelho de largura fixa pode trazer só a magnitude; o campo
+            # decimal conserva o sinal (por exemplo, ajuste negativo de UR).
+            magnitude_confere = valor is not None and valor < 0 and bruto.isdigit() and abs(valor) == espelho
+            if valor is not None and valor != espelho and not magnitude_confere:
                 raise ErroLayoutFiserv('TOTAL_DIVERGENTE')
             if valor is None:
                 valor = espelho

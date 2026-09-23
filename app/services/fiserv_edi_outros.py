@@ -338,7 +338,10 @@ def normalizar_outros(tipo: str, registros: list[dict], cabecalho: dict
             linha = _pix(registro, contexto, adquirente, avisos)
         else:
             linha = _voucher(registro, contexto, adquirente, avisos)
-        if any(valor is not None and valor < 0 for valor in linha.valores.values()):
+        # Ajustes da UR são assinados no decimal; o espelho fixo pode trazer
+        # somente a magnitude. Esse ajuste não invalida as demais métricas.
+        if any(valor is not None and valor < 0 and not (tipo == 'R' and metrica == 'ajuste')
+               for metrica, valor in linha.valores.items()):
             linha.incluir_totais = False
             avisos.add('SINAL_MONETARIO_NAO_CONFIRMADO')
         if not any(valor is not None for valor in linha.valores.values()):

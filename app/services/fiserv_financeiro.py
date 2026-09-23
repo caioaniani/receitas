@@ -448,6 +448,10 @@ def _selecionar_linhas(linhas):
 def _data_filtro(linha):
     __tracebackhide__ = True
     obs = linha.observacao
+    if linha.fonte.tipo == 'P':
+        # paymentDate é o pagamento informado; valueDate conserva o
+        # vencimento original e não deve deslocar um pagamento para outro dia.
+        return obs.data_evento or obs.data_vencimento or linha.fonte.data_processamento
     if obs.categoria in {'pagamentos', 'antecipacoes', 'suspensos', 'agenda', 'recebiveis', 'contratos'}:
         return obs.data_vencimento or obs.data_evento or linha.fonte.data_processamento
     return obs.data_evento or obs.data_vencimento or linha.fonte.data_processamento
@@ -477,7 +481,7 @@ def _dto(linha):
         'incluir_totais': bool(obs.incluir_totais and obs.chave_negocio and not linha.informativa
                                and obs.papel not in {'controle', 'composicao', 'informativo',
                                                      'total_arquivo', 'resumo_arquivo'}),
-        'sem_identidade': obs.chave_negocio is None,
+        'sem_identidade': obs.chave_negocio is None and obs.papel != 'controle',
         'valores': _valores(linha), 'detalhes': obs.detalhes_json or {},
     }
 
@@ -524,6 +528,10 @@ def obter_painel(inicio=None, fim=None, tipo=None, documento=None):
     totais_arquivo = []
     for linha in linhas:
         obs = linha.observacao
+        if obs.papel == 'controle':
+            # Cabeçalhos e trailers não representam fatos financeiros nem
+            # precisam de identidade comercial para conferir o original.
+            continue
         categoria = categorias[obs.categoria]
         categoria['quantidade'] += 1
         categoria['sem_identidade'] += obs.chave_negocio is None

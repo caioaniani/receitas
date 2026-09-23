@@ -68,7 +68,11 @@ o extrato da conta bancária.
 O envelope JSON e as grafias dos cinco tipos foram conferidos em arquivos reais
 da versão 7.6.0, além dos manuais 7.5 e 7.7. Campos monetários decimais são lidos
 com Decimal; o espelho `*Field`, quando presente, tem 15 dígitos em centavos e
-deve coincidir com o valor em reais. Não se arredonda divergência silenciosamente.
+deve coincidir com o valor em reais. Ajustes negativos podem trazer o espelho
+sem sinal: nesse caso ele deve coincidir com a magnitude e o sinal decimal é
+preservado. Não se arredonda divergência silenciosamente. Arquivos sem movimento
+podem repetir a sequência entre controles de tipos diferentes; a exceção não
+se aplica a arquivos com fatos financeiros nem aos controles inicial e final.
 Campos ausentes permanecem ausentes. Status ou formatos não confirmados ficam
 informativos ou geram uma pendência de interpretação, sem fabricar valores.
 
@@ -77,7 +81,10 @@ imutáveis. Reenvios byte a byte são filtrados na coleta; documentos financeiro
 semanticamente repetidos reutilizam as observações. Correções são ordenadas pela
 data da fonte, não pela ordem de download. Empates divergentes ficam fora dos
 totais e aparecem para conferência. Resumos e detalhes da mesma composição nunca
-são somados juntos. Recebíveis são posições por unidade, não novas entradas a
+são somados juntos. Nos pagamentos, ordens não conferidas ficam informativas;
+somente componentes identificados, válidos e com valor liquidado informado
+entram nos totais, mantendo um aviso quando a composição é parcial.
+Recebíveis são posições por unidade, não novas entradas a
 cada atualização; coleções explicitamente vazias substituem as anteriores e
 coleções ausentes as preservam. O painel usa o termo "recebíveis conhecidos",
 pois os arquivos parciais não comprovam a posição completa da conta.
@@ -85,7 +92,10 @@ pois os arquivos parciais não comprovam a posição completa da conta.
 Pix POS/TEF e voucher representam capturas; Pix PSP representa movimentos com
 direção própria. Transações recusadas não entram nas capturas aprovadas.
 Vendas, pagamentos, agenda e recebíveis não têm um total geral somado.
-Os filtros usam a data do fato ou a data do pagamento/recebível e mostram até
+Os filtros usam a data do fato ou a data do pagamento/recebível. Pagamentos usam
+`paymentDate`, incluindo antecipações, e preservam `valueDate` como vencimento
+original no detalhamento. Cabeçalhos e trailers não contam como movimentos ou
+registros sem identificação. Os filtros mostram até
 200 linhas, com acesso ao original correspondente. Falhas de recebimento,
 interpretação e conflitos permanecem visíveis, tornando explícita a cobertura
 parcial. Novas versões do parser podem interpretar novamente os originais sem

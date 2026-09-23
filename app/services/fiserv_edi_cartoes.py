@@ -5,6 +5,7 @@ alternativas; campos de cartão, portador e domicílio bancário não são copia
 """
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -391,7 +392,7 @@ def _selecionar_totais(grupo, tipo, avisar):
     if tipo == 'S' and resumo.categoria == 'ajustes':
         return
     if not detalhes:
-        resumo.incluir_totais = resumo.chave_negocio is not None
+        resumo.incluir_totais = tipo == 'S' and resumo.chave_negocio is not None
         avisar('grupo')
         return
     quantidade = None
@@ -418,6 +419,22 @@ def _selecionar_totais(grupo, tipo, avisar):
         if sum(valores, Decimal('0')) != esperado:
             divergente = True
     completas = completas and comparaveis > 0 and not divergente
+    if tipo == 'P':
+        # A ordem não conferida não prova que todos os seus componentes foram
+        # pagos. Somar apenas fatos identificados; a ordem fica para conferência.
+        resumo.incluir_totais = False
+        ocorrencias = Counter(item.chave_negocio for item in detalhes)
+        for item in detalhes:
+            item.incluir_totais = (
+                item.chave_negocio is not None and ocorrencias[item.chave_negocio] == 1
+                and item.status == 'OK' and item.direcao is not None
+                and item.valores.get('liquidado') is not None
+            )
+        if not completas:
+            avisar('grupo')
+        if any(item.status != 'OK' or item.direcao is None for item in detalhes):
+            avisar('status')
+        return
     if completas:
         for item in detalhes:
             item.incluir_totais = True
@@ -425,13 +442,6 @@ def _selecionar_totais(grupo, tipo, avisar):
         # A alternativa é o resumo identificado, nunca resumo + detalhes.
         resumo.incluir_totais = resumo.chave_negocio is not None
         avisar('grupo')
-    # Componentes suspensos ou sem direção impedem atribuir caixa ao resumo.
-    if tipo == 'P' and any(item.status != 'OK' or item.direcao is None for item in detalhes):
-        resumo.incluir_totais = False
-        for item in detalhes:
-            if item.status != 'OK' or item.direcao is None:
-                item.incluir_totais = False
-        avisar('status')
 
 
 def normalizar_cartoes(tipo: str, registros: list[dict], cabecalho: dict
@@ -500,7 +510,8 @@ def normalizar_cartoes(tipo: str, registros: list[dict], cabecalho: dict
         elif cod in {'027', '031'}:
             item.incluir_totais = item.chave_negocio is not None and item.direcao is not None
         if tipo == 'P' and cod in inversos and cod != '034' and (
-                item.direcao is None or item.status != 'OK'):
+                item.direcao is None or item.status != 'OK'
+                or item.valores.get('liquidado') is None):
             item.incluir_totais = False
         if item.chave_negocio is None and item.papel not in {'controle'}:
             avisar('identidade')

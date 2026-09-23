@@ -85,6 +85,7 @@ def _registros_json(conteudo):
         raise ErroLayoutFiserv('LAYOUT_INVALIDO')
     # A sequência declarada é do arquivo, não a ordem das propriedades do
     # envelope JSON. Só ela define o contexto de filial e resumo precedente.
+    controles_vazios = all(codigo(item) in {'000', '101', '200', '201', '999'} for item in registros)
     por_sequencia = {}
     for registro in registros:
         sequencia = texto(registro.get('recordNumber'), 12)
@@ -92,11 +93,19 @@ def _registros_json(conteudo):
             raise ErroLayoutFiserv('SEQUENCIA_INVALIDA')
         numero = int(sequencia)
         if numero in por_sequencia:
-            raise ErroLayoutFiserv('SEQUENCIA_INVALIDA')
-        por_sequencia[numero] = registro
-    if sorted(por_sequencia) != list(range(1, len(registros) + 1)):
+            # Arquivos reais sem movimento repetem o número do cabeçalho101
+            # no trailer200. Não se aplica a fatos financeiros nem a000/999.
+            anteriores = por_sequencia[numero]
+            if (not controles_vazios or codigo(registro) in {'000', '999'}
+                    or any(codigo(item) in {'000', '999', codigo(registro)} for item in anteriores)):
+                raise ErroLayoutFiserv('SEQUENCIA_INVALIDA')
+            anteriores.append(registro)
+        else:
+            por_sequencia[numero] = [registro]
+    if sorted(por_sequencia) != list(range(1, len(por_sequencia) + 1)):
         raise ErroLayoutFiserv('SEQUENCIA_INVALIDA')
-    return [por_sequencia[numero] for numero in sorted(por_sequencia)]
+    return [item for numero in sorted(por_sequencia)
+            for item in sorted(por_sequencia[numero], key=codigo)]
 
 
 def _familia(cabecalho):
