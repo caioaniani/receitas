@@ -259,6 +259,13 @@ def test_frase_de_venda_vai_pro_modelo(app, texto):
     # "ainda" entre o verbo e o objeto digital continua venda
     ('cliente não recebeu ainda o link de pagamento', False),
     ('cliente não recebeu ainda o cardápio', False),
+    # 2ª rodada (23/09/2026): link/cardápio/"qual o número/horário/telefone"
+    # no motivo NÃO desligam uma falha real relatada na mesma frase
+    ('entregador na portaria, ninguém atende, quer saber qual o telefone do cliente', True),
+    ('cliente não recebeu o pedido e pede o link de rastreio', True),
+    ('cliente não recebeu o pedido, quer saber qual o horário previsto', True),
+    ('motoboy foi embora, cliente pergunta qual o número da loja', True),
+    ('caso urgente: cliente não recebeu o pedido', True),
 ])
 def test_enforcement_libera_falha_operacional_no_motivo(motivo, esperado):
     from app.services.chatbot import _handoff_excecao, motivo_excecao_legitima
