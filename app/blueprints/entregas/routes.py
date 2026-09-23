@@ -526,18 +526,16 @@ def api_atendimento_chamar_telefone():
     (`chatwoot.iniciar_conversa_whatsapp`); o {{2}} do template vira o
     ASSUNTO digitado (ex.: 'Cesta dia dos pais') em vez do codigo."""
     from app.services import chatwoot as cw_svc
-    from app.utils import normalizar_telefone
     data = request.get_json(silent=True) or {}
     telefone = (data.get('telefone') or '').strip()
-    # Mesma guarda do canal do bot (crm/routes.py): 10-13 digitos = DDD +
-    # numero, com/sem 55. Fora disso nao e telefone BR — identifier de IG
-    # (~17 digitos) ou numero colado 2x passariam num check de minimo e o
-    # template poderia sair pra contato errado (achado de revisao).
-    digitos = normalizar_telefone(telefone)
-    if not (10 <= len(digitos) <= 13):
-        return jsonify({'ok': False,
-                        'erro': 'Telefone invalido — informe DDD + numero.'
-                        }), 400
+    # Só celular BR recebe template (classificador canônico, 23/09/2026):
+    # identifier de IG (~17 dígitos), número colado 2x, sem DDD, fixo ou
+    # internacional são recusados com o motivo — nunca template pra
+    # contato errado ou inventado.
+    motivo = cw_svc.motivo_telefone_sem_whatsapp(telefone)
+    if motivo:
+        return jsonify({'ok': False, 'erro': motivo,
+                        'telefone_recusado': True}), 400
     nome = (data.get('nome') or '').strip() or 'Cliente'
     sobre = (data.get('sobre') or '').strip() or 'no site'
     res = cw_svc.iniciar_conversa_whatsapp(telefone, nome,
