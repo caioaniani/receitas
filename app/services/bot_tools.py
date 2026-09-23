@@ -896,7 +896,8 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente,
                             'autorizado_como = destinatario, quem fala é '
                             'quem RECEBE (não quem comprou): diga isso no '
                             'motivo da transferência — a equipe decide com '
-                            'o comprador.'),
+                            'o comprador. Se autorizado_como = email, a '
+                            'pessoa provou posse pelo e-mail da compra.'),
     }
 
 
