@@ -183,6 +183,7 @@ def test_registrar_e_best_effort_e_retencao_poda(app):
         assert row is not None and row.conversation_id == 12
         row.criado_em = agora() - timedelta(days=app.config['RETENCAO_EVENTOS_DIAS'] + 1)
         db.session.commit()
-        rel = retencao.limpar(dry_run=False)
+        with patch('app.services.dropbox_storage.disponivel', return_value=False):
+            rel = retencao.executar_limpeza()
         assert rel['template_whatsapp_envio'] == 1
         assert TemplateWhatsappEnvio.query.count() == 0
