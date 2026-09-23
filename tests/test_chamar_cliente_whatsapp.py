@@ -33,7 +33,10 @@ def test_e164(app):
     with app.app_context():
         assert _e164('(11) 99999-8888') == '+5511999998888'
         assert _e164('5511999998888') == '+5511999998888'
-        assert _e164('11 3333-4444') == '+551133334444'
+        # Fixo NAO recebe WhatsApp (23/09/2026): None — antes saia template
+        # pra um numero que a Meta recusa (131026) e a tela dizia "enviado".
+        assert _e164('11 3333-4444') is None
+        assert _e164('+1 475-292-9850') is None   # internacional: nunca +55...
         assert _e164('99998888') is None     # sem DDD -> None
         assert _e164('') is None
 
