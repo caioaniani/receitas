@@ -1521,8 +1521,9 @@ def link_chatwoot(conv_id):
     return f'{base_cw}/app/accounts/{acc}/conversations/{cid}'
 
 
-def _serializar_alerta(v):
-    """Dict compacto de um VigiaVeredito pro front do painel."""
+def _serializar_alerta(v, resolucao=None):
+    """Dict compacto de um VigiaVeredito pro front do painel. `resolucao` =
+    linha de VigiaAlertaResolucao (ou None = caso em aberto)."""
     from app.utils import agora as _ag
     criado = v.criado_em
     # "ha quanto tempo" simples, pro banner ("ha 12min")
@@ -1542,13 +1543,28 @@ def _serializar_alerta(v):
         'chatwoot_url': link_chatwoot(v.conv_id),
         'criado_em': criado.isoformat() if criado else None,
         'ha_minutos': minutos,
+        # "reconhecido" = SILENCIADO (som parou); "resolvido" = caso fechado.
+        # Sao coisas diferentes desde 22/09/2026 (item 9, caso E3862E49).
         'reconhecido': v.reconhecido_em is not None,
+        'resolvido': resolucao is not None,
+        'resolvido_em': (resolucao.resolvido_em.isoformat()
+                         if resolucao is not None and resolucao.resolvido_em else None),
+        'resolvido_via': resolucao.via if resolucao is not None else None,
+        'resolvido_motivo': (resolucao.motivo or '') if resolucao is not None else '',
     }
 
 
+def _sem_resolucao():
+    """Criterio SQL "alerta sem VigiaAlertaResolucao"."""
+    from app.extensions import db
+    from app.models import VigiaAlertaResolucao, VigiaVeredito
+    return ~db.exists().where(VigiaAlertaResolucao.veredito_id == VigiaVeredito.id)
+
+
 def _query_pendentes():
-    """VigiaVeredito ALTA, nao reconhecido, dentro da janela — mais novos
-    primeiro."""
+    """VigiaVeredito ALTA NAO RESOLVIDO dentro da janela — mais novos
+    primeiro. Alerta RECONHECIDO (silenciado) CONTINUA aqui: reconhecer
+    para o som, nao fecha o caso (item 9, 22/09/2026)."""
     from datetime import timedelta
 
     from app.models import VigiaVeredito
@@ -1557,28 +1573,36 @@ def _query_pendentes():
     return (VigiaVeredito.query
             .filter(VigiaVeredito.alerta.is_(True),
                     VigiaVeredito.gravidade == 'alta',
-                    VigiaVeredito.reconhecido_em.is_(None),
+                    _sem_resolucao(),
                     VigiaVeredito.criado_em >= corte)
             .order_by(VigiaVeredito.criado_em.desc()))
 
 
 def alertas_pendentes_resumo():
-    """Pro api_painel: {pendentes: N, ultimo: {..}|None}. Barato — 1 query."""
+    """Pro api_painel: {pendentes: N (nao resolvidos), nao_reconhecidos: M
+    (destes, quantos ainda tocam o som), ultimo: {..}|None}. Barato — 1
+    query. O banner segue `pendentes`; o klaxon segue `nao_reconhecidos`."""
     pend = _query_pendentes().limit(50).all()
+    nao_rec = [v for v in pend if v.reconhecido_em is None]
+    ultimo = (nao_rec or pend)[0] if pend else None
     return {
         'pendentes': len(pend),
-        'ultimo': _serializar_alerta(pend[0]) if pend else None,
+        'nao_reconhecidos': len(nao_rec),
+        'ultimo': _serializar_alerta(ultimo) if ultimo is not None else None,
     }
 
 
 def reconhecer_pendentes(user_id=None, ids=None):
-    """Marca alertas como reconhecidos (clique no banner). Sem `ids`, marca
-    TODOS os pendentes da janela. Retorna quantos foram marcados."""
+    """SILENCIA alertas (clique no banner / abrir a aba): grava
+    `reconhecido_em` nos pendentes ainda nao reconhecidos. NAO resolve nada
+    — o alerta continua na fila do painel ate `resolver_alertas` (item 9,
+    caso E3862E49). Sem `ids`, silencia TODOS os pendentes da janela.
+    Retorna quantos foram marcados."""
     from app.extensions import db
+    from app.models import VigiaVeredito
     from app.utils import agora as _ag
-    q = _query_pendentes()
+    q = _query_pendentes().filter(VigiaVeredito.reconhecido_em.is_(None))
     if ids:
-        from app.models import VigiaVeredito
         q = q.filter(VigiaVeredito.id.in_(list(ids)))
     marcados = 0
     momento = _ag()
@@ -1588,17 +1612,91 @@ def reconhecer_pendentes(user_id=None, ids=None):
         marcados += 1
     if marcados:
         db.session.commit()
-        logger.info('vigia painel: %s alerta(s) reconhecido(s) por uid=%s',
+        logger.info('vigia painel: %s alerta(s) silenciado(s) por uid=%s',
                     marcados, user_id)
     return marcados
 
 
+VIAS_RESOLUCAO = ('resposta_humana', 'conversa_resolvida', 'manual')
+
+
+def resolver_alertas(ids, *, via, usuario_id=None, motivo=None, momento=None,
+                     commit=True):
+    """FECHA o caso de alertas ALTA (grava VigiaAlertaResolucao; idempotente
+    por veredito). `via='manual'` (botao do painel) EXIGE motivo por
+    escrito; 'resposta_humana'/'conversa_resolvida' sao as resolucoes
+    automaticas. Resolver implica silenciar (marca `reconhecido_em` se
+    ainda nao havia). Devolve quantos alertas foram resolvidos agora."""
+    from app.extensions import db
+    from app.models import VigiaAlertaResolucao, VigiaVeredito
+    from app.utils import agora as _ag
+    if via not in VIAS_RESOLUCAO:
+        raise ValueError(f'via de resolucao invalida: {via!r}')
+    motivo = (motivo or '').strip()
+    if via == 'manual' and not motivo:
+        raise ValueError('motivo obrigatorio para resolver manualmente')
+    ids_ok = []
+    for i in ids or []:
+        try:
+            ids_ok.append(int(i))
+        except (TypeError, ValueError):
+            continue
+    if not ids_ok:
+        return 0
+    ja = {r.veredito_id for r in VigiaAlertaResolucao.query
+          .filter(VigiaAlertaResolucao.veredito_id.in_(ids_ok)).all()}
+    momento = momento or _ag()
+    n = 0
+    for v in (VigiaVeredito.query
+              .filter(VigiaVeredito.id.in_(ids_ok),
+                      VigiaVeredito.alerta.is_(True),
+                      VigiaVeredito.gravidade == 'alta').all()):
+        if v.id in ja:
+            continue
+        db.session.add(VigiaAlertaResolucao(
+            veredito_id=v.id, resolvido_em=momento, via=via,
+            motivo=motivo[:2000] or None, usuario_id=usuario_id))
+        if v.reconhecido_em is None:
+            v.reconhecido_em = momento
+            v.reconhecido_por_id = usuario_id
+        n += 1
+    if n and commit:
+        db.session.commit()
+    if n:
+        logger.info('vigia painel: %s alerta(s) resolvido(s) via=%s uid=%s',
+                    n, via, usuario_id)
+    return n
+
+
+def resolver_alertas_da_conversa(conv_id, *, via, ate=None, usuario_id=None,
+                                 motivo=None, commit=True):
+    """Resolve os alertas ALTA em aberto de UMA conversa criados ate `ate`
+    (o instante da resposta humana / da resolucao) — nunca os posteriores:
+    um ALTA novo depois da resposta e caso novo. `ate=None` = todos."""
+    from app.models import VigiaVeredito
+    if conv_id is None:
+        return 0
+    q = (VigiaVeredito.query
+         .filter(VigiaVeredito.conv_id == str(conv_id),
+                 VigiaVeredito.alerta.is_(True),
+                 VigiaVeredito.gravidade == 'alta',
+                 _sem_resolucao()))
+    if ate is not None:
+        q = q.filter(VigiaVeredito.criado_em <= ate)
+    ids = [v.id for v in q.all()]
+    if not ids:
+        return 0
+    return resolver_alertas(ids, via=via, usuario_id=usuario_id, motivo=motivo,
+                            momento=ate, commit=commit)
+
+
 def historico_alertas(limite=40, janela_horas=48):
-    """Pro drawer lateral: ultimos alertas ALTA (reconhecidos ou nao) da
-    janela, com link do Chatwoot. Mais recentes primeiro."""
+    """Pro drawer lateral: ultimos alertas ALTA (silenciados, resolvidos ou
+    nao) da janela, com link do Chatwoot e o estado da resolucao. Mais
+    recentes primeiro."""
     from datetime import timedelta
 
-    from app.models import VigiaVeredito
+    from app.models import VigiaAlertaResolucao, VigiaVeredito
     from app.utils import agora as _ag
     corte = _ag() - timedelta(hours=janela_horas)
     rows = (VigiaVeredito.query
@@ -1607,4 +1705,9 @@ def historico_alertas(limite=40, janela_horas=48):
                     VigiaVeredito.criado_em >= corte)
             .order_by(VigiaVeredito.criado_em.desc())
             .limit(limite).all())
-    return [_serializar_alerta(v) for v in rows]
+    ids = [v.id for v in rows]
+    resol = {}
+    if ids:
+        resol = {r.veredito_id: r for r in VigiaAlertaResolucao.query
+                 .filter(VigiaAlertaResolucao.veredito_id.in_(ids)).all()}
+    return [_serializar_alerta(v, resol.get(v.id)) for v in rows]
