@@ -565,6 +565,8 @@
   // ao pai (painel-testes) pra abrir a conversa no painel da direita. No painel
   // normal esses botoes nunca sao criados, entao isto fica dormente.
   document.getElementById('drawer-lista').addEventListener('click', function (e) {
+    var r = e.target.closest('.al-resolver');
+    if (r) { e.preventDefault(); resolverAlerta(r); return; }
     var b = e.target.closest('.al-abrir-aqui');
     if (!b) return;
     e.preventDefault();
