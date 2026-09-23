@@ -68,15 +68,19 @@ class VigiaAlertaResolucao(db.Model):
     `VigiaVeredito.reconhecido_em` = alguem clicou no banner/abriu a aba e
     SILENCIOU o som. Nao diz nada sobre o caso: o alerta silenciado continua
     pendente na fila do painel. Esta linha e o que fecha o caso, e so nasce
-    de tres jeitos (`via`): 'resposta_humana' (alguem da equipe respondeu na
-    conversa DEPOIS do alerta — pelo painel ou pelo Chatwoot),
-    'conversa_resolvida' (a conversa foi marcada resolvida) ou 'manual'
-    (botao "Resolver" do painel, com MOTIVO por escrito obrigatorio).
-    Tabela nova via `db.create_all` — sem ALTER em tabela antiga."""
+    de DOIS jeitos (`via`): 'resposta_humana' (alguem da equipe respondeu na
+    conversa DEPOIS do alerta — pelo painel ou pelo Chatwoot; marcar a
+    conversa resolvida NAO resolve o alerta sozinha: so resolve se o
+    historico prova uma resposta humana posterior) ou 'manual' (botao
+    "Resolver" do painel, com MOTIVO por escrito obrigatorio).
+    Tabela nova via `db.create_all` — sem ALTER em tabela antiga. A FK tem
+    `ondelete='CASCADE'` e a retencao apaga a resolucao ANTES do veredito
+    (SQLite nao aplica o cascade sem PRAGMA)."""
     __tablename__ = 'vigia_alerta_resolucao'
 
     id = db.Column(db.Integer, primary_key=True)
-    veredito_id = db.Column(db.Integer, db.ForeignKey('vigia_veredito.id'),
+    veredito_id = db.Column(db.Integer,
+                            db.ForeignKey('vigia_veredito.id', ondelete='CASCADE'),
                             unique=True, nullable=False, index=True)
     resolvido_em = db.Column(db.DateTime, nullable=False, default=agora, index=True)
     via = db.Column(db.String(20), nullable=False)
