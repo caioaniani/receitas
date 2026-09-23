@@ -633,7 +633,7 @@ _SINAL_VENDA_FALA = re.compile(
 # chegou" e "quer saber por que nao recebeu" sao falha REAL relatada, e a
 # 1ª versao (pergunt*/duvida/quer saber soltos) as derrubava.
 _HIPOTESE_MOTIVO = re.compile(
-    r'(?i)\b(?:o\s+que\s+acontece|e\s+se\b|caso\b|'
+    r'(?i)\b(?:o\s+que\s+acontece|e\s+se\b|' + _CASO_CONJUNCAO + r'|'
     r'(?:pergunt\w+|d[uú]vida\w*|quer\s+saber)\s+(?:se|o\s+que|como|quando|caso)\b|'
     r'se\s+(?:(?:o|a|meu|minha|seu|sua)\s+)?\w+\s+(?:n[aã]o\s+)?'
     r'(?:chegar|receber|vier|vierem|atrasar|entregarem)\b)')
