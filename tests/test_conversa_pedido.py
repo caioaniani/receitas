@@ -170,8 +170,21 @@ def test_bot_pedido_existente_sem_autorizacao_vincula_mas_modelo_nao_ve(app, mon
         chatbot.responder([{'role': 'user', 'content': 'vi o pedido E3862E49 da minha esposa'}],
                           telefone_contato='11900000000', conversa_id=2432)
         assert _vinculos() == {('2432', 'bot')}
+        # Sem prova de posse o vínculo nasce NÃO autorizado (revisão 23/09):
+        # a equipe vê a conversa listada, mas o status da entrega não vai lá.
+        assert _autorizacao() == {'2432': False}
         assert vistos and vistos[0]['erro'] == 'autorizacao_necessaria'
         assert '_pedido_existente' not in vistos[0] and '_nota_interna' not in vistos[0]
+
+
+def test_bot_autorizado_grava_vinculo_autorizado(app, monkeypatch):
+    from app.services import chatbot
+    with app.app_context():
+        _pedido()
+        _cliente_com_tool(monkeypatch, {'numero': 'E3862E49'})
+        chatbot.responder([{'role': 'user', 'content': 'cadê meu pedido E3862E49?'}],
+                          telefone_contato='11988887777', conversa_id=2431)
+        assert _autorizacao() == {'2431': True}
 
 
 def test_lista_de_varios_pedidos_nao_vincula(app, monkeypatch):
