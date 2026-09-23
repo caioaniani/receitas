@@ -84,6 +84,24 @@ class VigiaAlertaResolucao(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
 
+class TemplateWhatsappEnvio(db.Model):
+    """Registro de cada TEMPLATE de WhatsApp disparado pelo painel ("Chamar
+    cliente" / "Chamar por telefone" / "Chamar motoboy") — dedupe do item 10
+    (spec do dono, caso E3862E49, 22/09/2026: a equipe reclicou "Chamar"
+    quatro vezes no mesmo pedido). Chave = (destino, template, referencia)
+    dentro de `template_dedupe.JANELA_MIN`. Tabela nova via
+    `db.create_all`; log de idempotencia (podado pela retencao)."""
+    __tablename__ = 'template_whatsapp_envio'
+
+    id = db.Column(db.Integer, primary_key=True)
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False, index=True)
+    destino_chave = db.Column(db.String(40), nullable=False, index=True)
+    template = db.Column(db.String(120), nullable=False)
+    referencia = db.Column(db.String(60), nullable=False)  # codigo do pedido / assunto
+    conversation_id = db.Column(db.Integer)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+
 class CopilotConversa(db.Model):
     """Audit trail das interacoes com o copilot.
     Cada prompt do usuario vira 1 registro. Guarda a interpretacao da
