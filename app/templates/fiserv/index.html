@@ -116,7 +116,7 @@
   <p class="text-muted small">Os arquivos originais ficam disponíveis aqui para conferência. O recebimento não dá baixa em pedidos ou contas. O extrato bancário Sicredi é uma conexão separada.</p>
   {% if pagina.items %}
   <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Arquivo</th><th>Recebido em</th><th>Tamanho</th><th></th></tr></thead><tbody>
-  {% for arquivo in pagina.items %}<tr><td class="text-break">{{ arquivo.nome }}</td><td>{{ arquivo.recebido_em.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ (arquivo.tamanho / 1024)|round(1) }} KB</td><td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('fiserv.baixar', arquivo_id=arquivo.id) }}">Baixar</a></td></tr>{% endfor %}
+  {% for arquivo in pagina.items %}<tr><td class="text-break">{{ arquivo.nome }}</td><td>{{ arquivo.recebido_em.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ (arquivo.tamanho / 1024)|round(1) }} KB</td><td><div class="d-flex gap-2"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('fiserv.visualizar', arquivo_id=arquivo.id) }}">Ver conteúdo</a><a class="btn btn-sm btn-outline-primary" href="{{ url_for('fiserv.baixar', arquivo_id=arquivo.id) }}">Baixar</a></div></td></tr>{% endfor %}
   </tbody></table></div>
   <nav class="d-flex gap-2" aria-label="Páginas de arquivos">{% if pagina.has_prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fiserv.index', pagina=pagina.prev_num) }}">Anteriores</a>{% endif %}{% if pagina.has_next %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fiserv.index', pagina=pagina.next_num) }}">Próximos</a>{% endif %}</nav>
   {% else %}<p class="mb-0">Ainda não há arquivos recebidos.</p>{% endif %}

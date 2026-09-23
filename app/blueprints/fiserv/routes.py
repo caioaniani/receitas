@@ -2,8 +2,10 @@
 
 import base64
 import io
+import json
 import os
 import secrets
+from decimal import Decimal, InvalidOperation
 
 from flask import (
     abort,
@@ -312,3 +314,38 @@ def baixar(arquivo_id):
     db.session.commit()
     return send_file(io.BytesIO(conteudo), mimetype='application/octet-stream',
                      as_attachment=True, download_name=arquivo.nome, max_age=0)
+
+
+@fiserv_bp.get('/arquivos/<int:arquivo_id>/visualizar')
+def visualizar(arquivo_id):
+    __tracebackhide__ = True
+    registro = db.session.get(ArquivoFiservRecebido, arquivo_id)
+    if registro is None:
+        abort(404)
+    arquivo = {'id': registro.id, 'nome': registro.nome, 'tamanho': registro.tamanho}
+    limite = 512 * 1024
+    conteudo = None
+    mensagem = None
+
+    def recusar_constante(_valor):
+        __tracebackhide__ = True
+        raise ValueError
+
+    if registro.tamanho > limite:
+        mensagem = 'Este arquivo ultrapassa o limite de visualização de 512 KiB. Baixe o original para conferi-lo.'
+    else:
+        try:
+            dados = decifrar_bytes(registro.conteudo_cifrado)
+            if len(dados) > limite:
+                mensagem = 'Este arquivo ultrapassa o limite de visualização de 512 KiB. Baixe o original para conferi-lo.'
+            else:
+                texto = dados.decode('utf-8-sig', errors='strict')
+                # Valida sem converter dinheiro em float nem reescrever os
+                # números, a ordem ou as strings do documento original.
+                json.loads(texto, parse_float=Decimal, parse_constant=recusar_constante)
+                conteudo = texto
+        except ErroSegredoFiserv:
+            mensagem = 'Não foi possível abrir o arquivo com a chave atual do servidor.'
+        except (UnicodeError, ValueError, InvalidOperation, RecursionError):
+            mensagem = 'Este arquivo não contém JSON válido em UTF-8 para visualização. Baixe o original para conferi-lo.'
+    return render_template('fiserv/arquivo.html', arquivo=arquivo, conteudo=conteudo, mensagem=mensagem)

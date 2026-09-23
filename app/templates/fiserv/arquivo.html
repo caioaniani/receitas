@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Conteúdo do arquivo Fiserv{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1">Conteúdo do arquivo</h1>
+    <p class="text-break mb-1">{{ arquivo.nome }}</p>
+    <p class="text-muted mb-0">{{ arquivo.tamanho }} bytes</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('fiserv.index') }}">Voltar</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('fiserv.baixar', arquivo_id=arquivo.id) }}">Baixar original</a>
+  </div>
+</div>
+{% if mensagem %}<div class="alert alert-warning">{{ mensagem }}</div>{% endif %}
+{% if conteudo is not none %}
+<p class="text-muted small">Conteúdo original validado como JSON. A quebra visual das linhas facilita a leitura e não modifica o arquivo guardado.</p>
+<pre id="conteudo-arquivo" class="border rounded p-3 bg-light" style="white-space: pre-wrap; overflow-wrap: anywhere; max-height: 70vh; overflow: auto;">{{ conteudo }}</pre>
+{% endif %}
+{% endblock %}
