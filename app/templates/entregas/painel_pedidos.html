@@ -356,7 +356,9 @@
   var EMBED = new URLSearchParams(location.search).has('embed');
   var pedidos = [];
   var audioCtx = null, beepTimer = null;
-  var vigia = { pendentes: 0, ultimo: null };  // resumo do api_painel
+  // resumo do api_painel: pendentes = NAO RESOLVIDOS (banner);
+  // nao_reconhecidos = destes, quantos ainda tocam o som (item 9, 22/09/2026).
+  var vigia = { pendentes: 0, nao_reconhecidos: 0, ultimo: null };
   var vigiaKlaxonTimer = null;
   var abertoCode = null;
 
