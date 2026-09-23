@@ -5071,6 +5071,29 @@ prompt mandava pedir número/CPF ANTES de transferir uma reclamação.
    ALTA com motivo NÃO resolve a `EsperaAtendimento` da conversa (decisão
    de 17-18/09 mantida). Testes: `tests/test_vigia_reconhecer_vs_
    resolver.py` + `test_vigia_painel.py` atualizado (reconhecido conta).
+10. **Template de "Chamar" não repete em 60 min** (spec do dono de
+   22/09/2026, caso E3862E49 — a equipe clicou "Chamar" 4× no pedido em
+   2 h porque a tela dizia "enviado"). Tabela NOVA `TemplateWhatsappEnvio`
+   (`app/models/integracoes.py`; `destino_chave` = `telefone_chave`,
+   `template`, `referencia` = código do pedido ou assunto, `conversation_id`,
+   `usuario_id`; via `db.create_all`; PODADA pela retenção com
+   `RETENCAO_EVENTOS_DIAS` — é idempotência, não negócio). Serviço
+   `app/services/template_dedupe.py`: `JANELA_MIN = 60`, `envio_recente(
+   telefone, template, referencia)` (mesmo destino canônico + mesmo
+   template + mesma referência sem caixa, dentro da janela), `registrar`
+   (best-effort, só depois de `ok=True` — recusa da Meta/Chatwoot NÃO
+   conta, senão a equipe ficaria 60 min sem poder corrigir e tentar) e
+   `resposta_bloqueio(row, nome)` = payload 409 `{ok: False, erro: "Modelo
+   já enviado às HH:MM (há N min) … um novo envio só depois de M min",
+   ja_enviado, ja_enviado_em, ha_minutos, conversation_id}` — o
+   `conversation_id` faz os três fronts abrirem a conversa existente sem
+   mudança de JS (todos já abrem quando a chave vem, e mostram `erro`).
+   Aplicado nas três rotas (`entregas/routes.py`: chamar-cliente por
+   `p.codigo`, chamar-telefone pelo `sobre`, chamar-motorista por
+   `pedido_code` com o template EFETIVO — o dedicado do motoboy é outro
+   template e não colide com o padrão). Sem override de propósito (a spec
+   não previu; reenviar antes da hora é ordem do dono). Testes:
+   `tests/test_template_dedupe.py`.
 CRÍTICA DE COMPLETUDE (workflow de 6 leitores + crítico) — aplicados:
 `chatbot_auditor._TRACKING_PREFIXES` ganhou `'[LALAMOVE'` (o veredito
 operacional não entra na taxa de contenção); `chatbot_vigia.
