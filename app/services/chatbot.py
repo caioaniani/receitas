@@ -1231,7 +1231,10 @@ def _resp_fila_silenciosa(motivo, tools_usadas=None, tools_resumo=None):
     cliente nao recebe nada — usado quando o bot encerraria mas ha
     reclamacao em aberto (item 7). Nao passa por `_resp_handoff` de
     proposito: o aviso de fora-horario transformaria o silencio em fala."""
-    out = {'acao': 'handoff', 'texto': '', 'motivo': motivo}
+    # `fila_silenciosa`: o vigia pula este turno (nao ha fala do bot pra
+    # julgar; a reclamacao ja teve o veredito dela quando aconteceu).
+    out = {'acao': 'handoff', 'texto': '', 'motivo': motivo,
+           'fila_silenciosa': True}
     if tools_usadas is not None:
         out['tools_usadas'] = list(tools_usadas)
     if tools_resumo is not None:
