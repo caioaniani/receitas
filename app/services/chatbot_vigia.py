@@ -359,18 +359,47 @@ def _alerta_alta_recente(conv_id, horas=_DEDUP_ALTA_HORAS):
     try:
         from datetime import timedelta
 
+        from sqlalchemy import or_
+
+        from app.models import VigiaVeredito
+        from app.utils import agora
+        corte = agora() - timedelta(hours=horas)
+        # O alerta OPERACIONAL da Lalamove (bot_acao='lalamove') nao e turno
+        # do bot: nao pode calar um ALTA legitimo do vigia na mesma conversa.
+        return (VigiaVeredito.query
+                .filter(VigiaVeredito.conv_id == str(conv_id),
+                        VigiaVeredito.criado_em >= corte,
+                        VigiaVeredito.gravidade == 'alta',
+                        VigiaVeredito.alerta.is_(True),
+                        VigiaVeredito.enviado_whatsapp.is_(True),
+                        or_(VigiaVeredito.bot_acao.is_(None),
+                            VigiaVeredito.bot_acao != 'lalamove'))
+                .first()) is not None
+    except Exception:  # noqa: BLE001
+        logger.exception('vigia: dedup ALTA falhou (fail-open)')
+        return False
+
+
+def alerta_lalamove_recente(conv_id, horas=24):
+    """True se esta conversa foi aberta pra equipe por corrida Lalamove
+    encerrada sem entrega (`lalamove_alerta`, bot_acao='lalamove') nas
+    ultimas `horas`: a contencao automatica ao cliente NAO sai — o contrato
+    do alerta e "sem mensagem automatica ao cliente" (23/09/2026)."""
+    if not conv_id:
+        return False
+    try:
+        from datetime import timedelta
+
         from app.models import VigiaVeredito
         from app.utils import agora
         corte = agora() - timedelta(hours=horas)
         return (VigiaVeredito.query
                 .filter(VigiaVeredito.conv_id == str(conv_id),
                         VigiaVeredito.criado_em >= corte,
-                        VigiaVeredito.gravidade == 'alta',
-                        VigiaVeredito.alerta.is_(True),
-                        VigiaVeredito.enviado_whatsapp.is_(True))
+                        VigiaVeredito.bot_acao == 'lalamove')
                 .first()) is not None
     except Exception:  # noqa: BLE001
-        logger.exception('vigia: dedup ALTA falhou (fail-open)')
+        logger.exception('vigia: alerta_lalamove_recente falhou (fail-open)')
         return False
 
 
@@ -1193,6 +1222,13 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
         if reclamacao:
             msg += ('\n\n🚨 Relato de PROBLEMA/reclamação — a mensagem automática '
                     'de espera NÃO foi enviada; alguém precisa responder a pessoa.')
+        elif alerta_lalamove_recente(conv_id):
+            # Conversa aberta pelo alerta de corrida Lalamove encerrada sem
+            # entrega: a equipe fala com o cliente; nada automatico sai.
+            reclamacao = True
+            msg += ('\n\n🛵 Conversa aberta pelo alerta de corrida Lalamove '
+                    'encerrada sem entrega — a mensagem automática de espera '
+                    'NÃO foi enviada; a equipe precisa falar com o cliente.')
         msg += '\n\nVou lembrar novamente em 15 minutos até a conversa ser marcada como resolvida.'
         # CLAIM-FIRST (20/08/2026): o registro É o dedupe, então ele fica
         # COMMITADO antes do envio. O que isso cobre de verdade: o processo
