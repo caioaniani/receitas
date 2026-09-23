@@ -1324,10 +1324,14 @@ def iniciar_conversa_whatsapp(telefone, nome, params,
                 'erro': ('Template do WhatsApp nao configurado. '
                          'Defina CHATWOOT_WHATSAPP_TEMPLATE.')}
     inbox_id = _whatsapp_inbox_id()
-    fone = _e164(telefone)
-    if not fone:
+    # Número que não recebe WhatsApp (internacional, fixo, inválido) é
+    # recusado AQUI, com o motivo explícito, antes de qualquer rede — nunca
+    # mais "template enviado" pra número inventado (23/09/2026).
+    motivo = motivo_telefone_sem_whatsapp(telefone)
+    if motivo:
         return {'ok': False, 'conversation_id': None, 'nova': False,
-                'erro': f'Telefone invalido/sem DDD: {telefone!r}'}
+                'erro': motivo, 'telefone_recusado': True}
+    fone = _e164(telefone)
 
     contato = _buscar_contato(fone) or _criar_contato(fone, nome, inbox_id)
     if not contato or not contato.get('id'):
