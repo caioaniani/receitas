@@ -47,6 +47,13 @@ def _pendentes_ids():
     return [v.id for v in chatbot_vigia._query_pendentes().all()]
 
 
+def _ts(dt):
+    """Epoch como o Chatwoot manda (`created_at`), a partir de um `agora()`
+    naive em BRT — sem isto o `.timestamp()` usaria o fuso do container."""
+    from app.utils import BRT
+    return int(dt.replace(tzinfo=BRT).timestamp())
+
+
 # ── reconhecer = silenciar ─────────────────────────────────────────────
 
 def test_reconhecer_silencia_mas_alerta_continua_pendente(app, admin_logado):
