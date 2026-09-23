@@ -1731,7 +1731,8 @@ def _executar_tool(nome, inp, *, telefone_contato=None,
             return bot_tools.consultar_pedido(
                 inp.get('numero') or inp.get('numero_pedido') or '',
                 telefone_contato=telefone_contato,
-                cpf_cliente=inp.get('cpf_cliente') or inp.get('cpf') or None)
+                cpf_cliente=inp.get('cpf_cliente') or inp.get('cpf') or None,
+                email_cliente=inp.get('email_cliente') or inp.get('email') or None)
         if nome == 'gerar_link_carrinho':
             return bot_tools.gerar_link_carrinho(inp.get('itens') or [])
         if nome == 'consultar_frete':
