@@ -1246,26 +1246,39 @@ def _texto_handoff_com_horario(texto):
 # -> "valeu" virava conversa aberta com nota "reclamacao em aberto"
 # (revisao 23/09/2026). Pergunta nunca e reclamacao; "trocar", "devolver" e
 # "atraso" soltos ficam fora (pedido/duvida, nao queixa).
+# Sinal FORTE = queixa ANCORADA numa construcao de queixa (2ª rodada da
+# revisao 23/09/2026: as palavras soltas casavam elogio — "nunca mais
+# compro pao em outro lugar, adorei", "o pao e absurdo de bom", "gosto do
+# pao bem queimado", "sem reclamacao, tudo otimo", "tem reembolso caso eu
+# nao goste" — e mandavam o "obrigada" pra fila).
 _RECLAMACAO_FORTE = re.compile(
-    r'(?i)\b(?:reclama\w*|p[eé]ssim\w*|horr[ií]vel|absurd\w*|vergonh\w*|'
-    r'decepcion\w*|revoltad\w*|indignad\w*|cancelei|acabei\s+cancelando|'
-    r'reembolso|estorno|nunca\s+mais|queimad[oa]s?|estragad[oa]s?|'
-    r'mofad[oa]s?|azed[oa]s?|'
-    r'veio\s+(?:errad|quebrad|faltando|incomplet|amassad|murch|trocad)\w*|'
+    r'(?i)\b(?:(?:quero|vou|preciso|venho|gostaria\s+de)\s+reclamar|'
+    r'(?:tenho|fa[çc]o|minha|uma)\s+reclama[çc][aã]o|'
+    r'p[eé]ssim[oa]s?|horr[ií]ve(?:l|is)|decepcion\w*|revoltad[oa]s?|indignad[oa]s?|'
+    r'acabei\s+cancelando|cancelei\s+(?:porque|pois|por\s+causa|de\s+raiva)|'
+    r'(?:quero|exijo|preciso\s+d[eo]|cad[eê]\s+(?:o\s+)?meu)\s+'
+    r'(?:reembolso|estorno|dinheiro\s+de\s+volta)|'
+    r'nunca\s+mais\s+(?:compro|pe[çc]o|volto|quero)\s+'
+    r'(?:aqui|com\s+voc[eê]s|de\s+voc[eê]s|nada\s+de\s+voc[eê]s|a[ií])|'
+    r'(?:veio|vieram|chegou|chegaram|est[aá]|t[aá]|estava|recebi)\s+(?:\w+\s+){0,2}?'
+    r'(?:errad|quebrad|faltando|incomplet|amassad|murch|trocad|queimad|estragad|'
+    r'mofad|azed|cru)\w*|'
     r'pedido\s+(?:errado|trocado|incompleto))\b')
 
 
 def _reclamacao_aberta(texto):
     """Fala do cliente que conta como reclamacao pro item 7: falha
-    operacional em curso OU sinal forte de queixa numa afirmacao."""
-    t = (texto or '').strip()
+    operacional em curso OU sinal forte de queixa numa afirmacao (negacao
+    escopada: "nao veio errado" nao e queixa)."""
+    t = _texto_para_deteccao(texto)
     if not t:
         return False
     if falha_operacional(t):
         return True
     if t.endswith('?'):
         return False
-    return bool(_RECLAMACAO_FORTE.search(t))
+    hits = [(m.start(), m.end()) for m in _RECLAMACAO_FORTE.finditer(t)]
+    return _algum_hit_nao_negado(t, hits, nua_veta=True)
 
 
 def _reclamacao_sem_resposta_humana(historico):
