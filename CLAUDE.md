@@ -5162,6 +5162,61 @@ sandbox; L7 dedupe Lalamove check-then-insert (2 workers na mesma
 reentrega = 2 alertas, raro); L8 "não sei se o motoboy não achou o
 prédio" vetado como hipótese; L11 colisão `telefone_chave` na
 autorização por telefone é pré-existente.
+REVISÃO INDEPENDENTE (revisor, 2ª rodada, 23/09/2026) — APLICADOS: #1
+CRÍTICO, regressão MINHA da 1ª rodada: os vetos de `falha_operacional`
+ficaram largos demais e calavam o socorro real — "comprei pelo site e meu
+pedido não chegou", "pedi pelo app e não veio nada", "meu pedido não chegou
+e ninguém responde no whatsapp", "o pedido não chegou, qual o telefone da
+loja?", "comprei na loja e veio errado" viravam venda/dúvida. Agora o canal
+digital (`_RE_CANAL_DIGITAL`) e a loja (`_RE_LOJA_ESTOQUE`) só vetam
+COLADOS ao verbo (`depois = t[m.end():]`, loja só em pergunta), o veto de
+venda na FALA usa `_SINAL_VENDA_FALA` (frete/cotar/orçamento/carrinho/
+tentando pagar/como pago — curta de propósito) e `_SINAL_VENDA_EM_CURSO`
+(MOTIVO) perdeu link/cardápio/"qual o número/horário/telefone" — falha
+real na mesma frase não se desarma por uma pergunta; `_HIPOTESE_FALHA`/
+`_HIPOTESE_MOTIVO` usam `_CASO_CONJUNCAO` ("caso" só como conjunção —
+"caso urgente: cliente não recebeu" é falha). #3 elogio/negação virava
+reclamação ("veio tudo certo, nada errado", "nunca mais compro em outro
+lugar, adorei") → `_RECLAMACAO_FORTE` ANCORADA (verbo + adjetivo de
+defeito, "quero/exijo/cadê meu reembolso/estorno/dinheiro de volta",
+"nunca mais compro/peço/volto aqui/com vocês", "cancelei porque/por causa/
+de raiva") + negação escopada (`_algum_hit_nao_negado(nua_veta=True)`).
+#4 fila silenciosa NUNCA vira `TEXTO_HANDOFF_REPETIDO` (webhook e
+vassoura pulam o dedupe de handoff quando `fila_silenciosa` — falar seria
+quebrar o contrato). #7 conversa `resolved` com ALTA em aberto: como ela
+SAI de `preparar` (único leitor do histórico), a resposta humana dada no
+Chatwoot antes do resolve ficava sem efeito → `atendimento_pendente.
+_resolver_alertas_por_historico` (só se `chatbot_vigia.alertas_em_aberto_
+da_conversa`; 1 GET; resolve via 'resposta_humana' com o instante da
+ÚLTIMA fala humana; sem fala humana = fica na fila — conservador). #8
+`VigiaAlertaResolucao.veredito_id` com `ondelete='CASCADE'` + PRÉ-PASSO na
+retenção (apaga a resolução dos vereditos que vão sair — SQLite não
+cascateia sem PRAGMA e o delete em massa do ORM não cascateia). #9
+`resolver_alertas` grava cada resolução num SAVEPOINT (`begin_nested`) e
+trata `IntegrityError` como "outro processo resolveu" (painel + relógio
+no mesmo minuto). #10 docstrings que ainda citavam 'conversa_resolvida'.
+#11 front: resolver o último pendente zera `vigia.ultimo` (o banner não
+mostra o caso fechado até o próximo poll). #14 `ConversaPedido.autorizada`
+(coluna na tabela NOVA — sem ALTER em prod): `consultar_pedido` com
+`autorizacao_necessaria` grava o vínculo `autorizada=False`; a nota de
+status NÃO vai nessa conversa (código nunca vira credencial), mas ela
+entra na lista das outras com `ROTULO_NAO_AUTORIZADA`; autorização
+posterior na mesma conversa PROMOVE, nunca rebaixa. #16 `vincular` trata
+`IntegrityError` do unique como "já existe" (INFO), não ERROR. ACEITOS/
+DOCUMENTADOS: #5 `_equipe_respondeu_no_chatwoot` pode fazer até 21 GETs
+sob o lock da conversa (só em reclamação aberta + fechamento — raro);
+#12 dedupe do template é check-then-insert, não claim-first (o botão
+desabilita no clique; 2 cliques no MESMO segundo em abas diferentes
+passam — aceito); #17 o alerta da Lalamove vincula a conversa MAIS
+RECENTE do contato (pode não ser a do pedido quando o cliente tem duas —
+a nota lista as demais); anti-flood do crítico conta TENTATIVAS, não
+envios; `conversa_pedido._executar` é privado chamado do `lalamove_
+alerta` (já está na thread dele — evitar 2ª thread). Testes: seção "2ª
+rodada" em `test_socorro_email_terceiro.py` (listas POSITIVOS/NEGATIVOS e
+motivos), `test_encerrar_reclamacao_aberta.py` (elogio × queixa forte,
+webhook com `handoff_recente`), `test_vigia_reconhecer_vs_resolver.py`
+(resolved com/sem resposta humana, savepoint), `test_conversa_pedido.py`
+(não autorizada, promoção, corrida).
 CRÍTICA DE COMPLETUDE (workflow de 6 leitores + crítico) — aplicados:
 `chatbot_auditor._TRACKING_PREFIXES` ganhou `'[LALAMOVE'` (o veredito
 operacional não entra na taxa de contenção); `chatbot_vigia.
