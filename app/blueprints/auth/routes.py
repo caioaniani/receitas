@@ -106,7 +106,12 @@ def minhas_fichas():
 def usuarios():
     """Gerenciar usuários — só admin."""
     from app.models import Loja
-    usuarios = Usuario.query.order_by(Usuario.papel, Usuario.nome).all()
+    usuario_id = request.args.get('usuario', type=int)
+    if 'usuario' in request.args and not usuario_id:
+        abort(400)
+    selecionado = Usuario.query.get_or_404(usuario_id) if usuario_id else None
+    usuarios = ([selecionado] if selecionado else
+                Usuario.query.order_by(Usuario.papel, Usuario.nome).all())
     if current_user.is_owner:
         from app.models import DelegacaoFiscalB2B
         delegados_nf = {row[0] for row in db.session.query(DelegacaoFiscalB2B.usuario_id).all()}
@@ -115,7 +120,7 @@ def usuarios():
     lojas = (Loja.query.filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
              .order_by(Loja.nome).all())
     return render_template('auth/usuarios.html', usuarios=usuarios, lojas=lojas,
-                           delegados_nf=delegados_nf)
+                           delegados_nf=delegados_nf, selecionado=selecionado)
 
 
 @auth_bp.route('/usuarios/<int:id>/nf-b2b', methods=['POST'])
@@ -136,7 +141,7 @@ def delegar_nf_b2b(id):
         db.session.delete(a)
     db.session.commit()
     flash(f'Permissão para emitir NF B2B de {u.nome} atualizada. Outras permissões não foram alteradas.', 'success')
-    return redirect(url_for('auth.usuarios'))
+    return _voltar_ao_usuario(u)
 
 
 @auth_bp.route('/usuarios/novo', methods=['POST'])
@@ -246,24 +251,31 @@ def alterar_papel(id):
     u = Usuario.query.get_or_404(id)
     if u.is_owner:
         flash('Owner nao pode ter o papel alterado.', 'warning')
-        return redirect(url_for('auth.usuarios'))
+        return _voltar_ao_usuario(u)
 
     papel = (request.form.get('papel') or '').strip()
     from app.constants import PAPEIS_VALIDOS
     if papel not in PAPEIS_VALIDOS:
         flash('Papel invalido.', 'warning')
-        return redirect(url_for('auth.usuarios'))
+        return _voltar_ao_usuario(u)
 
     if papel == 'relatorio_loja':
         from app.services.acesso_relatorio_loja import loja_operacional
         loja = loja_operacional(request.form.get('loja_id', type=int))
         if not loja or u.somente_treino or u.id == current_user.id:
             flash('Selecione uma loja ativa e retire a restrição só treinamento. Não é permitido restringir a própria conta.', 'warning')
-            return redirect(url_for('auth.usuarios'))
+            return _voltar_ao_usuario(u)
         u.loja_id = loja.id
     u.papel = papel
     db.session.commit()
     flash(f'Papel de "{u.nome}" alterado para {papel}.', 'success')
+    return _voltar_ao_usuario(u)
+
+
+def _voltar_ao_usuario(usuario):
+    """Mantém o foco na conta escolhida, sem aceitar uma URL de retorno."""
+    if request.form.get('voltar_acesso') == str(usuario.id):
+        return redirect(url_for('auth.usuarios', usuario=usuario.id))
     return redirect(url_for('auth.usuarios'))
 
 
@@ -276,21 +288,21 @@ def toggle_somente_treino(id):
     u = Usuario.query.get_or_404(id)
     if u.is_owner:
         flash('Owner não pode ser restrito a treinamento.', 'warning')
-        return redirect(url_for('auth.usuarios'))
+        return _voltar_ao_usuario(u)
     if u.id == current_user.id:
         # Auto-lockout: marcar a si mesmo prenderia você em /treino e você não
         # conseguiria nem se desmarcar (a rota não é treino.*).
         flash('Você não pode restringir a sua própria conta a treinamento.',
               'warning')
-        return redirect(url_for('auth.usuarios'))
+        return _voltar_ao_usuario(u)
     if u.is_relatorio_loja():
         flash('O perfil de relatório já é restrito à consulta da loja e não pode receber treinamento.', 'warning')
-        return redirect(url_for('auth.usuarios'))
+        return _voltar_ao_usuario(u)
     u.somente_treino = not u.somente_treino
     db.session.commit()
     estado = 'agora vê SÓ treinamento' if u.somente_treino else 'voltou ao acesso normal'
     flash(f'"{u.nome}" {estado}.', 'success')
-    return redirect(url_for('auth.usuarios'))
+    return _voltar_ao_usuario(u)
 
 
 @auth_bp.route('/usuarios/<int:id>/reset-senha', methods=['POST'])

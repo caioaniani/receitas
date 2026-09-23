@@ -151,7 +151,8 @@ def itens_para_usuario(usuario, categorias_receitas):
                   'check2-square', aliases=['TO-DO'])
         adicionar('Fichas atribuídas', 'auth.painel', 'Equipe', 'diagram-2',
                   aliases=['atribuições'])
-        adicionar('Usuários', 'auth.usuarios', 'Sistema', 'person-badge')
+        adicionar('Usuários', 'auth.usuarios', 'Sistema', 'person-badge',
+                  aliases=['permissões de acesso', 'perfil de acesso'])
         adicionar('Histórico de alterações', 'main.audit', 'Sistema',
                   'shield-check', aliases=['audit log', 'quem alterou'])
         adicionar('Manual de operação', 'main.manual_operacao', 'Sistema',
@@ -173,7 +174,8 @@ def itens_para_usuario(usuario, categorias_receitas):
         adicionar('Acessos dos funcionários', 'rh.funcionarios', 'Equipe',
                   'person-lock', view='acessos', acesso='todos',
                   aliases=['senha', 'enviar nova senha', 'e-mail de acesso',
-                           'liberar acesso', 'login da equipe'])
+                           'liberar acesso', 'login da equipe',
+                           'permissões da equipe'])
         adicionar('Cargos e salários', 'rh.plano_carreira', 'Equipe',
                   'signpost-split', aliases=['plano de carreira',
                                             'planilha de cargos'])

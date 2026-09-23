@@ -15,6 +15,7 @@
         {% if not func.ativo %}<span class="badge bg-danger">Inativo</span>{% endif %}
     </h1>
     <div class="d-flex gap-2 flex-wrap">
+    {% if current_user.is_dono() and func.usuario_id %}<a href="{{ url_for('auth.usuarios', usuario=func.usuario_id) }}" class="btn btn-primary"><i class="bi bi-shield-lock" aria-hidden="true"></i> Permissões de acesso</a>{% endif %}
     {% if current_user.is_dono() %}<a href="{{ url_for('rh.carreira_funcionario', id=func.id) }}" class="btn-pill">Histórico de carreira</a>{% endif %}
     {{ ui.botao_voltar(url_for('rh.funcionarios')) }}
     </div>

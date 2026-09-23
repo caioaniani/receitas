@@ -151,7 +151,12 @@
                     </div>
                     <div class="rh-acesso-person-meta">{{ f.cargo.nome if f.cargo else (f.funcao or 'Cargo não definido') }}{% if f.lojas %}<span>{{ f.lojas|map(attribute='nome')|join(' · ') }}</span>{% endif %}</div>
                 </div>
-                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}">Abrir ficha do RH</a>
+                <div class="d-flex gap-2 flex-wrap">
+                    {% if f.usuario_id and f.usuario %}
+                    <a class="btn btn-sm btn-primary" href="{{ url_for('auth.usuarios', usuario=f.usuario_id) }}" aria-label="Permissões de acesso de {{ f.nome }}"><i class="bi bi-shield-lock" aria-hidden="true"></i> Permissões de acesso</a>
+                    {% endif %}
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}">Abrir ficha do RH</a>
+                </div>
             </div>
 
             <details class="rh-acesso-modulos">

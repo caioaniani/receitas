@@ -1,8 +1,19 @@
 {% extends "base.html" %}
 
-{% block title %}Usuários{% endblock %}
+{% block title %}{{ 'Permissões de acesso' if selecionado else 'Usuários' }}{% endblock %}
 
 {% block content %}
+{% if selecionado %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth-acesso.css') }}?v={{ static_v.get('css/auth-acesso.css', '1') }}">
+<h1 class="page-title mb-2"><i class="bi bi-shield-lock" aria-hidden="true"></i> Permissões de acesso</h1>
+<p class="fs-5 fw-bold mb-2">{{ selecionado.nome }}</p>
+<p class="text-muted">Confira o perfil e a restrição de treinamento desta conta.</p>
+<div class="d-flex gap-2 flex-wrap mb-4">
+    {% if current_user.is_dono() and selecionado.funcionario %}<a class="btn btn-outline-secondary" href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', ativos='0', pessoa=selecionado.funcionario.id, _anchor='acesso-' ~ selecionado.funcionario.id) }}">Voltar ao cadastro da pessoa</a>{% endif %}
+    <a class="btn btn-outline-secondary" href="{{ url_for('auth.usuarios') }}">Ver todos os usuários</a>
+</div>
+{% if selecionado.somente_treino %}<div class="alert alert-info">Esta conta está limitada ao treinamento e às liberações individuais existentes. O perfil escolhido abaixo só passa a valer nas demais áreas quando a restrição de treinamento é retirada.</div>{% endif %}
+{% else %}
 <h1 class="page-title mb-3"><i class="bi bi-people"></i> Gerenciar usuários</h1>
 
 <!-- Criar novo usuario -->
@@ -68,17 +79,20 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 <!-- Lista de usuarios -->
-<div class="table-responsive">
+<div class="table-responsive{% if selecionado %} users-access-focus{% endif %}">
     <table class="table table-sm table-bordered bg-white users-v2-table">
         <thead class="thead-padaria">
             <tr>
                 <th>Nome</th>
                 <th>Login</th>
                 <th>Papel</th>
+                {% if not selecionado %}
                 <th>Fichas atribuídas</th>
                 <th style="width:240px">Ações</th>
+                {% endif %}
             </tr>
         </thead>
         <tbody>
@@ -92,6 +106,7 @@
                     {% else %}
                         <form method="POST" action="{{ url_for('auth.alterar_papel', id=u.id) }}" class="d-flex gap-1 flex-wrap">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            {% if selecionado %}<input type="hidden" name="voltar_acesso" value="{{ u.id }}">{% endif %}
                             <select name="papel" class="form-select form-select-sm" style="width:200px;" aria-label="Perfil de acesso de {{ u.nome }}">
                                 <option value="funcionario" {% if u.papel == 'funcionario' %}selected{% endif %}>Funcionário</option>
                                 <option value="gerente" {% if u.papel == 'gerente' %}selected{% endif %}>Gerente</option>
@@ -109,27 +124,31 @@
                             </select>
                             <button type="submit" class="btn btn-sm btn-outline-primary" aria-label="Salvar acesso de {{ u.nome }}">Salvar acesso</button>
                         </form>
+                        {% if selecionado %}<p class="small text-muted mt-2">A loja acima é usada pelo perfil de relatório. O perfil Gerente permite operar outras lojas; não é uma liberação individual de reposição.</p>{% endif %}
                         {% if u.is_relatorio_loja() %}<div class="small text-muted mt-1">Somente relatório · {{ u.loja.nome if u.loja else 'Sem loja — bloqueado' }}</div>{% endif %}
                         {% if not u.is_relatorio_loja() %}
                         <form method="POST" action="{{ url_for('auth.toggle_somente_treino', id=u.id) }}" class="mt-1">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            {% if selecionado %}<input type="hidden" name="voltar_acesso" value="{{ u.id }}">{% endif %}
                             <div class="form-check form-switch" style="font-size:11px;">
                                 <input class="form-check-input" type="checkbox" role="switch"
                                        id="st-{{ u.id }}" {% if u.somente_treino %}checked{% endif %}
                                        onchange="this.form.submit()">
-                                <label class="form-check-label" for="st-{{ u.id }}">🎓 só treino</label>
+                                <label class="form-check-label" for="st-{{ u.id }}">{{ 'Limitar ao treinamento e às liberações individuais' if selecionado else '🎓 só treino' }}</label>
                             </div>
                         </form>
                         {% endif %}
                         {% if current_user.is_owner and u.papel == 'admin' and not u.somente_treino %}
                         <form method="POST" action="{{ url_for('auth.delegar_nf_b2b', id=u.id) }}" class="mt-2">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            {% if selecionado %}<input type="hidden" name="voltar_acesso" value="{{ u.id }}">{% endif %}
                             <input type="hidden" name="permitir" value="{{ '0' if u.id in delegados_nf else '1' }}">
                             <button type="submit" class="btn btn-sm btn-outline-secondary" aria-label="{{ 'Revogar' if u.id in delegados_nf else 'Permitir' }} emissão de NF B2B para {{ u.nome }}">{{ 'NF B2B liberada · revogar' if u.id in delegados_nf else 'Permitir emitir NF B2B' }}</button>
                         </form>
                         {% endif %}
                     {% endif %}
                 </td>
+                {% if not selecionado %}
                 <td>
                     {% set pendentes = u.atribuicoes | selectattr('status', 'equalto', 'pendente') | list %}
                     {% set concluidas = u.atribuicoes | selectattr('status', 'equalto', 'concluida') | list %}
@@ -170,6 +189,7 @@
                     </form>
                     {% endif %}
                 </td>
+                {% endif %}
             </tr>
             {% endfor %}
         </tbody>

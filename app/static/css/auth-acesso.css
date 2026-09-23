@@ -1,0 +1,19 @@
+.users-access-focus { max-width: 860px; overflow: visible; }
+.users-access-focus .users-v2-table { display: block; min-width: 0; width: 100%; border: 1px solid var(--bs-border-color, #dce5df); border-radius: 14px; overflow: hidden; }
+.users-access-focus thead { display: none; }
+.users-access-focus tbody { display: block; }
+.users-access-focus tbody tr { display: grid; grid-template-columns: 1fr 1fr; }
+.users-access-focus tbody td { display: block; padding: 20px; border: 0; min-width: 0; overflow-wrap: anywhere; }
+.users-access-focus tbody td:nth-child(3) { grid-column: 1 / -1; border-top: 1px solid var(--bs-border-color, #dce5df); }
+.users-access-focus tbody td:nth-child(3)::before { content: 'Perfil e restrições'; display: block; margin-bottom: 16px; font-size: 18px; font-weight: 650; }
+.users-access-focus .form-select { width: 100% !important; max-width: 360px; min-height: 44px; }
+.users-access-focus .btn { min-height: 44px; white-space: normal; }
+.users-access-focus .form-check { margin-top: 20px; font-size: 14px !important; min-height: 44px; }
+.users-access-focus .form-check-label { cursor: pointer; }
+@media (max-width: 600px) {
+    .users-access-focus tbody tr { grid-template-columns: 1fr; }
+    .users-access-focus tbody td { padding: 16px; }
+    .users-access-focus tbody td:nth-child(2) { padding-top: 0; }
+    .users-access-focus .form-select { max-width: none; }
+    .users-access-focus .btn { width: 100%; }
+}
