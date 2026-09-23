@@ -5125,6 +5125,43 @@ prompt mandava pedir número/CPF ANTES de transferir uma reclamação.
    Fora de propósito: `entrega_candidata` (candidata pela rua é palpite,
    "conferir antes de agir" — não vira vínculo) e cancelamento do pedido
    (spec fala de status de ENTREGA). Testes: `tests/test_conversa_pedido.py`.
+REVISÃO INDEPENDENTE (revisor, 1ª rodada, 23/09/2026) — APLICADOS: C1
+`falha_operacional` virava handoff antes do modelo em VENDA/dúvida ("não
+recebi o link do pedido", "a confirmação do pedido não chegou", "meu pedido
+não chegou no e-mail, como pago?", "to tentando pagar no site e sem
+sucesso", "qual o número?", "o sourdough não chegou na loja hoje?", "o
+croissant não veio recheado?") → genitivo `_RE_OBJ_ENTREGA_GENITIVO`,
+canal digital `_RE_CANAL_DIGITAL`, `_RE_LOJA_ESTOQUE`, pergunta sem
+palavra de entrega (`_RE_ORACAO_ENTREGA` + terminador '?') e
+`_SINAL_VENDA_EM_CURSO` ampliado (preço, quer comprar, tem entrega, fazer
+o pedido, como pago, link, cardápio, qual o número/horário, tentando
+pagar); C2 item 7 com `_SINAIS_RECLAMACAO` inteiro mandava "vocês entregam
+com atraso?"+"valeu" pra fila → `_RECLAMACAO_FORTE` + pergunta nunca é
+reclamação; M1 socorro: código só se EXISTE no banco (e fora de e-mail),
+11 dígitos de telefone não é CPF; M2 anti-flood do crítico Lalamove
+(`_critico_permitido`, `LALAMOVE_ALERTA_MAX_CRITICO_HORA`=5, AppConfig
+por hora, fail-open); M3 terceiro pelo titular com "quer saber os preços"/
+"tem entrega na rua"/"quer comprar" → venda (veto); M4 conversa
+`resolved` NÃO resolve ALTA (regra estrita — o bot resolve num
+"obrigada"); M5 `_conversa_local_do_telefone` só BR (chave canônica
+descarta DDI); M7 `_HIPOTESE_MOTIVO` só hipótese real ("pergunta SE",
+"o que acontece", "se … não chegar") e veto por ORAÇÃO em
+`_hits_falha_no_motivo`; M8 lookahead cobre "ainda"; M9 formas canônicas
+("nunca recebi meu pedido", "paguei e não recebi", "só veio metade", "e
+nada do pedido", "pedido está incompleto", "não veio ninguém"); M11
+pedido cancelado não alerta Lalamove; M12 `documento(p)` sem guard de
+`cliente_id`; L6 `remarks` fora do motivo; L9 texto do resumo; L10
+commit próprio da resolução em `preparar`. ACEITOS/DOCUMENTADOS: M6
+e-mail como credencial (decisão pendente do dono, ver item 5); M10 texto
+"esperando há N min" na conversa reaberta pelo Lalamove (cobrança até
+resolver é desejada); L1 celular de 10 dígitos ganha o 9 (regra ANATEL —
+confirmar com o dono); L2 '12888887777' sem '+' vira NANP (regra
+documentada); L3 checkout grava '+' em 12-15 dígitos sem sinal; L4/L5
+Pagar.me/Tiny com telefone internacional omitido/'+' — validar no
+sandbox; L7 dedupe Lalamove check-then-insert (2 workers na mesma
+reentrega = 2 alertas, raro); L8 "não sei se o motoboy não achou o
+prédio" vetado como hipótese; L11 colisão `telefone_chave` na
+autorização por telefone é pré-existente.
 CRÍTICA DE COMPLETUDE (workflow de 6 leitores + crítico) — aplicados:
 `chatbot_auditor._TRACKING_PREFIXES` ganhou `'[LALAMOVE'` (o veredito
 operacional não entra na taxa de contenção); `chatbot_vigia.
