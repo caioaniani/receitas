@@ -364,6 +364,66 @@ def test_motivo_do_payload_parse_liberal():
     assert motivo_do_payload({'data': {'order': {}, 'reason': {'message': 'Y'}}}) == 'Y'
     assert motivo_do_payload({'data': {'order': {'status': 'CANCELED'}}}) == MOTIVO_DESCONHECIDO
     assert motivo_do_payload(None) == MOTIVO_DESCONHECIDO
+    # `remarks` é o que NÓS escrevemos na corrida — nunca vira "motivo"
+    # (revisão 23/09/2026)
+    assert motivo_do_payload({'data': {'order': {
+        'remarks': 'Pedido X — O Pão. PRESENTE: quem recebe não informou telefone'}}}) \
+        == MOTIVO_DESCONHECIDO
+
+
+# ── Revisão 23/09/2026: anti-flood, telefone internacional, pedido cancelado ──
+
+def test_alerta_critico_tem_teto_por_hora(cfg, monkeypatch):
+    """Até N críticos por hora (isentos do teto global do Z-API); do N+1 em
+    diante o alerta sai pelo caminho normal, com aviso no texto. O painel e
+    o VigiaVeredito continuam recebendo todos."""
+    from app.services import lalamove_alerta
+    app = cfg
+    monkeypatch.setenv('LALAMOVE_ALERTA_MAX_CRITICO_HORA', '2')
+    with app.app_context():
+        for i in range(3):
+            _pedido(f'LAL10{i}')
+            _corrida(f'LAL10{i}', f'ord-10{i}')
+    c = app.test_client()
+    with patch('app.services.lalamove_alerta._POOL', _PoolInline()), \
+            patch('app.services.zapi.enviar_texto', return_value={'ok': True}) as zap, \
+            patch('app.services.chatwoot.definir_status', return_value={'ok': True}), \
+            patch('app.services.chatwoot._buscar_contato', return_value=None):
+        for i in range(3):
+            _webhook(c, f'ord-10{i}', 'EXPIRED')
+    assert zap.call_count == 3
+    criticos = [k.kwargs['critico'] for k in zap.call_args_list]
+    assert criticos == [True, True, False]
+    assert 'limite de críticos' in zap.call_args_list[2].args[1]
+    with app.app_context():
+        assert len(_vereditos()) == 3
+        assert lalamove_alerta._critico_permitido() is False     # 4º da hora
+
+
+def test_telefone_internacional_nao_colide_com_conversa_br(cfg):
+    """`telefone_chave('+14752929850')` == chave de (47) 9 5292-9850: sem a
+    guarda, a conversa de OUTRO cliente iria para `open`."""
+    from app.services import lalamove_alerta
+    app = cfg
+    with app.app_context():
+        _conversa_local(5555, telefone='47952929850')       # cliente BR de Blumenau
+        assert lalamove_alerta._conversa_local_do_telefone('+1 475-292-9850') is None
+        assert lalamove_alerta._conversa_local_do_telefone('47952929850') == '5555'
+
+
+def test_pedido_cancelado_nao_alerta(cfg):
+    app = cfg
+    with app.app_context():
+        _pedido('LAL020', status='cancelado')
+        _corrida('LAL020', 'ord-20')
+    c = app.test_client()
+    with patch('app.services.lalamove_alerta._POOL', _PoolInline()), \
+            patch('app.services.zapi.enviar_texto') as zap:
+        r = _webhook(c, 'ord-20', 'CANCELED')
+    assert r.status_code == 200
+    zap.assert_not_called()
+    with app.app_context():
+        assert _vereditos() == []
 
 
 def test_expedicao_ignora_corrida_expirada_ou_recusada(app):
