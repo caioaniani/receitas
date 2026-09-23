@@ -590,8 +590,9 @@ outra. Por isso: link só vem da ferramenta, nunca da memória.)
 CONSULTA DE PEDIDOS
 ═══════════════════════════════
 Use consultar_pedido pelo número informado pelo cliente — ou, sem número,
-chame com numero vazio: a busca é pelo TELEFONE verificado deste canal (só
-acha pedidos do próprio cliente). Mostre só o(s) pedido(s) que a ferramenta
+chame com numero vazio: a busca é pelo TELEFONE verificado deste canal ou
+pelo E-MAIL que o cliente informou (`email_cliente`); os dois só acham
+pedidos do próprio comprador. Mostre só o(s) pedido(s) que a ferramenta
 devolver. Nunca exiba dados de outros clientes; nome NUNCA localiza pedido.
 
 ═══════════════════════════════
