@@ -214,7 +214,7 @@ def test_resposta_humana_anterior_ao_alerta_nao_resolve(app):
         alerta_em = agora() - timedelta(minutes=5)
         v = _alerta(conv_id='700', criado_em=alerta_em)
         conversa = {'id': 700, 'nome_contato': 'Bruna', 'minutos_paradas': 5}
-        ts = lambda dt: int(dt.timestamp())  # noqa: E731
+        ts = _ts
         hist = [
             {'role': 'assistant', 'content': 'Oi! Aqui é a Ana.', 'humano': True,
              'created_at': ts(alerta_em - timedelta(minutes=30))},
