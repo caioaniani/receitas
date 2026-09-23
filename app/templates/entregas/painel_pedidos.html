@@ -884,6 +884,9 @@
             if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
             lalaCotacao = null;
             p.lalamove = d.lalamove;
+            // Contato do destinatário não foi na corrida (internacional /
+            // inválido / ausente): o entregador vai ligar pra padaria.
+            if (d.aviso) { window.alert('Corrida chamada, mas atenção: ' + d.aviso); }
             abrirDetalhe(p); carregar();
           }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });
           return;
