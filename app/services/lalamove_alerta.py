@@ -234,9 +234,11 @@ def _tratar(e, status, anterior, dados):
             'motivo': motivo, 'texto': texto}
 
 
-def _executar_rede(app, veredito_id, texto, conv_id, telefone_cliente):
-    """Thread: WhatsApp ao dono (crítico) + conversa do cliente → open.
-    Nunca escreve pro cliente."""
+def _executar_rede(app, veredito_id, texto, conv_id, telefone_cliente,
+                   pedido_code=None, rotulo=None, motivo=''):
+    """Thread: WhatsApp ao dono (crítico) + conversa do cliente → open +
+    vínculo conversa↔pedido e nota privada nas conversas abertas do pedido
+    (item 8). Nunca escreve pro cliente."""
     with app.app_context():
         from app.extensions import db
         from app.models import VigiaVeredito
