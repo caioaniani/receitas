@@ -154,6 +154,10 @@
   .vigia-banner { display: none; background: #c92a2a; color: #fff; cursor: pointer;
     padding: 14px 18px; align-items: center; gap: 14px; border-bottom: 3px solid #7a1010; }
   .vigia-banner.on { display: flex; animation: vigia-pisca 1s infinite; }
+  /* Silenciado (alguem clicou) mas AINDA SEM RESOLUCAO: fica visivel, sem
+     piscar e sem som, ate alguem responder na conversa ou resolver com
+     motivo (item 9, 22/09/2026). */
+  .vigia-banner.on.silenciado { animation: none; background: #8a1c1c; }
   @keyframes vigia-pisca { 0%,100% { background: #c92a2a; } 50% { background: #e8410f; } }
   .vigia-banner .ico { font-size: 30px; line-height: 1; }
   .vigia-banner .corpo { flex: 1; min-width: 0; }

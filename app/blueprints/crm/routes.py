@@ -404,6 +404,18 @@ def bot_webhook():
             enc = presenca_humana.encerrar(
                 conv_id_ev, f'{evento}:{status_ev}',
                 tolerancia_seg=presenca_humana.ENCERRAR_TOLERANCIA_SEG)
+            if status_ev == 'resolved':
+                # Conversa resolvida no Chatwoot fecha os alertas ALTA em
+                # aberto dela (item 9, 22/09/2026). Best-effort: o
+                # `candidatos()` do cron repete a leitura se isto falhar.
+                try:
+                    from app.services import chatbot_vigia
+                    chatbot_vigia.resolver_alertas_da_conversa(
+                        conv_id_ev, via='conversa_resolvida')
+                except Exception:  # noqa: BLE001
+                    db.session.rollback()
+                    logger.exception('crm/bot: resolver alertas da conv=%s falhou',
+                                     conv_id_ev)
             return jsonify({'ok': True, 'ignorado': 'evento',
                             'episodio': 'encerrado' if enc else 'sem-episodio'})
         return jsonify({'ok': True, 'ignorado': 'evento'})
