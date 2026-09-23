@@ -1214,20 +1214,48 @@ def _texto_handoff_com_horario(texto):
     return aviso + base
 
 
+# Reclamacao que SEGURA o encerramento (item 7): sinal FORTE numa
+# afirmacao. `_SINAIS_RECLAMACAO` do vigia e largo de proposito (la, errar
+# pra mais so evita um falso "venda em risco"); aqui, largo demais mandava
+# fechamento banal pra fila — "voces entregam com atraso?" -> bot responde
+# -> "valeu" virava conversa aberta com nota "reclamacao em aberto"
+# (revisao 23/09/2026). Pergunta nunca e reclamacao; "trocar", "devolver" e
+# "atraso" soltos ficam fora (pedido/duvida, nao queixa).
+_RECLAMACAO_FORTE = re.compile(
+    r'(?i)\b(?:reclama\w*|p[eé]ssim\w*|horr[ií]vel|absurd\w*|vergonh\w*|'
+    r'decepcion\w*|revoltad\w*|indignad\w*|cancelei|acabei\s+cancelando|'
+    r'reembolso|estorno|nunca\s+mais|queimad[oa]s?|estragad[oa]s?|'
+    r'mofad[oa]s?|azed[oa]s?|'
+    r'veio\s+(?:errad|quebrad|faltando|incomplet|amassad|murch|trocad)\w*|'
+    r'pedido\s+(?:errado|trocado|incompleto))\b')
+
+
+def _reclamacao_aberta(texto):
+    """Fala do cliente que conta como reclamacao pro item 7: falha
+    operacional em curso OU sinal forte de queixa numa afirmacao."""
+    t = (texto or '').strip()
+    if not t:
+        return False
+    if falha_operacional(t):
+        return True
+    if t.endswith('?'):
+        return False
+    return bool(_RECLAMACAO_FORTE.search(t))
+
+
 def _reclamacao_sem_resposta_humana(historico):
     """True se ha reclamacao/falha operacional em alguma fala do CLIENTE
     (nao herdada) e NENHUMA fala HUMANA da equipe (`humano=True`, autoria
     do Chatwoot) depois da ULTIMA reclamacao. Fonte do item 7 (dono,
     22-23/09/2026, caso E3862E49): o bot marcava `resolved` num "obrigada"
     com a reclamacao ainda sem ninguem da equipe ter falado."""
-    from app.services.chatbot_vigia import _SINAIS_RECLAMACAO
     ultima_reclamacao = None
     for i, m in enumerate(historico or []):
         if not isinstance(m, dict) or m.get('herdada'):
             continue
         if m.get('role') == 'user':
             c = str(m.get('content') or '')
-            if c.strip() and (falha_operacional(c) or _SINAIS_RECLAMACAO.search(c)):
+            if _reclamacao_aberta(c):
                 ultima_reclamacao = i
     if ultima_reclamacao is None:
         return False
