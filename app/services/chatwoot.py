@@ -1268,9 +1268,10 @@ def debug_envio_whatsapp(telefone):
     ou envio sem parâmetros recusado pela Meta."""
     if not disponivel():
         return {'ok': False, 'erro': 'Chatwoot nao configurado'}
+    motivo = motivo_telefone_sem_whatsapp(telefone)
+    if motivo:
+        return {'ok': False, 'erro': motivo}
     fone = _e164(telefone)
-    if not fone:
-        return {'ok': False, 'erro': f'Telefone invalido/sem DDD: {telefone!r}'}
     contato = _buscar_contato(fone)
     if not contato or not contato.get('id'):
         return {'ok': False, 'erro': 'Contato nao encontrado no Chatwoot'}
