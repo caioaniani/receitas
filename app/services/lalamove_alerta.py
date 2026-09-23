@@ -242,7 +242,7 @@ def _executar_rede(app, veredito_id, texto, conv_id, telefone_cliente,
     with app.app_context():
         from app.extensions import db
         from app.models import VigiaVeredito
-        from app.services import chatwoot, loja_alerta, zapi
+        from app.services import chatwoot, conversa_pedido, loja_alerta, zapi
         enviado = False
         try:
             numero = loja_alerta._numero_destino()
