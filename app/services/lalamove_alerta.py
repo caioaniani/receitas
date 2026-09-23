@@ -283,7 +283,7 @@ def _executar_rede(app, veredito_id, texto, conv_id, telefone_cliente,
                 if conv:
                     conversa_pedido.vincular(conv, pedido_code, 'lalamove')
                 # Ja estamos na thread: roda a nota em linha (sem 2ª thread).
-                convs = conversa_pedido.conversas_do_pedido(pedido_code)
+                convs = conversa_pedido.conversas_do_pedido(pedido_code, detalhado=True)
                 if convs:
                     conversa_pedido._executar(app, conversa_pedido._code(pedido_code),
                                               rotulo or 'CORRIDA LALAMOVE ENCERRADA',
