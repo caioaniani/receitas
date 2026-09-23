@@ -940,7 +940,9 @@ def api_lalamove_chamar():
     # link de rastreio do Lalamove). VNDA não tem PedidoOnline → no-op.
     from app.services.loja_entrega import avancar_status_entrega
     avancar_status_entrega(e.pedido_code, 'a_caminho', rastreio_url=e.share_link)
-    return jsonify(ok=True, lalamove=_lalamove_json(e))
+    # `aviso`: o contato do destinatário NÃO foi na corrida (internacional /
+    # inválido / ausente) — o entregador vai ligar pra padaria (23/09/2026).
+    return jsonify(ok=True, lalamove=_lalamove_json(e), aviso=r.get('aviso'))
 
 
 @entregas_bp.route('/api/painel/lalamove/cancelar', methods=['POST'])
