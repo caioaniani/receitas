@@ -2211,7 +2211,7 @@ def responder(historico, *, telefone_contato=None,
         logger.info('chatbot: falha operacional em curso -> handoff forcado '
                     'msg=%r', texto_user[:120])
         usadas, resumos = _localizar_pedido_para_socorro(
-            historico, telefone_contato)
+            historico, telefone_contato, conversa_id=conversa_id)
         return _resp_handoff(
             TEXTO_FALHA_OPERACIONAL,
             f'falha operacional relatada pelo cliente: {trecho or texto_user[:80]}',
