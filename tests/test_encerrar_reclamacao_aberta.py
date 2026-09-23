@@ -11,6 +11,8 @@ para o webhook e a vassoura. Anthropic/Chatwoot mockados.
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 
 def test_pode_encerrar_regras():
     from app.services.chatbot import pode_encerrar
@@ -125,6 +127,40 @@ def test_vigia_pula_a_fila_silenciosa(app):
                                           'tools_usadas': []})
         M.return_value.messages.create.assert_not_called()
     assert res.get('pulou', '').startswith('fila silenciosa')
+
+
+@pytest.mark.parametrize('fala', [
+    'vocês entregam com atraso?', 'posso trocar o sabor?', 'dá pra devolver se eu não gostar?',
+    'quero trocar o horário da entrega', 'tem como cancelar meu pedido de amanhã?',
+    'vocês têm entrega em Moema?',
+])
+def test_pergunta_ou_pedido_nao_e_reclamacao_e_o_obrigada_encerra(app, fala):
+    """Revisão 23/09/2026: `_SINAIS_RECLAMACAO` do vigia é largo (trocar,
+    devolver, atraso, cancelar) e mandava fechamento banal pra fila com
+    nota "reclamação em aberto". Pergunta/pedido comum não segura o
+    encerramento — só falha em curso ou queixa forte numa afirmação."""
+    from app.services import chatbot
+    assert chatbot._reclamacao_aberta(fala) is False
+    with app.app_context():
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        with patch('anthropic.Anthropic') as M, \
+                patch('app.services.chatwoot.buscar_historico') as bh:
+            r = chatbot.responder([
+                {'role': 'user', 'content': fala},
+                {'role': 'assistant', 'content': 'Entregamos das 8h às 18h, sem atraso.'},
+                {'role': 'user', 'content': 'valeu'}], conversa_id=77)
+        M.return_value.messages.create.assert_not_called()
+        bh.assert_not_called()                     # nem consulta o Chatwoot
+    assert r['acao'] == 'encerrar'
+
+
+@pytest.mark.parametrize('fala', [
+    'o atendimento foi péssimo', 'veio errado de novo, absurdo', 'cancelei, nunca mais',
+    'o pão veio queimado', 'não recebi meu pedido',
+])
+def test_queixa_forte_em_afirmacao_segura_o_encerramento(fala):
+    from app.services import chatbot
+    assert chatbot._reclamacao_aberta(fala) is True
 
 
 def test_camada_1_obrigada_sem_reclamacao_segue_encerrando(app):
