@@ -170,6 +170,35 @@ def test_falha_operacional_usa_email_da_conversa(app):
     assert 'SOC0003A' in r['tools_resumo'][0] and 'AUTORIZADO' in r['tools_resumo'][0]
 
 
+def test_localizacao_ignora_codigo_falso_e_telefone_como_cpf(app):
+    """Revisão 23/09/2026: 'ana2024x@gmail.com' e 'bloco12a' PARECEM código
+    de pedido e desligavam a busca por telefone/e-mail (e ainda batiam na
+    rede do VNDA); 11 dígitos de TELEFONE não são CPF."""
+    from unittest.mock import patch
+
+    from app.services import chatbot
+    with app.app_context():
+        _pedido('E49C374A', telefone='11988887777', email='ana2024x@gmail.com')
+        hist = [{'role': 'user', 'content': 'meu e-mail é ana2024x@gmail.com, moro no bloco12a'},
+                {'role': 'user', 'content': 'meu telefone é 11988887777 e não recebi meu pedido'}]
+        with patch('app.services.bot_tools.consultar_pedido', wraps=None) as cp, \
+                patch('app.services.vnda.buscar_pedido_completo',
+                      side_effect=AssertionError('nunca bate no VNDA no socorro')):
+            cp.return_value = {'erro': 'pedido_nao_encontrado'}
+            chatbot._localizar_pedido_para_socorro(hist, '11988887777')
+        kw = cp.call_args.kwargs
+        assert cp.call_args.args[0] == ''                 # nenhum código falso
+        assert kw['email_cliente'] == 'ana2024x@gmail.com'
+        assert kw['cpf_cliente'] is None                  # telefone não virou CPF
+        # código que EXISTE continua sendo usado; CPF formatado também
+        hist2 = [{'role': 'user', 'content': 'pedido e49c374a, cpf 123.456.789-09, não chegou'}]
+        with patch('app.services.bot_tools.consultar_pedido',
+                   return_value={'erro': 'pedido_nao_encontrado'}) as cp2:
+            chatbot._localizar_pedido_para_socorro(hist2, None)
+        assert cp2.call_args.args[0] == 'E49C374A'
+        assert cp2.call_args.kwargs['cpf_cliente'] == '123.456.789-09'
+
+
 def test_busca_paralela_falhando_nao_impede_o_socorro(app):
     from app.services import chatbot
     with app.app_context():
