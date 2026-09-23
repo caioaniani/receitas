@@ -22,7 +22,7 @@ from itsdangerous import BadData, URLSafeTimedSerializer
 from app.blueprints.fiserv import fiserv_bp
 from app.decorators import owner_required
 from app.extensions import db, limiter
-from app.models.fiserv import ArquivoFiservRecebido, EventoFiserv, IntegracaoFiserv
+from app.models.fiserv import ArquivoFiservRecebido, EventoFiserv, IntegracaoFiserv, PendenciaFiserv
 from app.services.fiserv_integracao import (
     ColetaEmAndamento,
     coleta_disponivel,
@@ -90,8 +90,13 @@ def _painel(proposta=None, confirmacao=None, remotos=None):
     pagina = ArquivoFiservRecebido.query.order_by(
         ArquivoFiservRecebido.recebido_em.desc(), ArquivoFiservRecebido.id.desc(),
     ).paginate(page=request.args.get('pagina', 1, type=int), per_page=20, error_out=False)
+    pendencias = PendenciaFiserv.query.filter_by(
+        versao_configuracao=registro.versao if registro is not None else 0,
+    ).order_by(PendenciaFiserv.ultima_tentativa_em.desc(), PendenciaFiserv.id.desc()).paginate(
+        page=request.args.get('pagina_pendencias', 1, type=int), per_page=20, error_out=False,
+    )
     return render_template(
-        'fiserv/index.html', estado=estado, pagina=pagina,
+        'fiserv/index.html', estado=estado, pagina=pagina, pendencias=pendencias,
         hosts=sorted(HOSTS_PERMITIDOS), host_padrao=HOST_PADRAO,
         proposta=proposta, confirmacao=confirmacao, remotos=remotos,
         coleta_disponivel=coleta_disponivel(),
@@ -233,18 +238,19 @@ def pausar():
     return redirect(url_for('fiserv.index'))
 
 
-def _informar_erro_consulta(exc):
+def _informar_erro_consulta(exc, *, recebimento=False):
     __tracebackhide__ = True
     db.session.rollback()
+    operacao = 'receber o arquivo' if recebimento else 'consultar os arquivos disponíveis'
     if isinstance(exc, (ErroOperacaoFiservSFTP, ErroEtapaAutenticacaoFiservSFTP)):
         # Categoria fixa, sem texto remoto e sem prometer uma nova tentativa.
-        flash(f'Não foi possível concluir a consulta. [{exc.etapa}/{exc.codigo}] '
+        flash(f'Não foi possível {operacao}. [{exc.etapa}/{exc.codigo}] '
               'A coleta automática continua pausada.', 'warning')
     elif isinstance(exc, (ErroFiservSFTP, ErroSegredoFiserv, ColetaEmAndamento)):
         flash(str(exc), 'warning')
     else:
-        flash('Não foi possível concluir a consulta. Nenhuma nova coleta automática foi solicitada.', 'warning')
-        current_app.logger.error('Consulta Fiserv não concluída; detalhes privados omitidos.')
+        flash(f'Não foi possível {operacao}. Nenhuma nova coleta automática foi solicitada.', 'warning')
+        current_app.logger.error('Operação manual Fiserv não concluída; detalhes privados omitidos.')
 
 
 @fiserv_bp.post('/arquivos-remotos')
@@ -287,7 +293,7 @@ def receber_arquivo():
     except (BadData, KeyError, TypeError):
         flash('A seleção expirou ou é inválida. Consulte os arquivos disponíveis novamente.', 'warning')
     except Exception as exc:
-        _informar_erro_consulta(exc)
+        _informar_erro_consulta(exc, recebimento=True)
     return redirect(url_for('fiserv.index'))
 
 

@@ -5,7 +5,7 @@
 <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
   <div><h1 class="h3 mb-1">Recebimentos Fiserv</h1>
     <p class="text-muted mb-0">Receba automaticamente os arquivos de vendas e recebíveis das maquininhas.</p></div>
-  <a class="btn btn-outline-secondary" href="{{ url_for('fiserv.index') }}">Atualizar</a>
+  <a class="btn btn-outline-secondary" href="{{ url_for('fiserv.index') }}">Atualizar situação</a>
 </div>
 {% if not coleta_disponivel %}
 <div class="alert alert-warning">A coleta automática está desabilitada neste ambiente. O acesso pode ser preparado, mas os arquivos só serão recebidos na instância de produção autorizada.</div>
@@ -13,7 +13,7 @@
 <div class="card mb-4"><div class="card-body">
   <h2 class="h5">Situação da conexão</h2>
   {% if estado %}
-    {% set rotulos = {'aguardando': 'Aguardando primeira coleta', 'coletando': 'Coleta em andamento', 'conectado': 'Conectado', 'erro': 'Precisa de atenção', 'pausado': 'Pausado'} %}
+    {% set rotulos = {'aguardando': 'Aguardando primeira coleta', 'coletando': 'Coleta em andamento', 'conectado': 'Conectado', 'parcial': 'Recebimento com pendências', 'erro': 'Precisa de atenção', 'pausado': 'Pausado'} %}
     <p><strong>{{ rotulos.get(estado.estado, 'Em preparação') }}</strong> · {{ 'Automático ativo' if estado.ativa else 'Automático ainda não ativo' }}</p>
     {% if estado.mensagem %}<p>{{ estado.mensagem }}</p>{% endif %}
     {% if atualizar_coleta %}<p id="fiserv-atualizacao" class="text-muted small" role="status">O resultado da coleta aparecerá aqui automaticamente.</p>{% endif %}
@@ -29,8 +29,28 @@
 </div></div>
 
 {% if estado and not proposta %}
+<div class="card mb-4" id="pendencias-fiserv"><div class="card-body">
+  <h2 class="h5">Arquivos pendentes <span class="text-muted">({{ pendencias.total }})</span></h2>
+  {% if pendencias.total %}
+  <p class="text-muted">Estes arquivos ainda não tiveram o recebimento confirmado. A coleta continua com os demais e tenta novamente após o intervalo indicado, se o arquivo estiver disponível na Fiserv. A pendência permanece registrada mesmo quando ele sai da lista remota.</p>
+  {% if not estado.ativa %}<p class="text-muted small">O automático está pausado. As próximas tentativas dependem de sua ativação.</p>{% endif %}
+  <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Arquivo</th><th>Tentativas</th><th>Última tentativa</th><th>Nova tentativa a partir de</th><th>Diagnóstico</th></tr></thead><tbody>
+  {% for pendencia in pendencias.items %}<tr>
+    <td class="text-break">{{ pendencia.nome }}</td><td>{{ pendencia.tentativas }}</td>
+    <td>{{ pendencia.ultima_tentativa_em.strftime('%d/%m/%Y %H:%M') }}</td>
+    <td>{{ pendencia.proxima_tentativa_em.strftime('%d/%m/%Y %H:%M') }}</td>
+    <td><code>{{ pendencia.etapa }}/{{ pendencia.codigo }}</code></td>
+  </tr>{% endfor %}
+  </tbody></table></div>
+  <nav class="d-flex gap-2" aria-label="Páginas de pendências">
+    {% if pendencias.has_prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fiserv.index', pagina=pagina.page, pagina_pendencias=pendencias.prev_num, _anchor='pendencias-fiserv') }}">Anteriores</a>{% endif %}
+    {% if pendencias.has_next %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fiserv.index', pagina=pagina.page, pagina_pendencias=pendencias.next_num, _anchor='pendencias-fiserv') }}">Próximas</a>{% endif %}
+  </nav>
+  {% else %}<p class="text-muted mb-0">Nenhuma pendência registrada para este acesso.</p>{% endif %}
+</div></div>
+
 <div class="card mb-4"><div class="card-body">
-  <h2 class="h5">Conferir arquivos na Fiserv</h2>
+  <h2 class="h5">Arquivos disponíveis na Fiserv</h2>
   <p class="text-muted">Consulte os arquivos disponíveis e receba um arquivo específico usando o acesso já salvo. Para essa conferência, a coleta automática precisa estar pausada.</p>
   <form method="post" action="{{ url_for('fiserv.consultar_arquivos') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -53,6 +73,8 @@
       <button class="btn btn-outline-secondary">Ir para página</button>
     </form>
     {% endif %}
+  {% else %}
+    <p class="text-muted mt-3 mb-0">A lista de arquivos disponíveis ainda não foi consultada nesta tela. Use o botão acima para mostrá-la. Os arquivos já recebidos aparecem abaixo.</p>
   {% endif %}
 </div></div>
 {% endif %}
@@ -108,7 +130,7 @@
   let editando = false;
   const pausarAtualizacao = () => {
     editando = true;
-    document.getElementById('fiserv-atualizacao').textContent = 'Atualização automática pausada enquanto você edita. Use Atualizar para conferir a coleta.';
+    document.getElementById('fiserv-atualizacao').textContent = 'Atualização automática pausada enquanto você edita. Use Atualizar situação para conferir a coleta.';
   };
   ['input', 'change', 'submit'].forEach(evento => {
     document.addEventListener(evento, pausarAtualizacao, {once: true, capture: true});
@@ -119,7 +141,7 @@
       window.setTimeout(atualizar, 15000);
       return;
     }
-    window.location.replace({{ url_for('fiserv.index', pagina=pagina.page)|tojson }});
+    window.location.replace({{ url_for('fiserv.index', pagina=pagina.page, pagina_pendencias=pendencias.page)|tojson }});
   };
   window.setTimeout(atualizar, 15000);
 })();

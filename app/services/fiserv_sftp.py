@@ -985,25 +985,40 @@ def coletar_arquivos(config: ConfigFiservSFTP | None = None) -> list[ArquivoFise
         return [_baixar(sftp, pasta, item.nome, config, prazo, esperado=item) for item in metadados]
 
 
-def coletar_lote_pendente(conhecidos, config=None, max_baixas=20, *, ao_receber=None):
+def coletar_lote_pendente(conhecidos, config=None, max_baixas=20, *, ao_receber=None,
+                          ao_falhar=None, tentativas_anteriores=()):
     """Lote incremental: históricos conhecidos não ocupam o limite de download.
 
     ``conhecidos`` contém tuplas (nome, tamanho, mtime) conferidas recentemente.
     O chamador deve expirar esse cache e revalidar conteúdo periodicamente.
     Retorna (arquivos, há_mais_pendentes); todos os acessos continuam só leitura.
     ``ao_receber``, se fornecido, deve guardar cada arquivo completo antes que
-    seu handle seja fechado normalmente. Uma falha interrompe o restante do lote.
+    seu handle seja fechado normalmente. ``ao_falhar``, quando fornecido, registra
+    um arquivo indisponível antes de continuar o lote. Só ausência em operações
+    do arquivo permite continuar; conexão, segurança e persistência interrompem.
+    Tentativas malsucedidas também contam para os limites do lote.
+    ``tentativas_anteriores`` ordena revisões pendentes da tentativa mais antiga
+    à mais recente. Revisões nunca tentadas têm prioridade sobre as repetições.
     """
     __tracebackhide__ = True
     if type(max_baixas) is not int or not 1 <= max_baixas <= 100:
         raise ErroConfiguracaoFiservSFTP(invalidos=('max_baixas',))
     if ao_receber is not None and not callable(ao_receber):
         raise ErroConfiguracaoFiservSFTP(invalidos=('ao_receber',))
+    if ao_falhar is not None and not callable(ao_falhar):
+        raise ErroConfiguracaoFiservSFTP(invalidos=('ao_falhar',))
     config = config or ConfigFiservSFTP.from_env()
     with _conectar(config) as (sftp, prazo):
         pasta = _pasta_disponivel(sftp, config, prazo)
         pendentes = [item for item in _listar(sftp, pasta, config, prazo)
                      if (item.nome, item.tamanho, item.modificado_em) not in conhecidos]
+        prioridades = {chave: indice for indice, chave in enumerate(tentativas_anteriores)}
+
+        def prioridade(item):
+            chave = (item.nome, item.tamanho, item.modificado_em)
+            return (chave in prioridades, prioridades.get(chave, 0), item.nome)
+
+        pendentes.sort(key=prioridade)
         lote = []
         tamanho = 0
         for item in pendentes:
@@ -1013,6 +1028,23 @@ def coletar_lote_pendente(conhecidos, config=None, max_baixas=20, *, ao_receber=
                 raise ErroLimiteFiservSFTP('Arquivo Fiserv excede o limite total de bytes por coleta.')
             lote.append(item)
             tamanho += item.tamanho
-        arquivos = [_baixar(sftp, pasta, item.nome, config, prazo, esperado=item,
-                           ao_receber=ao_receber) for item in lote]
+        arquivos = []
+        for item in lote:
+            try:
+                arquivo = _baixar(sftp, pasta, item.nome, config, prazo,
+                                  esperado=item, ao_receber=ao_receber)
+            except ErroOperacaoFiservSFTP as exc:
+                if (ao_falhar is None or exc.codigo != 'IO_AUSENTE'
+                        or exc.etapa not in {
+                            'ARQUIVO_LSTAT', 'ARQUIVO_REALPATH', 'ARQUIVO_OPEN',
+                            'ARQUIVO_FSTAT', 'ARQUIVO_READ',
+                        }):
+                    raise
+                try:
+                    ao_falhar(item, exc)
+                except Exception:
+                    # Sem registro durável da pendência, não avançar em silêncio.
+                    raise ErroPersistenciaFiservSFTP() from None
+            else:
+                arquivos.append(arquivo)
         return arquivos, len(pendentes) > len(lote)

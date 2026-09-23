@@ -14,7 +14,13 @@ from flask import current_app
 from sqlalchemy import text
 
 from app.extensions import db
-from app.models.fiserv import ArquivoFiservRecebido, EventoFiserv, FiservArquivoRemoto, IntegracaoFiserv
+from app.models.fiserv import (
+    ArquivoFiservRecebido,
+    EventoFiserv,
+    FiservArquivoRemoto,
+    IntegracaoFiserv,
+    PendenciaFiserv,
+)
 from app.services.fiserv_segredos import (
     ErroSegredoFiserv,
     carregar_chave,
@@ -160,6 +166,9 @@ def _guardar_arquivo(registro, arquivo):
     remoto.conferido_em = agora()
     with db.session.no_autoflush:
         recebido = ArquivoFiservRecebido.query.filter_by(sha256=arquivo.sha256).first()
+        pendencia = PendenciaFiserv.query.filter_by(
+            nome=arquivo.metadados.nome, versao_configuracao=registro.versao,
+        ).first()
     novo = recebido is None
     if novo:
         recebido = ArquivoFiservRecebido(
@@ -170,8 +179,49 @@ def _guardar_arquivo(registro, arquivo):
             versao_configuracao=registro.versao,
         )
         db.session.add(recebido)
+    if pendencia is not None:
+        db.session.delete(pendencia)
     db.session.commit()
     return recebido.id, novo
+
+
+def _falha_individual(erro):
+    return (isinstance(erro, ErroOperacaoFiservSFTP) and erro.codigo == 'IO_AUSENTE'
+            and erro.etapa in {
+                'ARQUIVO_LSTAT', 'ARQUIVO_REALPATH', 'ARQUIVO_OPEN',
+                'ARQUIVO_FSTAT', 'ARQUIVO_READ',
+            })
+
+
+def _guardar_pendencia(registro, metadados, erro):
+    """Registra somente o diagnóstico local; uma falha nunca vira recebimento."""
+    __tracebackhide__ = True
+    if not _falha_individual(erro):
+        raise ErroPersistenciaFiservSFTP()
+    pendencia = PendenciaFiserv.query.filter_by(
+        nome=metadados.nome, versao_configuracao=registro.versao,
+    ).first()
+    remoto = FiservArquivoRemoto.query.filter_by(
+        nome=metadados.nome, versao_configuracao=registro.versao,
+    ).first()
+    if pendencia is None:
+        pendencia = PendenciaFiserv(nome=metadados.nome, versao_configuracao=registro.versao,
+                                   tentativas=0)
+        db.session.add(pendencia)
+    elif (pendencia.tamanho, pendencia.modificado_remoto) != (metadados.tamanho, metadados.modificado_em):
+        pendencia.tentativas = 0
+    pendencia.tamanho = metadados.tamanho
+    pendencia.modificado_remoto = metadados.modificado_em
+    pendencia.etapa = erro.etapa
+    pendencia.codigo = erro.codigo
+    pendencia.tentativas += 1
+    pendencia.ultima_tentativa_em = agora()
+    pendencia.proxima_tentativa_em = pendencia.ultima_tentativa_em + timedelta(hours=1)
+    if remoto is not None:
+        # A revalidação falhou: o cache de sucesso não deve adiar a nova
+        # tentativa por 24 horas depois que o intervalo da pendência vencer.
+        db.session.delete(remoto)
+    db.session.commit()
 
 
 def _registro_consulta():
@@ -210,8 +260,16 @@ def receber_arquivo_selecionado(esperado, versao, usuario_id):
             nonlocal arquivo_id, novo
             arquivo_id, novo = _guardar_arquivo(registro, arquivo)
 
-        baixar_arquivo(esperado.nome, _config_coleta(registro, duracao_maxima_segundos=45),
-                       esperado=esperado, ao_receber=receber)
+        try:
+            baixar_arquivo(esperado.nome, _config_coleta(registro, duracao_maxima_segundos=45),
+                           esperado=esperado, ao_receber=receber)
+        except ErroOperacaoFiservSFTP as exc:
+            if _falha_individual(exc):
+                try:
+                    _guardar_pendencia(registro, esperado, exc)
+                except Exception:
+                    raise ErroPersistenciaFiservSFTP() from None
+            raise
         if arquivo_id is None:
             raise ErroPersistenciaFiservSFTP()
         db.session.add(EventoFiserv(acao='arquivo_recebido_manual', usuario_id=usuario_id,
@@ -254,6 +312,17 @@ def executar_ciclo():
                     FiservArquivoRemoto.conferido_em > agora() - timedelta(hours=24),
                 ).all()
                 conhecidos = {(item.nome, item.tamanho, item.modificado_remoto) for item in conferidos}
+                pendencias_anteriores = PendenciaFiserv.query.filter_by(
+                    versao_configuracao=registro.versao,
+                ).order_by(PendenciaFiserv.ultima_tentativa_em.asc(), PendenciaFiserv.id.asc()).all()
+                instante = agora()
+                conhecidos.update(
+                    (item.nome, item.tamanho, item.modificado_remoto) for item in pendencias_anteriores
+                    if item.proxima_tentativa_em > instante
+                )
+                tentativas_anteriores = [
+                    (item.nome, item.tamanho, item.modificado_remoto) for item in pendencias_anteriores
+                ]
                 novos = 0
 
                 def receber(arquivo):
@@ -263,16 +332,31 @@ def executar_ciclo():
                     if novo:
                         novos += 1
 
+                def falhar(metadados, erro):
+                    __tracebackhide__ = True
+                    _guardar_pendencia(registro, metadados, erro)
+
                 _, mais_pendentes = coletar_lote_pendente(
-                    conhecidos, _config_coleta(registro), ao_receber=receber,
+                    conhecidos, _config_coleta(registro), ao_receber=receber, ao_falhar=falhar,
+                    tentativas_anteriores=tentativas_anteriores,
                 )
+                pendencias = PendenciaFiserv.query.filter_by(versao_configuracao=registro.versao).count()
                 registro.ativa = True
                 registro.coleta_solicitada = mais_pendentes
-                registro.estado = 'conectado'
-                registro.ultimo_sucesso_em = agora()
-                registro.mensagem = ('Lote recebido. Os arquivos restantes serão coletados automaticamente.'
-                                     if mais_pendentes else 'Coleta concluída.')
-                db.session.add(EventoFiserv(acao='coleta_concluida', arquivos_novos=novos))
+                if pendencias:
+                    registro.estado = 'parcial'
+                    registro.mensagem = (
+                        f'{novos} arquivo(s) novo(s) recebido(s); {pendencias} arquivo(s) pendente(s). '
+                        + ('A coleta continuará com os demais arquivos.' if mais_pendentes
+                           else 'As pendências serão verificadas nas próximas coletas, quando disponíveis.')
+                    )
+                else:
+                    registro.estado = 'conectado'
+                    registro.ultimo_sucesso_em = agora()
+                    registro.mensagem = ('Lote recebido. Os arquivos restantes serão coletados automaticamente.'
+                                         if mais_pendentes else 'Coleta concluída.')
+                db.session.add(EventoFiserv(acao='coleta_parcial' if pendencias else 'coleta_concluida',
+                                           arquivos_novos=novos))
                 db.session.commit()
                 return novos
             except ErroEtapaAutenticacaoFiservSFTP as exc:

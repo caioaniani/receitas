@@ -58,3 +58,23 @@ class FiservArquivoRemoto(db.Model):
     modificado_remoto = db.Column(db.BigInteger, nullable=False)
     sha256 = db.Column(db.String(64), nullable=False)
     conferido_em = db.Column(db.DateTime, nullable=False, default=agora)
+
+
+class PendenciaFiserv(db.Model):
+    """Arquivo ainda não recebido; preservado mesmo se deixar a lista remota."""
+    __tablename__ = 'pendencia_fiserv'
+    __table_args__ = (
+        db.UniqueConstraint('versao_configuracao', 'nome', name='uq_fiserv_pendencia_versao_nome'),
+        db.CheckConstraint('tentativas >= 1', name='ck_fiserv_pendencia_tentativas'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(255), nullable=False)
+    versao_configuracao = db.Column(db.Integer, nullable=False)
+    tamanho = db.Column(db.Integer, nullable=False)
+    modificado_remoto = db.Column(db.BigInteger, nullable=False)
+    etapa = db.Column(db.String(32), nullable=False)
+    codigo = db.Column(db.String(32), nullable=False)
+    tentativas = db.Column(db.Integer, nullable=False, default=1)
+    ultima_tentativa_em = db.Column(db.DateTime, nullable=False, default=agora)
+    proxima_tentativa_em = db.Column(db.DateTime, nullable=False)

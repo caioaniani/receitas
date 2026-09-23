@@ -62,7 +62,7 @@ ser homologados com amostra real, pois os PDFs não definem o envelope externo
 completamente. Não confundir posições de recebíveis com novas entradas de caixa,
 nem somar venda, parcela, resumo e liquidação da mesma operação.
 
-Com o automático pausado, **Conferir arquivos na Fiserv** lista nomes e tamanhos
+Com o automático pausado, **Arquivos disponíveis na Fiserv** lista nomes e tamanhos
 diretamente do acesso salvo, em páginas de 20 arquivos ordenados por nome. Isso
 permite comparar com o mesmo arquivo do WinSCP, sem presumir que o primeiro da
 lista corresponde ao download que o owner realizou. **Receber este arquivo**
@@ -120,13 +120,32 @@ após a leitura e a validação completas, antes do CLOSE normal do handle. Uma
 falha no arquivo seguinte não descarta os anteriores. Falhas de persistência
 têm classificação local própria, pausam a coleta e não viram erros de rede.
 
+Ausência de um arquivo (`IO_AUSENTE` em LSTAT, REALPATH, OPEN, FSTAT ou READ do
+arquivo) não bloqueia os demais downloads do lote automático. A tentativa é
+registrada em `PendenciaFiserv`, com nome, metadados, etapa, código fixo e horário;
+nenhum conteúdo parcial é salvo ou marcado como recebido. Falhas também contam
+para os limites de quantidade e bytes do lote. A mesma revisão fica adiada por
+uma hora, permitindo que os lotes seguintes avancem. Mudança de tamanho, data ou
+versão do acesso permite uma nova tentativa sem aguardar esse intervalo.
+Revisões nunca tentadas vêm antes das repetições; pendências vencidas são
+retomadas da tentativa mais antiga à mais recente, evitando que os primeiros
+nomes monopolizem a coleta quando o histórico leva mais de uma hora para drenar.
+Uma pendência não desaparece só porque o arquivo deixou a listagem remota: fica
+visível ao owner até um recebimento bem-sucedido, inclusive manual, resolver o
+mesmo nome na mesma versão do acesso. Com pendências, o painel informa coleta
+parcial; não apresenta o conjunto como totalmente recebido. Os demais erros de
+conexão, permissão, segurança, limite ou armazenamento continuam interrompendo
+o lote. Falha ao guardar a própria pendência também interrompe a coleta.
+
 Arquivo regular e metadados válidos, conferidos por LSTAT e realpath, são
 obrigatórios antes do OPEN. A transferência segue a sequência do download
 do WinSCP: OPEN, FSTAT opcional e READ pelo handle, sem intercalar consultas
 LSTAT/REALPATH pelo nome enquanto o arquivo está aberto. A versão anterior
 intercalava essas consultas; essa diferença não está prevista no guia da
 Fiserv. A compatibilidade do gateway com a sequência anterior não foi
-confirmada. Não se ignoram erros de permissão, rede ou ausência em OPEN/READ.
+confirmada. Não se ignoram erros de permissão ou rede. Ausência em OPEN/READ
+interrompe esse arquivo e, no lote automático, registra uma pendência antes de
+continuar para o próximo; não transforma uma leitura incompleta em sucesso.
 Quando FSTAT retorna status SFTP 4 (falha genérica) ou 8 (operação não
 suportada), usa os metadados conferidos antes do OPEN. FSTAT válido e divergente
 é recusado e é repetido no mesmo handle após a leitura quando suportado.
