@@ -4882,6 +4882,140 @@ Confirmação de passagem: a nota privada escrita na 2429 às 12:25 apareceu
 em `presenca_humana` (`nota_em` 12:25:38) — o Agent Bot RECEBE
 `message_created` de nota privada (a hipótese de 21/09 está provada).
 
+## Dia de problemas de entrega (23/09/2026) — telefone inventado, presente sem telefone, Lalamove muda, bot exige credencial
+
+Dono ("Tivemos alguns problemas hoje, levar em consideração e fazer o que
+faz sentido"), seis itens. Fatos provados no código antes de mexer: o
+`chatwoot._e164` prefixava '55' em QUALQUER número ('+1 475-292-9850' →
+'+5514752929850', DDD 14 inventado) e a tela dizia "template enviado";
+`lalamove._fone_e164` mandava o mesmo número como contato do destinatário;
+o checkout descartava o '+' (`telefone_cliente` gravava '14752929850');
+o webhook da Lalamove gravava CANCELED/EXPIRED/REJECTED em silêncio; o
+prompt mandava pedir número/CPF ANTES de transferir uma reclamação.
+
+1. **Classificador canônico de telefone** — `app/utils.py:115`
+   `classificar_telefone(bruto)` → `{tipo: br_celular|br_fixo|internacional|
+   invalido, e164, ddd, nacional, digitos}`; `DDDS_BRASIL` (utils.py:71,
+   fonte única — `wifi_portal._DDDS_VALIDOS` importa de lá);
+   `telefone_e164_whatsapp` (utils.py:174) = SÓ celular BR. Regras que
+   custaram contato/venda: DDD 55 de Santa Maria SEM código de país
+   (11 dígitos) é BR — só 12/13 dígitos começando em 55 perdem o 55;
+   tronco '0'/operadora '015' (incidente Pagar.me 22/06) continuam
+   descartados; 11 dígitos com 3º dígito ≠ 9 só viram internacional no
+   plano norte-americano ('1' + área 2-9 — cobre o '14752929850' já
+   gravado); outros DDIs exigem '+'/'00'; celular no formato antigo (10
+   dígitos, assinante 6-9) ganha o 9 da migração ANATEL; '99999-9999' e
+   DDD inexistente = inválido. Consumidores: `chatwoot._e164`
+   (chatwoot.py:1056, SÓ celular) + `motivo_telefone_sem_whatsapp`
+   (chatwoot.py:1069 — texto explícito: "internacional (+1…): não é
+   possível contato por WhatsApp — use e-mail" / "fixo: não recebe
+   WhatsApp — use ligação ou e-mail" / "inválido/sem DDD");
+   `iniciar_conversa_whatsapp` recusa ANTES da rede (`telefone_recusado`)
+   e as três rotas Chamar (`entregas/routes.py:499,535,581`) devolvem 400
+   com o motivo; `lalamove._fone_e164` (lalamove.py:121, BR celular OU
+   fixo) + `_contato_destinatario` (lalamove.py:131): internacional/
+   inválido/vazio → contato = telefone da FILIAL e a observação vai nos
+   `remarks` da corrida + chave `aviso` no retorno (a rota `chamar` repassa
+   e o painel mostra `alert`); `pagarme._telefone_br` via classificador
+   (internacional = omitido, nunca +55 + número americano);
+   `loja_checkout._normalizar_telefone_checkout` PRESERVA o '+' do
+   internacional ('+14752929850') — sem ele os dígitos ficam
+   indistinguíveis de BR mal digitado. DECISÕES: fixo também é recusado
+   no WhatsApp (custa template e falha com 131026); checkout segue
+   LENIENTE pra BR inválido (não barra venda; o painel marca ⚠ e o
+   Chamar recusa). Testes: `tests/test_telefone_internacional.py` (com
+   '+1 475-292-9850', '+44', '+351', DDD 55 e toda a lista BR do
+   `test_pagarme_telefone.py`).
+2. **Presente exige telefone de quem recebe** — `loja_checkout.py:725`
+   (erro "Informe o telefone de quem vai receber"); `checkout.js`
+   `aplicarPresente()` liga `required` nos dois campos SÓ com o bloco
+   visível e `aplicarModo()` DESMARCA o presente na retirada (required em
+   campo oculto travava o submit sem mensagem). Painel:
+   `_telefones_meta` (entregas/routes.py:139) expõe `telefone_tipo`,
+   `telefone_comprador_tipo`, `sem_telefone_destinatario` — e
+   **`/entregas/api/painel` (dict de :687-705) NÃO repassava `e_presente`
+   nem `telefone_comprador` desde 13/07: o bloco "🎁 não ligue pra quem
+   recebe" NUNCA renderizava no painel do dia** (só no `/api/pedidos`,
+   que é o que os testes batiam) — corrigido. Selos 🌐/☎/⚠ e "sem
+   telefone de quem recebe" no card (`painel_pedidos.html`), PDF
+   (`pdf.py`), `imprimir.html`, app do motorista (`driver/index.html`) e
+   detalhe admin; `api_lalamove_chamar` acrescenta à observação da
+   corrida "PRESENTE: quem recebe não informou telefone; o número é do
+   COMPRADOR" (o card manda o fallback do comprador pra cotação).
+3. **Lalamove encerrada SEM entrega** — `app/services/lalamove_alerta.py`
+   (`tratar_encerramento`, chamado pelo webhook em
+   `lalamove/routes.py:170-172` depois do commit): VigiaVeredito ALTA
+   (`bot_acao='lalamove'`, `bot_motivo='lalamove:<order>:<status>'` =
+   dedupe cross-worker; mensagem `[LALAMOVE <STATUS>] pedido X — motivo`),
+   WhatsApp ao dono pelo número de `loja_alerta` com `critico=True`,
+   conversa do cliente → `open` (local `ChatbotConversa.contato_key` em
+   7 dias, senão open/pending do contato via API — só celular BR), SEM
+   mensagem ao cliente; rede numa thread (`_POOL`, testes trocam por
+   inline). `anterior == status` cala (cancelamento pelo painel grava
+   CANCELED antes do webhook; reentrega). Motivo por parse liberal do
+   payload (`cancelReason`/`reason`/… — a doc v3 não fixa o campo) ou
+   "motivo não informado pela Lalamove". NUNCA `avancar_status_entrega`
+   nem mexe no `PedidoOnline`. `_expedicao_com_pedido`
+   (main/routes.py:6187) deixou de tratar EXPIRED/REJECTED como motoboy
+   chamado. Testes: `tests/test_lalamove_encerramento.py`.
+4. **Bot: socorro antes de credencial** — `chatbot.falha_operacional`
+   (chatbot.py:618; padrões ancorados: objeto de ENTREGA ou âncora
+   temporal, verbo no passado, hipótese `se/caso/quando` veta, negação
+   escopada — "nunca recebi nada errado de vocês"/"não veio errado" —,
+   e oração sobre link/e-mail/cardápio/pix sem objeto de entrega fica
+   fora). Camada 1 do `responder` (chatbot.py:1981, depois do
+   `_quer_humano`): handoff forçado com `TEXTO_FALHA_OPERACIONAL`, motivo
+   "falha operacional relatada pelo cliente: <trecho>", e
+   `_localizar_pedido_para_socorro` (chatbot.py:1830) consulta o pedido
+   em paralelo com código/e-mail/CPF já ditos ou telefone do canal — o
+   achado vai SÓ pra `tools_resumo` → nota privada (`entrega_candidata.
+   nota_de_handoff`), nunca pro texto ao cliente. `_MOTIVO_FALHA_
+   OPERACIONAL` + `_hits_falha_no_motivo` (chatbot.py:743,757) liberam o
+   enforcement (`_handoff_excecao`, APÓS o veto de venda em curso) e a
+   métrica do auditor — "dúvida se o motoboy liga quando ninguém atende"
+   segue barrado (hipótese). Turno vazio do modelo também cobre.
+   `chatbot_vigia.reclamacao_no_historico` (chatbot_vigia.py:588): a
+   contenção "atendimento em alta demanda" NÃO sai sobre reclamação/
+   falha (só dúvida comum) e a cobrança ao dono ganha "🚨 Relato de
+   PROBLEMA — a mensagem automática NÃO foi enviada"; o detector de
+   venda em risco desarma por `falha_operacional` como já desarmava por
+   `_quer_humano`. Prompt: seção FALHA OPERACIONAL EM CURSO, exceção em
+   ANTES DE TRANSFERIR, RECLAMAÇÃO DE ENTREGA sem "peça o número/CPF
+   antes" (o caso D33BF3F27D continua: consultar SIM, interrogar NÃO).
+5. **E-mail localiza e autoriza; três respostas** — `bot_tools`:
+   `_norm_email`/`_email_confere` (`PedidoOnline.email_cliente` ou
+   `Cliente.email`, minúsculas sem espaços), `autorizado_como='email'`,
+   `email_cliente` na tool (`chatbot.py` schema + `_executar_tool`) e em
+   `_pedidos_recentes_por_telefone` (só e-mail do COMPRADOR, mesma razão
+   do telefone — presente-surpresa); `_nao_autorizado` (bot_tools.py:743)
+   devolve `autorizacao_necessaria` + `instrucao` + `_nota_interna`
+   ("pedido X EXISTE (status) mas o contato NÃO foi autorizado; cliente
+   informou CPF, mas o cadastro NÃO tem CPF" / "CPF não confere" /
+   "e-mail não confere"). **A `_nota_interna` é removida do tool_result
+   ANTES de ir ao modelo** (chatbot.py:2239) e viaja só em `_resumo_tool`
+   → nota privada — o modelo não tem como revelar existência. Cadastro
+   sem CPF → `_AUTORIZACAO_SEM_CPF_INSTRUCAO` (transferir, não pedir de
+   novo). DECISÃO A CONFIRMAR COM O DONO: e-mail é credencial MAIS FRACA
+   que telefone do canal/CPF (quem sabe o e-mail do comprador vê itens,
+   valor e cartinha) — implementado como pedido; restringir a "localiza
+   mas não revela" é um gesto de 1 linha em `_consultar_pedido_online`.
+6. **Terceiro pelo titular** — `_TERCEIRO_PELO_TITULAR` +
+   `motivo_terceiro_pelo_titular` (chatbot.py:1012,1032: parentesco/
+   "em nome de"/"quem comprou foi" + identificação — pedido/código/@/
+   CPF/destinatário/endereço; venda em curso veta) na exceção do
+   enforcement; seção TERCEIRO FALANDO PELO TITULAR no prompt (consulta
+   UMA vez com o dado; `autorizacao_necessaria` → transfere com tudo no
+   motivo; nunca revela ao terceiro). Teste de conversa com modelo
+   mockado em `tests/test_socorro_email_terceiro.py` (junto dos itens 4
+   e 5).
+ARMADILHA DE PROCESSO desta rodada: o push do auto-commit falhou em
+SILÊNCIO a sessão inteira — outra sessão subiu 16 commits (Fiserv/motor)
+depois de a9ca8522 e o clone ficou atrás; 70 commits locais só subiram
+após `git rebase origin/<branch>` (sem conflito — arquivos disjuntos).
+Conferir `git rev-list --left-right --count HEAD...origin/<branch>` ANTES
+de confiar em "deployado". Manual de operação atualizado (RODA SOZINHO +
+QUANDO PRECISAR).
+
 ## Contas a Pagar (NF/boleto via Slack → IA → Dropbox → banco)
 
 Feature de 2026-05-23. Funcionarios postam foto de NF/boleto em canais Slack de
