@@ -5008,6 +5008,35 @@ prompt mandava pedir número/CPF ANTES de transferir uma reclamação.
    motivo; nunca revela ao terceiro). Teste de conversa com modelo
    mockado em `tests/test_socorro_email_terceiro.py` (junto dos itens 4
    e 5).
+7. **Reclamação em aberto NUNCA vira `resolved`** (spec do dono de
+   22/09/2026, caso E3862E49 — o bot marcava resolvido num "obrigada"
+   com a reclamação ainda sem ninguém da equipe ter falado). Fonte única
+   `chatbot.pode_encerrar(historico, exigir_fechamento=True,
+   conversa_id=None)` (chatbot.py:1176): (a) com `exigir_fechamento`, a
+   última fala do cliente tem que passar em `_e_fechamento`; (b) regra
+   dura em TODOS os caminhos: `_reclamacao_sem_resposta_humana`
+   (chatbot.py:1154 — fala do cliente não herdada que casa
+   `falha_operacional` OU `_SINAIS_RECLAMACAO`, sem fala com
+   `humano=True` depois da ÚLTIMA reclamação) barra; (c) como o nosso
+   store NÃO vê a resposta da equipe (o bot não processa conversa
+   `open`), `_equipe_respondeu_no_chatwoot` confere na API
+   (`buscar_historico(incluir_autoria=True)`) e só libera com prova
+   positiva — API fora/vazia/sem fala humana = conservador (fila).
+   Aplicado na Camada 1 do fechamento (chatbot.py ~2080), no ramo (b)
+   do turno vazio e na tool `encerrar_conversa` do modelo — estes dois
+   com `exigir_fechamento=False`, porque "Obrigada. Esclareceu" e "Não,
+   muito obrigada !" não passam no `_e_fechamento` ancorado e exigi-lo
+   mandaria fechamento banal pra fila (o problema de 26/07/2026).
+   Resultado = `_resp_fila_silenciosa` (`acao='handoff'`, `texto=''`,
+   `fila_silenciosa=True`, motivo `MOTIVO_FILA_RECLAMACAO`): webhook e
+   vassoura já tratam handoff sem texto como "status `open`, nada ao
+   cliente"; a nota privada de handoff leva o motivo; o vigia pula o
+   turno (`_avaliar_interno`, `fila_silenciosa` — sem fala do bot não há
+   o que julgar e a reclamação já teve o veredito dela). NÃO passa por
+   `_resp_handoff` de propósito (o aviso de fora-horário viraria fala).
+   EXCEÇÕES mantidas: encerrar por LOOP bot-a-bot e o resolve do número
+   ignorado (`CHATBOT_NUMEROS_IGNORADOS`) não passam pela guarda — não
+   são cliente. Testes: `tests/test_encerrar_reclamacao_aberta.py`.
 CRÍTICA DE COMPLETUDE (workflow de 6 leitores + crítico) — aplicados:
 `chatbot_auditor._TRACKING_PREFIXES` ganhou `'[LALAMOVE'` (o veredito
 operacional não entra na taxa de contenção); `chatbot_vigia.
