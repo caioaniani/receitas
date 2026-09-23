@@ -226,7 +226,8 @@ def _tratar(e, status, anterior, dados):
     link = chatbot_vigia.link_chatwoot(conv_id) if conv_id else ''
     texto = _texto_whatsapp(e, status, motivo, pedido, link)
     app = current_app._get_current_object()
-    _POOL.submit(_executar_rede, app, row_id, texto, conv_id, telefone_cliente)
+    _POOL.submit(_executar_rede, app, row_id, texto, conv_id, telefone_cliente,
+                 e.pedido_code, f'CORRIDA LALAMOVE {rotulo.upper()}', motivo)
     logger.warning('lalamove_alerta: %s (veredito %s, conversa %s)',
                    resumo, row_id, conv_id or '-')
     return {'ok': True, 'veredito_id': row_id, 'conv_id': conv_id,
