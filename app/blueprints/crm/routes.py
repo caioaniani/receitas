@@ -413,7 +413,8 @@ def bot_webhook():
                     chatbot_vigia.resolver_alertas_da_conversa(
                         conv_id_ev, via='conversa_resolvida')
                 except Exception:  # noqa: BLE001
-                    db.session.rollback()
+                    from app.extensions import db as _db
+                    _db.session.rollback()
                     logger.exception('crm/bot: resolver alertas da conv=%s falhou',
                                      conv_id_ev)
             return jsonify({'ok': True, 'ignorado': 'evento',
