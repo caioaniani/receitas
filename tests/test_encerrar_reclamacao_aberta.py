@@ -61,6 +61,72 @@ def test_camada_1_obrigada_com_reclamacao_vai_pra_fila_sem_resolver(app):
     assert r['tools_usadas'] == []
 
 
+def _api_hist(com_humano):
+    """Historico como `chatwoot.buscar_historico(incluir_autoria=True)`
+    devolve: a resposta da EQUIPE so existe la (o bot nao processa
+    conversa `open`, entao o nosso store nunca a ve)."""
+    hist = [{'role': 'user', 'content': 'não recebi meu pedido', 'humano': False},
+            {'role': 'assistant', 'content': 'Sinto muito! Já estou passando pra equipe.',
+             'humano': False}]
+    if com_humano:
+        hist.append({'role': 'assistant', 'humano': True,
+                     'content': 'Oi! Aqui é a Ana. Reenviamos, chega em 40 min.'})
+    hist.append({'role': 'user', 'content': 'obrigada', 'humano': False})
+    return hist
+
+
+def test_camada_1_confere_resposta_humana_no_chatwoot(app):
+    """A resposta da equipe que so existe no Chatwoot libera o encerramento;
+    sem ela (ou com a API fora) a conversa fica na fila."""
+    from app.services import chatbot
+    store = [{'role': 'user', 'content': 'não recebi meu pedido'},
+             {'role': 'assistant', 'content': 'Sinto muito! Já estou passando pra equipe.'},
+             {'role': 'user', 'content': 'obrigada'}]
+    with app.app_context():
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        with patch('anthropic.Anthropic'), \
+                patch('app.services.chatwoot.buscar_historico',
+                      return_value=_api_hist(com_humano=True)) as bh:
+            r = chatbot.responder(store, conversa_id=4242)
+        assert r['acao'] == 'encerrar'
+        bh.assert_called_once_with(4242, incluir_autoria=True)
+        with patch('anthropic.Anthropic'), \
+                patch('app.services.chatwoot.buscar_historico',
+                      return_value=_api_hist(com_humano=False)):
+            r = chatbot.responder(store, conversa_id=4242)
+        assert r['acao'] == 'handoff' and r['texto'] == ''
+        with patch('anthropic.Anthropic'), \
+                patch('app.services.chatwoot.buscar_historico',
+                      side_effect=RuntimeError('chatwoot fora')):
+            r = chatbot.responder(store, conversa_id=4242)
+        assert r['acao'] == 'handoff' and r['texto'] == ''
+        # Sem conversa_id nao ha o que conferir: conservador.
+        with patch('anthropic.Anthropic'), \
+                patch('app.services.chatwoot.buscar_historico') as bh:
+            r = chatbot.responder(store)
+        assert r['acao'] == 'handoff' and r['texto'] == ''
+        bh.assert_not_called()
+
+
+def test_vigia_pula_a_fila_silenciosa(app):
+    """O vigia nao julga o turno sem fala do bot (seria "transferiu um
+    obrigada" = falso handoff preguicoso)."""
+    from app.services import chatbot_vigia
+    with app.app_context():
+        app.config['ANTHROPIC_API_KEY'] = 'test'
+        with patch('anthropic.Anthropic') as M, \
+                patch('app.services.chatbot_vigia.disponivel', return_value=True):
+            res = chatbot_vigia._avaliar_interno(
+                [{'role': 'user', 'content': 'quero uma cesta pra amanhã'},
+                 {'role': 'assistant', 'content': 'Claro! Temos a Family Box.'},
+                 {'role': 'user', 'content': 'obrigada'}],
+                conv_id=1, resultado_bot={'acao': 'handoff', 'texto': '',
+                                          'fila_silenciosa': True,
+                                          'tools_usadas': []})
+        M.return_value.messages.create.assert_not_called()
+    assert res.get('pulou', '').startswith('fila silenciosa')
+
+
 def test_camada_1_obrigada_sem_reclamacao_segue_encerrando(app):
     from app.services import chatbot
     with app.app_context():
