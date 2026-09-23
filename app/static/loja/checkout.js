@@ -327,7 +327,15 @@
     var chkPresente = document.getElementById('e_presente');
     var blocoDest = document.getElementById('bloco-destinatario');
     function aplicarPresente() {
-      if (blocoDest) blocoDest.style.display = chkPresente.checked ? 'block' : 'none';
+      var marcado = !!(chkPresente && chkPresente.checked);
+      if (blocoDest) blocoDest.style.display = marcado ? 'block' : 'none';
+      // Nome E telefone de quem recebe são obrigatórios no presente
+      // (23/09/2026): `required` só enquanto o bloco está visível — campo
+      // required escondido travaria o submit sem mensagem visível.
+      ['nome_destinatario', 'telefone_destinatario'].forEach(function (nome) {
+        var el = form.querySelector('[name="' + nome + '"]');
+        if (el) el.required = marcado;
+      });
     }
     if (chkPresente) {
       chkPresente.addEventListener('change', aplicarPresente);
