@@ -1617,16 +1617,20 @@ def reconhecer_pendentes(user_id=None, ids=None):
     return marcados
 
 
-VIAS_RESOLUCAO = ('resposta_humana', 'conversa_resolvida', 'manual')
+# Regra ESTRITA da spec (22/09/2026): ALTA so fecha com resposta HUMANA na
+# conversa depois do alerta ou com motivo POR ESCRITO. "Conversa resolvida"
+# ficou de fora de proposito — o proprio bot resolve conversa num
+# "obrigada" (revisao 23/09/2026) e o status nao diz quem resolveu.
+VIAS_RESOLUCAO = ('resposta_humana', 'manual')
 
 
 def resolver_alertas(ids, *, via, usuario_id=None, motivo=None, momento=None,
                      commit=True):
     """FECHA o caso de alertas ALTA (grava VigiaAlertaResolucao; idempotente
     por veredito). `via='manual'` (botao do painel) EXIGE motivo por
-    escrito; 'resposta_humana'/'conversa_resolvida' sao as resolucoes
-    automaticas. Resolver implica silenciar (marca `reconhecido_em` se
-    ainda nao havia). Devolve quantos alertas foram resolvidos agora."""
+    escrito; 'resposta_humana' e a resolucao automatica. Resolver implica
+    silenciar (marca `reconhecido_em` se ainda nao havia). Devolve quantos
+    alertas foram resolvidos agora."""
     from app.extensions import db
     from app.models import VigiaAlertaResolucao, VigiaVeredito
     from app.utils import agora as _ag
