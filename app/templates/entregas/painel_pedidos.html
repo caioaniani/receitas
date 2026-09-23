@@ -514,11 +514,23 @@
     }
     var msg = a.mensagem_cliente
       ? '<div class="al-msg">' + esc(a.mensagem_cliente) + '</div>' : '';
+    var VIA = { resposta_humana: 'resposta da equipe na conversa',
+                conversa_resolvida: 'conversa resolvida', manual: 'resolvido no painel' };
+    var resol = '';
+    if (a.resolvido) {
+      var rq = a.resolvido_em ? new Date(a.resolvido_em).toLocaleString('pt-BR',
+        { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+      resol = '<div class="al-resolucao">✔ ' + esc(VIA[a.resolvido_via] || 'resolvido') +
+        (rq ? ' · ' + esc(rq) : '') +
+        (a.resolvido_motivo ? ' — ' + esc(a.resolvido_motivo) : '') + '</div>';
+    }
+    var resolver = a.resolvido ? '' :
+      '<button type="button" class="al-resolver" data-id="' + esc(a.id) + '">✔ Resolver</button>';
     return '<div class="al-card' + lido + '">' +
       '<div class="al-top"><span class="al-cliente">' + esc(a.cliente) + '</span>' +
         '<span class="al-quando">' + esc(quando) + '</span></div>' +
-      '<span class="al-badge' + lido + '">' + (a.reconhecido ? 'visto' : 'NOVO') + '</span>' +
-      '<div class="al-motivo">' + esc(a.motivo) + '</div>' + msg + link + '</div>';
+      '<span class="al-badge' + badgeCls + '">' + badgeTxt + '</span>' +
+      '<div class="al-motivo">' + esc(a.motivo) + '</div>' + msg + resol + link + resolver + '</div>';
   }
 
   function carregarHistorico() {
