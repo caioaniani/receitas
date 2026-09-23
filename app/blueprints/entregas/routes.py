@@ -501,8 +501,20 @@ def api_atendimento_chamar_cliente():
         return jsonify({'ok': False, 'erro': motivo,
                         'telefone_recusado': True}), 400
     nome = (p.nome_cliente or 'Cliente').strip()
+    # Mesmo template pro mesmo pedido em 60 min NAO sai de novo (item 10,
+    # caso E3862E49: 4 cliques no mesmo pedido em 2 h) — 409 com quando e
+    # a conversa pra abrir.
+    from app.services import template_dedupe
+    template = (current_app.config.get('CHATWOOT_WHATSAPP_TEMPLATE') or '').strip()
+    repetido = template_dedupe.envio_recente(p.telefone_cliente, template, p.codigo)
+    if repetido is not None:
+        return jsonify(template_dedupe.resposta_bloqueio(repetido, nome=nome)), 409
     res = cw_svc.iniciar_conversa_whatsapp(
         p.telefone_cliente, nome, params=[nome, p.codigo])
+    if res.get('ok'):
+        template_dedupe.registrar(p.telefone_cliente, template, p.codigo,
+                                  conversation_id=res.get('conversation_id'),
+                                  usuario_id=current_user.id)
     return jsonify({
         'ok': bool(res.get('ok')),
         'conversation_id': res.get('conversation_id'),
