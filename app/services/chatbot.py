@@ -594,9 +594,21 @@ _FALHA_OPERACIONAL_PATTERNS = [
 # Hipotese/condicao na ORACAO do hit ("se nao chegar", "caso venha errado",
 # "e se vier errado?") nao e falha em curso.
 _HIPOTESE_FALHA = re.compile(r'(?i)(?:^|\W)(?:e\s+)?(?:se|caso|quando)\s+\S*$')
+# Oracao que fala de link/e-mail/cardapio SEM objeto de entrega ("o cardapio
+# nunca chegou no meu e-mail") e duvida comum, nao falha em curso.
+_RE_OBJ_NAO_ENTREGA = re.compile(r'(?i)\b' + _OBJ_NAO_ENTREGA + r'\b')
+_RE_OBJ_ENTREGA = re.compile(
+    r'(?i)\b(?:pedido|encomenda|cesta|caixa|box|entrega|compra|produto|'
+    r'mercadoria|p[aã]es|p[aã]o|croissant\w*|sourdough|brioche|kit|presente)\b')
 TEXTO_FALHA_OPERACIONAL = (
     'Sinto muito por isso! Já estou passando seu caso agora pra nossa '
     'equipe resolver com você.')
+
+
+def _oracao_do_hit(texto, inicio, fim):
+    m = _PONTUACAO_ORACAO.search(texto, fim)
+    depois = texto[fim:m.start()] if m else texto[fim:]
+    return _oracao_antes(texto, inicio) + texto[inicio:fim] + depois
 
 
 def falha_operacional(texto):
@@ -614,6 +626,9 @@ def falha_operacional(texto):
         for m in p.finditer(t):
             antes = _oracao_antes(t, m.start())
             if _HIPOTESE_FALHA.search(antes):
+                continue
+            oracao = _oracao_do_hit(t, m.start(), m.end())
+            if _RE_OBJ_NAO_ENTREGA.search(oracao) and not _RE_OBJ_ENTREGA.search(oracao):
                 continue
             hits.append((m.start(), m.end()))
     return _algum_hit_nao_negado(t, hits, nua_veta=True)
