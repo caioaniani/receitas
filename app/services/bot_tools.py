@@ -709,18 +709,68 @@ _STATUS_ONLINE_CLIENTE = {
 }
 
 _AUTORIZACAO_INSTRUCAO = (
-    'Peca o CPF do comprador do pedido pra confirmar que voce esta falando '
-    'com o dono. So depois chame a tool de novo passando cpf_cliente=<cpf '
-    'informado>.')
+    'Nao conseguimos confirmar que quem fala e o dono do pedido. Peca UMA vez '
+    'o CPF do comprador OU o e-mail usado na compra e chame a tool de novo '
+    'passando cpf_cliente=<cpf> ou email_cliente=<e-mail>. Se ainda assim nao '
+    'conferir, transfira para a equipe com os dados informados no motivo — '
+    'sem dizer ao cliente que o pedido existe. Se a pessoa esta relatando '
+    'um PROBLEMA em curso (nao recebeu, veio errado, motoboy foi embora), '
+    'NAO peca nada: transfira agora com o que tem.')
+_AUTORIZACAO_SEM_CPF_INSTRUCAO = (
+    'O CPF informado NAO pode ser conferido: o cadastro deste pedido nao tem '
+    'CPF. NAO peca o CPF de novo e NAO diga ao cliente que o pedido existe: '
+    'transfira para a equipe (transferir_para_humano) com motivo '
+    '"pedido <numero>: cadastro sem CPF, conferir titularidade com o '
+    'comprador" e o que o cliente relatou.')
 
 
-def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
+def _norm_email(valor):
+    """E-mail canônico pra comparação: minúsculas, sem espaços."""
+    return ''.join(str(valor or '').split()).lower()
+
+
+def _email_confere(p, email_cliente):
+    """E-mail informado bate com o do pedido ou do cadastro do cliente."""
+    e = _norm_email(email_cliente)
+    if not e or '@' not in e:
+        return False
+    if _norm_email(p.email_cliente) == e:
+        return True
+    cli = getattr(p, 'cliente', None)
+    return bool(cli is not None and _norm_email(getattr(cli, 'email', '')) == e)
+
+
+def _nao_autorizado(p, cpf_d, cpf_pedido, email_cliente):
+    """Resposta fail-closed com TRÊS leituras (23/09/2026): o modelo recebe
+    só `erro`+`instrucao` (nunca que o pedido existe); a `_nota_interna` é
+    removida antes de ir ao modelo (`chatbot.responder`) e segue pro resumo
+    das ferramentas → nota privada do handoff, onde a equipe lê que o
+    pedido EXISTE e por que não deu pra autorizar."""
+    partes = [f'pedido {p.codigo} EXISTE (status {p.status}) mas o contato '
+              'NAO foi autorizado']
+    sem_cpf = bool(cpf_d) and not cpf_pedido
+    if sem_cpf:
+        partes.append('cliente informou CPF, mas o cadastro do pedido NAO '
+                      'tem CPF — nao da pra conferir')
+    elif cpf_d:
+        partes.append('CPF informado NAO confere com o do pedido')
+    if _norm_email(email_cliente):
+        partes.append('e-mail informado NAO confere')
+    return {'erro': 'autorizacao_necessaria',
+            'instrucao': (_AUTORIZACAO_SEM_CPF_INSTRUCAO if sem_cpf
+                          else _AUTORIZACAO_INSTRUCAO),
+            '_nota_interna': '; '.join(partes)}
+
+
+def _consultar_pedido_online(code, telefone_contato, cpf_cliente,
+                             email_cliente=None):
     """Pedido NATIVO do site (PedidoOnline). Devolve:
       - None: não é um pedido nosso → o caller tenta o VNDA (transição).
       - {'erro': 'autorizacao_necessaria', ...}: é nosso, mas o dono não bate.
       - dict do pedido: autorizado.
-    Autoriza por telefone do canal (cliente OU destinatário) ou pelo CPF do
-    comprador (Cliente.cpf) — mesma regra do VNDA."""
+    Autoriza por telefone do canal (cliente OU destinatário), pelo CPF do
+    comprador (Cliente.cpf) ou, desde 23/09/2026, pelo E-MAIL usado na
+    compra (`PedidoOnline.email_cliente` / `Cliente.email`, normalizados)."""
     from app.models import PedidoOnline
     from app.utils import telefone_chave
     p = PedidoOnline.query.filter_by(codigo=code).first()
@@ -738,15 +788,17 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
             if tel and telefone_chave(tel) == tel_contato:
                 autorizado_como = rotulo
                 break
+    cpf_d = ''.join(c for c in (cpf_cliente or '') if c.isdigit())
+    cpf_pedido = ''
     if not autorizado_como:
-        cpf_d = ''.join(c for c in (cpf_cliente or '') if c.isdigit())
         from app.services.fiscal_online import documento
         cpf_pedido = documento(p) if p.cliente_id else ''
         if cpf_d and cpf_pedido and cpf_d == cpf_pedido:
             autorizado_como = 'cpf'
+    if not autorizado_como and _email_confere(p, email_cliente):
+        autorizado_como = 'email'
     if not autorizado_como:
-        return {'erro': 'autorizacao_necessaria',
-                'instrucao': _AUTORIZACAO_INSTRUCAO}
+        return _nao_autorizado(p, cpf_d, cpf_pedido, email_cliente)
     # Valores DETALHADOS e rotulados (auditor 06/07/2026): o bot mostrava
     # "R$138" e "R$148" sem dizer o que era cada um e o cliente lia como
     # contradição. Com subtotal/frete/preço unitário explícitos, o bot nunca
