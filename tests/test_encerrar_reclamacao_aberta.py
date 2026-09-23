@@ -155,12 +155,27 @@ def test_pergunta_ou_pedido_nao_e_reclamacao_e_o_obrigada_encerra(app, fala):
 
 
 @pytest.mark.parametrize('fala', [
-    'o atendimento foi péssimo', 'veio errado de novo, absurdo', 'cancelei, nunca mais',
-    'o pão veio queimado', 'não recebi meu pedido',
+    'o atendimento foi péssimo', 'veio errado de novo, absurdo',
+    'cancelei porque veio estragado, nunca mais compro de vocês',
+    'o pão veio queimado', 'não recebi meu pedido', 'quero meu dinheiro de volta',
+    'a cesta chegou amassada', 'recebi o pedido errado',
 ])
 def test_queixa_forte_em_afirmacao_segura_o_encerramento(fala):
     from app.services import chatbot
     assert chatbot._reclamacao_aberta(fala) is True
+
+
+@pytest.mark.parametrize('fala', [
+    # elogio/fechamento NÃO é reclamação (2ª rodada da revisão, 23/09/2026:
+    # 'errado'/'trocar' soltos casavam "veio tudo certo, nada errado")
+    'Amei! chegou tudo certinho', 'veio tudo certo, nada errado, obrigada',
+    'não veio errado, veio perfeito', 'nunca mais vou comprar em outro lugar, adorei',
+    'nunca recebi nada errado de vocês', 'quero trocar o sabor do próximo pedido',
+    'ficou ótimo, parabéns', 'ok',
+])
+def test_elogio_ou_negacao_nao_e_reclamacao(fala):
+    from app.services import chatbot
+    assert chatbot._reclamacao_aberta(fala) is False
 
 
 def test_camada_1_obrigada_sem_reclamacao_segue_encerrando(app):
