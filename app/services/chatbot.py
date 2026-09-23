@@ -1256,7 +1256,7 @@ _RECLAMACAO_FORTE = re.compile(
     r'(?:tenho|fa[çc]o|minha|uma)\s+reclama[çc][aã]o|'
     r'p[eé]ssim[oa]s?|horr[ií]ve(?:l|is)|decepcion\w*|revoltad[oa]s?|indignad[oa]s?|'
     r'acabei\s+cancelando|cancelei\s+(?:porque|pois|por\s+causa|de\s+raiva)|'
-    r'(?:quero|exijo|preciso\s+d[eo]|cad[eê]\s+(?:o\s+)?meu)\s+'
+    r'(?:quero|exijo|preciso\s+d[eo]|cad[eê])\s+(?:o\s+|a\s+|um\s+|meu\s+|o\s+meu\s+)?'
     r'(?:reembolso|estorno|dinheiro\s+de\s+volta)|'
     r'nunca\s+mais\s+(?:compro|pe[çc]o|volto|quero)\s+'
     r'(?:aqui|com\s+voc[eê]s|de\s+voc[eê]s|nada\s+de\s+voc[eê]s|a[ií])|'
