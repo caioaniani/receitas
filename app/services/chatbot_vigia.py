@@ -1248,8 +1248,11 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
         # chegado. A COBRANCA ao dono segue ate resolver — so o texto ao
         # contato e barrado.
         from app.services import presenca_humana
+        if reclamacao and espera.estado == 'aguardando' and not espera.contencao_em:
+            logger.info('espera-humano: contenção suprimida conv=%s '
+                        '(cliente relata problema/reclamação)', conv_id)
         if (espera.estado == 'aguardando' and not espera.contencao_em
-                and not bot_no_turno
+                and not bot_no_turno and not reclamacao
                 and _os.environ.get('ESPERA_HUMANO_CONTENCAO', '1') != '0'
                 and not presenca_humana.humano_presente(
                     conv_id, consultar_chatwoot=True)):
