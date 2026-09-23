@@ -152,9 +152,9 @@ def test_resposta_pelo_painel_resolve_alertas_anteriores_nao_os_posteriores(app)
         r = VigiaAlertaResolucao.query.filter_by(veredito_id=antes.id).one()
         assert r.via == 'resposta_humana' and r.usuario_id == 7
         assert r.resolvido_em == momento
-        # resolver pelo painel: conversa resolvida
+        # resolver pelo painel: conversa resolvida (DEPOIS do 2º alerta)
         atendimento_pendente.confirmar_acao_painel(
-            '500', 'resolved', iniciado_em=agora() + timedelta(minutes=1), usuario_id=7)
+            '500', 'resolved', iniciado_em=momento + timedelta(minutes=10), usuario_id=7)
         assert _pendentes_ids() == []
         r2 = VigiaAlertaResolucao.query.filter_by(veredito_id=depois.id).one()
         assert r2.via == 'conversa_resolvida'
