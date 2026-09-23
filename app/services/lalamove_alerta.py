@@ -278,6 +278,19 @@ def _executar_rede(app, veredito_id, texto, conv_id, telefone_cliente,
         except Exception:  # noqa: BLE001
             logger.exception('lalamove_alerta: atualizar veredito %s falhou', veredito_id)
             db.session.rollback()
+        if pedido_code:
+            try:
+                if conv:
+                    conversa_pedido.vincular(conv, pedido_code, 'lalamove')
+                # Ja estamos na thread: roda a nota em linha (sem 2ª thread).
+                convs = conversa_pedido.conversas_do_pedido(pedido_code)
+                if convs:
+                    conversa_pedido._executar(app, conversa_pedido._code(pedido_code),
+                                              rotulo or 'CORRIDA LALAMOVE ENCERRADA',
+                                              (motivo or '')[:200], convs)
+            except Exception:  # noqa: BLE001
+                logger.exception('lalamove_alerta: vinculo/nota do pedido %s falhou',
+                                 pedido_code)
 
 
 def _conversa_no_chatwoot(chatwoot, telefone_cliente):

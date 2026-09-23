@@ -65,3 +65,12 @@ def avancar_status_entrega(codigo, novo_status, rastreio_url=None):
     except Exception:  # noqa: BLE001
         logger.exception('email de avancar_status_entrega %s -> %s falhou',
                          codigo, novo_status)
+    # Item 8 (caso E3862E49): nota privada em cada conversa ABERTA vinculada
+    # ao pedido, listando as outras — a equipe sabe onde mais o cliente esta
+    # falando. Best-effort em thread; nunca mensagem ao cliente.
+    try:
+        from app.services import conversa_pedido
+        conversa_pedido.alertar_mudanca_status(codigo, novo_status)
+    except Exception:  # noqa: BLE001
+        logger.exception('aviso de conversas de avancar_status_entrega %s -> %s falhou',
+                         codigo, novo_status)
