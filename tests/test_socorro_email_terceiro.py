@@ -107,7 +107,9 @@ def test_falha_operacional_transfere_sem_pedir_nada(app):
         M.return_value.messages.create.assert_not_called()
     assert r['acao'] == 'handoff'
     assert r['motivo'].startswith('falha operacional')
-    assert r['texto'].startswith(chatbot.TEXTO_FALHA_OPERACIONAL)
+    # (fora do horário do chat o `_resp_handoff` prefixa o aviso — o texto
+    # do socorro continua lá)
+    assert chatbot.TEXTO_FALHA_OPERACIONAL in r['texto']
     for proibido in ('CPF', 'número do pedido', 'alta demanda', 'paciência'):
         assert proibido not in r['texto']
     # localizou em paralelo pelo telefone do canal — vai pra nota interna
