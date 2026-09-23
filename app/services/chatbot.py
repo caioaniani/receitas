@@ -2059,6 +2059,12 @@ def responder(historico, *, telefone_contato=None,
     from app.services.chatbot_vigia import _e_fechamento
     cliente_fechou = _e_fechamento(texto_user)
     if cliente_fechou and not _bot_aguarda_resposta(historico):
+        if not pode_encerrar(historico):
+            # Item 7 (caso E3862E49): "obrigada" com reclamacao ainda sem
+            # resposta humana NAO vira resolved — fica na fila, em silencio.
+            logger.info('chatbot: fechamento com reclamacao em aberto -> fila '
+                        'sem resolver msg=%r', texto_user[:80])
+            return _resp_fila_silenciosa(MOTIVO_FILA_RECLAMACAO, tools_usadas=[])
         logger.info('chatbot: fechamento puro -> encerra sem handoff msg=%r',
                     texto_user[:80])
         return _resp_encerrar('fechamento do cliente (sem handoff)',
