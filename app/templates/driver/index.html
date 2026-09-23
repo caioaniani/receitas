@@ -297,7 +297,9 @@
                     '<span class="badge-status ' + st + '">' + label + '</span>' +
                 '</div>' +
                 '<div class="text-muted small"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>' +
-                (p.telefone ? '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>' : '') +
+                (p.sem_telefone_destinatario
+                    ? '<div class="small text-danger"><i class="bi bi-telephone-x"></i> quem recebe não informou telefone' + (p.telefone_comprador ? ' — comprador: ' + escapeHtml(p.telefone_comprador) : '') + '</div>'
+                    : (p.telefone ? '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>' : '')) +
                 (p.periodo ? '<span class="badge bg-light text-dark mt-1" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span> ' : '') +
                 (st === 'pendente' && p.pulado_em
                     ? '<span class="badge bg-warning text-dark mt-1" style="font-size:10px;">⏭️ pulado às ' + escapeHtml(p.pulado_em) + ' — voltar depois</span>'
