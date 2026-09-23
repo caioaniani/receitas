@@ -178,6 +178,7 @@ def _serializar_pedido_online(p, detalhes=True):
             'telefone_comprador': p.telefone_cliente or '',
             'e_presente': bool(p.nome_destinatario or p.telefone_destinatario
                                or (p.cartinha or '').strip()),
+            **_telefones_meta(p),
             'divulgacao': bool(getattr(p, 'divulgacao', False)),
             'endereco': _endereco_online(p),
             'data_entrega': (p.data_entrega.isoformat()
