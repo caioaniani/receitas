@@ -514,8 +514,7 @@
     }
     var msg = a.mensagem_cliente
       ? '<div class="al-msg">' + esc(a.mensagem_cliente) + '</div>' : '';
-    var VIA = { resposta_humana: 'resposta da equipe na conversa',
-                conversa_resolvida: 'conversa resolvida', manual: 'resolvido no painel' };
+    var VIA = { resposta_humana: 'resposta da equipe na conversa', manual: 'resolvido no painel' };
     var resol = '';
     if (a.resolvido) {
       var rq = a.resolvido_em ? new Date(a.resolvido_em).toLocaleString('pt-BR',
