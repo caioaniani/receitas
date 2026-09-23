@@ -578,6 +578,10 @@ def api_atendimento_chamar_motorista():
         return jsonify({'ok': False,
                         'erro': 'Motorista ainda nao atribuido (sem '
                                 'telefone) — aguarde a Lalamove designar.'}), 400
+    motivo = cw_svc.motivo_telefone_sem_whatsapp(e.motorista_telefone)
+    if motivo:
+        return jsonify({'ok': False, 'erro': motivo,
+                        'telefone_recusado': True}), 400
     nome = (e.motorista_nome or 'Motoboy').strip()
     cfg = current_app.config
     # Override ATOMICO (achado do revisor): so vale com NOME e CORPO
