@@ -1173,7 +1173,30 @@ def _reclamacao_sem_resposta_humana(historico):
                    for m in (historico or [])[ultima_reclamacao + 1:])
 
 
-def pode_encerrar(historico, exigir_fechamento=True):
+def _equipe_respondeu_no_chatwoot(conversa_id):
+    """Confere NA FONTE se a equipe respondeu ao cliente depois da ultima
+    reclamacao. O nosso store nao ve a resposta humana: o bot nao processa
+    conversa `open`, entao "cliente reclamou -> equipe resolveu no Chatwoot
+    -> cliente volta dias depois com 'obrigada'" mostra no store a
+    reclamacao sem resposta e mandaria um fechamento banal pra fila. So
+    libera com prova positiva (fala humana publica na API, depois da
+    ultima reclamacao); API fora/vazia = conservador (fila)."""
+    if conversa_id is None:
+        return False
+    try:
+        from app.services import chatwoot
+        api = chatwoot.buscar_historico(conversa_id, incluir_autoria=True)
+    except Exception:  # noqa: BLE001
+        logger.exception('chatbot: pode_encerrar nao leu o Chatwoot conv=%s',
+                         conversa_id)
+        return False
+    if not api or not any(isinstance(m, dict) and m.get('humano') is True
+                          for m in api):
+        return False
+    return not _reclamacao_sem_resposta_humana(api)
+
+
+def pode_encerrar(historico, exigir_fechamento=True, conversa_id=None):
     """Encerramento AUTOMATICO (resolved sem fala) so quando o ultimo turno
     do cliente e fechamento E nao ha reclamacao sem resposta humana. Vale
     para a Camada 1, para a tool `encerrar_conversa` do modelo e para o
@@ -1186,14 +1209,17 @@ def pode_encerrar(historico, exigir_fechamento=True):
     duas pontas — exigi-lo aqui mandaria fechamento banal pra fila humana,
     o problema do caso 26/07/2026). A regra dura, valida em TODOS os
     caminhos, e a segunda: reclamacao sem resposta humana NUNCA vira
-    resolved."""
+    resolved. Com `conversa_id`, a resposta humana que so existe no
+    Chatwoot (`_equipe_respondeu_no_chatwoot`) tambem libera."""
     if exigir_fechamento:
         from app.services.chatbot_vigia import _e_fechamento
         ultima = next((m for m in reversed(historico or [])
                        if isinstance(m, dict) and m.get('role') == 'user'), None)
         if not _e_fechamento(str((ultima or {}).get('content') or '')):
             return False
-    return not _reclamacao_sem_resposta_humana(historico)
+    if not _reclamacao_sem_resposta_humana(historico):
+        return True
+    return _equipe_respondeu_no_chatwoot(conversa_id)
 
 
 MOTIVO_FILA_RECLAMACAO = ('reclamação em aberto sem resposta humana — conversa '
