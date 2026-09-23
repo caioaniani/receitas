@@ -60,19 +60,26 @@ def test_api_painel_inclui_resumo_vigia(app, admin_logado):
 
 
 def test_api_painel_so_conta_alta_pendente(app, admin_logado):
-    """media, reconhecido e antigo NÃO entram nos pendentes do banner."""
+    """media, RESOLVIDO e antigo NÃO entram nos pendentes do banner.
+    Reconhecido (silenciado) CONTINUA pendente — reconhecer para o som,
+    não fecha o caso (item 9, caso E3862E49, 22/09/2026)."""
     from unittest.mock import patch
 
+    from app.services import chatbot_vigia
     from app.utils import agora
     with app.app_context():
         _alerta(app, gravidade='media')                       # media → fora
-        _alerta(app, reconhecido_em=agora())                  # já visto → fora
+        _alerta(app, reconhecido_em=agora())                  # silenciado → CONTA
         _alerta(app, criado_em=agora() - timedelta(hours=20))  # velho → fora
+        resolvido = _alerta(app, conv_id='300')                # resolvido → fora
+        chatbot_vigia.resolver_alertas([resolvido.id], via='manual',
+                                       motivo='cliente ligou, resolvido')
         _alerta(app)                                          # esse conta
     with patch('app.services.vnda.buscar_pedidos_do_dia',
                return_value={'pedidos': []}):
         d = admin_logado.get('/entregas/api/painel').get_json()
-    assert d['vigia']['pendentes'] == 1
+    assert d['vigia']['pendentes'] == 2
+    assert d['vigia']['nao_reconhecidos'] == 1
 
 
 def test_api_painel_sem_alertas_zera(app, admin_logado):
