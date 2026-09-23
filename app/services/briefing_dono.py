@@ -235,8 +235,10 @@ def _vigias_doentes():
         from app.services.chatbot_vigia import alertas_pendentes_resumo
         resumo = alertas_pendentes_resumo()
         if resumo.get('pendentes'):
+            # "pendentes" = NAO RESOLVIDOS (silenciar o som nao fecha o
+            # caso — item 9, 22/09/2026).
             out.append({'chave': 'vigia_bot',
-                        'rotulo': 'Alertas do vigia do bot sem reconhecimento',
+                        'rotulo': 'Alertas do vigia do bot sem resolução',
                         'qtd': resumo['pendentes'], 'url': '/entregas/painel'})
     except Exception:  # noqa: BLE001 — vigia fora não derruba o briefing
         logger.exception('briefing: resumo do vigia do bot falhou')
