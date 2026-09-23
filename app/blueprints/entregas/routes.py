@@ -780,14 +780,39 @@ def api_painel_pedidos_online():
 @entregas_bp.route('/api/painel/vigia/reconhecer', methods=['POST'])
 @login_required
 def api_painel_vigia_reconhecer():
-    """Clique no banner = reconhece os alertas pendentes (para o som em todos
-    os aparelhos). JSON opcional {ids:[...]}; sem ids, reconhece todos os
-    pendentes da janela."""
+    """Clique no banner = SILENCIA os alertas pendentes (para o som em todos
+    os aparelhos). NAO resolve o caso: o alerta segue na fila do painel ate
+    `resolver` (item 9, caso E3862E49, 22/09/2026). JSON opcional
+    {ids:[...]}; sem ids, silencia todos os pendentes da janela."""
     from app.services import chatbot_vigia
     dados = request.get_json(silent=True) or {}
     ids = dados.get('ids') or None
     n = chatbot_vigia.reconhecer_pendentes(user_id=current_user.id, ids=ids)
     return jsonify(ok=True, reconhecidos=n)
+
+
+@entregas_bp.route('/api/painel/vigia/resolver', methods=['POST'])
+@login_required
+def api_painel_vigia_resolver():
+    """Botao "Resolver" do drawer: fecha o caso de um alerta ALTA com MOTIVO
+    por escrito (obrigatorio). JSON {ids:[...], motivo:'...'}. As outras
+    duas formas de resolver sao automaticas: resposta humana na conversa
+    depois do alerta e conversa resolvida."""
+    from app.services import chatbot_vigia
+    dados = request.get_json(silent=True) or {}
+    ids = dados.get('ids') or []
+    motivo = (dados.get('motivo') or '').strip()
+    if not isinstance(ids, list) or not ids:
+        return jsonify(ok=False, erro='informe os alertas (ids)'), 400
+    if not motivo:
+        return jsonify(ok=False, erro='Escreva como o caso foi resolvido '
+                                      '(motivo obrigatório).'), 400
+    try:
+        n = chatbot_vigia.resolver_alertas(ids, via='manual', motivo=motivo,
+                                           usuario_id=current_user.id)
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+    return jsonify(ok=True, resolvidos=n)
 
 
 @entregas_bp.route('/api/painel/vigia/historico')
