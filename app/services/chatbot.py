@@ -2209,7 +2209,7 @@ def responder(historico, *, telefone_contato=None,
                     # dono (16/06/2026, reforcada 21/07) — mesma saida da
                     # Camada 1, que so nao pegou porque `_e_fechamento` e
                     # ancorado nas duas pontas e nao tolera texto extra.
-                    if not pode_encerrar(historico):
+                    if not pode_encerrar(historico, exigir_fechamento=False):
                         return _resp_fila_silenciosa(
                             MOTIVO_FILA_RECLAMACAO, tools_usadas=tools_usadas,
                             tools_resumo=tools_resumo)
