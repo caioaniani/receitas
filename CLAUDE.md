@@ -5048,17 +5048,20 @@ prompt mandava pedir número/CPF ANTES de transferir uma reclamação.
    contador) e `nao_reconhecidos` (klaxon) — `ultimo` prefere o que ainda
    toca; `reconhecer_pendentes` só carimba os ainda não reconhecidos;
    `resolver_alertas(ids, via=, motivo=, usuario_id=, momento=,
-   commit=)` com `VIAS_RESOLUCAO = resposta_humana | conversa_resolvida
-   | manual` (manual EXIGE motivo; resolver implica silenciar;
-   idempotente por veredito); `resolver_alertas_da_conversa(conv_id,
-   via=, ate=)` resolve só os criados ATÉ o instante da resposta — ALTA
-   posterior é caso novo. Resolução AUTOMÁTICA: `atendimento_pendente.
-   confirmar_acao_painel` (responder/resolver pelo painel — antes só
-   reconhecia), `atendimento_pendente.preparar` (`_resolver_alertas_
-   respondidos`: última fala humana das `efetivas` do histórico com
-   autoria, cobre resposta dada dentro do Chatwoot), `candidatos()`
-   (conversa `resolved`) e o webhook `conversation_status_changed`
-   resolved (crm/routes.py, best-effort). Rota nova `POST /entregas/api/
+   commit=)` com `VIAS_RESOLUCAO = resposta_humana | manual` (manual
+   EXIGE motivo; resolver implica silenciar; idempotente por veredito);
+   `resolver_alertas_da_conversa(conv_id, via=, ate=)` resolve só os
+   criados ATÉ o instante da resposta — ALTA posterior é caso novo.
+   Resolução AUTOMÁTICA SÓ por resposta humana: `atendimento_pendente.
+   confirmar_acao_painel('responder')` (enviar pelo painel) e
+   `atendimento_pendente.preparar` (`_resolver_alertas_respondidos`:
+   última fala humana das `efetivas` do histórico com autoria, cobre
+   resposta dada dentro do Chatwoot; commit próprio). **Conversa
+   `resolved` NÃO fecha o alerta** (regra estrita da spec, achado M4 do
+   revisor: o próprio bot resolve conversa num "obrigada" e nem o webhook
+   nem `candidatos()` sabem QUEM resolveu) — o botão "Conversa resolvida"
+   do painel só silencia; resolveu por telefone = "✔ Resolver" com o
+   motivo. Rota nova `POST /entregas/api/
    painel/vigia/resolver` {ids, motivo} (400 sem motivo/ids). Front
    `painel_pedidos.html`: banner segue `pendentes` e ganha a classe
    `silenciado` (sem piscar/som) quando `nao_reconhecidos == 0`;
