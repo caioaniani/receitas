@@ -38,7 +38,7 @@
     <div class="table-responsive"><table class="table table-sm">
         <thead><tr><th>Data</th><th>Croissant tradicional</th><th>Pain au chocolat</th></tr></thead>
         <tbody>{% for dia in loja.dias %}
-        <tr><td>{{ dia.data[8:10] }}/{{ dia.data[5:7] }}</td><td>{{ dia.croissant }}</td><td>{{ dia.pain }}</td></tr>
+        <tr><td>{{ dia.data[8:10] }}/{{ dia.data[5:7] }}</td><td>{{ dia.croissant|int }}</td><td>{{ dia.pain|int }}</td></tr>
         {% endfor %}</tbody>
     </table></div>
     {% endfor %}
