@@ -6179,9 +6179,12 @@ def _expedicao_com_pedido(p):
     if p.status in ('em_preparo', 'a_caminho'):
         return {'em_preparo': 'em preparo na cozinha',
                 'a_caminho': 'EM ROTA'}[p.status]
+    # EXPIRED/REJECTED também são corrida ENCERRADA sem motoboy (23/09/2026)
+    # — antes contavam como "chamado" e exigiam confirmação à toa.
     lal = (LalamoveEntrega.query
            .filter(LalamoveEntrega.pedido_code == p.codigo,
-                   LalamoveEntrega.status.notin_(('cotacao', 'CANCELED')))
+                   LalamoveEntrega.status.notin_(
+                       ('cotacao', 'CANCELED', 'EXPIRED', 'REJECTED')))
            .first())
     if lal:
         return 'motoboy Lalamove chamado (%s)' % lal.status
