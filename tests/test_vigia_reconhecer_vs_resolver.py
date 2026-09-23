@@ -179,7 +179,7 @@ def test_resposta_humana_no_chatwoot_resolve_via_preparar(app):
         alerta_em = agora() - timedelta(minutes=30)
         v = _alerta(conv_id='600', criado_em=alerta_em)
         conversa = {'id': 600, 'nome_contato': 'Bruna', 'minutos_paradas': 5}
-        ts = lambda dt: int(dt.timestamp())  # noqa: E731 — helper local
+        ts = _ts
         # Só bot depois do alerta → segue pendente
         hist_bot = [
             {'role': 'user', 'content': 'meu pedido não chegou', 'humano': False,
