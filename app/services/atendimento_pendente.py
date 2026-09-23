@@ -158,6 +158,9 @@ def preparar(conversa, historico, *, min_minutos=10):
         efetivas = [m for m in efetivas if m.get('role') != 'user'
                     or not (_e_fechamento(m.get('content'), elogio=True)
                             or _e_mencao_story(m.get('content')))]
+    # Resposta humana dada pelo Chatwoot (nao pelo painel) tambem fecha os
+    # alertas anteriores a ela — este e o unico leitor periodico da conversa.
+    _resolver_alertas_respondidos(conv_id, efetivas)
     if not efetivas:
         if row is None and grave:
             row = EsperaAtendimento(conversa_id=conv_id, inicio_em=grave.criado_em,
