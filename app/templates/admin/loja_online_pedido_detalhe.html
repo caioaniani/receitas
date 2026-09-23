@@ -266,7 +266,7 @@
         {% if p.nome_destinatario %}
         <div class="alert alert-warning py-2 px-3 mb-2 small">
           🎁 <strong>Destinatário:</strong> {{ p.nome_destinatario }}
-          {% if p.telefone_destinatario %}· {{ p.telefone_destinatario }}{% endif %}
+          {% if p.telefone_destinatario %}· {{ p.telefone_destinatario }}{% else %}· <span class="text-danger fw-bold">sem telefone de quem recebe</span> — o entregador só terá o do comprador{% endif %}
         </div>
         {% endif %}
         {% if p.modo_entrega == 'retirada' %}
