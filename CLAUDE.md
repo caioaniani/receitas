@@ -5008,6 +5008,32 @@ prompt mandava pedir número/CPF ANTES de transferir uma reclamação.
    motivo; nunca revela ao terceiro). Teste de conversa com modelo
    mockado em `tests/test_socorro_email_terceiro.py` (junto dos itens 4
    e 5).
+CRÍTICA DE COMPLETUDE (workflow de 6 leitores + crítico) — aplicados:
+`chatbot_auditor._TRACKING_PREFIXES` ganhou `'[LALAMOVE'` (o veredito
+operacional não entra na taxa de contenção); `chatbot_vigia.
+_alerta_alta_recente` ignora `bot_acao='lalamove'` (o alerta da corrida
+não cala um ALTA legítimo do vigia na mesma conversa por 2h);
+`alerta_lalamove_recente` suprime a contenção "alta demanda" na conversa
+que o alerta abriu (contrato "sem mensagem automática ao cliente") e a
+cobrança ao dono diz "corrida Lalamove encerrada"; CANCELED depois de
+COMPLETED / pedido já `entregue` → `ignorado='ja_entregue'` (evento fora
+de ordem não mente "não entregue"); hipótese no MOTIVO ("cliente pergunta
+o que acontece se o pedido não chegou") vetada por `_HIPOTESE_MOTIVO` +
+`_HIPOTESE_FALHA` com até 4 palavras — e as alternativas de falha de
+entrega SAÍRAM de `_MOTIVO_EXCECAO_LEGITIMA` (fonte única em
+`_MOTIVO_FALHA_OPERACIONAL`); `analytics_server` hasheia o E.164 do
+classificador (internacional com o DDI dele, inválido fora);
+`bot/routes._normalizar_telefone` importa de utils. ACEITOS (documentados):
+`crm/routes._tel_ok` segue 10-13 dígitos (o +1 vira chave '4752929850' e
+casa o pedido gravado com '+14752929850' — é o que autoriza o cliente
+internacional pelo canal); presente marcado SÓ por cartinha não gera o
+aviso "sem telefone de quem recebe" (não há destinatário distinto);
+retirada desmarca o presente no JS (o bloco já ficava oculto); celular
+de 10 dígitos (formato antigo) vai ao Pagar.me com o 9 inserido; a Camada
+1 de falha operacional vale em QUALQUER turno (o diagnóstico "liste os
+itens e pergunte o que faltou" do prompt só roda se a frase não casar —
+decisão de produto: socorro > diagnóstico); a cobrança de espera-humana
+trata o veredito Lalamove como caso grave até resolver (desejado).
 ARMADILHA DE PROCESSO desta rodada: o push do auto-commit falhou em
 SILÊNCIO a sessão inteira — outra sessão subiu 16 commits (Fiserv/motor)
 depois de a9ca8522 e o clone ficou atrás; 70 commits locais só subiram
