@@ -1780,6 +1780,37 @@ def _executar_tool(nome, inp, *, telefone_contato=None,
         return {'erro': str(exc)}
 
 
+_RE_CODIGO_PEDIDO = re.compile(r'\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{8}\b')
+_RE_EMAIL = re.compile(r'[\w.+-]+@[\w-]+\.[\w.-]+')
+_RE_CPF = re.compile(r'\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b')
+
+
+def _localizar_pedido_para_socorro(historico, telefone_contato):
+    """Localizacao BEST-EFFORT do pedido pra nota interna do handoff de
+    falha operacional (23/09/2026): usa o que JA esta na conversa — codigo
+    de pedido, e-mail, CPF nas falas do cliente — ou o telefone do canal.
+    Nao pergunta nada ao cliente. Devolve (tools_usadas, tools_resumo);
+    qualquer erro vira ([], []) — o socorro nunca espera a busca."""
+    try:
+        from app.services import bot_tools
+        falas = [str((m or {}).get('content') or '')
+                 for m in (historico or [])[-10:]
+                 if (m or {}).get('role') == 'user' and not (m or {}).get('herdada')]
+        texto = '\n'.join(falas)
+        codigo = next((m.group(0) for m in _RE_CODIGO_PEDIDO.finditer(texto.upper())
+                       if not m.group(0).isdigit()), '')
+        email = next((m.group(0) for m in _RE_EMAIL.finditer(texto)), '')
+        cpf = next((m.group(0) for m in _RE_CPF.finditer(texto)), '')
+        out = bot_tools.consultar_pedido(
+            codigo, telefone_contato=telefone_contato,
+            cpf_cliente=cpf or None, email_cliente=email or None)
+        resumo = _resumo_tool('consultar_pedido', out)
+        return ['consultar_pedido'], [resumo]
+    except Exception:  # noqa: BLE001
+        logger.exception('chatbot: localizar pedido pro socorro falhou')
+        return [], []
+
+
 def _build_messages(historico):
     """Converte o historico [{'role','content','imagens'?}] em mensagens da API.
 
@@ -1898,6 +1929,23 @@ def responder(historico, *, telefone_contato=None,
         return _resp_handoff(
             'Claro! Já estou te passando pra um atendente. Só um instante.',
             'cliente pediu atendente', tools_usadas=[])
+
+    # FALHA OPERACIONAL EM CURSO (dono 23/09/2026): "nao recebi", "o motoboy
+    # foi embora", "veio errado", "ninguem responde" → transfere NA HORA,
+    # sem pedir CPF/numero/e-mail e sem macro de espera. O pedido e
+    # localizado EM PARALELO com o que ja ha na conversa (codigo, e-mail,
+    # telefone do canal) e o achado vai pra nota interna do handoff — a
+    # autorizacao decide o que REVELAR, nunca se a pessoa recebe ajuda.
+    if falha_operacional(texto_user):
+        trecho = trecho_falha_operacional(texto_user)
+        logger.info('chatbot: falha operacional em curso -> handoff forcado '
+                    'msg=%r', texto_user[:120])
+        usadas, resumos = _localizar_pedido_para_socorro(
+            historico, telefone_contato)
+        return _resp_handoff(
+            TEXTO_FALHA_OPERACIONAL,
+            f'falha operacional relatada pelo cliente: {trecho or texto_user[:80]}',
+            tools_usadas=usadas, tools_resumo=resumos)
 
     # Fechamento puro ("Muito Obrigada🙏", "valeu", "ok show") NUNCA é handoff.
     # O modelo às vezes "passava pra um atendente" num simples agradecimento
@@ -2029,7 +2077,8 @@ def responder(historico, *, telefone_contato=None,
                 # como "handoff preguicoso" na metrica do auditor (tools
                 # vazias). Agora o ramo DISCRIMINA os 3 casos:
                 from app.services.chatbot_vigia import _SINAIS_RECLAMACAO
-                if _SINAIS_RECLAMACAO.search(texto_user or ''):
+                if (_SINAIS_RECLAMACAO.search(texto_user or '')
+                        or falha_operacional(texto_user)):
                     # (a) Fechamento COM problema — "cancelei, nao chegava
                     # nunca, obrigada". Silenciar seria o PIOR desfecho: e
                     # venda perdida que a equipe precisa ver. Vai pra fila,
@@ -2141,6 +2190,11 @@ def responder(historico, *, telefone_contato=None,
                                   conversa_id=conversa_id)
             tools_usadas.append(b.name)
             tools_resumo.append(_resumo_tool(b.name, out))
+            # A nota interna (pedido existe / cadastro sem CPF) fica SO no
+            # resumo → nota privada do handoff; o modelo nunca a ve, entao
+            # nao tem como revelar ao contato (23/09/2026).
+            if isinstance(out, dict):
+                out.pop('_nota_interna', None)
             if b.name == 'buscar_nota_fiscal' and isinstance(out, dict) and out.get('precisa_humano'):
                 return _resp_handoff(out['mensagem'], 'pendência fiscal exige atendimento',
                                      tools_usadas=tools_usadas,
