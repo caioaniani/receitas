@@ -662,21 +662,33 @@
     // COMPRADOR (dúvidas) — ligar pro destinatário estraga a surpresa. Fora
     // de presente é um número só (comprador = quem recebe).
     var telHTML = '';
+    // Selo por TIPO do número (23/09/2026): internacional/fixo/inválido não
+    // recebe WhatsApp — o botão Chamar recusa e a equipe já vê aqui por quê.
+    function seloTel(tipo) {
+      if (tipo === 'internacional') return ' <span class="tel-selo" style="color:#a61e00;font-weight:600;">🌐 internacional — sem WhatsApp, use e-mail</span>';
+      if (tipo === 'br_fixo') return ' <span class="tel-selo" style="color:#a61e00;">☎ fixo — sem WhatsApp</span>';
+      if (tipo === 'invalido') return ' <span class="tel-selo" style="color:#a61e00;">⚠ número inválido</span>';
+      return '';
+    }
     if (p.e_presente) {
       telHTML += '<div class="d-presente">🎁 Presente — <strong>não ligue pra quem recebe</strong>, estraga a surpresa. Dúvida? Fale com o comprador.</div>';
-      if (p.telefone && p.telefone !== p.telefone_comprador) {
-        telHTML += '<div class="d-tel">📞 Entrega (quem recebe): ' + esc(p.telefone) + '</div>';
+      if (p.sem_telefone_destinatario) {
+        // Pedido antigo (antes de o campo virar obrigatório): o entregador
+        // não tem como falar com quem recebe — só com o comprador/padaria.
+        telHTML += '<div class="d-tel" style="color:#a61e00;">📞 Entrega (quem recebe): <strong>sem telefone informado</strong> — avise o entregador</div>';
+      } else if (p.telefone && p.telefone !== p.telefone_comprador) {
+        telHTML += '<div class="d-tel">📞 Entrega (quem recebe): ' + esc(p.telefone) + seloTel(p.telefone_tipo) + '</div>';
       }
       // Comprador SEMPRE rotulado — nunca um número cru (evita o operador
       // ligar pra quem recebe achando que é o comprador). Sem telefone do
       // comprador, avisa explícito em vez de repetir o de entrega.
       if (p.telefone_comprador) {
-        telHTML += '<div class="d-tel d-tel-comprador">☎️ Comprador (dúvidas): ' + esc(p.telefone_comprador) + '</div>';
+        telHTML += '<div class="d-tel d-tel-comprador">☎️ Comprador (dúvidas): ' + esc(p.telefone_comprador) + seloTel(p.telefone_comprador_tipo) + '</div>';
       } else {
         telHTML += '<div class="d-tel" style="color:#a61e00;">☎️ Comprador (dúvidas): sem telefone informado</div>';
       }
     } else if (p.telefone) {
-      telHTML += '<div class="d-tel">📞 ' + esc(p.telefone) + '</div>';
+      telHTML += '<div class="d-tel">📞 ' + esc(p.telefone) + seloTel(p.telefone_tipo) + '</div>';
     }
     document.getElementById('detalhe-box').innerHTML =
       '<div class="d-nome">' + esc(p.destinatario) + '</div>' +
