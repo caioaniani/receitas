@@ -1916,7 +1916,8 @@ def _resumo_tool(nome, out):
                     f'status {d.get("status") or "?"}')
         if d.get('pedidos_recentes'):
             return (f'consultar_pedido: {len(d["pedidos_recentes"])} pedidos '
-                    'recentes deste telefone (lista pro cliente escolher)')
+                    'recentes deste contato — telefone do canal ou e-mail '
+                    'informado (lista pro cliente escolher)')
         if d.get('erro') == 'autorizacao_necessaria':
             # `_nota_interna` (bot_tools._nao_autorizado): codigo, status e
             # por que nao autorizou — NUNCA vai ao modelo (o responder a
