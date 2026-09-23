@@ -775,16 +775,15 @@ def _hits_falha_no_motivo(texto):
     return out
 
 
+# As alternativas de FALHA DE ENTREGA (nao recebeu/chegou, veio errado,
+# entrega parada, pedido errado) moraram aqui ate 23/09/2026; migraram para
+# `_MOTIVO_FALHA_OPERACIONAL` (fonte unica com o enforcement, com o veto de
+# hipotese) — `motivo_excecao_legitima` soma as duas listas.
 _MOTIVO_EXCECAO_LEGITIMA = re.compile(
     r'(?i)\b(?:al[eé]rg\w*|intoler[aâ]nc\w*|'
     r'reclama\w*|'
     r'atras(?:o|os|ou|ado|ada|ando)|'
-    r'entrega\s+(?:n[aã]o\s+chegou|parada|atrasada)|'
-    r'n[aã]o\s+(?:recebeu|chegou)|nunca\s+chegou|'
-    r'(?:veio|chegou|recebeu)\s+(?:errad[oa]|quebrad[oa]|estragad[oa]|'
-    r'diferente|faltando|amassad[oa])|'
     r'queimad[oa]s?|estragad[oa]s?|mofad[oa]s?|azed[oa]s?|murch[oa]s?|'
-    r'pedido\s+errado|'
     r'rappi|ifood|99\s*food|marketplace|'
     r'estorno|reembolso|cancelamento|cancelar\s+(?:o\s+|um\s+)?pedido)\b')
 
