@@ -21,7 +21,6 @@ import hashlib
 import hmac
 import json
 import logging
-import re
 import time
 
 import requests
@@ -120,15 +119,33 @@ def _erro_api(status, corpo, contexto):
 
 
 def _fone_e164(fone):
-    """Telefone BR pro formato +55DDDNUMERO exigido pela API."""
-    dig = re.sub(r'\D', '', fone or '')
-    if not dig:
-        return None
-    if dig.startswith('55') and len(dig) >= 12:
-        return f'+{dig}'
-    if len(dig) in (10, 11):
-        return f'+55{dig}'
-    return f'+{dig}'
+    """Telefone BR (celular ou fixo) no formato +55DDDNUMERO exigido pela
+    API; None pra internacional/inválido. Até 23/09/2026 qualquer sequência
+    de 10/11 dígitos ganhava '+55' na frente — '+1 475-292-9850' virava
+    '+5514752929850' e ia como contato do destinatário na corrida."""
+    from app.utils import TEL_BR_CELULAR, TEL_BR_FIXO, classificar_telefone
+    c = classificar_telefone(fone)
+    return c['e164'] if c['tipo'] in (TEL_BR_CELULAR, TEL_BR_FIXO) else None
+
+
+def _contato_destinatario(telefone_destino, remetente_fone):
+    """(telefone que vai na corrida, aviso|None). Internacional ou inválido
+    NUNCA vai como contato do destinatário: o entregador liga pra filial e a
+    observação da corrida diz por quê (decisão do dono, 23/09/2026)."""
+    from app.utils import TEL_INTERNACIONAL, classificar_telefone
+    fone = _fone_e164(telefone_destino)
+    if fone:
+        return fone, None
+    c = classificar_telefone(telefone_destino)
+    if c['tipo'] == TEL_INTERNACIONAL:
+        aviso = (f'Telefone do destinatário é internacional ({c["e164"]}) — '
+                 'sem contato local; falar com a padaria.')
+    elif (telefone_destino or '').strip():
+        aviso = (f'Telefone do destinatário inválido '
+                 f'({str(telefone_destino).strip()[:30]}) — falar com a padaria.')
+    else:
+        aviso = 'Pedido sem telefone do destinatário — falar com a padaria.'
+    return remetente_fone, aviso
 
 
 def _origem():
