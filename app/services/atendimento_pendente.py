@@ -360,8 +360,12 @@ def confirmar_acao_painel(cid, acao, *, iniciado_em, usuario_id):
                 _limitar_proximo_aviso(row, iniciado_em)
             else:
                 row.proximo_aviso_em = None
-    for v in vereditos:
-        if not v.reconhecido_em:
-            v.reconhecido_em = agora()
-            v.reconhecido_por_id = usuario_id
+    # Resposta enviada / conversa resolvida PELO PAINEL: fecha os alertas
+    # ALTA anteriores ao gesto (item 9, 22/09/2026). `resolver_alertas`
+    # tambem carimba o reconhecimento (silencia) — antes so silenciava.
+    from app.services import chatbot_vigia
+    chatbot_vigia.resolver_alertas(
+        [v.id for v in vereditos],
+        via='conversa_resolvida' if acao == 'resolved' else 'resposta_humana',
+        usuario_id=usuario_id, momento=iniciado_em, commit=False)
     db.session.commit()
