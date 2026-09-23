@@ -401,6 +401,6 @@ def test_painel_expoe_tipo_do_telefone_e_presente_sem_telefone(app):
 def test_painel_html_tem_selo_e_aviso(app):
     with app.app_context():
         c = _staff(app)
-    html = c.get('/entregas/painel-pedidos').get_data(as_text=True)
+    html = c.get('/entregas/painel-testes').get_data(as_text=True)
     assert 'sem WhatsApp, use e-mail' in html
     assert 'sem_telefone_destinatario' in html
