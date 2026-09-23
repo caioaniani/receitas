@@ -19,11 +19,7 @@ from flask import current_app, jsonify, request
 from app.blueprints.bot import bot_bp
 from app.extensions import csrf
 from app.utils import hoje as hoje_brt
-
-
-def _normalizar_telefone(s):
-    """Mantem so digitos. '+55 (11) 9 9999-9999' → '5511999999999'."""
-    return ''.join(c for c in (s or '') if c.isdigit())
+from app.utils import normalizar_telefone as _normalizar_telefone  # fonte única
 
 
 def _bot_auth_required(f):
