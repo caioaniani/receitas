@@ -248,14 +248,107 @@ def test_conversa_resolvida_no_chatwoot_nao_fecha_o_alerta(app):
         v = _alerta(conv_id='800', criado_em=agora() - timedelta(minutes=15))
         atendimento_pendente.registrar_alerta(v)
         assert EsperaAtendimento.query.get('800').estado == 'aguardando'
+        # Histórico SEM resposta humana depois do alerta: só o bot falou.
+        hist = [{'role': 'user', 'content': 'meu pedido não chegou',
+                 'created_at': _ts(agora() - timedelta(minutes=16))},
+                {'role': 'assistant', 'content': 'Sinto muito, vou verificar.', 'humano': False,
+                 'created_at': _ts(agora() - timedelta(minutes=14))}]
         with patch('app.services.chatwoot.listar_conversas_paradas', return_value=[]), \
                 patch('app.services.chatwoot.consultar_conversa',
                       return_value={'id': 800, 'status': 'resolved'}), \
+                patch('app.services.chatwoot.buscar_historico', return_value=hist) as bh, \
                 patch('app.services.presenca_humana.encerrar'):
             atendimento_pendente.candidatos()
+        bh.assert_called_once()
         assert EsperaAtendimento.query.get('800').estado == 'resolvido'
         assert _pendentes_ids() == [v.id]
         assert VigiaAlertaResolucao.query.filter_by(veredito_id=v.id).first() is None
+
+
+def test_conversa_resolvida_com_resposta_humana_anterior_fecha_o_alerta(app):
+    """2ª rodada da revisão (23/09/2026): a conversa resolvida sai de
+    `preparar` (o único leitor do histórico), então a resposta humana dada
+    no Chatwoot ANTES do resolve ficava sem efeito e o ALTA preso na fila
+    até a janela vencer. `candidatos()` lê o histórico uma vez (só se há
+    ALTA em aberto) e resolve via 'resposta_humana' com o instante certo."""
+    from unittest.mock import patch
+
+    from app.models import EsperaAtendimento, VigiaAlertaResolucao
+    from app.services import atendimento_pendente
+    from app.utils import agora
+    with app.app_context():
+        v = _alerta(conv_id='801', criado_em=agora() - timedelta(minutes=15))
+        # ALTA posterior à resposta humana: caso novo, fica em aberto
+        v2 = _alerta(conv_id='801', criado_em=agora() - timedelta(minutes=2))
+        atendimento_pendente.registrar_alerta(v)
+        hist = [{'role': 'user', 'content': 'meu pedido não chegou',
+                 'created_at': _ts(agora() - timedelta(minutes=16))},
+                {'role': 'assistant', 'content': 'Oi! Já estou vendo com o motoboy.',
+                 'humano': True, 'created_at': _ts(agora() - timedelta(minutes=10))},
+                {'role': 'user', 'content': 'e agora veio errado',
+                 'created_at': _ts(agora() - timedelta(minutes=3))}]
+        with patch('app.services.chatwoot.listar_conversas_paradas', return_value=[]), \
+                patch('app.services.chatwoot.consultar_conversa',
+                      return_value={'id': 801, 'status': 'resolved'}), \
+                patch('app.services.chatwoot.buscar_historico', return_value=hist), \
+                patch('app.services.presenca_humana.encerrar'):
+            atendimento_pendente.candidatos()
+        assert EsperaAtendimento.query.get('801').estado == 'resolvido'
+        r = VigiaAlertaResolucao.query.filter_by(veredito_id=v.id).one()
+        assert r.via == 'resposta_humana'
+        assert VigiaAlertaResolucao.query.filter_by(veredito_id=v2.id).first() is None
+        assert _pendentes_ids() == [v2.id]
+
+
+def test_conversa_resolvida_sem_alerta_em_aberto_nao_le_o_historico(app):
+    from unittest.mock import patch
+
+    from app.services import atendimento_pendente, chatbot_vigia
+    from app.utils import agora
+    with app.app_context():
+        v = _alerta(conv_id='802', criado_em=agora() - timedelta(minutes=15))
+        atendimento_pendente.registrar_alerta(v)
+        chatbot_vigia.resolver_alertas([v.id], via='manual', motivo='ligamos pra cliente')
+        with patch('app.services.chatwoot.listar_conversas_paradas', return_value=[]), \
+                patch('app.services.chatwoot.consultar_conversa',
+                      return_value={'id': 802, 'status': 'resolved'}), \
+                patch('app.services.chatwoot.buscar_historico') as bh, \
+                patch('app.services.presenca_humana.encerrar'):
+            atendimento_pendente.candidatos()
+        bh.assert_not_called()
+
+
+def test_resolver_tolera_corrida_no_unique_e_segue_os_outros(app):
+    """Painel e relógio da espera humana resolvendo o MESMO alerta no mesmo
+    minuto: o 2º bate no unique de `veredito_id` dentro de um SAVEPOINT —
+    pula esse e resolve os demais, sem envenenar a sessão."""
+    from unittest.mock import patch
+
+    from sqlalchemy.exc import IntegrityError
+
+    from app.extensions import db
+    from app.models import VigiaAlertaResolucao
+    from app.services import chatbot_vigia
+    with app.app_context():
+        a = _alerta(conv_id='810')
+        b = _alerta(conv_id='811')
+        real_flush = db.session.flush
+        chamadas = {'n': 0}
+
+        def flush_com_corrida(*args, **kw):
+            chamadas['n'] += 1
+            if chamadas['n'] == 1:
+                # simula o outro processo que gravou a resolução de `a` antes
+                raise IntegrityError('insert', {}, Exception('uq veredito_id'))
+            return real_flush(*args, **kw)
+
+        with patch.object(db.session, 'flush', side_effect=flush_com_corrida):
+            n = chatbot_vigia.resolver_alertas([a.id, b.id], via='manual', motivo='tratado')
+        assert n == 1
+        assert VigiaAlertaResolucao.query.filter_by(veredito_id=b.id).one().motivo == 'tratado'
+        assert VigiaAlertaResolucao.query.filter_by(veredito_id=a.id).first() is None
+        # sessão continua sã: dá pra resolver `a` de verdade depois
+        assert chatbot_vigia.resolver_alertas([a.id], via='manual', motivo='agora sim') == 1
 
 
 def test_webhook_status_resolved_nao_fecha_o_alerta(app):
