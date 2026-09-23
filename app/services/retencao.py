@@ -48,6 +48,7 @@ def executar_limpeza(dry_run=False):
         FreteSensor,
         SlackAcaoPendente,
         SlackEventoProcessado,
+        TemplateWhatsappEnvio,
         VigiaVeredito,
         ZapiBotEventoProcessado,
     )
