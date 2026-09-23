@@ -614,9 +614,20 @@ def api_atendimento_chamar_motorista():
                  or '').strip()
     if not (tpl_mot and corpo_mot):
         tpl_mot = corpo_mot = None
+    # Dedupe por (motorista, template efetivo, pedido) em 60 min — item 10.
+    from app.services import template_dedupe
+    template = tpl_mot or (cfg.get('CHATWOOT_WHATSAPP_TEMPLATE') or '').strip()
+    repetido = template_dedupe.envio_recente(e.motorista_telefone, template, e.pedido_code)
+    if repetido is not None:
+        return jsonify(template_dedupe.resposta_bloqueio(
+            repetido, nome=f'Motoboy {nome}'.strip())), 409
     res = cw_svc.iniciar_conversa_whatsapp(
         e.motorista_telefone, nome, params=[nome, e.pedido_code],
         template_nome=tpl_mot, template_corpo=corpo_mot)
+    if res.get('ok'):
+        template_dedupe.registrar(e.motorista_telefone, template, e.pedido_code,
+                                  conversation_id=res.get('conversation_id'),
+                                  usuario_id=current_user.id)
     return jsonify({
         'ok': bool(res.get('ok')),
         'conversation_id': res.get('conversation_id'),
