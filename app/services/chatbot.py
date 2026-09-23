@@ -594,6 +594,17 @@ _FALHA_OPERACIONAL_PATTERNS = [
         r'[^.!?\n]{0,40}\b(?:nada|n[aã]o\s+chegou|n[aã]o\s+veio|ningu[eé]m)\b|'
         r'\b(?:hor[aá]rio|prazo|janela)\s+(?:j[aá]\s+)?passou\b'
         r'[^.!?\n]{0,40}\b(?:nada|n[aã]o\s+chegou|n[aã]o\s+veio)\b'),
+    # Formas canonicas que ficavam de fora (revisao 23/09/2026): "nunca
+    # recebi meu pedido", "paguei e nao recebi", "so veio metade", "e nada
+    # do pedido", "pedido esta incompleto/errado", "nao veio ninguem".
+    re.compile(
+        r'(?i)\bnunca\s+recebi\s+(?:(?:o|a|meu|minha|meus|minhas|esse|essa)\s+)?'
+        r'(?:pedido|encomenda|cesta|caixa|box|produto|compra|mercadoria)\b|'
+        r'\bpaguei\s+e\s+(?:ainda\s+|at[eé]\s+agora\s+)?n[aã]o\s+(?:recebi|chegou)\b|'
+        r'\bn[aã]o\s+veio\s+ningu[eé]m\b|\bs[oó]\s+veio\s+(?:a\s+)?metade\b|'
+        r'\be\s+nada\s+d[oa]\s+(?:pedido|entrega|cesta|encomenda)\b|'
+        r'\b(?:pedido|entrega|cesta)\s+(?:est[aá]|t[aá])\s+'
+        r'(?:errad[oa]|incomplet[oa]|trocad[oa]|faltando)\b'),
 ]
 # Hipotese/condicao na ORACAO do hit ("se nao chegar", "caso venha errado",
 # "e se vier errado?") nao e falha em curso.
