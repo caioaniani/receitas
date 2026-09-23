@@ -692,6 +692,15 @@ def api_painel():
             'expresso': bool(p.get('expresso')),
             'retirada': bool(p.get('retirada')),
             'telefone': p.get('telefone') or '',
+            # Presente × comprador (13/07/2026) e tipo do número (23/09/2026):
+            # o card do painel (`painel_pedidos.html`) consome estas chaves —
+            # até 23/09 este dict não as repassava e o bloco "🎁 Presente /
+            # não ligue pra quem recebe" NUNCA aparecia no painel do dia.
+            'e_presente': bool(p.get('e_presente')),
+            'telefone_comprador': p.get('telefone_comprador') or '',
+            'telefone_tipo': p.get('telefone_tipo'),
+            'telefone_comprador_tipo': p.get('telefone_comprador_tipo'),
+            'sem_telefone_destinatario': bool(p.get('sem_telefone_destinatario')),
             'cartinha': p.get('cartinha') or '',
             'itens': [{'nome': it.get('nome') or '',
                        'qtd': it.get('quantidade') or 1,
