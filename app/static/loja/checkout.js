@@ -262,6 +262,14 @@
       var aviso = document.getElementById('retirada-nf-aviso');
       var titulo = document.getElementById('entrega-titulo');
       if (quem) quem.style.display = ehEntrega ? 'block' : 'none';
+      // Retirada esconde "quem recebe": desmarca o presente pra não deixar
+      // `required` num campo oculto (submit travaria sem mensagem) nem
+      // mandar e_presente ao servidor sem os campos (23/09/2026).
+      if (!ehEntrega) {
+        var chk = document.getElementById('e_presente');
+        if (chk && chk.checked) { chk.checked = false; }
+        if (typeof aplicarPresente === 'function') aplicarPresente();
+      }
       if (freteBox) freteBox.style.display = ehEntrega ? 'block' : 'none';
       if (aviso) aviso.style.display = ehRetirada ? 'block' : 'none';
       if (titulo) {
