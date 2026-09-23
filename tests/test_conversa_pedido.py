@@ -89,7 +89,6 @@ def test_vincular_tolera_corrida_no_unique(app):
         assert conversa_pedido.vincular(2431, 'E3862E49', 'bot') is True
         # Simula a corrida: a leitura não vê a linha (outro processo gravou
         # entre o SELECT e o INSERT) e o commit estoura o unique.
-        real_first = None
 
         class _QueryVazia:
             def filter_by(self, **kw):
@@ -103,7 +102,6 @@ def test_vincular_tolera_corrida_no_unique(app):
                       side_effect=IntegrityError('insert', {}, Exception('uq_conversa_pedido'))), \
                 patch('app.services.conversa_pedido.logger') as log:
             assert conversa_pedido.vincular(2431, 'E3862E49', 'bot') is False
-        assert real_first is None
         log.exception.assert_not_called()
         assert any('corrida' in str(c) for c in log.info.call_args_list)
         assert _vinculos() == {('2431', 'bot')}
