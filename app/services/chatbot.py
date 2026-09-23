@@ -1173,16 +1173,26 @@ def _reclamacao_sem_resposta_humana(historico):
                    for m in (historico or [])[ultima_reclamacao + 1:])
 
 
-def pode_encerrar(historico):
+def pode_encerrar(historico, exigir_fechamento=True):
     """Encerramento AUTOMATICO (resolved sem fala) so quando o ultimo turno
     do cliente e fechamento E nao ha reclamacao sem resposta humana. Vale
     para a Camada 1, para a tool `encerrar_conversa` do modelo e para o
-    turno vazio — e, por eles, para o webhook e a vassoura."""
-    from app.services.chatbot_vigia import _e_fechamento
-    ultima = next((m for m in reversed(historico or [])
-                   if isinstance(m, dict) and m.get('role') == 'user'), None)
-    if not _e_fechamento(str((ultima or {}).get('content') or '')):
-        return False
+    turno vazio — e, por eles, para o webhook e a vassoura.
+
+    `exigir_fechamento=False` checa SO a reclamacao em aberto: e o que a
+    tool do modelo e o ramo (b) do turno vazio usam, porque ali o
+    fechamento ja foi reconhecido por quem chamou ("Nao, muito obrigada !"
+    e "Obrigada. Esclareceu" nao passam no `_e_fechamento`, ancorado nas
+    duas pontas — exigi-lo aqui mandaria fechamento banal pra fila humana,
+    o problema do caso 26/07/2026). A regra dura, valida em TODOS os
+    caminhos, e a segunda: reclamacao sem resposta humana NUNCA vira
+    resolved."""
+    if exigir_fechamento:
+        from app.services.chatbot_vigia import _e_fechamento
+        ultima = next((m for m in reversed(historico or [])
+                       if isinstance(m, dict) and m.get('role') == 'user'), None)
+        if not _e_fechamento(str((ultima or {}).get('content') or '')):
+            return False
     return not _reclamacao_sem_resposta_humana(historico)
 
 
