@@ -573,13 +573,34 @@ def _e_handoff_preguicoso_em_compra(historico, resultado_bot, conv_id=None):
     # prompt do bot), mesmo com tools=[]. Sem isso, dava falso positivo: quem
     # via cestas e dizia "quero falar com atendente" virava "preguicoso".
     # Reusa o MESMO regex do bot (chatbot._quer_humano) pra nao divergir.
+    # FALHA OPERACIONAL em curso ("estou sem resposta", que _SINAIS_RECLAMACAO
+    # nao casa) idem: o handoff forcado da Camada 1 sai com tools=[] e nao
+    # e "venda em risco" (23/09/2026).
     try:
-        from app.services.chatbot import _quer_humano
-        if any(_quer_humano(m) for m in msgs_user):
+        from app.services.chatbot import _quer_humano, falha_operacional
+        if any(_quer_humano(m) or falha_operacional(m) for m in msgs_user):
             return False
     except Exception:  # noqa: BLE001
         pass
     return bool(_SINAIS_COMPRA.search(texto))
+
+
+def reclamacao_no_historico(historico, ultimas=3):
+    """True se alguma das ultimas falas do CLIENTE relata problema em curso
+    (`chatbot.falha_operacional`) ou reclamacao (`_SINAIS_RECLAMACAO`).
+    Usado pra NUNCA mandar a macro de espera ("atendimento em alta demanda,
+    obrigado pela paciencia") sobre reclamacao — so pra duvida comum (dono
+    23/09/2026). Fail-open: erro devolve False (macro segue como antes)."""
+    try:
+        from app.services.chatbot import falha_operacional
+        falas = [str(m.get('content') or '') for m in (historico or [])
+                 if isinstance(m, dict) and m.get('role') == 'user'
+                 and not m.get('herdada')][-ultimas:]
+        return any(falha_operacional(f) or _SINAIS_RECLAMACAO.search(f)
+                   for f in falas if f.strip())
+    except Exception:  # noqa: BLE001
+        logger.exception('vigia: reclamacao_no_historico falhou')
+        return False
 
 
 def _montar_mensagem(veredicto, nome_contato, conv_id):
