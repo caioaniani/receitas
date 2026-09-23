@@ -1054,18 +1054,35 @@ def whatsapp_disponivel():
 
 
 def _e164(telefone):
-    """Telefone armazenado -> E.164 pro WhatsApp (+55DDDNUMERO). Retorna None
-    se nao der pra montar um numero confiavel (sem DDD)."""
-    from app.utils import normalizar_telefone
-    d = normalizar_telefone(telefone)
-    if not d:
+    """Telefone armazenado -> E.164 pro WhatsApp (+55DDD9XXXXXXXX). SÓ celular
+    BR: fixo, internacional e inválido devolvem None — o motivo legível vem
+    de `motivo_telefone_sem_whatsapp`.
+
+    Até 23/09/2026 prefixava '55' em QUALQUER número: '+1 475-292-9850'
+    virava '+5514752929850' (número brasileiro inventado, DDD 14) e o
+    template saía pra um desconhecido — ou morria com Meta 131026 — enquanto
+    a tela dizia "template enviado" (caso Cintia)."""
+    from app.utils import telefone_e164_whatsapp
+    return telefone_e164_whatsapp(telefone)
+
+
+def motivo_telefone_sem_whatsapp(telefone):
+    """Texto pro atendente quando o número NÃO pode receber template de
+    WhatsApp, ou None quando é celular BR. Fonte única dos três botões
+    "Chamar" e de `iniciar_conversa_whatsapp` (23/09/2026)."""
+    from app.utils import TEL_BR_CELULAR, TEL_BR_FIXO, TEL_INTERNACIONAL, classificar_telefone
+    c = classificar_telefone(telefone)
+    mostrado = (str(telefone or '').strip() or '(vazio)')[:40]
+    if c['tipo'] == TEL_BR_CELULAR:
         return None
-    if not d.startswith('55'):
-        d = '55' + d
-    # 55 + DDD(2) + numero(8 ou 9) = 12 ou 13 digitos. Menos que isso = sem DDD.
-    if len(d) < 12:
-        return None
-    return '+' + d
+    if c['tipo'] == TEL_INTERNACIONAL:
+        return (f'Telefone internacional ({c["e164"]}): não é possível '
+                'contato por WhatsApp — use e-mail.')
+    if c['tipo'] == TEL_BR_FIXO:
+        return (f'Telefone fixo ({mostrado}): não recebe WhatsApp — '
+                'use ligação ou e-mail.')
+    return (f'Telefone inválido/sem DDD ({mostrado}): confira o cadastro '
+            'ou use e-mail.')
 
 
 def listar_inboxes():
