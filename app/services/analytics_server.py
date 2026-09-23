@@ -89,11 +89,12 @@ def _payload_meta(pedido):
     email = (pedido.email_cliente or '').strip().lower()
     if email:
         user_data['em'] = [_sha256(email)]
-    fone = ''.join(c for c in (pedido.telefone_cliente or '') if c.isdigit())
-    if fone:
-        if not fone.startswith('55'):
-            fone = '55' + fone
-        user_data['ph'] = [_sha256(fone)]
+    # E.164 pelo classificador canônico (23/09/2026): internacional vai com o
+    # DDI dele, não com '55' prefixado; inválido fica fora do hash.
+    from app.utils import classificar_telefone
+    e164 = classificar_telefone(pedido.telefone_cliente)['e164']
+    if e164:
+        user_data['ph'] = [_sha256(e164.lstrip('+'))]
     return {
         'data': [{
             'event_name': 'Purchase',
