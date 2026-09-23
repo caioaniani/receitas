@@ -153,7 +153,9 @@ def _numero_destino():
             or (cfg.get('ZAPI_NUMERO_DESTINO') or '').strip())
 
 
-_TRACKING_PREFIXES = ('[FOLLOWUP', '[ABANDONO', '[ESPERA_HUMANO')
+# '[LALAMOVE' (23/09/2026): alerta operacional de corrida encerrada sem
+# entrega (lalamove_alerta) — nao e turno do bot, fica fora da contencao.
+_TRACKING_PREFIXES = ('[FOLLOWUP', '[ABANDONO', '[ESPERA_HUMANO', '[LALAMOVE')
 
 
 def _eh_conversa_real(v):
