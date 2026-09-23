@@ -27,8 +27,17 @@ def test_pode_encerrar_regras():
     # a mesma conversa com resposta HUMANA depois da reclamação → pode
     hist_h = hist[:2] + [{'role': 'assistant', 'humano': True,
                           'content': 'Oi! Reenviamos agora, chega em 40 min.'},
-                         {'role': 'user', 'content': 'obrigada, resolvido'}]
+                         {'role': 'user', 'content': 'obrigada'}]
     assert pode_encerrar(hist_h) is True
+    # fechamento que o `_e_fechamento` NAO reconhece ("Obrigada. Esclareceu")
+    # so passa com exigir_fechamento=False — e mesmo assim a reclamacao
+    # em aberto barra.
+    hist_e = hist[:2] + [{'role': 'user', 'content': 'Obrigada. Esclareceu'}]
+    assert pode_encerrar(hist_e) is False
+    assert pode_encerrar(hist_e, exigir_fechamento=False) is False
+    assert pode_encerrar([{'role': 'assistant', 'content': 'Link enviado!'},
+                          {'role': 'user', 'content': 'Obrigada. Esclareceu'}],
+                         exigir_fechamento=False) is True
     # reclamação HERDADA de conversa anterior não conta
     hist_herd = [{'role': 'user', 'content': 'não recebi meu pedido', 'herdada': True},
                  {'role': 'assistant', 'content': 'Já passei pra equipe', 'herdada': True},
