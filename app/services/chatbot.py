@@ -2862,8 +2862,10 @@ def varrer_pendentes_sem_resposta():
                 acao = (resultado or {}).get('acao')
                 texto = (resultado or {}).get('texto') or ''
                 # Mesmo dedupe do webhook: conversa ja transferida ha pouco
-                # nao ganha 2º "vou te passar pra equipe".
-                if acao == 'handoff' and handoff_recente(conv_id):
+                # nao ganha 2º "vou te passar pra equipe". A fila silenciosa
+                # (item 7) nao tem texto — fica handoff pra levar a nota.
+                if (acao == 'handoff' and not (resultado or {}).get('fila_silenciosa')
+                        and handoff_recente(conv_id)):
                     acao = 'handoff_repetido'
                     texto = TEXTO_HANDOFF_REPETIDO
                 if chatwoot.buscar_historico(
