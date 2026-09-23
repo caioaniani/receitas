@@ -2074,6 +2074,7 @@ def _localizar_pedido_para_socorro(historico, telefone_contato, conversa_id=None
             codigo, telefone_contato=telefone_contato,
             cpf_cliente=cpf or None, email_cliente=email or None)
         resumo = _resumo_tool('consultar_pedido', out)
+        _vincular_pedido_da_conversa(conversa_id, out, origem='socorro')
         return ['consultar_pedido'], [resumo]
     except Exception:  # noqa: BLE001
         logger.exception('chatbot: localizar pedido pro socorro falhou')
