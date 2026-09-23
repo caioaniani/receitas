@@ -968,6 +968,36 @@ _SINAL_VENDA_EM_CURSO = re.compile(
     r'fechar o pedido|carrinho)\b')
 
 
+# TERCEIRO FALANDO PELO TITULAR (dono 23/09/2026): num presente podem ser
+# tres pessoas — quem comprou, quem recebe e quem escreve. Motivo que diz
+# que quem fala NAO e o titular E identifica o pedido por qualquer dado
+# (codigo, e-mail, CPF, quem recebe, endereco) e handoff com contexto, nao
+# interrogatorio.
+_TERCEIRO_PELO_TITULAR = re.compile(
+    r'(?i)\b(?:em\s+nome\s+d[eoa]|pel[oa]\s+(?:titular|comprador[a]?)|'
+    r'terceir[oa]\s+(?:falando|pel[oa]|em\s+nome)|'
+    r'n[aã]o\s+[eé]\s+[oa]\s+(?:titular|comprador[a]?|dono)|'
+    r'quem\s+(?:comprou|pediu|pagou|fez\s+o\s+pedido)\s+foi|'
+    r'(?:m[aã]e|pai|marido|esposa|mulher|filh[oa]|irm[aã][oa]?|amig[oa]|'
+    r'chefe|patr[aã]o|s[oó]ci[oa]|namorad[oa]|noiv[oa]|tia|tio|av[oó]|'
+    r'av[oó]s|sogr[oa]|colega|cunhad[oa]|nora|genro|cliente\s+del[ea])\s+'
+    r'(?:que\s+)?(?:comprou|fez\s+o\s+pedido|pediu|pagou|encomendou))\b')
+_IDENTIFICACAO_PEDIDO = re.compile(
+    r'(?i)\bpedido\b|@|\bcpf\b|\be-?mail\b|\bdestinat[aá]ri\w*|\bquem\s+recebe|'
+    r'\bendere[cç]o\b|\brua\b|\bav(?:enida)?\.?\b|\bcesta\b|'
+    r'\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{8}\b|\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b')
+
+
+def motivo_terceiro_pelo_titular(motivo):
+    """True se o motivo do handoff diz que quem escreve fala EM NOME do
+    titular (mae/marido/amiga comprou) e traz algum dado que identifica o
+    pedido. Venda em curso veta como sempre."""
+    t = (motivo or '').strip()
+    if not t or _SINAL_VENDA_EM_CURSO.search(t):
+        return False
+    return bool(_TERCEIRO_PELO_TITULAR.search(t) and _IDENTIFICACAO_PEDIDO.search(t))
+
+
 def _handoff_excecao(inp):
     """True se o input da tool transferir_para_humano traz um motivo de
     excecao (nao exige consulta previa). Olha SO os campos de MOTIVO
@@ -982,9 +1012,14 @@ def _handoff_excecao(inp):
     # "ligacao" solta ("faz ligacao antes de entregar?" e pergunta de venda)
     if pediu_humano(None, texto):
         return True
+    # falha operacional em curso no motivo ("cliente nao recebeu o pedido",
+    # "motoboy foi embora") — socorro nao espera consulta (23/09/2026)
+    hits = [(h.start(), h.end()) for h in _MOTIVO_FALHA_OPERACIONAL.finditer(texto)]
+    if hits and _algum_hit_nao_negado(texto, hits, nua_veta=True):
+        return True
     if _SINAL_VENDA_EM_CURSO.search(texto):
         return False
-    if motivo_terceiro_na_entrega(texto):
+    if motivo_terceiro_na_entrega(texto) or motivo_terceiro_pelo_titular(texto):
         return True
     return bool(_CORRECAO_ENTREGA.search(texto)
                 and _ANCORA_PEDIDO.search(texto))
