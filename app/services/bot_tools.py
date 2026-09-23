@@ -934,13 +934,16 @@ _PEDIDOS_POR_TELEFONE_DIAS = 90
 _PEDIDOS_POR_TELEFONE_MAX = 3
 
 
-def _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente):
-    """Localiza os PedidoOnline recentes do telefone do canal.
+def _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente,
+                                   email_cliente=None):
+    """Localiza os PedidoOnline recentes do telefone do canal — ou, desde
+    23/09/2026, do E-MAIL que o cliente informou na conversa.
 
     1 achado  -> devolve a ficha completa direto (mesma forma da consulta por
                  numero — o bot responde na hora).
     2-3       -> lista compacta pro bot perguntar qual e.
-    0 / sem telefone no canal -> erro orientando a pedir o numero.
+    0 / sem telefone no canal nem e-mail -> erro orientando a pedir o
+                 numero ou o e-mail.
 
     SO o telefone do COMPRADOR (telefone_cliente) localiza — o do
     DESTINATARIO fica FORA da descoberta de proposito (achado da revisao
@@ -948,7 +951,8 @@ def _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente):
     cadastro seria DESCOBERTO pela propria pessoa ("tem pedido pra mim?"
     revelaria itens e cartinha — mesma classe do caso 13/07 que estragou
     surpresa). Destinatario que JA TEM o numero segue autorizado no fluxo
-    por numero (`_consultar_pedido_online`, inalterado).
+    por numero (`_consultar_pedido_online`, inalterado). O e-mail e o do
+    COMPRADOR pela mesma razao (email_cliente).
 
     `telefone_chave` e Python-side (nao SQL) — filtramos em memoria a janela
     recente (streaming `yield_per`, para no cap), mesmo padrao do card CRM
@@ -958,9 +962,13 @@ def _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente):
     from app.models import PedidoOnline
     from app.utils import agora, telefone_chave
     tel = telefone_chave(telefone_contato or '')
-    if not tel:
-        return {'erro': ('sem telefone verificado neste canal não dá pra '
-                          'localizar — peça o número do pedido ao cliente')}
+    email = _norm_email(email_cliente)
+    if '@' not in email:
+        email = ''
+    if not tel and not email:
+        return {'erro': ('sem telefone verificado neste canal nem e-mail '
+                          'informado não dá pra localizar — peça o número '
+                          'do pedido OU o e-mail usado na compra')}
     corte = agora() - timedelta(days=_PEDIDOS_POR_TELEFONE_DIAS)
     achados = []
     q = (PedidoOnline.query
@@ -969,20 +977,30 @@ def _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente):
          .yield_per(200))
     for p in q:
         t = p.telefone_cliente
-        if t and telefone_chave(t) == tel:
+        if (tel and t and telefone_chave(t) == tel) or (
+                email and _norm_email(p.email_cliente) == email):
             achados.append(p)
         if len(achados) >= _PEDIDOS_POR_TELEFONE_MAX:
             break
     if not achados:
+        if email:
+            return {'erro': 'nenhum_pedido_para_este_email',
+                    'instrucao': ('Nenhum pedido recente com esse e-mail nem '
+                                   'no telefone deste canal. Peça o número do '
+                                   'pedido UMA vez; se a pessoa está relatando '
+                                   'um problema em curso ou não tem o número, '
+                                   'transfira com o que ela disse.')}
         return {'erro': 'nenhum_pedido_para_este_telefone',
                 'instrucao': ('Nenhum pedido recente no telefone deste '
-                               'WhatsApp. Peça o número do pedido (pode ter '
-                               'sido feito com outro telefone). Se o cliente '
-                               'não tiver o número, transfira.')}
+                               'WhatsApp. Peça o número do pedido ou o '
+                               'e-mail usado na compra (pode ter sido feito '
+                               'com outro telefone). Se o cliente não tiver '
+                               'nenhum dos dois, transfira.')}
     if len(achados) == 1:
-        # Telefone do canal bate = mesma autorizacao do fluxo por numero.
+        # Telefone do canal (ou e-mail) bate = mesma autorizacao do fluxo
+        # por numero.
         return _consultar_pedido_online(
-            achados[0].codigo, telefone_contato, cpf_cliente)
+            achados[0].codigo, telefone_contato, cpf_cliente, email_cliente)
     return {
         'pedidos_recentes': [{
             'numero': p.codigo,
