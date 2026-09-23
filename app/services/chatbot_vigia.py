@@ -1647,6 +1647,7 @@ def resolver_alertas(ids, *, via, usuario_id=None, motivo=None, momento=None,
             continue
     if not ids_ok:
         return 0
+    from sqlalchemy.exc import IntegrityError
     ja = {r.veredito_id for r in VigiaAlertaResolucao.query
           .filter(VigiaAlertaResolucao.veredito_id.in_(ids_ok)).all()}
     momento = momento or _ag()
@@ -1657,9 +1658,19 @@ def resolver_alertas(ids, *, via, usuario_id=None, motivo=None, momento=None,
                       VigiaVeredito.gravidade == 'alta').all()):
         if v.id in ja:
             continue
-        db.session.add(VigiaAlertaResolucao(
-            veredito_id=v.id, resolvido_em=momento, via=via,
-            motivo=motivo[:2000] or None, usuario_id=usuario_id))
+        # SAVEPOINT por veredito: dois processos resolvendo o mesmo alerta
+        # (painel + relogio da espera humana no mesmo minuto) batem no
+        # unique de `veredito_id`; o perdedor pula este e segue os outros
+        # em vez de envenenar a sessao inteira (revisao 23/09/2026).
+        try:
+            with db.session.begin_nested():
+                db.session.add(VigiaAlertaResolucao(
+                    veredito_id=v.id, resolvido_em=momento, via=via,
+                    motivo=motivo[:2000] or None, usuario_id=usuario_id))
+                db.session.flush()
+        except IntegrityError:
+            logger.info('vigia painel: alerta %s ja resolvido por outro processo', v.id)
+            continue
         if v.reconhecido_em is None:
             v.reconhecido_em = momento
             v.reconhecido_por_id = usuario_id
