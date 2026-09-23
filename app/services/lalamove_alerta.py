@@ -197,6 +197,10 @@ def _tratar(e, status, anterior, dados):
     if (anterior or '').upper() == 'COMPLETED' or (
             pedido is not None and pedido.status == 'entregue'):
         return {'ok': True, 'ignorado': 'ja_entregue'}
+    if pedido is not None and pedido.status == 'cancelado':
+        # Pedido cancelado/reembolsado: a corrida cai por consequência —
+        # "chame outro entregador" seria errado (revisão 23/09/2026).
+        return {'ok': True, 'ignorado': 'pedido_cancelado'}
     telefone_cliente = (pedido.telefone_cliente if pedido else None) or ''
     conv_id = _conversa_local_do_telefone(telefone_cliente)
     rotulo = rotulo_status(status)
