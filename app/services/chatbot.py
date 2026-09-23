@@ -748,6 +748,22 @@ _MOTIVO_FALHA_OPERACIONAL = re.compile(
     r'sem\s+(?:resposta|retorno)|ningu[eé]m\s+(?:responde|atende|retorna)|'
     r'(?:motoboy|entregador\w*|motorista)\s+(?:foi\s+embora|n[aã]o\s+apareceu|'
     r'sumiu|n[aã]o\s+veio|desistiu))\b')
+
+
+def _hits_falha_no_motivo(texto):
+    """Hits de `_MOTIVO_FALHA_OPERACIONAL` fora de hipotese/pergunta de
+    processo ("duvida se o motoboy liga quando ninguem atende" nao e falha
+    em curso — e a pergunta de venda que o enforcement existe pra barrar)."""
+    if _HIPOTESE_ENTREGA.search(texto):
+        return []
+    out = []
+    for h in _MOTIVO_FALHA_OPERACIONAL.finditer(texto):
+        if _HIPOTESE_FALHA.search(_oracao_antes(texto, h.start())):
+            continue
+        out.append((h.start(), h.end()))
+    return out
+
+
 _MOTIVO_EXCECAO_LEGITIMA = re.compile(
     r'(?i)\b(?:al[eé]rg\w*|intoler[aâ]nc\w*|'
     r'reclama\w*|'
@@ -771,7 +787,7 @@ def motivo_excecao_legitima(motivo):
     if not m:
         return False
     hits = [(h.start(), h.end()) for h in _MOTIVO_EXCECAO_LEGITIMA.finditer(m)]
-    hits += [(h.start(), h.end()) for h in _MOTIVO_FALHA_OPERACIONAL.finditer(m)]
+    hits += _hits_falha_no_motivo(m)
     if _algum_hit_nao_negado(m, hits, nua_veta=True):
         return True
     # terceiro na entrega com problema em curso (caso conv 2409) — mesma
@@ -1028,13 +1044,14 @@ def _handoff_excecao(inp):
     # "ligacao" solta ("faz ligacao antes de entregar?" e pergunta de venda)
     if pediu_humano(None, texto):
         return True
-    # falha operacional em curso no motivo ("cliente nao recebeu o pedido",
-    # "motoboy foi embora") — socorro nao espera consulta (23/09/2026)
-    hits = [(h.start(), h.end()) for h in _MOTIVO_FALHA_OPERACIONAL.finditer(texto)]
-    if hits and _algum_hit_nao_negado(texto, hits, nua_veta=True):
-        return True
     if _SINAL_VENDA_EM_CURSO.search(texto):
         return False
+    # falha operacional em curso no motivo ("cliente nao recebeu o pedido",
+    # "motoboy foi embora") — socorro nao espera consulta (23/09/2026);
+    # hipotese ("se o motoboy liga quando ninguem atende") nao conta
+    hits = _hits_falha_no_motivo(texto)
+    if hits and _algum_hit_nao_negado(texto, hits, nua_veta=True):
+        return True
     if motivo_terceiro_na_entrega(texto) or motivo_terceiro_pelo_titular(texto):
         return True
     return bool(_CORRECAO_ENTREGA.search(texto)
