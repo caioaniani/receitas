@@ -2016,7 +2016,24 @@ _RE_EMAIL = re.compile(r'[\w.+-]+@[\w-]+\.[\w.-]+')
 _RE_CPF = re.compile(r'\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b')
 
 
-def _localizar_pedido_para_socorro(historico, telefone_contato):
+def _vincular_pedido_da_conversa(conversa_id, out, origem='bot'):
+    """Item 8 (caso E3862E49): o bot identificou o pedido — autorizado
+    (`numero`) ou existente sem autorizacao (`_pedido_existente`) — grava o
+    vinculo conversa<->pedido. Lista de varios (`pedidos_recentes`) nao
+    identifica nada. Best-effort: nunca interfere no turno."""
+    try:
+        if not conversa_id or not isinstance(out, dict) or out.get('pedidos_recentes'):
+            return
+        codigo = (out.get('numero') if not out.get('erro') else None) \
+            or out.get('_pedido_existente')
+        if codigo:
+            from app.services import conversa_pedido
+            conversa_pedido.vincular(conversa_id, codigo, origem)
+    except Exception:  # noqa: BLE001
+        logger.exception('chatbot: vincular pedido da conversa %s falhou', conversa_id)
+
+
+def _localizar_pedido_para_socorro(historico, telefone_contato, conversa_id=None):
     """Localizacao BEST-EFFORT do pedido pra nota interna do handoff de
     falha operacional (23/09/2026): usa o que JA esta na conversa — codigo
     de pedido, e-mail, CPF nas falas do cliente — ou o telefone do canal.
