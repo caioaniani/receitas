@@ -930,10 +930,19 @@ def api_lalamove_chamar():
     e = db.session.get(LalamoveEntrega, dados.get('entrega_id'))
     if not e or e.status != 'cotacao':
         return jsonify(ok=False, erro='cotação não encontrada ou já usada'), 400
+    observacao = f'Pedido {e.pedido_code} — O Pão Padaria Artesanal'
+    # Presente SEM telefone de quem recebe (pedido anterior a 23/09/2026): o
+    # número da cotação é o do COMPRADOR (fallback do card). A corrida diz
+    # isso ao entregador — ele não vai achar quem recebe por esse telefone.
+    from app.models import PedidoOnline
+    po = PedidoOnline.query.filter_by(codigo=e.pedido_code).first() if e.pedido_code else None
+    if (po is not None and (po.nome_destinatario or '').strip()
+            and not (po.telefone_destinatario or '').strip()):
+        observacao += (' — PRESENTE: quem recebe não informou telefone; o '
+                       'número é do COMPRADOR (não comentar o conteúdo).')
     r = lala_svc.criar_ordem(
         e.quotation_id, e.sender_stop_id, e.recipient_stop_id,
-        e.destinatario, e.telefone_destino,
-        observacao=f'Pedido {e.pedido_code} — O Pão Padaria Artesanal')
+        e.destinatario, e.telefone_destino, observacao=observacao)
     if not r.get('ok'):
         return jsonify(ok=False, erro=r.get('erro')), 502
     e.order_id = r['order_id']
