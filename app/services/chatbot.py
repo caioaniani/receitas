@@ -650,13 +650,18 @@ _RE_OBJ_ENTREGA = re.compile(
 _RE_OBJ_ENTREGA_GENITIVO = re.compile(
     r'(?i)\b(?:d[oa]|de|n[oa])\s+(?:meu\s+|minha\s+|seu\s+|sua\s+)?'
     r'(?:pedido|compra|encomenda)\b')
-# "meu pedido nao chegou NO E-MAIL" — e a confirmacao, nao o pao.
+# "meu pedido nao chegou NO E-MAIL" — e a confirmacao, nao o pao. So vale
+# COLADO ao verbo do hit (`.match` no texto logo depois): na oracao inteira
+# derrubava "comprei pelo site e meu pedido nao chegou" e "meu pedido nao
+# chegou e ninguem responde no whatsapp" (revisao 23/09/2026, 2ª rodada).
 _RE_CANAL_DIGITAL = re.compile(
-    r'(?i)\b(?:no|na|por|pel[oa]|via|em)\s+(?:meu\s+|minha\s+)?'
+    r'(?i)\s*(?:no|na|por|pel[oa]|via|em)\s+(?:meu\s+|minha\s+)?'
     r'(?:e-?mail|email|whats\w*|sms|site|app|aplicativo)\b')
-# "o sourdough nao chegou NA LOJA hoje?" — estoque, nao entrega.
+# "o sourdough nao chegou NA LOJA hoje?" — estoque, nao entrega. Idem:
+# colado ao verbo E em pergunta ("comprei na loja e veio errado" e "fui
+# buscar na loja e nao entregaram meu pedido" sao falha).
 _RE_LOJA_ESTOQUE = re.compile(
-    r'(?i)\b(?:na\s+loja|nas\s+lojas|na\s+padaria|na\s+unidade|'
+    r'(?i)\s*(?:na\s+loja|nas\s+lojas|na\s+padaria|na\s+unidade|'
     r'n[oa]\s+estoque|em\s+estoque)\b')
 # Pergunta sem palavra de ENTREGA ("o croissant nao veio recheado?") e
 # duvida de produto; "meu pedido nao chegou?" segue falha.
