@@ -39,6 +39,11 @@ def _vinculos(code='E3862E49'):
     return {(r.conv_id, r.origem) for r in ConversaPedido.query.filter_by(pedido_code=code).all()}
 
 
+def _autorizacao(code='E3862E49'):
+    from app.models import ConversaPedido
+    return {r.conv_id: r.autorizada for r in ConversaPedido.query.filter_by(pedido_code=code).all()}
+
+
 # ── vincular ────────────────────────────────────────────────────────────
 
 def test_vincular_idempotente_e_ignora_conversa_invalida(app):
@@ -51,6 +56,57 @@ def test_vincular_idempotente_e_ignora_conversa_invalida(app):
         assert conversa_pedido.vincular(2432, 'E3862E49', 'chamar') is True
         assert conversa_pedido.conversas_do_pedido('e3862e49') == ['2431', '2432']
         assert _vinculos() == {('2431', 'bot'), ('2432', 'chamar')}
+        assert conversa_pedido.conversas_do_pedido('e3862e49', detalhado=True) == [
+            {'conv_id': '2431', 'autorizada': True, 'origem': 'bot'},
+            {'conv_id': '2432', 'autorizada': True, 'origem': 'chamar'}]
+
+
+def test_vincular_nao_autorizada_e_promovida_por_autorizacao_posterior(app):
+    """Terceiro que só tem o código (revisão 23/09/2026): o vínculo nasce
+    `autorizada=False`; se a mesma conversa provar posse depois, promove."""
+    from app.services import conversa_pedido
+    with app.app_context():
+        assert conversa_pedido.vincular(2432, 'E3862E49', 'bot', autorizada=False) is True
+        assert _autorizacao() == {'2432': False}
+        # repetir sem autorização não muda nada
+        assert conversa_pedido.vincular(2432, 'E3862E49', 'bot', autorizada=False) is False
+        assert _autorizacao() == {'2432': False}
+        # autorização posterior promove (não é vínculo novo → False)
+        assert conversa_pedido.vincular(2432, 'E3862E49', 'bot', autorizada=True) is False
+        assert _autorizacao() == {'2432': True}
+        # autorizada nunca é rebaixada por uma consulta não autorizada depois
+        assert conversa_pedido.vincular(2432, 'E3862E49', 'socorro', autorizada=False) is False
+        assert _autorizacao() == {'2432': True}
+
+
+def test_vincular_tolera_corrida_no_unique(app):
+    """Dois turnos da mesma conversa gravando o mesmo par: o 2º bate no
+    unique e vira "já existe" (info no log), não exceção nem ERROR."""
+    from sqlalchemy.exc import IntegrityError
+
+    from app.services import conversa_pedido
+    with app.app_context():
+        assert conversa_pedido.vincular(2431, 'E3862E49', 'bot') is True
+        # Simula a corrida: a leitura não vê a linha (outro processo gravou
+        # entre o SELECT e o INSERT) e o commit estoura o unique.
+        real_first = None
+
+        class _QueryVazia:
+            def filter_by(self, **kw):
+                return self
+
+            def first(self):
+                return None
+
+        with patch('sqlalchemy.orm.Session.query', return_value=_QueryVazia()), \
+                patch('sqlalchemy.orm.Session.commit',
+                      side_effect=IntegrityError('insert', {}, Exception('uq_conversa_pedido'))), \
+                patch('app.services.conversa_pedido.logger') as log:
+            assert conversa_pedido.vincular(2431, 'E3862E49', 'bot') is False
+        assert real_first is None
+        log.exception.assert_not_called()
+        assert any('corrida' in str(c) for c in log.info.call_args_list)
+        assert _vinculos() == {('2431', 'bot')}
 
 
 # ── bot identifica o pedido ─────────────────────────────────────────────
