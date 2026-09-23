@@ -398,6 +398,23 @@ def test_painel_expoe_tipo_do_telefone_e_presente_sem_telefone(app):
     assert cards['BR1']['sem_telefone_destinatario'] is False
 
 
+def test_api_painel_repassa_presente_e_tipos(app):
+    """Achado colateral 23/09/2026: `/entregas/api/painel` montava o card
+    sem `e_presente`/`telefone_comprador` — o bloco "🎁 não ligue pra quem
+    recebe" NUNCA aparecia no painel do dia (só no /api/pedidos)."""
+    with app.app_context():
+        c = _staff(app)
+        _pedido_painel('PAN1', '+14752929850', nome_dest='Bia')
+    with patch('app.services.vnda.buscar_pedidos_do_dia',
+               return_value={'pedidos': []}):
+        d = c.get('/entregas/api/painel').get_json()
+    card = next(p for p in d['pedidos'] if p['code'] == 'PAN1')
+    assert card['e_presente'] is True
+    assert card['telefone_comprador'] == '+14752929850'
+    assert card['telefone_comprador_tipo'] == 'internacional'
+    assert card['sem_telefone_destinatario'] is True
+
+
 def test_painel_html_tem_selo_e_aviso(app):
     with app.app_context():
         c = _staff(app)
