@@ -56,7 +56,7 @@ def verify_signing(headers, body):
     return hmac.compare_digest(esperado, sig)
 
 
-def post_message(channel, text=None, blocks=None, thread_ts=None):
+def post_message(channel, text=None, blocks=None, thread_ts=None, retry=True):
     """chat.postMessage. Retorna {'ok': bool, 'ts': str, ...}.
 
     Guarda de INSTÂNCIA CANÔNICA (20/08/2026): cópia de homologação com as
@@ -76,7 +76,12 @@ def post_message(channel, text=None, blocks=None, thread_ts=None):
             kwargs['blocks'] = blocks
         if thread_ts:
             kwargs['thread_ts'] = thread_ts
-        resp = _client().chat_postMessage(**kwargs)
+        client = _client()
+        # Instruções operacionais com reserva persistente não devem repetir
+        # um POST cuja resposta se perdeu, inclusive dentro do SDK.
+        if not retry:
+            client.retry_handlers = []
+        resp = client.chat_postMessage(**kwargs)
         return {'ok': True, 'ts': resp.get('ts'), 'channel': resp.get('channel')}
     except Exception as exc:  # noqa: BLE001
         logger.exception('slack post_message falhou')

@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Fermentação de amanhã{% endblock %}
+{% block content %}
+<h1 class="page-title">Fermentação de amanhã</h1>
+<p>Envio diário às <strong>12h, horário de Brasília</strong>, no mesmo canal do desperdício.</p>
+<p>Somente croissant tradicional e pain au chocolat, para Ribeiro do Vale e Anésio Pinto Rosa.</p>
+{% if not agendador_ativo %}
+<div class="alert alert-warning">O envio automático está parado nesta instância. Confira o agendador do sistema.</div>
+{% endif %}
+<div class="card mb-3"><div class="card-body">
+    <h2 class="h5">{% if envio %}Mensagem registrada{% else %}Prévia da próxima mensagem{% endif %}</h2>
+    <div style="white-space: pre-wrap">{{ envio.texto if envio else calculo.texto }}</div>
+</div></div>
+{% if envio %}
+    {% if envio.estado == 'enviado' %}
+    <div class="alert alert-success">Lista enviada ao Slack em {{ envio.enviado_em.strftime('%d/%m às %H:%M') }}.</div>
+    {% elif envio.estado == 'aviso_enviado' %}
+    <div class="alert alert-warning">Foi enviado um aviso: faltam dados para calcular a lista.</div>
+    {% else %}
+    <div class="alert alert-warning">O envio está em andamento ou não foi confirmado. Confira o canal antes de qualquer nova tentativa.</div>
+    {% endif %}
+{% else %}
+<form method="post" class="mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-primary" type="submit">
+        {{ 'Enviar lista de amanhã agora' if calculo.ok else 'Enviar aviso de dados incompletos' }}
+    </button>
+    <p class="small text-muted mt-2">Uma mensagem por data. O envio manual também impede duplicação pelo automático.</p>
+</form>
+{% endif %}
+<details class="mb-3">
+    <summary>Como a quantidade foi calculada</summary>
+    <p class="mt-2">Soma das vendas simples nas três datas anteriores do mesmo dia da semana, dividida por três e arredondada para cima. Não desconta estoque nem acrescenta margem.</p>
+    <p>O tradicional reúne os nomes do PDV “Croissant Francês”, “Croissant Tradicional” e “Croissant Esquentado”. Recheados, sanduíches, minis e bicolor ficam de fora.</p>
+    {% set base = envio.calculo if envio else calculo %}
+    {% for loja in base.lojas %}
+    <h3 class="h6">{{ loja.nome }}</h3>
+    <div class="table-responsive"><table class="table table-sm">
+        <thead><tr><th>Data</th><th>Croissant tradicional</th><th>Pain au chocolat</th></tr></thead>
+        <tbody>{% for dia in loja.dias %}
+        <tr><td>{{ dia.data[8:10] }}/{{ dia.data[5:7] }}</td><td>{{ dia.croissant }}</td><td>{{ dia.pain }}</td></tr>
+        {% endfor %}</tbody>
+    </table></div>
+    {% endfor %}
+    <p class="small text-muted">Fonte: vendas registradas no sistema pelo PDV Seru. Vendas sem itens detalhados ou dias sem histórico fechado impedem o cálculo.</p>
+</details>
+<a href="{{ url_for('main.slack_diagnostico') }}" class="btn btn-outline-secondary">Voltar ao Slack</a>
+{% endblock %}

@@ -13,6 +13,7 @@ from app.models.entregas import *  # noqa: F401, F403
 from app.models.espera_atendimento import *  # noqa: F401, F403
 from app.models.estoque import *  # noqa: F401, F403
 from app.models.estoque_massa import *  # noqa: F401, F403
+from app.models.fermentacao import *  # noqa: F401, F403
 from app.models.financeiro import *  # noqa: F401, F403
 from app.models.fiscal_online import *  # noqa: F401, F403
 from app.models.fiserv import *  # noqa: F401, F403

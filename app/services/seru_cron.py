@@ -549,6 +549,13 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Decisão do owner: lista de fermentação de amanhã, diariamente ao meio-dia.
+    _scheduler.add_job(
+        lambda: _run_fermentacao(app),
+        'cron', hour=12, minute=0, id='slack-fermentacao',
+        max_instances=1, coalesce=True, misfire_grace_time=3600,
+    )
+
     # Lembretes de pedido pra amanha — 4 vezes ao dia
     for h in (9, 12, 16, 19):
         _scheduler.add_job(
@@ -1438,6 +1445,17 @@ def _run_slack_lembretes_pedidos_hoje(app):
     with app.app_context():
         _com_lock(7727, slack_resumos.enviar_lembrete_pedidos_hoje_pendentes,
                   'slack lembrete pedidos hoje', cooldown_seg=1800)
+
+
+def _run_fermentacao(app):
+    from app.services.fermentacao import enviar_amanha
+
+    with app.app_context():
+        try:
+            resultado = enviar_amanha()
+            logger.info('fermentacao: %s', resultado['mensagem'])
+        except Exception as exc:
+            _falha_de_job('lista de fermentação', exc)
 
 
 def _run_heartbeat_slack(app):

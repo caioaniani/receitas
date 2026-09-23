@@ -2930,6 +2930,30 @@ def slack_diagnostico():
     return render_template('main/slack_diagnostico.html', info=info)
 
 
+@main_bp.route('/admin/slack/fermentacao', methods=['GET', 'POST'])
+@owner_required
+def slack_fermentacao():
+    from datetime import timedelta
+
+    from flask import flash
+
+    from app.models import FermentacaoEnvio
+    from app.services import fermentacao, seru_cron
+    from app.utils import hoje
+
+    if request.method == 'POST':
+        resultado = fermentacao.enviar_amanha()
+        flash(resultado['mensagem'],
+              'success' if resultado['estado'] == 'enviado' else 'warning')
+        return redirect(url_for('main.slack_fermentacao'))
+    alvo = hoje() + timedelta(days=1)
+    return render_template(
+        'main/slack_fermentacao.html', calculo=fermentacao.calcular(alvo),
+        envio=db.session.get(FermentacaoEnvio, alvo),
+        agendador_ativo=seru_cron.status()['ativo'],
+    )
+
+
 @main_bp.route('/admin/slack/diagnostico/testar-canal', methods=['POST'])
 @owner_required
 def slack_diagnostico_testar_canal():

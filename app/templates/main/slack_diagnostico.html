@@ -7,6 +7,9 @@
     </h1>
     <a href="{{ url_for('main.debug_schema') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
 </div>
+<a href="{{ url_for('main.slack_fermentacao') }}" class="btn btn-outline-primary">
+    Fermentação de amanhã — envio diário às 12h
+</a>
 
 {% with flashes = get_flashed_messages(with_categories=true) %}
 {% for cat, msg in flashes %}
