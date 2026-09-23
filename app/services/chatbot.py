@@ -2480,11 +2480,15 @@ def responder(historico, *, telefone_contato=None,
                                   conversa_id=conversa_id)
             tools_usadas.append(b.name)
             tools_resumo.append(_resumo_tool(b.name, out))
+            if b.name == 'consultar_pedido':
+                _vincular_pedido_da_conversa(conversa_id, out)
             # A nota interna (pedido existe / cadastro sem CPF) fica SO no
             # resumo → nota privada do handoff; o modelo nunca a ve, entao
-            # nao tem como revelar ao contato (23/09/2026).
+            # nao tem como revelar ao contato (23/09/2026). O mesmo vale
+            # pro `_pedido_existente` (vinculo do item 8).
             if isinstance(out, dict):
                 out.pop('_nota_interna', None)
+                out.pop('_pedido_existente', None)
             if b.name == 'buscar_nota_fiscal' and isinstance(out, dict) and out.get('precisa_humano'):
                 return _resp_handoff(out['mensagem'], 'pendência fiscal exige atendimento',
                                      tools_usadas=tools_usadas,
