@@ -493,6 +493,13 @@ def api_atendimento_chamar_cliente():
     if not (p.telefone_cliente or '').strip():
         return jsonify({'ok': False,
                         'erro': 'Pedido sem telefone do cliente.'}), 400
+    # Internacional / fixo / inválido: recusa ANTES da rede, com o motivo
+    # explícito (23/09/2026, caso Cintia: template "enviado" pra +55 +
+    # número americano). O serviço repete a guarda pra outros chamadores.
+    motivo = cw_svc.motivo_telefone_sem_whatsapp(p.telefone_cliente)
+    if motivo:
+        return jsonify({'ok': False, 'erro': motivo,
+                        'telefone_recusado': True}), 400
     nome = (p.nome_cliente or 'Cliente').strip()
     res = cw_svc.iniciar_conversa_whatsapp(
         p.telefone_cliente, nome, params=[nome, p.codigo])
