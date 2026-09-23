@@ -157,7 +157,7 @@ def test_chamar_motorista_dedupe_por_pedido_e_template_efetivo(cfg, admin_user):
     m.assert_called_once()
     with cfg.app_context():
         row = TemplateWhatsappEnvio.query.one()
-        assert row.referencia == 'PED42' and row.destino_chave == '1198888777'
+        assert row.referencia == 'PED42' and row.destino_chave == '1188887777'
         # Template dedicado do motoboy e OUTRO template: nao colide com o padrao
         cfg.config['CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY'] = 'motoboy_chegando'
         cfg.config['CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY_CORPO'] = 'Oi {{1}}, pedido {{2}}'
