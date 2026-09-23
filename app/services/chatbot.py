@@ -813,13 +813,16 @@ _MOTIVO_FALHA_OPERACIONAL = re.compile(
 def _hits_falha_no_motivo(texto):
     """Hits de `_MOTIVO_FALHA_OPERACIONAL` fora de hipotese/pergunta de
     processo ("duvida se o motoboy liga quando ninguem atende" nao e falha
-    em curso — e a pergunta de venda que o enforcement existe pra barrar)."""
-    if _HIPOTESE_ENTREGA.search(texto):
-        return []
+    em curso — e a pergunta de venda que o enforcement existe pra barrar).
+    Os vetos valem na ORACAO do hit: "cliente nao recebeu o pedido;
+    perguntou se pode deixar na portaria" e falha real (revisao
+    23/09/2026 — o veto no texto inteiro derrubava)."""
     out = []
     for h in _MOTIVO_FALHA_OPERACIONAL.finditer(texto):
         antes = _oracao_antes(texto, h.start())
-        if _HIPOTESE_FALHA.search(antes) or _HIPOTESE_MOTIVO.search(antes):
+        oracao = _oracao_do_hit(texto, h.start(), h.end())
+        if (_HIPOTESE_ENTREGA.search(oracao) or _HIPOTESE_FALHA.search(antes)
+                or _HIPOTESE_MOTIVO.search(antes)):
             continue
         out.append((h.start(), h.end()))
     return out
