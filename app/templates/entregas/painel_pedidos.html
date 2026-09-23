@@ -484,6 +484,9 @@
           return;
         }
         if (vigia.pendentes > 0) vigia.pendentes -= 1;
+        // Ultimo alerta resolvido: o banner nao pode seguir mostrando o
+        // caso que acabou de fechar ate o proximo poll (20 s).
+        if (vigia.pendentes === 0) { vigia.ultimo = null; vigia.nao_reconhecidos = 0; }
         atualizarVigia(vigia);
         carregarHistorico();
       })
