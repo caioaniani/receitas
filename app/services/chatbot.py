@@ -611,16 +611,42 @@ _FALHA_OPERACIONAL_PATTERNS = [
 _HIPOTESE_FALHA = re.compile(
     r'(?i)(?:^|\W)(?:e\s+)?(?:se|caso|quando)\s+(?:\S+\s+){0,4}\S*$')
 # No MOTIVO do bot (3ª pessoa): "cliente pergunta o que acontece se o pedido
-# nao chegou" e duvida de venda, nao falha em curso.
+# nao chegou" e duvida de venda, nao falha em curso. So HIPOTESE de verdade
+# (revisao 23/09/2026): "pergunta SE", "quer saber O QUE ACONTECE", forma
+# futura ("se nao chegar") — "cliente perguntou onde esta o pedido que nao
+# chegou" e "quer saber por que nao recebeu" sao falha REAL relatada, e a
+# 1ª versao (pergunt*/duvida/quer saber soltos) as derrubava.
 _HIPOTESE_MOTIVO = re.compile(
-    r'(?i)\b(?:pergunt\w+|d[uú]vida\w*|quer\s+saber|o\s+que\s+acontece|'
-    r'e\s+se\b|caso\b)')
+    r'(?i)\b(?:o\s+que\s+acontece|e\s+se\b|caso\b|'
+    r'(?:pergunt\w+|d[uú]vida\w*|quer\s+saber)\s+(?:se|o\s+que|como|quando|caso)\b|'
+    r'se\s+(?:(?:o|a|meu|minha|seu|sua)\s+)?\w+\s+(?:n[aã]o\s+)?'
+    r'(?:chegar|receber|vier|vierem|atrasar|entregarem)\b)')
 # Oracao que fala de link/e-mail/cardapio SEM objeto de entrega ("o cardapio
 # nunca chegou no meu e-mail") e duvida comum, nao falha em curso.
 _RE_OBJ_NAO_ENTREGA = re.compile(r'(?i)\b' + _OBJ_NAO_ENTREGA + r'\b')
 _RE_OBJ_ENTREGA = re.compile(
     r'(?i)\b(?:pedido|encomenda|cesta|caixa|box|entrega|compra|produto|'
     r'mercadoria|p[aã]es|p[aã]o|croissant\w*|sourdough|brioche|kit|presente)\b')
+# "link DO PEDIDO", "confirmacao DA COMPRA", "boleto NO PEDIDO": o pedido e
+# so genitivo — o objeto e o documento, que o bot resolve sozinho. Sem esta
+# regra, "nao recebi o link do pedido" virava handoff antes do modelo
+# (revisao 23/09/2026 — o bot parava de vender).
+_RE_OBJ_ENTREGA_GENITIVO = re.compile(
+    r'(?i)\b(?:d[oa]|de|n[oa])\s+(?:meu\s+|minha\s+|seu\s+|sua\s+)?'
+    r'(?:pedido|compra|encomenda)\b')
+# "meu pedido nao chegou NO E-MAIL" — e a confirmacao, nao o pao.
+_RE_CANAL_DIGITAL = re.compile(
+    r'(?i)\b(?:no|na|por|pel[oa]|via|em)\s+(?:meu\s+|minha\s+)?'
+    r'(?:e-?mail|email|whats\w*|sms|site|app|aplicativo)\b')
+# "o sourdough nao chegou NA LOJA hoje?" — estoque, nao entrega.
+_RE_LOJA_ESTOQUE = re.compile(
+    r'(?i)\b(?:na\s+loja|nas\s+lojas|na\s+padaria|na\s+unidade|'
+    r'n[oa]\s+estoque|em\s+estoque)\b')
+# Pergunta sem palavra de ENTREGA ("o croissant nao veio recheado?") e
+# duvida de produto; "meu pedido nao chegou?" segue falha.
+_RE_ORACAO_ENTREGA = re.compile(
+    r'(?i)\b(?:pedido|entrega|encomenda|compra|cesta|caixa|box|kit|presente|'
+    r'motoboy|entregador\w*|motorista|lalamove)\b')
 TEXTO_FALHA_OPERACIONAL = (
     'Sinto muito por isso! Já estou passando seu caso agora pra nossa '
     'equipe resolver com você.')
@@ -630,6 +656,11 @@ def _oracao_do_hit(texto, inicio, fim):
     m = _PONTUACAO_ORACAO.search(texto, fim)
     depois = texto[fim:m.start()] if m else texto[fim:]
     return _oracao_antes(texto, inicio) + texto[inicio:fim] + depois
+
+
+def _terminador_da_oracao(texto, fim):
+    m = _PONTUACAO_ORACAO.search(texto, fim)
+    return texto[m.start()] if m else ''
 
 
 def falha_operacional(texto):
@@ -649,7 +680,14 @@ def falha_operacional(texto):
             if _HIPOTESE_FALHA.search(antes):
                 continue
             oracao = _oracao_do_hit(t, m.start(), m.end())
-            if _RE_OBJ_NAO_ENTREGA.search(oracao) and not _RE_OBJ_ENTREGA.search(oracao):
+            sem_genitivo = _RE_OBJ_ENTREGA_GENITIVO.sub(' ', oracao)
+            if (_RE_OBJ_NAO_ENTREGA.search(oracao)
+                    and not _RE_OBJ_ENTREGA.search(sem_genitivo)):
+                continue
+            if _RE_CANAL_DIGITAL.search(oracao) or _RE_LOJA_ESTOQUE.search(oracao):
+                continue
+            if (_terminador_da_oracao(t, m.end()) == '?'
+                    and not _RE_ORACAO_ENTREGA.search(oracao)):
                 continue
             hits.append((m.start(), m.end()))
     return _algum_hit_nao_negado(t, hits, nua_veta=True)
