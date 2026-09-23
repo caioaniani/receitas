@@ -4,7 +4,8 @@ do Vigia SILENCIA o som — não encerra o caso.
 - "alerta silenciado" (`VigiaVeredito.reconhecido_em`) ≠ "caso resolvido"
   (`VigiaAlertaResolucao`);
 - ALTA só resolvido com resposta HUMANA enviada na conversa DEPOIS do
-  alerta (painel ou Chatwoot), conversa resolvida, ou motivo por escrito;
+  alerta (painel ou Chatwoot) ou motivo por escrito — conversa resolvida
+  no Chatwoot NÃO resolve por si (o próprio bot resolve num "obrigada");
 - silenciado e não resolvido continua na fila do painel (banner + contador),
   só sem som.
 """
