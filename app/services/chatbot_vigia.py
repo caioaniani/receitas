@@ -257,6 +257,15 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
 
     rb = resultado_bot or {}
 
+    if rb.get('fila_silenciosa'):
+        # Item 7 (caso E3862E49): o bot NAO encerrou um fechamento porque
+        # havia reclamacao sem resposta humana — a conversa foi pra fila
+        # SEM fala. Nao ha turno do bot pra julgar e a reclamacao ja teve
+        # o veredito dela na hora; avaliar aqui daria "bot transferiu um
+        # obrigada" (falso handoff preguicoso).
+        logger.info('vigia: short-circuit fila silenciosa conv=%s', conv_id)
+        return {'pulou': 'fila silenciosa (reclamacao em aberto)'}
+
     # ── DETECTOR DETERMINISTICO: HANDOFF PREGUIÇOSO EM VENDA ──────────
     # Pedido do dono 16/06/2026 (auditor reportou caso de venda perdida):
     # quando o bot transfere SEM ter chamado tool de busca/resolucao E a
