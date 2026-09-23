@@ -264,7 +264,19 @@ def _folha_pedido(pdf, p, via, data_fmt):
     pdf.set_font('Helvetica', '', 12)
     pdf.multi_cell(0, 6, _latin1(p.get('endereco') or '—'),
                    new_x='LMARGIN', new_y='NEXT')
-    if p.get('telefone'):
+    if p.get('sem_telefone_destinatario'):
+        # Presente SEM telefone de quem recebe (pedido anterior a 23/09/2026,
+        # quando o campo virou obrigatório): o número que sobra é o do
+        # COMPRADOR — rotulado, pra o entregador não ligar achando que é
+        # quem recebe.
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.cell(0, 7, _latin1('Tel. de quem recebe: NAO INFORMADO'),
+                 new_x='LMARGIN', new_y='NEXT')
+        if p.get('telefone_comprador'):
+            pdf.set_font('Helvetica', '', 11)
+            pdf.cell(0, 6, _latin1(f'Comprador (duvidas): {p["telefone_comprador"]}'),
+                     new_x='LMARGIN', new_y='NEXT')
+    elif p.get('telefone'):
         pdf.set_font('Helvetica', 'B', 12)
         # Num presente, o telefone é o de ENTREGA (quem recebe) — rotula pra
         # não confundir com o contato do comprador.
