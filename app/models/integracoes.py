@@ -102,6 +102,27 @@ class TemplateWhatsappEnvio(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
 
+class ConversaPedido(db.Model):
+    """Vinculo conversa do Chatwoot <-> codigo de pedido do site (item 8 da
+    spec do dono, caso E3862E49, 22/09/2026: UM pedido gerou TRES conversas
+    — 2429 WhatsApp de saida, 2431 Instagram da compradora, 2432 WhatsApp do
+    marido — e ninguem sabia que eram a mesma coisa). Gravado quando o bot
+    identifica o pedido (tool consultar_pedido / socorro), quando a equipe
+    clica "Chamar cliente" e quando a Lalamove abre a conversa. Na mudanca
+    de status da entrega, `conversa_pedido.alertar_mudanca_status` deixa
+    nota PRIVADA em cada conversa aberta listando as outras — nunca
+    mensagem ao cliente. Tabela nova via `db.create_all`."""
+    __tablename__ = 'conversa_pedido'
+    __table_args__ = (db.UniqueConstraint('conv_id', 'pedido_code',
+                                          name='uq_conversa_pedido'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    conv_id = db.Column(db.String(50), nullable=False, index=True)
+    pedido_code = db.Column(db.String(40), nullable=False, index=True)
+    origem = db.Column(db.String(20))   # bot | socorro | chamar | lalamove
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+
+
 class CopilotConversa(db.Model):
     """Audit trail das interacoes com o copilot.
     Cada prompt do usuario vira 1 registro. Guarda a interpretacao da
