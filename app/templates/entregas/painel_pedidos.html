@@ -424,8 +424,9 @@
   function desligarKlaxon() { if (vigiaKlaxonTimer) { clearInterval(vigiaKlaxonTimer); vigiaKlaxonTimer = null; } }
 
   function atualizarVigia(v) {
-    vigia = v || { pendentes: 0, ultimo: null };
+    vigia = v || { pendentes: 0, nao_reconhecidos: 0, ultimo: null };
     var n = vigia.pendentes || 0;
+    var nr = vigia.nao_reconhecidos || 0;
     var cnt = document.getElementById('alertas-cnt');
     cnt.textContent = n;
     cnt.classList.toggle('on', n > 0);
@@ -433,31 +434,71 @@
     if (n > 0 && vigia.ultimo) {
       var u = vigia.ultimo;
       var quando = (u.ha_minutos != null) ? (' · há ' + u.ha_minutos + 'min') : '';
+      // Silenciado != resolvido: o banner so some quando alguem responde na
+      // conversa ou resolve com motivo; o som so toca enquanto ha alerta
+      // nao reconhecido.
+      var estado = nr > 0 ? '' : ' (silenciado — ainda sem resolução)';
       document.getElementById('vigia-banner-tit').textContent =
-        (n === 1 ? '1 alerta' : n + ' alertas') + ' do atendimento — ' + (u.cliente || '') + quando;
+        (n === 1 ? '1 alerta' : n + ' alertas') + ' do atendimento' + estado + ' — ' + (u.cliente || '') + quando;
       document.getElementById('vigia-banner-msg').textContent = u.motivo || '';
       banner.classList.add('on');
-      ligarKlaxon();
+      banner.classList.toggle('silenciado', nr === 0);
+      if (nr > 0) ligarKlaxon(); else desligarKlaxon();
     } else {
-      banner.classList.remove('on');
+      banner.classList.remove('on', 'silenciado');
       desligarKlaxon();
     }
   }
 
   function reconhecerAlertas() {
-    // Para o som JA (otimista) e zera local pra nao re-tocar antes do proximo poll.
+    // SILENCIA: para o som JA (otimista) e marca local pra nao re-tocar antes
+    // do proximo poll. O banner e o contador FICAM — reconhecer nao resolve
+    // o caso (item 9, caso E3862E49, 22/09/2026).
     desligarKlaxon();
-    vigia.pendentes = 0;
-    document.getElementById('vigia-banner').classList.remove('on');
-    document.getElementById('alertas-cnt').classList.remove('on');
+    vigia.nao_reconhecidos = 0;
+    document.getElementById('vigia-banner').classList.toggle('silenciado', (vigia.pendentes || 0) > 0);
     fetch(VIGIA_RECONHECER, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify({})
     }).catch(function () {});
   }
 
+  function resolverAlerta(btn) {
+    var id = btn.getAttribute('data-id');
+    if (!id || btn.disabled) return;
+    var motivo = window.prompt('Como este caso foi resolvido? (obrigatório — fica registrado)');
+    if (motivo === null) return;
+    motivo = String(motivo).trim();
+    if (!motivo) { window.alert('Escreva o motivo para resolver o alerta.'); return; }
+    btn.disabled = true;
+    btn.textContent = 'Resolvendo…';
+    fetch(VIGIA_RESOLVER, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ ids: [parseInt(id, 10)], motivo: motivo })
+    }).then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (d) {
+        if (!d || !d.ok) {
+          window.alert('Não consegui resolver: ' + ((d && d.erro) || 'erro de rede'));
+          btn.disabled = false;
+          btn.textContent = '✔ Resolver';
+          return;
+        }
+        if (vigia.pendentes > 0) vigia.pendentes -= 1;
+        atualizarVigia(vigia);
+        carregarHistorico();
+      })
+      .catch(function () {
+        window.alert('Não consegui resolver (rede).');
+        btn.disabled = false;
+        btn.textContent = '✔ Resolver';
+      });
+  }
+
   function alertaCardHTML(a) {
-    var lido = a.reconhecido ? ' lido' : '';
+    // 3 estados: NOVO (toca) → silenciado (visto, caso aberto) → resolvido.
+    var lido = a.resolvido ? ' lido' : '';
+    var badgeCls = a.resolvido ? ' lido' : (a.reconhecido ? ' silenciado' : '');
+    var badgeTxt = a.resolvido ? 'resolvido' : (a.reconhecido ? 'silenciado' : 'NOVO');
     var quando = a.criado_em ? new Date(a.criado_em).toLocaleString('pt-BR',
       { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
     var link;
