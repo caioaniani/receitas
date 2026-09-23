@@ -37,6 +37,11 @@ def candidatos():
             # privada" encerrado (sinal alternativo ao evento do webhook).
             from app.services import presenca_humana
             presenca_humana.encerrar(row.conversa_id, 'candidatos:resolved')
+            # Conversa resolvida no Chatwoot fecha os alertas ALTA em
+            # aberto dela (item 9, 22/09/2026) — mesma transacao.
+            from app.services import chatbot_vigia
+            chatbot_vigia.resolver_alertas_da_conversa(
+                row.conversa_id, via='conversa_resolvida', commit=False)
         elif atual.get('status') in ('open', 'pending', 'snoozed'):
             if row.estado == 'respondido':
                 row.estado = 'em_atendimento'
