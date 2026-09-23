@@ -107,7 +107,12 @@ def _conversa_local_do_telefone(telefone):
     """conv_id da conversa mais recente do MESMO contato no nosso histórico
     (`ChatbotConversa.contato_key`, sem HTTP), dentro da janela; None se não há."""
     from app.models import ChatbotConversa
-    from app.utils import agora, telefone_chave
+    from app.utils import agora, classificar_telefone, telefone_chave
+    # Só telefone BR: a chave canônica descarta o DDI, e '+1 475-292-9850'
+    # colidiria com (47) 9 5292-9850 — a conversa de OUTRO cliente iria
+    # para `open` (revisão 23/09/2026).
+    if classificar_telefone(telefone)['tipo'] not in ('br_celular', 'br_fixo'):
+        return None
     key = telefone_chave(telefone)
     if not key:
         return None
