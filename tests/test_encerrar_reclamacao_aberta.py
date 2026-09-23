@@ -243,3 +243,42 @@ def test_webhook_fila_silenciosa_vai_para_open_sem_falar(app):
     assert r.status_code == 200
     enviar.assert_not_called()
     status.assert_called_with(778, 'open')
+
+
+def test_webhook_fila_silenciosa_nao_vira_handoff_repetido_falado(app):
+    """2ª rodada da revisão (23/09/2026): conversa transferida há < 90 min
+    que volta a cair na fila silenciosa NÃO pode ganhar o texto
+    `TEXTO_HANDOFF_REPETIDO` — o contrato da fila é não falar."""
+    app.config['CHATWOOT_BOT_SECRET'] = 'seg'
+    app.config['CHATWOOT_URL'] = 'https://atendimento.x.com'
+    app.config['CHATWOOT_ACCOUNT_ID'] = '1'
+    app.config['CHATWOOT_BOT_TOKEN'] = 'bot-tok'
+    c = app.test_client()
+    payload = {'event': 'message_created', 'id': 7002, 'message_type': 'incoming',
+               'content': 'ok', 'conversation': {'id': 779, 'status': 'pending'},
+               'sender': {'name': 'Cliente'}}
+
+    class _SyncThread:
+        def __init__(self, target=None, daemon=None, **kw):
+            self._target = target
+
+        def start(self):
+            if self._target:
+                self._target()
+
+    with patch('threading.Thread', _SyncThread), \
+            patch('app.services.chatbot.responder',
+                  return_value={'acao': 'handoff', 'texto': '', 'fila_silenciosa': True,
+                                'motivo': 'reclamação em aberto sem resposta humana'}), \
+            patch('app.services.chatbot.handoff_recente', return_value=True), \
+            patch('app.services.chatbot.carregar_historico', return_value=None), \
+            patch('app.services.chatwoot.buscar_historico', return_value=[]), \
+            patch('app.services.chatbot.salvar_historico'), \
+            patch('app.services.entrega_candidata.anotar_handoff', return_value={'ok': True}), \
+            patch('app.services.chatwoot.enviar_mensagem') as enviar, \
+            patch('app.services.chatwoot.definir_status', return_value={'ok': True}) as status, \
+            patch('app.services.chatbot_vigia.disponivel', return_value=False):
+        r = c.post('/crm/bot?k=seg', json=payload)
+    assert r.status_code == 200
+    enviar.assert_not_called()
+    status.assert_called_with(779, 'open')
