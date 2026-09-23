@@ -88,6 +88,29 @@ def executar_limpeza(dry_run=False):
          cfg['RETENCAO_FRETE_SENSOR_DIAS']),
     ]
 
+    # PRE-PASSO: a resolucao de alerta (item 9, 22/09/2026) referencia o
+    # veredito com `ondelete='CASCADE'`, mas o SQLite nao aplica cascade sem
+    # PRAGMA e o delete em massa do ORM nao cascateia por conta propria.
+    # Apagar a resolucao dos vereditos que VAO sair deixa Postgres e SQLite
+    # iguais e nunca deixa o delete do veredito falhar por FK.
+    try:
+        from sqlalchemy import select
+
+        from app.models import VigiaAlertaResolucao
+        vencidos = select(VigiaVeredito.id).where(
+            VigiaVeredito.criado_em < _limite(cfg['RETENCAO_LOGS_DIAS']))
+        q = VigiaAlertaResolucao.query.filter(
+            VigiaAlertaResolucao.veredito_id.in_(vencidos))
+        if dry_run:
+            rel['vigia_alerta_resolucao'] = q.count()
+        else:
+            rel['vigia_alerta_resolucao'] = q.delete(synchronize_session=False)
+            db.session.commit()
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        logger.exception('retencao: falha limpando vigia_alerta_resolucao')
+        rel['vigia_alerta_resolucao'] = 'ERRO (ver log)'
+
     for nome, modelo, coluna, dias in alvos_db:
         try:
             q = modelo.query.filter(coluna < _limite(dias))
