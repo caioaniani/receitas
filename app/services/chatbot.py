@@ -1522,20 +1522,30 @@ TOOLS = [
                         'lista pra você perguntar qual é. SEMPRE tente isso '
                         'antes de pedir o número ou transferir.\n\n'
                         'AUTORIZAÇÃO: a tool valida que o solicitante é o dono '
-                        'do pedido (por telefone do canal OU CPF). Se vier '
-                        '`erro: autorizacao_necessaria`, peça o CPF ao cliente '
-                        'e chame de novo com `cpf_cliente`.'),
+                        'do pedido (por telefone do canal, CPF ou e-mail da '
+                        'compra). Se vier `erro: autorizacao_necessaria`, '
+                        'siga a `instrucao` que vem junto: pedir UMA vez CPF '
+                        'ou e-mail, ou transferir quando ela mandar. Pessoa '
+                        'relatando PROBLEMA em curso (não recebeu, veio '
+                        'errado): NÃO peça nada — transfira com o que tem.'),
         'input_schema': {
             'type': 'object',
             'properties': {
                 'numero': {'type': 'string',
                             'description': ('numero do pedido; vazio = buscar '
                                             'pelos pedidos recentes do '
-                                            'telefone do canal')},
+                                            'telefone do canal ou do '
+                                            'email_cliente informado')},
                 'cpf_cliente': {
                     'type': 'string',
                     'description': ('CPF do comprador do pedido — só preencha '
                                      'se o cliente JÁ informou na conversa.'),
+                },
+                'email_cliente': {
+                    'type': 'string',
+                    'description': ('e-mail usado na compra — só preencha se '
+                                     'o cliente JÁ informou na conversa; '
+                                     'localiza e autoriza como o CPF.'),
                 },
             },
         },
