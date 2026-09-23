@@ -355,7 +355,8 @@ def test_nota_interna_nunca_chega_ao_modelo(app):
     assert r['acao'] == 'responder'
     segunda = capturado['chamadas'][1]
     tool_results = [b for m in segunda if isinstance(m.get('content'), list)
-                    for b in m['content'] if b.get('type') == 'tool_result']
+                    for b in m['content']
+                    if isinstance(b, dict) and b.get('type') == 'tool_result']
     assert tool_results
     payload = json.loads(tool_results[-1]['content'])
     assert payload['erro'] == 'autorizacao_necessaria'
