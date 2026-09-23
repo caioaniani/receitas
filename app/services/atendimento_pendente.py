@@ -112,8 +112,11 @@ def _resolver_alertas_respondidos(conv_id, efetivas):
     if ultima is None:
         return 0
     from app.services import chatbot_vigia
+    # Commit proprio SO quando resolveu algo: a resolucao e um fato
+    # independente do que `preparar` decide depois (e alguns ramos dele
+    # retornam sem commitar).
     return chatbot_vigia.resolver_alertas_da_conversa(
-        conv_id, via='resposta_humana', ate=ultima, commit=False)
+        conv_id, via='resposta_humana', ate=ultima, commit=True)
 
 
 def preparar(conversa, historico, *, min_minutos=10):
