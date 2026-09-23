@@ -362,12 +362,18 @@ def confirmar_acao_painel(cid, acao, *, iniciado_em, usuario_id):
                 _limitar_proximo_aviso(row, iniciado_em)
             else:
                 row.proximo_aviso_em = None
-    # Resposta enviada / conversa resolvida PELO PAINEL: fecha os alertas
-    # ALTA anteriores ao gesto (item 9, 22/09/2026). `resolver_alertas`
-    # tambem carimba o reconhecimento (silencia) — antes so silenciava.
+    # Resposta enviada PELO PAINEL fecha os alertas ALTA anteriores ao gesto
+    # (item 9, 22/09/2026: "resposta enviada na conversa depois do alerta").
+    # "Conversa resolvida" pelo painel SO silencia (marca reconhecido, como
+    # antes): resolver sem responder nem escrever o motivo nao fecha o caso
+    # — regra estrita da spec; o botao "Resolver" do drawer pede o motivo.
     from app.services import chatbot_vigia
-    chatbot_vigia.resolver_alertas(
-        [v.id for v in vereditos],
-        via='conversa_resolvida' if acao == 'resolved' else 'resposta_humana',
-        usuario_id=usuario_id, momento=iniciado_em, commit=False)
+    if acao == 'responder':
+        chatbot_vigia.resolver_alertas(
+            [v.id for v in vereditos], via='resposta_humana',
+            usuario_id=usuario_id, momento=iniciado_em, commit=False)
+    for v in vereditos:
+        if not v.reconhecido_em:
+            v.reconhecido_em = agora()
+            v.reconhecido_por_id = usuario_id
     db.session.commit()
