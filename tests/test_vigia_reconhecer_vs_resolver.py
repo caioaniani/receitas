@@ -159,13 +159,21 @@ def test_resposta_pelo_painel_resolve_alertas_anteriores_nao_os_posteriores(app)
         r = VigiaAlertaResolucao.query.filter_by(veredito_id=antes.id).one()
         assert r.via == 'resposta_humana' and r.usuario_id == 7
         assert r.resolvido_em == momento
-        # resolver pelo painel: conversa resolvida (DEPOIS do 2º alerta)
+        # "Conversa resolvida" pelo painel (DEPOIS do 2º alerta) SO silencia:
+        # regra estrita da spec — sem resposta nem motivo por escrito o caso
+        # segue aberto (o proprio bot resolve conversa num "obrigada").
         atendimento_pendente.confirmar_acao_painel(
             '500', 'resolved', iniciado_em=momento + timedelta(minutes=10), usuario_id=7)
+        assert _pendentes_ids() == [depois.id]
+        assert VigiaAlertaResolucao.query.filter_by(veredito_id=depois.id).first() is None
+        from app.models import VigiaVeredito
+        assert VigiaVeredito.query.get(depois.id).reconhecido_em is not None
+        resumo = chatbot_vigia.alertas_pendentes_resumo()
+        assert resumo['pendentes'] == 1 and resumo['nao_reconhecidos'] == 0
+        # so o motivo por escrito fecha
+        chatbot_vigia.resolver_alertas([depois.id], via='manual', usuario_id=7,
+                                       motivo='Liguei, cliente recebeu a reentrega')
         assert _pendentes_ids() == []
-        r2 = VigiaAlertaResolucao.query.filter_by(veredito_id=depois.id).one()
-        assert r2.via == 'conversa_resolvida'
-        assert chatbot_vigia.alertas_pendentes_resumo()['pendentes'] == 0
 
 
 def test_resposta_humana_no_chatwoot_resolve_via_preparar(app):
