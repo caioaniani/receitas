@@ -1,9 +1,12 @@
 """Relógio de espera humana: mensagens automáticas não atendem nem resolvem."""
+import logging
 from datetime import UTC, datetime, timedelta
 
 from app.extensions import db
 from app.models import EsperaAtendimento, VigiaVeredito
 from app.utils import BRT, agora
+
+logger = logging.getLogger(__name__)
 
 
 def candidatos():
@@ -37,10 +40,15 @@ def candidatos():
             # privada" encerrado (sinal alternativo ao evento do webhook).
             from app.services import presenca_humana
             presenca_humana.encerrar(row.conversa_id, 'candidatos:resolved')
-            # Conversa resolvida no Chatwoot NAO fecha o alerta ALTA (item
-            # 9, regra estrita: so resposta humana depois do alerta ou
+            # Conversa resolvida no Chatwoot NAO fecha o alerta ALTA por si
+            # (item 9, regra estrita: so resposta humana depois do alerta ou
             # motivo por escrito — o proprio BOT resolve conversa num
-            # "obrigada", e aqui nao da pra saber quem resolveu).
+            # "obrigada"). Mas a conversa resolvida SAI de `preparar` (o
+            # unico leitor periodico do historico), entao a resposta humana
+            # dada no Chatwoot antes do resolve ficaria sem efeito e o ALTA
+            # preso na fila ate a janela vencer (revisao 23/09/2026, 2ª
+            # rodada). Le o historico UMA vez, so se ha ALTA em aberto.
+            _resolver_alertas_por_historico(row.conversa_id)
         elif atual.get('status') in ('open', 'pending', 'snoozed'):
             if row.estado == 'respondido':
                 row.estado = 'em_atendimento'
@@ -103,6 +111,15 @@ def _ultima_resposta_humana(efetivas):
     return max((t for t in instantes if t), default=None)
 
 
+def _efetivas_humanas(historico):
+    """Falas da equipe (autoria humana; sem metadata, assistant e humano) sem
+    a nossa contencao automatica — a mesma regua de `preparar`."""
+    from app.services.chatbot_vigia import TEXTO_CONTENCAO_ESPERA
+    return [m for m in (historico or [])
+            if m.get('role') == 'assistant' and m.get('humano', True)
+            and TEXTO_CONTENCAO_ESPERA[:40] not in (m.get('content') or '')]
+
+
 def _resolver_alertas_respondidos(conv_id, efetivas):
     """Resposta HUMANA na conversa fecha os alertas ALTA criados ANTES dela
     (item 9, caso E3862E49, 22/09/2026): "ALTA so resolvido com resposta
@@ -117,6 +134,26 @@ def _resolver_alertas_respondidos(conv_id, efetivas):
     # retornam sem commitar).
     return chatbot_vigia.resolver_alertas_da_conversa(
         conv_id, via='resposta_humana', ate=ultima, commit=True)
+
+
+def _resolver_alertas_por_historico(conv_id):
+    """Conversa que ficou `resolved` no Chatwoot: se ha ALTA em aberto, le o
+    historico com autoria e resolve os alertas anteriores a ULTIMA resposta
+    humana (a mesma regra de `preparar`, que nao roda mais nessa conversa).
+    Sem resposta humana ou API fora = nada muda (o alerta segue na fila —
+    conservador de proposito). Best-effort: erro aqui nunca derruba o
+    ciclo da espera humana. Devolve quantos alertas resolveu."""
+    from app.services import chatbot_vigia, chatwoot
+    try:
+        if not chatbot_vigia.alertas_em_aberto_da_conversa(conv_id):
+            return 0
+        historico = chatwoot.buscar_historico(conv_id, incluir_autoria=True) or []
+        efetivas = _efetivas_humanas(historico)
+        return _resolver_alertas_respondidos(conv_id, efetivas)
+    except Exception:  # noqa: BLE001
+        logger.exception('espera humana: resolver alertas da conversa %s resolvida falhou',
+                         conv_id)
+        return 0
 
 
 def preparar(conversa, historico, *, min_minutos=10):
