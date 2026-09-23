@@ -2062,11 +2062,14 @@ def _vincular_pedido_da_conversa(conversa_id, out, origem='bot'):
     try:
         if not conversa_id or not isinstance(out, dict) or out.get('pedidos_recentes'):
             return
-        codigo = (out.get('numero') if not out.get('erro') else None) \
-            or out.get('_pedido_existente')
+        autorizada = bool(out.get('numero')) and not out.get('erro')
+        codigo = out.get('numero') if autorizada else out.get('_pedido_existente')
         if codigo:
             from app.services import conversa_pedido
-            conversa_pedido.vincular(conversa_id, codigo, origem)
+            # NAO autorizada (terceiro que so tem o codigo) fica marcada: a
+            # equipe ve o vinculo rotulado e a nota de status nao vai la
+            # (revisao 23/09/2026, 2ª rodada — codigo nunca vira credencial).
+            conversa_pedido.vincular(conversa_id, codigo, origem, autorizada=autorizada)
     except Exception:  # noqa: BLE001
         logger.exception('chatbot: vincular pedido da conversa %s falhou', conversa_id)
 
