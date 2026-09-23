@@ -2022,15 +2022,36 @@ def _localizar_pedido_para_socorro(historico, telefone_contato):
     Nao pergunta nada ao cliente. Devolve (tools_usadas, tools_resumo);
     qualquer erro vira ([], []) — o socorro nunca espera a busca."""
     try:
+        from app.models import PedidoOnline
         from app.services import bot_tools
+        from app.utils import classificar_telefone
         falas = [str((m or {}).get('content') or '')
                  for m in (historico or [])[-10:]
                  if (m or {}).get('role') == 'user' and not (m or {}).get('herdada')]
         texto = '\n'.join(falas)
-        codigo = next((m.group(0) for m in _RE_CODIGO_PEDIDO.finditer(texto.upper())
-                       if not m.group(0).isdigit()), '')
         email = next((m.group(0) for m in _RE_EMAIL.finditer(texto)), '')
-        cpf = next((m.group(0) for m in _RE_CPF.finditer(texto)), '')
+        # Codigo: 8 alfanumericos FORA de e-mail ("ana2024x@gmail.com" nao e
+        # codigo) e que EXISTE no site — "bloco12a" parece codigo e, sem a
+        # checagem, desligava a busca por telefone/e-mail e ainda batia na
+        # rede do VNDA no meio do socorro (revisao 23/09/2026).
+        codigo = ''
+        for m in _RE_CODIGO_PEDIDO.finditer(_RE_EMAIL.sub(' ', texto).upper()):
+            cand = m.group(0)
+            if cand.isdigit():
+                continue
+            if PedidoOnline.query.filter_by(codigo=cand).first() is not None:
+                codigo = cand
+                break
+        # CPF: 11 digitos SOLTOS que sao um telefone BR ("11988887777")
+        # nao sao CPF; formatado (pontos/traço) e sempre CPF.
+        cpf = ''
+        for m in _RE_CPF.finditer(texto):
+            bruto = m.group(0)
+            if ('.' not in bruto and '-' not in bruto
+                    and classificar_telefone(bruto)['tipo'] in ('br_celular', 'br_fixo')):
+                continue
+            cpf = bruto
+            break
         out = bot_tools.consultar_pedido(
             codigo, telefone_contato=telefone_contato,
             cpf_cliente=cpf or None, email_cliente=email or None)
