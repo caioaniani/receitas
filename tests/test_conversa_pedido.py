@@ -317,6 +317,33 @@ def test_avancar_status_avisa_so_as_conversas_abertas(app):
         assert 'única conversa aberta' in nota2.call_args.args[1]
 
 
+def test_conversa_nao_autorizada_e_listada_mas_nao_recebe_o_status(app):
+    """Revisão 23/09/2026 (2ª rodada): o terceiro que só tem o código não
+    pode receber o status da entrega na conversa dele — mas a equipe precisa
+    saber que ele perguntou. A conversa entra na lista das outras, rotulada,
+    e a nota vai só nas autorizadas."""
+    from app.services import conversa_pedido, loja_entrega
+    with app.app_context():
+        _pedido(status='pago')
+        conversa_pedido.vincular(2431, 'E3862E49', 'bot')                    # compradora
+        conversa_pedido.vincular(2432, 'E3862E49', 'bot', autorizada=False)  # terceiro
+        estados = {'2431': {'status': 'open', 'meta': {'channel': 'Channel::Instagram'}},
+                   '2432': {'status': 'open', 'meta': {'channel': 'Channel::Whatsapp'}}}
+        with patch('app.services.conversa_pedido._POOL', _PoolInline()), \
+                patch('app.services.email.disponivel', return_value=False), \
+                patch('app.services.chatwoot.consultar_conversa',
+                      side_effect=lambda cid: estados.get(str(cid))), \
+                patch('app.services.chatwoot.enviar_nota_privada',
+                      return_value={'ok': True}) as nota, \
+                patch('app.services.chatwoot.enviar_mensagem',
+                      side_effect=AssertionError('nunca ao cliente')):
+            loja_entrega.avancar_status_entrega('E3862E49', 'a_caminho')
+        assert [k.args[0] for k in nota.call_args_list] == ['2431']
+        t = nota.call_args.args[1]
+        assert '#2432 (WhatsApp, aberta) — ' + conversa_pedido.ROTULO_NAO_AUTORIZADA in t
+        assert 'A CAMINHO' in t
+
+
 def test_sem_vinculo_nao_consulta_o_chatwoot(app):
     from app.services import loja_entrega
     with app.app_context():
