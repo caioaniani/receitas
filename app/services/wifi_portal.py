@@ -72,19 +72,9 @@ _PROVEDORES_COMUNS = frozenset({
     'uol.com.br', 'bol.com.br', 'terra.com.br', 'globo.com', 'ig.com.br',
 })
 
-# DDDs reais (ANATEL). '20', '23'… não existem — número com DDD inválido
-# é erro de digitação na certa.
-_DDDS_VALIDOS = frozenset({
-    '11', '12', '13', '14', '15', '16', '17', '18', '19',
-    '21', '22', '24', '27', '28',
-    '31', '32', '33', '34', '35', '37', '38',
-    '41', '42', '43', '44', '45', '46', '47', '48', '49',
-    '51', '53', '54', '55',
-    '61', '62', '63', '64', '65', '66', '67', '68', '69',
-    '71', '73', '74', '75', '77', '79',
-    '81', '82', '83', '84', '85', '86', '87', '88', '89',
-    '91', '92', '93', '94', '95', '96', '97', '98', '99',
-})
+# DDDs reais (ANATEL) — fonte única em `app.utils.DDDS_BRASIL` desde
+# 23/09/2026 (o classificador de telefone usa a mesma lista).
+from app.utils import DDDS_BRASIL as _DDDS_VALIDOS  # noqa: E402
 
 
 def _distancia1(a, b):
