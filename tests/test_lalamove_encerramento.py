@@ -147,8 +147,8 @@ def test_expired_e_rejected_tambem_alertam_com_rotulo(cfg):
     assert 'RECUSADA PELA LALAMOVE' in textos[1].upper() and 'LAL003' in textos[1]
     assert 'motivo não informado pela Lalamove' in textos[0]
     with app.app_context():
-        assert {v.mensagem_cliente[:18] for v in _vereditos()} == {
-            '[LALAMOVE EXPIRED]', '[LALAMOVE REJECTE'}
+        prefixos = sorted(v.mensagem_cliente.split(']')[0] for v in _vereditos())
+        assert prefixos == ['[LALAMOVE EXPIRED', '[LALAMOVE REJECTED']
 
 
 def test_reentrega_do_webhook_nao_duplica(cfg):
