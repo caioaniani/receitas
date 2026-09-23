@@ -5,18 +5,21 @@ O pedido E3862E49 gerou três conversas (2429 WhatsApp de saída, 2431
 Instagram da compradora, 2432 WhatsApp do marido) e a equipe respondia em
 uma sem saber das outras. Agora:
 
-- `vincular(conv_id, pedido_code, origem)` grava o par uma vez, quando o
-  bot identifica o pedido (`consultar_pedido` autorizado OU existente sem
-  autorização — a nota interna já diz o código), quando o socorro da
-  falha operacional localiza, quando a equipe clica "Chamar cliente" e
-  quando o alerta da Lalamove abre a conversa. Sessão ISOLADA e
+- `vincular(conv_id, pedido_code, origem, autorizada=True)` grava o par
+  uma vez, quando o bot identifica o pedido (`consultar_pedido`), quando o
+  socorro da falha operacional localiza, quando a equipe clica "Chamar
+  cliente" e quando o alerta da Lalamove abre a conversa. Sessão ISOLADA e
   best-effort: roda dentro do turno do bot e de rotas com transação
-  própria, e nunca pode derrubá-los.
+  própria, e nunca pode derrubá-los. `autorizada=False` = o contato
+  perguntou pelo pedido SEM prova de posse (`autorizacao_necessaria`): a
+  conversa fica LISTADA pra equipe, mas não recebe a nota com o status.
+  Uma autorização posterior na mesma conversa promove o vínculo.
 - `alertar_mudanca_status(pedido_code, rotulo, detalhe)` (thread): para
-  cada conversa vinculada ainda ABERTA (open/pending no Chatwoot), nota
-  PRIVADA com o status novo e a lista das outras conversas abertas do
-  mesmo pedido. NUNCA mensagem ao cliente (contrato: `enviar_nota_privada`
-  é a única fala).
+  cada conversa vinculada AUTORIZADA ainda ABERTA (open/pending no
+  Chatwoot), nota PRIVADA com o status novo e a lista das outras conversas
+  abertas do mesmo pedido (as não autorizadas entram na lista rotuladas).
+  NUNCA mensagem ao cliente (contrato: `enviar_nota_privada` é a única
+  fala).
 """
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -29,6 +32,7 @@ ORIGENS = ('bot', 'socorro', 'chamar', 'lalamove')
 STATUS_ABERTOS = ('open', 'pending')
 _POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix='conversa-pedido')
 _ROTULO_STATUS = {'a_caminho': 'A CAMINHO', 'entregue': 'ENTREGUE'}
+ROTULO_NAO_AUTORIZADA = 'NÃO autorizada — terceiro perguntou por este pedido'
 
 
 def _conv_ok(conv_id):
@@ -40,11 +44,15 @@ def _code(pedido_code):
     return str(pedido_code or '').strip().upper()[:40]
 
 
-def vincular(conv_id, pedido_code, origem):
-    """Grava (conversa, pedido) uma vez. Devolve True se criou agora."""
+def vincular(conv_id, pedido_code, origem, autorizada=True):
+    """Grava (conversa, pedido) uma vez. Devolve True se criou agora.
+    Par já gravado sem autorização que agora vem autorizado é PROMOVIDO
+    (devolve False — não é vínculo novo). Corrida entre dois turnos da
+    mesma conversa cai no unique e é tratada como "já existe"."""
     cid, code = _conv_ok(conv_id), _code(pedido_code)
     if not cid or not code:
         return False
+    from sqlalchemy.exc import IntegrityError
     from sqlalchemy.orm import Session
 
     from app.extensions import db
@@ -54,31 +62,53 @@ def vincular(conv_id, pedido_code, origem):
             ja = (s.query(ConversaPedido)
                   .filter_by(conv_id=cid, pedido_code=code).first())
             if ja is not None:
+                if autorizada and not ja.autorizada:
+                    ja.autorizada = True
+                    s.commit()
+                    logger.info('conversa_pedido: conv %s <-> pedido %s promovido a '
+                                'autorizado (%s)', cid, code, origem)
                 return False
             s.add(ConversaPedido(conv_id=cid, pedido_code=code,
-                                 origem=(origem or '')[:20] or None))
-            s.commit()
-        logger.info('conversa_pedido: conv %s <-> pedido %s (%s)', cid, code, origem)
+                                 origem=(origem or '')[:20] or None,
+                                 autorizada=bool(autorizada)))
+            try:
+                s.commit()
+            except IntegrityError:
+                s.rollback()
+                logger.info('conversa_pedido: conv %s <-> pedido %s ja gravado por '
+                            'outro turno (corrida)', cid, code)
+                return False
+        logger.info('conversa_pedido: conv %s <-> pedido %s (%s%s)', cid, code, origem,
+                    '' if autorizada else ', NAO autorizada')
         return True
     except Exception:  # noqa: BLE001
         logger.exception('conversa_pedido: vincular conv=%s pedido=%s falhou', cid, code)
         return False
 
 
-def conversas_do_pedido(pedido_code):
-    """conv_ids vinculados ao pedido, do mais antigo pro mais novo."""
+def conversas_do_pedido(pedido_code, detalhado=False):
+    """conv_ids vinculados ao pedido, do mais antigo pro mais novo.
+    `detalhado=True` devolve dicts {conv_id, autorizada, origem}."""
     from app.models import ConversaPedido
     code = _code(pedido_code)
     if not code:
         return []
     rows = (ConversaPedido.query.filter_by(pedido_code=code)
             .order_by(ConversaPedido.criado_em.asc(), ConversaPedido.id.asc()).all())
-    vistos, out = set(), []
+    vistos, out = {}, []
     for r in rows:
-        if r.conv_id not in vistos:
-            vistos.add(r.conv_id)
-            out.append(r.conv_id)
-    return out
+        if r.conv_id in vistos:
+            # Duplicata teorica (unique impede); a autorizacao vale se QUALQUER
+            # linha da conversa foi autorizada.
+            if r.autorizada:
+                vistos[r.conv_id]['autorizada'] = True
+            continue
+        d = {'conv_id': r.conv_id, 'autorizada': bool(r.autorizada), 'origem': r.origem}
+        vistos[r.conv_id] = d
+        out.append(d)
+    if detalhado:
+        return out
+    return [d['conv_id'] for d in out]
 
 
 def _rotulo_canal(conv):
@@ -102,9 +132,11 @@ def texto_nota(pedido_code, rotulo_status, detalhe, cid, abertas, estado):
         for c in outras:
             e = estado.get(c) or {}
             link = link_chatwoot(c)
-            partes.append(f'#{c} ({e.get("canal", "canal?")}, '
-                          f'{_rotulo_conv_status(e.get("status"))})'
-                          + (f' {link}' if link else ''))
+            rotulo = (f'#{c} ({e.get("canal", "canal?")}, '
+                      f'{_rotulo_conv_status(e.get("status"))})')
+            if not e.get('autorizada', True):
+                rotulo += f' — {ROTULO_NAO_AUTORIZADA}'
+            partes.append(rotulo + (f' {link}' if link else ''))
         linhas.append('Outras conversas ABERTAS deste pedido: ' + ' · '.join(partes))
         linhas.append('Combine quem avisa o cliente — por UMA conversa só.')
     else:
@@ -121,7 +153,7 @@ def alertar_mudanca_status(pedido_code, status, detalhe=''):
     if not code:
         return {'ok': True, 'conversas': 0}
     try:
-        convs = conversas_do_pedido(code)
+        convs = conversas_do_pedido(code, detalhado=True)
     except Exception:  # noqa: BLE001
         logger.exception('conversa_pedido: listar conversas do pedido %s falhou', code)
         return {'ok': False, 'conversas': 0}
@@ -133,22 +165,46 @@ def alertar_mudanca_status(pedido_code, status, detalhe=''):
     return {'ok': True, 'conversas': len(convs)}
 
 
+def _normalizar_convs(convs):
+    """Aceita conv_ids soltos (compat) ou os dicts de `conversas_do_pedido`."""
+    out = []
+    for c in convs or []:
+        if isinstance(c, dict):
+            cid = _conv_ok(c.get('conv_id'))
+            if cid:
+                out.append({'conv_id': cid, 'autorizada': bool(c.get('autorizada', True))})
+        else:
+            cid = _conv_ok(c)
+            if cid:
+                out.append({'conv_id': cid, 'autorizada': True})
+    return out
+
+
 def _executar(app, code, rotulo, detalhe, convs):
+    """Consulta cada conversa vinculada e deixa a nota privada nas ABERTAS e
+    AUTORIZADAS. As abertas NÃO autorizadas só entram na lista das outras
+    (rotuladas) — nunca recebem o status. Chamado pela thread daqui e, em
+    linha, pelo alerta da Lalamove (que já está na thread dele)."""
     with app.app_context():
         from app.services import chatwoot
+        itens = _normalizar_convs(convs)
         estado = {}
-        for cid in convs:
+        for it in itens:
+            cid = it['conv_id']
             try:
                 d = chatwoot.consultar_conversa(cid)
             except Exception:  # noqa: BLE001
                 logger.exception('conversa_pedido: consultar conv %s falhou', cid)
                 d = None
             if d:
-                estado[cid] = {'status': d.get('status'), 'canal': _rotulo_canal(d)}
-        abertas = [c for c in convs
-                   if (estado.get(c) or {}).get('status') in STATUS_ABERTOS]
+                estado[cid] = {'status': d.get('status'), 'canal': _rotulo_canal(d),
+                               'autorizada': it['autorizada']}
+        abertas = [it['conv_id'] for it in itens
+                   if (estado.get(it['conv_id']) or {}).get('status') in STATUS_ABERTOS]
         avisadas = []
         for cid in abertas:
+            if not estado[cid].get('autorizada', True):
+                continue
             texto = texto_nota(code, rotulo, detalhe, cid, abertas, estado)
             try:
                 r = chatwoot.enviar_nota_privada(cid, texto)
