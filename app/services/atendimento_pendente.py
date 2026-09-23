@@ -97,6 +97,26 @@ def _primeira_resposta(historico, inicio):
     return min((t for t in instantes if t and t >= inicio), default=None)
 
 
+def _ultima_resposta_humana(efetivas):
+    """Instante da ULTIMA fala humana da equipe (as `efetivas` ja excluem o
+    bot, quando ha autoria, e a nossa contencao). None = sem instante."""
+    instantes = [_instante(m, None) for m in efetivas if m.get('role') == 'assistant']
+    return max((t for t in instantes if t), default=None)
+
+
+def _resolver_alertas_respondidos(conv_id, efetivas):
+    """Resposta HUMANA na conversa fecha os alertas ALTA criados ANTES dela
+    (item 9, caso E3862E49, 22/09/2026): "ALTA so resolvido com resposta
+    enviada na conversa depois do alerta". Alerta posterior a resposta
+    continua em aberto. Sem commit — quem chama commita."""
+    ultima = _ultima_resposta_humana(efetivas)
+    if ultima is None:
+        return 0
+    from app.services import chatbot_vigia
+    return chatbot_vigia.resolver_alertas_da_conversa(
+        conv_id, via='resposta_humana', ate=ultima, commit=False)
+
+
 def preparar(conversa, historico, *, min_minutos=10):
     from app.services.chatbot_vigia import TEXTO_CONTENCAO_ESPERA, _e_fechamento, _e_mencao_story
 
