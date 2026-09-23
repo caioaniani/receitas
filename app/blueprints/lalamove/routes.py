@@ -142,6 +142,7 @@ def webhook():
     # pedido vira "entregue" cedo demais (bug 19/06/2026: marcava entregue na
     # retirada/alocação). Aqui esses eventos só atualizam motorista/link.
     status = ''
+    anterior = e.status
     if event_type == 'ORDER_STATUS_CHANGED':
         status = (ordem.get('status') or '').upper()
         if status in ('PICKED_UP', 'COMPLETED'):
