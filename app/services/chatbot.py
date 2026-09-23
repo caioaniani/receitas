@@ -597,7 +597,13 @@ _FALHA_OPERACIONAL_PATTERNS = [
 ]
 # Hipotese/condicao na ORACAO do hit ("se nao chegar", "caso venha errado",
 # "e se vier errado?") nao e falha em curso.
-_HIPOTESE_FALHA = re.compile(r'(?i)(?:^|\W)(?:e\s+)?(?:se|caso|quando)\s+\S*$')
+_HIPOTESE_FALHA = re.compile(
+    r'(?i)(?:^|\W)(?:e\s+)?(?:se|caso|quando)\s+(?:\S+\s+){0,4}\S*$')
+# No MOTIVO do bot (3ª pessoa): "cliente pergunta o que acontece se o pedido
+# nao chegou" e duvida de venda, nao falha em curso.
+_HIPOTESE_MOTIVO = re.compile(
+    r'(?i)\b(?:pergunt\w+|d[uú]vida\w*|quer\s+saber|o\s+que\s+acontece|'
+    r'e\s+se\b|caso\b)')
 # Oracao que fala de link/e-mail/cardapio SEM objeto de entrega ("o cardapio
 # nunca chegou no meu e-mail") e duvida comum, nao falha em curso.
 _RE_OBJ_NAO_ENTREGA = re.compile(r'(?i)\b' + _OBJ_NAO_ENTREGA + r'\b')
