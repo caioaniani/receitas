@@ -142,6 +142,11 @@ def _tratar(e, status, anterior, dados):
     motivo = motivo_do_payload(dados)
     pedido = (PedidoOnline.query.filter_by(codigo=e.pedido_code).first()
               if e.pedido_code else None)
+    # Evento fora de ordem (CANCELED chegando DEPOIS do COMPLETED) ou pedido
+    # já entregue por outro caminho: alertar "não entregue" mentiria.
+    if (anterior or '').upper() == 'COMPLETED' or (
+            pedido is not None and pedido.status == 'entregue'):
+        return {'ok': True, 'ignorado': 'ja_entregue'}
     telefone_cliente = (pedido.telefone_cliente if pedido else None) or ''
     conv_id = _conversa_local_do_telefone(telefone_cliente)
     rotulo = rotulo_status(status)
