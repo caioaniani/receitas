@@ -768,7 +768,8 @@ def _hits_falha_no_motivo(texto):
         return []
     out = []
     for h in _MOTIVO_FALHA_OPERACIONAL.finditer(texto):
-        if _HIPOTESE_FALHA.search(_oracao_antes(texto, h.start())):
+        antes = _oracao_antes(texto, h.start())
+        if _HIPOTESE_FALHA.search(antes) or _HIPOTESE_MOTIVO.search(antes):
             continue
         out.append((h.start(), h.end()))
     return out
