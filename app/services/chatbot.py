@@ -755,6 +755,7 @@ def motivo_excecao_legitima(motivo):
     if not m:
         return False
     hits = [(h.start(), h.end()) for h in _MOTIVO_EXCECAO_LEGITIMA.finditer(m)]
+    hits += [(h.start(), h.end()) for h in _MOTIVO_FALHA_OPERACIONAL.finditer(m)]
     if _algum_hit_nao_negado(m, hits, nua_veta=True):
         return True
     # terceiro na entrega com problema em curso (caso conv 2409) — mesma
