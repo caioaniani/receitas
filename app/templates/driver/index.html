@@ -370,7 +370,9 @@
         var enderecoEnc = encodeURIComponent(p.endereco || '');
         var html =
             '<div class="text-muted small mb-2"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>' +
-            (p.telefone ? '<div class="mb-2"><a href="tel:' + escapeHtml(p.telefone) + '" class="btn btn-sm btn-outline-secondary"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</a></div>' : '') +
+            (p.sem_telefone_destinatario
+                ? '<div class="mb-2 small text-danger"><i class="bi bi-telephone-x"></i> Quem recebe não informou telefone.' + (p.telefone_comprador ? ' Comprador (dúvidas): <a href="tel:' + escapeHtml(p.telefone_comprador) + '">' + escapeHtml(p.telefone_comprador) + '</a>' : '') + '</div>'
+                : (p.telefone ? '<div class="mb-2"><a href="tel:' + escapeHtml(p.telefone) + '" class="btn btn-sm btn-outline-secondary"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</a></div>' : '')) +
             '<div class="mb-3"><a href="https://maps.google.com/?q=' + enderecoEnc + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="bi bi-map"></i> Abrir no Maps</a></div>' +
             (p.periodo ? '<div class="mb-2"><span class="badge bg-light text-dark"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span></div>' : '') +
             '<hr>' +
