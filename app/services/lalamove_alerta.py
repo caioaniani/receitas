@@ -30,10 +30,55 @@ logger = logging.getLogger(__name__)
 STATUS_SEM_ENTREGA = ('CANCELED', 'EXPIRED', 'REJECTED')
 JANELA_CONVERSA_DIAS = 7
 MOTIVO_DESCONHECIDO = 'motivo não informado pela Lalamove'
+# `remarks` ficou FORA (revisão 23/09/2026): é o campo que NÓS preenchemos
+# na criação da corrida ("Pedido X — O Pão… PRESENTE: …") e voltava como
+# "motivo" do cancelamento.
 _CHAVES_MOTIVO = ('cancelReason', 'cancellationReason', 'cancelledReason',
-                  'reason', 'rejectReason', 'message', 'remarks')
+                  'reason', 'rejectReason', 'message')
+# Anti-flood do WhatsApp CRÍTICO ao dono (revisão 23/09/2026, mesma
+# preocupação do dono em 18/07: "cuidado pra não bloquear a conta"): até N
+# alertas por hora saem isentos do teto global; do N+1 em diante o alerta
+# segue pelo caminho normal do Z-API (teto/hora) — o painel e o
+# VigiaVeredito já têm tudo. Env `LALAMOVE_ALERTA_MAX_CRITICO_HORA`.
+MAX_CRITICO_HORA = 5
+_CHAVE_CONTADOR = 'lalamove_alerta_critico_hora'
 
 _POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix='lalamove-alerta')
+
+
+def _max_critico_hora():
+    import os
+    try:
+        v = int(os.environ.get('LALAMOVE_ALERTA_MAX_CRITICO_HORA', '') or MAX_CRITICO_HORA)
+    except ValueError:
+        logger.warning('LALAMOVE_ALERTA_MAX_CRITICO_HORA ilegível — usando %s',
+                       MAX_CRITICO_HORA)
+        return MAX_CRITICO_HORA
+    return max(0, v)
+
+
+def _critico_permitido():
+    """Conta os alertas da hora corrente em AppConfig (cruza workers) e diz
+    se ESTE ainda pode sair como crítico. Fail-open: erro na contagem nunca
+    cala um alerta crítico."""
+    from app.extensions import db
+    from app.models import AppConfig
+    from app.utils import agora
+    hora = agora().strftime('%Y%m%d%H')
+    try:
+        raw = AppConfig.get(_CHAVE_CONTADOR) or ''
+        h, _, n = raw.partition(':')
+        n = int(n) if (h == hora and n.isdigit()) else 0
+        AppConfig.set(_CHAVE_CONTADOR, f'{hora}:{n + 1}')
+        db.session.commit()
+        return n < _max_critico_hora()
+    except Exception:  # noqa: BLE001
+        logger.exception('lalamove_alerta: contador de críticos falhou (fail-open)')
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return True
 
 
 def marcador(order_id, status):
