@@ -1,0 +1,77 @@
+#fiserv-leitura {
+  --f-papel: #fff; --f-borda: #dce5e1; --f-suave: #f0f6f3;
+  --f-verde: #245b45; --f-texto: #233e32; --f-secundario: #5d6c65;
+  max-width: 1500px; margin: auto; color: var(--bs-body-color);
+}
+[data-theme="dark"] #fiserv-leitura {
+  --f-papel: #1b2520; --f-borda: #35483d; --f-suave: #20342a;
+  --f-verde: #9ad0b0; --f-texto: #e3f0e8; --f-secundario: #bac9bf;
+}
+#fiserv-leitura h1 { font-size: clamp(1.65rem,2.6vw,2.25rem); letter-spacing: -.03em; margin-bottom: .4rem; font-weight: 700; }
+#fiserv-leitura h2 { font-size: 1.08rem; font-weight: 650; line-height: 1.45; }
+#fiserv-leitura .fiserv-cabecalho { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.6rem; }
+#fiserv-leitura .fiserv-sobretitulo { font-size: .75rem; font-weight: 650; letter-spacing: .065em; text-transform: uppercase; color: var(--f-secundario); margin-bottom: .65rem; }
+#fiserv-leitura .fiserv-filtros { border: 1px solid var(--f-borda); border-radius: 14px; padding: 1.15rem; background: var(--f-papel); margin-bottom: 1.2rem; }
+#fiserv-leitura .fiserv-periodos { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+#fiserv-leitura .fiserv-periodo { padding: .42rem .8rem; border-radius: 7px; font-size: .83rem; text-decoration: none; color: var(--f-secundario); border: 1px solid var(--f-borda); }
+#fiserv-leitura .fiserv-periodo.ativo { background: var(--f-suave); border-color: var(--f-verde); color: var(--f-verde); font-weight: 650; }
+#fiserv-leitura .fiserv-aviso { display: flex; gap: .8rem; background: #fff7e5; border: 1px solid #e8d6a7; border-radius: 10px; padding: 1rem 1.15rem; margin-bottom: 1.2rem; color: #684f15; font-size: .88rem; }
+#fiserv-leitura .fiserv-aviso p { margin: .18rem 0 .25rem; }
+#fiserv-leitura .fiserv-aviso a { color: inherit; text-decoration: underline; }
+[data-theme="dark"] #fiserv-leitura .fiserv-aviso { background: #372e1d; color: #efdca4; border-color: #64542f; }
+#fiserv-leitura .fiserv-explicacao { padding: 1.5rem; border-radius: 14px; background: var(--f-suave); border: 1px solid var(--f-borda); margin-bottom: 1.2rem; color: var(--f-texto); }
+#fiserv-leitura .fiserv-explicacao h2 { font-size: 1.3rem; margin-bottom: .8rem; }
+#fiserv-leitura .fiserv-narrativa { font-size: 1.05rem; line-height: 1.75; max-width: 1100px; margin-bottom: .85rem; }
+#fiserv-leitura .fiserv-contexto { color: var(--f-secundario); font-size: .85rem; line-height: 1.65; max-width: 1050px; }
+#fiserv-leitura .fiserv-indicadores { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; margin-bottom: 1.2rem; }
+#fiserv-leitura .fiserv-indicador-unico { grid-template-columns: 1fr; }
+#fiserv-leitura .fiserv-indicador { background: var(--f-papel); border: 1px solid var(--f-borda); border-radius: 14px; padding: 1.25rem; display: flex; flex-direction: column; min-width: 0; }
+#fiserv-leitura .fiserv-icone { color: var(--f-verde); background: var(--f-suave); width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; font-size: 1.1rem; margin-bottom: .85rem; }
+#fiserv-leitura .fiserv-indicador h2 { min-height: 3.1em; margin-bottom: .7rem; }
+#fiserv-leitura .fiserv-valor { font-size: 1.9rem; font-weight: 750; letter-spacing: -.035em; font-variant-numeric: tabular-nums; line-height: 1.3; margin-bottom: .75rem; overflow-wrap: anywhere; color: var(--f-texto); }
+#fiserv-leitura .fiserv-indicador>p:not(.fiserv-valor) { font-size: .86rem; line-height: 1.65; color: var(--f-secundario); }
+#fiserv-leitura .fiserv-rodape { border-top: 1px solid var(--f-borda); padding-top: .85rem; margin-top: auto; font-size: .83rem; line-height: 1.6; }
+#fiserv-leitura .fiserv-rodape span { display: block; font-size: .78rem; color: var(--f-secundario); margin-top: .3rem; }
+#fiserv-leitura .fiserv-composicao { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .55rem .5rem; border-top: 1px solid var(--f-borda); padding-top: .85rem; margin-top: auto; margin-bottom: 0; font-size: .8rem; }
+#fiserv-leitura .fiserv-composicao dt { font-weight: 400; color: var(--f-secundario); }
+#fiserv-leitura .fiserv-composicao dd { font-weight: 650; text-align: right; margin: 0; font-variant-numeric: tabular-nums; }
+#fiserv-leitura .fiserv-faixa { padding: 1.2rem 1.4rem; border: 1px solid var(--f-borda); border-radius: 12px; margin-bottom: 1rem; background: var(--f-papel); display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; font-size: .9rem; line-height: 1.65; }
+#fiserv-leitura .fiserv-faixa>div:first-child { flex: 1; min-width: min(100%,280px); }
+#fiserv-leitura .fiserv-faixa-icone { font-size: 1.8rem; color: var(--f-verde); }
+#fiserv-leitura .fiserv-faixa-icone+div { flex: 1; min-width: 220px; }
+#fiserv-leitura .fiserv-proporcao { display: flex; width: 180px; height: 12px; border-radius: 8px; overflow: hidden; background: var(--f-suave); }
+#fiserv-leitura .fiserv-proporcao span { background: #397958; height: 100%; }
+#fiserv-leitura .fiserv-proporcao .taxas { background: #d4a448; }
+#fiserv-leitura .fiserv-titulo-secao { margin: 1.75rem 0 .9rem; }
+#fiserv-leitura .fiserv-titulo-secao h2 { margin-bottom: .25rem; }
+#fiserv-leitura .fiserv-titulo-secao p { color: var(--f-secundario); font-size: .85rem; margin-bottom: 0; }
+#fiserv-leitura .fiserv-datas { display: grid; grid-template-columns: repeat(auto-fit,minmax(145px,1fr)); gap: .75rem; }
+#fiserv-leitura .fiserv-datas>div { padding: 1rem; border: 1px solid var(--f-borda); border-radius: 10px; background: var(--f-papel); }
+#fiserv-leitura .fiserv-datas span, #fiserv-leitura .fiserv-datas strong, #fiserv-leitura .fiserv-datas small { display: block; }
+#fiserv-leitura .fiserv-datas span { font-size: .85rem; }
+#fiserv-leitura .fiserv-datas strong { font-size: 1.15rem; margin: .45rem 0; }
+#fiserv-leitura .fiserv-datas small { color: var(--f-secundario); font-size: .75rem; }
+#fiserv-leitura .fiserv-data-passada { font-size: .85rem; line-height: 1.6; padding: .9rem 0; margin: 0; color: var(--f-secundario); }
+#fiserv-leitura .fiserv-outros-grade { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,230px),1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+#fiserv-leitura .fiserv-outros-grade article { padding: 1.2rem; border: 1px solid var(--f-borda); border-radius: 12px; background: var(--f-papel); }
+#fiserv-leitura .fiserv-outros-grade h3 { font-size: 1rem; font-weight: 650; }
+#fiserv-leitura .fiserv-outros-grade p:last-child { color: var(--f-secundario); font-size: .84rem; line-height: 1.6; }
+#fiserv-leitura .fiserv-detalhes { border: 1px solid var(--f-borda); border-radius: 12px; background: var(--f-papel); margin-top: 1rem; scroll-margin-top: 90px; }
+#fiserv-leitura .fiserv-detalhes>summary { padding: 1.1rem 1.3rem; cursor: pointer; font-weight: 650; line-height: 1.5; }
+#fiserv-leitura .fiserv-detalhes>summary span { display: block; font-size: .8rem; font-weight: 400; color: var(--f-secundario); margin-top: .3rem; }
+#fiserv-leitura .fiserv-detalhes-corpo { padding: 1.25rem; border-top: 1px solid var(--f-borda); font-size: .88rem; }
+#fiserv-leitura a:focus-visible, #fiserv-leitura summary:focus-visible { outline: 3px solid var(--f-verde); outline-offset: 3px; }
+@media(min-width:1500px) {
+  #fiserv-leitura .fiserv-visao-geral { grid-template-columns: repeat(4,minmax(0,1fr)); }
+}
+@media(max-width:1499px) {
+  #fiserv-leitura .fiserv-indicador h2 { min-height: 0; }
+}
+@media(max-width:575px) {
+  #fiserv-leitura .fiserv-indicadores { grid-template-columns: 1fr; }
+  #fiserv-leitura .fiserv-explicacao, #fiserv-leitura .fiserv-indicador { padding: 1.15rem; }
+  #fiserv-leitura .fiserv-filtros { padding: 1rem; }
+  #fiserv-leitura .fiserv-narrativa { font-size: 1rem; }
+  #fiserv-leitura .fiserv-proporcao { width: 100%; }
+  #fiserv-leitura .fiserv-composicao { font-size: .84rem; }
+}

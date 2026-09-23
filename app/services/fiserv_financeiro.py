@@ -24,7 +24,7 @@ from app.services.fiserv_edi_comum import (
     texto,
 )
 from app.services.fiserv_segredos import ErroSegredoFiserv, decifrar_bytes
-from app.utils import BRT
+from app.utils import BRT, hoje
 
 _CATEGORIAS = (
     'vendas', 'pagamentos', 'antecipacoes', 'ajustes', 'suspensos',
@@ -486,6 +486,67 @@ def _dto(linha):
     }
 
 
+def _somar_informados(valores):
+    """Ausência de informação não é um zero financeiro informado."""
+    conhecidos = [valor for valor in valores if valor is not None]
+    return sum(conhecidos, Decimal('0.00')) if conhecidos else None
+
+
+def _leitura_interpretativa(linhas, categorias, hoje_referencia):
+    """Leitura pura das linhas vigentes e filtradas, antes de paginar a tabela.
+
+    A agenda vencida é apenas uma previsão sem confirmação na última posição
+    conhecida. Não representa débito bancário nem confirma inadimplência.
+    """
+    __tracebackhide__ = True
+    vendas = categorias.get('vendas', {}).get('metricas', {})
+    bruto, taxas, liquido = (vendas.get(nome) for nome in ('bruto', 'taxa', 'liquido'))
+    percentual = None
+    if (bruto is not None and bruto > 0 and taxas is not None and 0 <= taxas <= bruto
+            and liquido is not None and bruto - taxas == liquido):
+        percentual = taxas * Decimal('100') / bruto
+
+    pagos = {'pagamentos': [], 'antecipacoes': [], 'ajustes': []}
+    custos = []
+    agenda = []
+    vencidas = []
+    por_data = defaultdict(list)
+    for linha in linhas:
+        obs = linha.observacao
+        elegivel = (obs.incluir_totais and obs.chave_negocio and not linha.informativa
+                    and obs.papel not in {'controle', 'composicao', 'informativo',
+                                          'total_arquivo', 'resumo_arquivo'})
+        if not elegivel:
+            continue
+        if linha.fonte.tipo == 'P' and obs.categoria in pagos:
+            pagos[obs.categoria].append(obs.liquidado)
+            if obs.categoria == 'antecipacoes' and obs.liquidado is not None:
+                custos.append(obs.antecipacao)
+        if obs.categoria == 'agenda' and obs.status == 'previsto':
+            agenda.append(obs.previsto)
+            if obs.data_vencimento is not None:
+                if obs.data_vencimento < hoje_referencia:
+                    vencidas.append(obs.previsto)
+                elif obs.previsto is not None:
+                    por_data[obs.data_vencimento].append(obs.previsto)
+
+    pagamentos = {categoria: _somar_informados(valores) for categoria, valores in pagos.items()}
+    return {
+        'vendas_bruto': bruto, 'vendas_taxas': taxas, 'vendas_liquido': liquido,
+        'taxa_percentual': percentual,
+        'pagamentos_normais': pagamentos['pagamentos'],
+        'pagamentos_antecipados': pagamentos['antecipacoes'],
+        'pagamentos_ajustes': pagamentos['ajustes'],
+        'total_pago': _somar_informados(pagamentos.values()),
+        'custo_antecipacao': _somar_informados(custos),
+        'agenda_prevista': _somar_informados(agenda),
+        'agenda_vencida': _somar_informados(vencidas),
+        'proximas_datas': [{'data': dia, 'valor': _somar_informados(por_data[dia])}
+                           for dia in sorted(por_data)[:5]],
+        'arquivo_mais_recente': max((linha.fonte.data_processamento for linha in linhas), default=None),
+    }
+
+
 def obter_painel(inicio=None, fim=None, tipo=None, documento=None):
     """Projeção somente leitura; nenhum original é processado durante o GET."""
     __tracebackhide__ = True
@@ -558,6 +619,7 @@ def obter_painel(inicio=None, fim=None, tipo=None, documento=None):
         versao_parser=VERSAO_PARSER, status='erro',
     ).order_by(InterpretacaoFiserv.arquivo_id.desc()).limit(20)]
     return {
+        'leitura': _leitura_interpretativa(linhas, categorias, hoje()),
         'categorias': categorias, 'linhas': [_dto(linha) for linha in linhas[:_LIMITE_LINHAS]],
         'total_linhas': len(linhas), 'limite_linhas': _LIMITE_LINHAS,
         'total_conflitos': len(conflitos), 'conflitos': conflitos[:_LIMITE_LINHAS],

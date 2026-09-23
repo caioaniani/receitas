@@ -5,7 +5,7 @@ import io
 import json
 import os
 import secrets
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from flask import (
@@ -134,8 +134,15 @@ def resumo():
     pendencias_recebimento = PendenciaFiserv.query.filter_by(
         versao_configuracao=registro.versao if registro else 0,
     ).count()
+    hoje = agora().date()
+    periodos = [
+        {'nome': 'Este mês', 'inicio': hoje.replace(day=1).isoformat(), 'fim': hoje.isoformat()},
+        {'nome': 'Últimos 7 dias', 'inicio': (hoje - timedelta(days=6)).isoformat(), 'fim': hoje.isoformat()},
+        {'nome': 'Todo o histórico', 'inicio': '', 'fim': ''},
+    ]
     return render_template('fiserv/resumo.html', painel=painel, filtros=filtros,
                            pendencias_recebimento=pendencias_recebimento,
+                           periodos=periodos, inicio=inicio, fim=fim,
                            automatico=bool(registro and registro.ativa))
 
 

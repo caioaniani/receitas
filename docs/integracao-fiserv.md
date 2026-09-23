@@ -101,6 +101,19 @@ interpretação e conflitos permanecem visíveis, tornando explícita a cobertur
 parcial. Novas versões do parser podem interpretar novamente os originais sem
 baixá-los outra vez. Testes e amostras financeiras permanecem privados.
 
+A visão inicial explica os valores em linguagem comum e mantém a composição e
+os lançamentos em seções recolhidas. O subtotal pago usa somente `liquidado`
+das linhas P vigentes e elegíveis de pagamentos, antecipações e ajustes. Não
+soma novamente liquidações de R. A previsão considera apenas a agenda vigente
+com status `previsto`; datas passadas são sinalizadas como posições sem
+confirmação, sem presumir inadimplência. As próximas cinco datas e os totais
+usam todas as linhas filtradas, antes do limite de exibição de 200 registros.
+A proporção de taxas só aparece quando bruto menos taxas confere exatamente
+com o líquido das vendas e a proporção está entre zero e cem por cento.
+Custos de antecipação correspondem aos pagamentos antecipados identificados.
+Dados ausentes continuam como "Não informado". Os atalhos de período
+preservam os filtros de tipo e documento; pendências permanecem acessíveis.
+
 Com o automático pausado, **Arquivos disponíveis na Fiserv** lista nomes e tamanhos
 diretamente do acesso salvo, em páginas de 20 arquivos ordenados por nome. Isso
 permite comparar com o mesmo arquivo do WinSCP, sem presumir que o primeiro da
