@@ -1017,7 +1017,12 @@ _TERCEIRO_PELO_TITULAR = re.compile(
     r'(?:m[aã]e|pai|marido|esposa|mulher|filh[oa]|irm[aã][oa]?|amig[oa]|'
     r'chefe|patr[aã]o|s[oó]ci[oa]|namorad[oa]|noiv[oa]|tia|tio|av[oó]|'
     r'av[oó]s|sogr[oa]|colega|cunhad[oa]|nora|genro|cliente\s+del[ea])\s+'
-    r'(?:que\s+)?(?:comprou|fez\s+o\s+pedido|pediu|pagou|encomendou))\b')
+    r'(?:que\s+)?(?:comprou|fez\s+o\s+pedido|pediu|pagou|encomendou)|'
+    # "filha do comprador", "marido da titular", "amiga da cliente"
+    r'(?:m[aã]e|pai|marido|esposa|mulher|filh[oa]|irm[aã][oa]?|amig[oa]|'
+    r's[oó]ci[oa]|namorad[oa]|noiv[oa]|tia|tio|av[oó]|sogr[oa]|colega|'
+    r'cunhad[oa]|nora|genro|secret[aá]ri[oa]|assistente)\s+d[oa]\s+'
+    r'(?:comprador[a]?|titular|cliente|dono|quem\s+comprou))\b')
 _IDENTIFICACAO_PEDIDO = re.compile(
     r'(?i)\bpedido\b|@|\bcpf\b|\be-?mail\b|\bdestinat[aá]ri\w*|\bquem\s+recebe|'
     r'\bendere[cç]o\b|\brua\b|\bav(?:enida)?\.?\b|\bcesta\b|'
