@@ -268,7 +268,8 @@ def test_email_localiza_sem_numero(app):
         r = bot_tools.consultar_pedido('', telefone_contato='',
                                        email_cliente='JOAO@example.com')
         assert r['numero'] == 'EML00002' and r['autorizado_como'] == 'email'
-        _pedido('EML00003', telefone='11977776666', email='joao@example.com', dias=2)
+        _pedido('EML00003', telefone='11977776666', email='joao@example.com', dias=2,
+                com_cliente=False)   # Cliente.email é unique; 2º pedido do mesmo e-mail
         lista = bot_tools.consultar_pedido('', telefone_contato='',
                                            email_cliente='joao@example.com')
         assert [p['numero'] for p in lista['pedidos_recentes']] == ['EML00002', 'EML00003']
