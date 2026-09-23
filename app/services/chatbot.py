@@ -607,9 +607,25 @@ _FALHA_OPERACIONAL_PATTERNS = [
         r'(?:errad[oa]|incomplet[oa]|trocad[oa]|faltando)\b'),
 ]
 # Hipotese/condicao na ORACAO do hit ("se nao chegar", "caso venha errado",
-# "e se vier errado?") nao e falha em curso.
+# "e se vier errado?") nao e falha em curso. "caso" so como CONJUNCAO
+# (seguido de sujeito/negacao/verbo) — "caso urgente: cliente nao recebeu"
+# e "caso de entrega: motoboy foi embora" sao substantivo (revisao
+# 23/09/2026, 2ª rodada).
+_CASO_CONJUNCAO = (r'caso(?=\s+(?:o|a|os|as|n[aã]o|ningu[eé]m|ele|ela|eles|elas|'
+                   r'voc[eê]s?|eu|meu|minha|haja|tenha|venha|chegue|aconte[çc]a|'
+                   r'd[eê]\s+problema)\b)')
 _HIPOTESE_FALHA = re.compile(
-    r'(?i)(?:^|\W)(?:e\s+)?(?:se|caso|quando)\s+(?:\S+\s+){0,4}\S*$')
+    r'(?i)(?:^|\W)(?:e\s+)?(?:se|quando|' + _CASO_CONJUNCAO + r')\s+(?:\S+\s+){0,4}\S*$')
+# Venda/duvida comum na FALA do cliente que desliga o socorro deterministico
+# (o modelo atende). Lista CURTA de proposito: a ampliada da 1ª rodada
+# ("link", "cardapio", "qual o telefone", "tem entrega", "quero comprar")
+# matava "comprei pelo site e meu pedido nao chegou", "meu pedido nao
+# chegou, qual o telefone da loja?" e "a cesta veio faltando, quero comprar
+# outro" — 14 de 16 reclamacoes reais viravam falso negativo (2ª rodada).
+_SINAL_VENDA_FALA = re.compile(
+    r'(?i)\b(frete|cotar|cota[çc][aã]o|or[çc]amento|novo pedido|fechar o pedido|'
+    r'carrinho|(?:tentando|consigo|consegui)\s+(?:pagar|comprar|finalizar|'
+    r'fazer\s+(?:o|um|meu)?\s*pedido)|como\s+(?:fa[çc]o\s+pra\s+|eu\s+|que\s+)?pag\w+)\b')
 # No MOTIVO do bot (3ª pessoa): "cliente pergunta o que acontece se o pedido
 # nao chegou" e duvida de venda, nao falha em curso. So HIPOTESE de verdade
 # (revisao 23/09/2026): "pergunta SE", "quer saber O QUE ACONTECE", forma
