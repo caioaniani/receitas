@@ -70,6 +70,10 @@ def executar_limpeza(dry_run=False):
          SlackEventoProcessado.processado_em, cfg['RETENCAO_EVENTOS_DIAS']),
         ('zapi_bot_evento_processado', ZapiBotEventoProcessado,
          ZapiBotEventoProcessado.processado_em, cfg['RETENCAO_EVENTOS_DIAS']),
+        # Dedupe do template de WhatsApp do painel (item 10, 22/09/2026): a
+        # janela e de 60 min; a linha so serve de idempotencia.
+        ('template_whatsapp_envio', TemplateWhatsappEnvio,
+         TemplateWhatsappEnvio.criado_em, cfg['RETENCAO_EVENTOS_DIAS']),
         # Ações pendentes do Slack (17/07/2026, volume a 75%): o token expira
         # em 10 MINUTOS, mas as linhas ficavam pra sempre — e o params_json
         # carrega FOTO em base64 (441 linhas = 62 MB, 32% do banco; a foto
