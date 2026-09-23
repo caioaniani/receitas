@@ -2266,12 +2266,11 @@ def responder(historico, *, telefone_contato=None,
                                          tools_resumo=tools_resumo)
                 if b.name == 'encerrar_conversa':
                     tools_usadas.append('encerrar_conversa')
-                    if not pode_encerrar(historico):
-                        # Item 7: o modelo pediu resolved, mas o ultimo
-                        # turno nao e fechamento ou ha reclamacao sem
-                        # resposta humana — fila da equipe, sem fala.
+                    if not pode_encerrar(historico, exigir_fechamento=False):
+                        # Item 7: o modelo pediu resolved, mas ha reclamacao
+                        # sem resposta humana — fila da equipe, sem fala.
                         logger.info('chatbot: encerrar_conversa recusado '
-                                    '(reclamacao em aberto / sem fechamento)')
+                                    '(reclamacao em aberto)')
                         return _resp_fila_silenciosa(
                             MOTIVO_FILA_RECLAMACAO, tools_usadas=tools_usadas,
                             tools_resumo=tools_resumo)
