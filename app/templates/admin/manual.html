@@ -75,7 +75,27 @@
                 é quem responde. A cobrança de espera no WhatsApp do dono continua até a conversa ser
                 <em>resolvida</em> no Chatwoot. Ao transferir, o bot deixa uma <em>nota privada</em>
                 com o motivo e, se um entregador ou portaria citou a rua, a entrega candidata
-                (código do pedido) — o contato nunca vê essa nota.</li>
+                (código do pedido) — o contato nunca vê essa nota.
+                <strong>Problema em curso passa na hora</strong> (23/09/2026): "não recebi",
+                "não chegou", "o motoboy foi embora", "veio errado/faltando", "ninguém responde"
+                → o bot transfere na <em>primeira</em> mensagem, <strong>sem pedir CPF, e-mail
+                nem número</strong>, e a nota privada já traz o pedido que ele achou sozinho
+                (pelo telefone, código ou e-mail da conversa). Pra esse cliente a mensagem
+                automática "atendimento em alta demanda" <strong>não sai</strong> — a cobrança
+                no WhatsApp do dono avisa que é reclamação. Quem escreve pelo titular (mãe,
+                marido, filha) e identifica o pedido por qualquer dado também vai direto pra
+                equipe com o contexto, sem interrogatório. O <strong>e-mail da compra</strong>
+                passou a localizar e autorizar pedido como o CPF; CPF que não confere porque o
+                cadastro não tem CPF vira transferência com nota, nunca "não localizei".</li>
+            <li><strong>Corrida Lalamove cancelada, expirada ou recusada</strong> (23/09/2026):
+                o sistema registra o status na corrida, abre um alerta ALTA no
+                <a href="/entregas/painel">painel de entregas</a> (banner + som, como os do vigia,
+                com o código do pedido e o motivo que a Lalamove informou), manda WhatsApp ao dono
+                pelo canal dos alertas críticos e coloca a conversa do cliente no Chatwoot na fila
+                da equipe — <strong>sem mensagem automática ao cliente</strong>. O pedido
+                <strong>não</strong> vira entregue nem muda de status: quem decide é a equipe
+                (chamar outro entregador no card do pedido ou avisar o cliente). Cancelamento
+                feito pelo próprio painel não alerta.</li>
             <li><strong>Listas de e-mail marketing</strong> (Listmonk): todo dia
                 às 09:00 o sistema atualiza as listas — quem comprou no site,
                 quem se cadastrou no Wi-Fi das lojas — e traz de volta quem
