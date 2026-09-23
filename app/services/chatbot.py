@@ -692,7 +692,7 @@ def falha_operacional(texto):
     modelo, contencao do espera-humano (`chatbot_vigia`) e desarme do
     detector de venda em risco."""
     t = _texto_para_deteccao(texto)
-    if len(t) < 6 or _SINAL_VENDA_EM_CURSO.search(t):
+    if len(t) < 6 or _SINAL_VENDA_FALA.search(t):
         return False
     hits = []
     for p in _FALHA_OPERACIONAL_PATTERNS:
@@ -705,10 +705,12 @@ def falha_operacional(texto):
             if (_RE_OBJ_NAO_ENTREGA.search(oracao)
                     and not _RE_OBJ_ENTREGA.search(sem_genitivo)):
                 continue
-            if _RE_CANAL_DIGITAL.search(oracao) or _RE_LOJA_ESTOQUE.search(oracao):
+            depois = t[m.end():]
+            terminador = _terminador_da_oracao(t, m.end())
+            if _RE_CANAL_DIGITAL.match(depois):
                 continue
-            if (_terminador_da_oracao(t, m.end()) == '?'
-                    and not _RE_ORACAO_ENTREGA.search(oracao)):
+            if terminador == '?' and (_RE_LOJA_ESTOQUE.match(depois)
+                                      or not _RE_ORACAO_ENTREGA.search(oracao)):
                 continue
             hits.append((m.start(), m.end()))
     return _algum_hit_nao_negado(t, hits, nua_veta=True)
