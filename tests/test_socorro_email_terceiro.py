@@ -38,6 +38,22 @@ POSITIVOS = [
     'o pedido tá errado', 'não veio ninguém', 'só veio metade do pedido',
     'já são 11h e nada do pedido', 'meu pedido não chegou?',
     'não recebi o pedido; perguntei na portaria e nada',
+    # 2ª rodada da revisão (23/09/2026): os vetos de "canal digital", "loja"
+    # e "venda em curso" eram largos demais e calavam o socorro real —
+    # mencionar site/app/link/e-mail/telefone/loja NA MESMA frase de uma
+    # entrega que falhou não pode desarmar o detector.
+    'comprei pelo site e meu pedido não chegou',
+    'fiz o pedido no site ontem e não recebi nada',
+    'pedi pelo app e não veio nada',
+    'meu pedido não chegou e ninguém responde no whatsapp',
+    'não recebi meu pedido, o link de rastreio diz entregue',
+    'o pedido não chegou, qual o telefone da loja pra eu ligar?',
+    'passou do horário e nada, qual o número do motoboy?',
+    'comprei na loja e veio errado',
+    'fui buscar na loja e não entregaram meu pedido',
+    'a cesta veio faltando o pão, quero comprar outro pra compensar',
+    'meu pedido não chegou até agora, tem entrega hoje ainda?',
+    'meu pedido nao chegou e ninguem responde por e-mail',
 ]
 NEGATIVOS = [
     # venda / dúvida comum que virava handoff antes do modelo (revisão 23/09/2026)
@@ -45,12 +61,9 @@ NEGATIVOS = [
     'não recebi o comprovante do pedido', 'não recebi a nota do pedido',
     'não recebi o pix do pedido', 'o boleto não veio no pedido',
     'meu pedido não chegou no e-mail, como pago?', 'não recebi o cupom da compra',
-    'não recebi nada de vocês ainda, quando mandam o link?',
     'to tentando fazer o pedido no site e sem sucesso',
     'to tentando pagar no site e não vai, sem sucesso',
-    'não consigo falar com vocês por telefone, qual o número?',
     'o sourdough não chegou na loja da Ribeiro hoje?',
-    'ninguém atende o telefone da loja, qual o horário?',
     'o croissant não veio recheado?',
     'quero 2 cestas, se não receber até as 10 eu cancelo',
     'pode deixar na portaria se eu não receber?',
