@@ -11,6 +11,10 @@ import unicodedata
 from collections.abc import Mapping
 
 
+class MinisPedidoLojaError(ValueError):
+    """Recusa de catálogo; erros inesperados mantêm seu tratamento normal."""
+
+
 def _normalizar(texto):
     return ''.join(c for c in unicodedata.normalize('NFKD', texto or '')
                    if not unicodedata.combining(c)).casefold()
@@ -128,6 +132,6 @@ def validar_itens_loja(itens):
             if nome not in nomes:
                 nomes.append(nome)
     if nomes:
-        raise ValueError(
+        raise MinisPedidoLojaError(
             'Minis não podem ser pedidos pelas lojas para recebimento pelo motorista: '
             + ', '.join(nomes) + '. Use o pedido de encomenda do cliente.')

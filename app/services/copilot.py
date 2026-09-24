@@ -21,7 +21,11 @@ from flask import current_app
 
 from app.extensions import db
 from app.models import Loja, MateriaPrima, Produto, Receita
-from app.services.pedido_loja_catalogo import permite_item_loja, validar_itens_loja
+from app.services.pedido_loja_catalogo import (
+    MinisPedidoLojaError,
+    permite_item_loja,
+    validar_itens_loja,
+)
 from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
@@ -2700,7 +2704,7 @@ def _calcular_saldo_mp(mp_id):
 def executar_criar_pedido(params, user):
     try:
         return _executar_criar_pedido(params, user)
-    except ValueError as exc:
+    except MinisPedidoLojaError as exc:
         db.session.rollback()
         return {'ok': False, 'erro': str(exc)}
 
@@ -2870,7 +2874,7 @@ def executar_editar_pedido(params, user):
     # Nunca deixar itens/data parcialmente alterados nessa mesma sessão.
     try:
         return _executar_editar_pedido(params, user)
-    except ValueError as exc:
+    except MinisPedidoLojaError as exc:
         db.session.rollback()
         return {'ok': False, 'erro': str(exc)}
     except Exception:
@@ -3462,7 +3466,7 @@ def executar_mudar_status_pedido(params, user):
     if novo in ('confirmar', 'separar', 'enviar'):
         try:
             validar_itens_loja(p.itens)
-        except ValueError as exc:
+        except MinisPedidoLojaError as exc:
             db.session.rollback()
             return {'ok': False, 'erro': str(exc)}
 

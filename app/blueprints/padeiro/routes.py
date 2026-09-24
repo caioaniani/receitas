@@ -745,10 +745,10 @@ def separar(id):
     if pedido.status not in _A_SEPARAR:
         flash(f'Pedido #{pedido.id} nao esta mais aguardando separacao.', 'warning')
         return redirect(url_for('padeiro.index', data=data_str))
-    from app.services.pedido_loja_catalogo import validar_itens_loja
+    from app.services.pedido_loja_catalogo import MinisPedidoLojaError, validar_itens_loja
     try:
         validar_itens_loja(pedido.itens)
-    except ValueError as exc:
+    except MinisPedidoLojaError as exc:
         flash(str(exc), 'warning')
         return redirect(url_for('padeiro.index', data=data_str))
     pedido.status = 'separado'
@@ -810,10 +810,10 @@ def gerar_qr(id):
 
     data_str = (request.form.get('data') or '').strip() or None
     pedido = PedidoLoja.query.get_or_404(id)
-    from app.services.pedido_loja_catalogo import validar_itens_loja
+    from app.services.pedido_loja_catalogo import MinisPedidoLojaError, validar_itens_loja
     try:
         validar_itens_loja(pedido.itens)
-    except ValueError as exc:
+    except MinisPedidoLojaError as exc:
         flash(str(exc), 'warning')
         return redirect(url_for('padeiro.index', data=data_str))
     if pedido.status != 'separado':
@@ -941,6 +941,7 @@ def juntar_repetidos():
     dia visto num so; os absorvidos viram 'cancelado'. (A criacao nova ja junta
     sozinha; isto eh pros que ja existiam antes do recurso.)"""
     from app.services.pedido_lock import travar_pedidos_lojas
+    from app.services.pedido_loja_catalogo import MinisPedidoLojaError
     from app.services.pedido_merge import STATUS_MESCLAVEL, consolidar_loja_data
     data_str = (request.form.get('data') or '').strip() or None
     hj = hoje()
@@ -962,7 +963,7 @@ def juntar_repetidos():
         for loja_id, status, d_ent in grupos:
             _alvo, absorvidos = consolidar_loja_data(loja_id, d_ent, status, current_user.id)
             juntados += absorvidos
-    except ValueError as exc:
+    except MinisPedidoLojaError as exc:
         db.session.rollback()
         flash(str(exc), 'warning')
         return redirect(url_for('padeiro.index', data=data_str))

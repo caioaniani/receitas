@@ -54,7 +54,11 @@ from app.models import (
 )
 from app.services.pedido_corte import salvar_no_prazo
 from app.services.pedido_lock import reler_pedido_travado, travar_pedidos_lojas
-from app.services.pedido_loja_catalogo import permite_item_loja, validar_itens_loja
+from app.services.pedido_loja_catalogo import (
+    MinisPedidoLojaError,
+    permite_item_loja,
+    validar_itens_loja,
+)
 from app.utils import agora
 from app.utils import hoje as hoje_brt
 
@@ -63,7 +67,7 @@ def _itens_liberados_loja(itens):
     """Mostra a regra de catálogo antes de alterar pedido ou expedição."""
     try:
         validar_itens_loja(itens)
-    except ValueError as exc:
+    except MinisPedidoLojaError as exc:
         flash(str(exc), 'warning')
         return False
     return True

@@ -244,6 +244,7 @@ def handshake(token):
 def _handshake_saida(qr, pedido, pin):
     """PIN do motorista → muda status pra em_transporte."""
     from app.blueprints.pedidos.routes import _executar_envio_pedido
+    from app.services.pedido_loja_catalogo import MinisPedidoLojaError
     drivers = Driver.query.filter_by(ativo=True).all()
     driver_match = next((d for d in drivers if d.pin and pin and hmac.compare_digest(str(d.pin), str(pin))), None)
     if not driver_match:
@@ -273,7 +274,7 @@ def _handshake_saida(qr, pedido, pin):
             pedido, user=None,
             ref_extra=f'via QR / motorista {driver_match.nome}',
         )
-    except ValueError as exc:
+    except MinisPedidoLojaError as exc:
         db.session.rollback()
         _audit(qr.token, pedido, qr.tipo, 'erro_executor', str(exc)[:500])
         return render_template('handshake/erro.html', msg=str(exc)), 409
