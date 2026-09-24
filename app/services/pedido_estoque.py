@@ -53,7 +53,11 @@ def baixar_industria_pedido(pedido, usuario_id, ref_extra=None):
     caminhão sai mesmo; a falta fica registrada pra acerto de inventário).
     """
     from app.services.estoque_congelados import obter_linha_producao
+    from app.services.pedido_loja_catalogo import validar_itens_loja
 
+    # Também protege QR já emitido e pedidos anteriores à regra de catálogo.
+    # Valida tudo antes da primeira baixa, sem deixar uma saída parcial.
+    validar_itens_loja(pedido.itens)
     ref = _ref_base(pedido, ref_extra)
     faltas = []
     for item in pedido.itens:

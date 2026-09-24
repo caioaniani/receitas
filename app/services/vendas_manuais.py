@@ -241,16 +241,23 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
             estoque_por_item[chave] = el.quantidade or 0
 
     # 4. Resolve nomes
+    from app.services.pedido_loja_catalogo import permite_item_loja
+
     nome_por_chave = {}
+    bloqueados = set()
     receitas_ids = [k[1] for k in vendas_por_item if k[0] == 'receita']
     produtos_ids = [k[1] for k in vendas_por_item if k[0] == 'produto']
     mps_ids = [k[1] for k in vendas_por_item if k[0] == 'mp']
     if receitas_ids:
         for r in Receita.query.filter(Receita.id.in_(receitas_ids)).all():
             nome_por_chave[('receita', r.id)] = r.nome
+            if not permite_item_loja(receita=r):
+                bloqueados.add(('receita', r.id))
     if produtos_ids:
         for p in Produto.query.filter(Produto.id.in_(produtos_ids)).all():
             nome_por_chave[('produto', p.id)] = p.nome
+            if not permite_item_loja(produto=p):
+                bloqueados.add(('produto', p.id))
     if mps_ids:
         for m in MateriaPrima.query.filter(MateriaPrima.id.in_(mps_ids)).all():
             nome_por_chave[('mp', m.id)] = m.nome
@@ -258,6 +265,8 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
     # 5. Monta sugestao
     out = []
     for chave, total_vendas in vendas_por_item.items():
+        if chave in bloqueados:
+            continue
         tipo, item_id = chave
         media = total_vendas / dias_periodo
         estoque_atual = estoque_por_item.get(chave, 0)

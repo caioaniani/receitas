@@ -273,6 +273,10 @@ def _handshake_saida(qr, pedido, pin):
             pedido, user=None,
             ref_extra=f'via QR / motorista {driver_match.nome}',
         )
+    except ValueError as exc:
+        db.session.rollback()
+        _audit(qr.token, pedido, qr.tipo, 'erro_executor', str(exc)[:500])
+        return render_template('handshake/erro.html', msg=str(exc)), 409
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
         _audit(qr.token, pedido, qr.tipo, 'erro_executor', str(exc)[:500])

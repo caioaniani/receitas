@@ -9,6 +9,7 @@ materia_prima_id, estado) — a mesma chave usada no recebimento
 from app.extensions import db
 from app.models import PedidoItem, PedidoLoja
 from app.services.pedido_lock import reler_pedido_travado, travar_pedidos_lojas
+from app.services.pedido_loja_catalogo import validar_itens_loja
 from app.utils import agora
 
 # Pedido so eh "mesclavel" enquanto aberto — depois de separado o estoque/QR
@@ -74,6 +75,8 @@ def adotar_rascunho_automatico(pedido, itens, user_id, observacao=None):
     NAO commita. Retorna {'substituidos', 'adicionados', 'mantidos'}.
     """
     pedido = reler_pedido_travado(pedido)
+    validar_itens_loja(pedido.itens)
+    validar_itens_loja(itens)
     idx = {_chave(it): it for it in pedido.itens}
     por_fk = {}
     for it in pedido.itens:
@@ -156,6 +159,8 @@ def mesclar_itens(pedido, itens, modificado_por_id=None):
     Retorna {'adicionados': int, 'somados': int}.
     """
     pedido = reler_pedido_travado(pedido)
+    validar_itens_loja(pedido.itens)
+    validar_itens_loja(itens)
     idx = {_chave(it): it for it in pedido.itens}
     adicionados = somados = 0
     for novo in itens:
@@ -199,15 +204,19 @@ def consolidar_loja_data(loja_id, data_entrega, status, modificado_por_id=None):
                .all())
     if len(pedidos) < 2:
         return (pedidos[0] if pedidos else None), 0
+    # Recusa a consolidação inteira antes de alterar qualquer pedido.
+    validar_itens_loja([it for pedido in pedidos for it in pedido.itens])
     alvo = pedidos[0]
+    # Uma única releitura do alvo: repetir mesclar_itens poderia expirar
+    # somas ainda não gravadas quando todos os filhos já estão carregados.
+    itens = [{
+        'receita_id': it.receita_id, 'produto_id': it.produto_id,
+        'materia_prima_id': it.materia_prima_id, 'quantidade': it.quantidade,
+        'estado': it.estado, 'observacao': it.observacao,
+    } for outro in pedidos[1:] for it in outro.itens]
+    mesclar_itens(alvo, itens, modificado_por_id=modificado_por_id)
     absorvidos = 0
     for outro in pedidos[1:]:
-        itens = [{
-            'receita_id': it.receita_id, 'produto_id': it.produto_id,
-            'materia_prima_id': it.materia_prima_id, 'quantidade': it.quantidade,
-            'estado': it.estado, 'observacao': it.observacao,
-        } for it in outro.itens]
-        mesclar_itens(alvo, itens, modificado_por_id=modificado_por_id)
         outro.status = 'cancelado'
         outro.modificado_em = agora()
         if modificado_por_id:
