@@ -389,7 +389,7 @@ def _payload_webhook(content, status='pending'):
     }
 
 
-def test_webhook_intercepta_codigo_e_resolve(app):
+def test_webhook_intercepta_codigo_sem_encerrar_atendimento(app):
     with app.app_context():
         app.config['CHATWOOT_BOT_SECRET'] = 'seg'
         s = _sessao()
@@ -404,7 +404,7 @@ def test_webhook_intercepta_codigo_e_resolve(app):
     assert r.get_json().get('wifi_portal') is True
     assert env.called
     assert 'Wi-Fi liberado' in env.call_args[0][1]
-    st.assert_called_once_with(4242, 'resolved')
+    st.assert_not_called()
 
 
 def test_webhook_codigo_em_conversa_open_nao_resolve(app):

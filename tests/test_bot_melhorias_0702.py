@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Melhorias do bot/auditor de 02/07/2026 — os 4 pacotes aprovados pelo dono.
 
 P1 (graves): áudio sem resposta, exceção avisando o cliente, injection sem
@@ -73,14 +74,15 @@ def _veredito(app, *, conv_id, bot_acao='responder', tools=..., gravidade=None,
 
 # ── P1: áudio/anexo não suportado ──────────────────────────────────────────
 
-def test_webhook_audio_sem_texto_responde_educado(app):
-    """Mensagem SÓ de áudio antes caía num return silencioso — a conversa
-    ficava presa em pending pra sempre (followup não dispara porque a última
-    msg é do cliente). Agora responde pedindo texto, sem gastar Claude."""
+def test_webhook_audio_sem_texto_vai_para_equipe(app):
+    """O áudio fica com a equipe sem exigir que o cliente redigite."""
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     client = app.test_client()
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatbot.responder') as resp, \
+         patch('app.services.chatwoot.definir_status', return_value={'ok': True}) as status, \
+         patch('app.services.entrega_candidata.anotar_handoff', return_value={'ok': True}), \
          patch('app.services.chatwoot.enviar_mensagem',
                return_value={'ok': True}) as env:
         r = _post(client, content='',
@@ -89,14 +91,13 @@ def test_webhook_audio_sem_texto_responde_educado(app):
     assert r.status_code == 200
     assert r.get_json()['acao'] == 'anexo-nao-suportado'
     resp.assert_not_called()          # zero Claude
-    env.assert_called_once()
-    texto = env.call_args.args[1]
-    assert 'escrever' in texto.lower()
+    env.assert_not_called()
+    status.assert_called_once_with(7, 'open')
     # O turno fica no store local pro próximo contexto do bot.
     from app.services.chatbot import carregar_historico
     with app.app_context():
         hist = carregar_historico(7)
-    assert any('áudio/anexo não suportado' in (m.get('content') or '')
+    assert any('áudio/anexo para a equipe' in (m.get('content') or '')
                for m in hist)
 
 
@@ -111,13 +112,12 @@ def test_webhook_vazio_sem_anexo_ignora(app):
 
 # ── P1: exceção no processamento avisa o cliente ───────────────────────────
 
-def test_excecao_no_processamento_avisa_cliente_e_abre(app):
-    """Antes, exceção só mudava o status — a conversa ia pra fila humana EM
-    SILÊNCIO. Agora o cliente recebe o fallback e a conversa abre."""
-    from app.services import chatbot
+def test_excecao_no_processamento_abre_fila_sem_resposta_autonoma(app):
+    """A falha cria atendimento humano durável e não dispara outra macro."""
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     client = app.test_client()
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.buscar_historico',
                return_value=[{'role': 'user', 'content': 'oi'}]), \
          patch('app.services.chatbot.responder',
@@ -128,7 +128,7 @@ def test_excecao_no_processamento_avisa_cliente_e_abre(app):
                return_value={'ok': True}) as st:
         r = _post(client)
     assert r.status_code == 200
-    env.assert_called_once_with(7, chatbot.FALLBACK_TEXTO)
+    env.assert_not_called()
     st.assert_called_once_with(7, 'open')
 
 
@@ -156,6 +156,7 @@ def test_vassoura_responde_conversa_esquecida(app):
         with patch('app.services.chatwoot.listar_conversas_paradas',
                    return_value=[{'id': 5, 'minutos_paradas': 30,
                                   'nome_contato': 'Ana'}]), \
+             patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
              patch('app.services.chatwoot.buscar_historico',
                    return_value=[{'role': 'user',
                                   'content': 'oi, tem croissant hoje?'}]), \
@@ -167,7 +168,7 @@ def test_vassoura_responde_conversa_esquecida(app):
             r = chatbot.varrer_pendentes_sem_resposta()
     assert r == {'varridas': 1, 'respondidas': 1}
     resp.assert_called_once()
-    env.assert_called_once_with(5, 'Temos sim!')
+    env.assert_called_once_with(5, 'Temos sim!', politica_atendimento=None, finalidade=None)
 
 
 def test_vassoura_ignora_quando_ultima_msg_e_nossa(app):
@@ -206,7 +207,7 @@ def test_handoff_preguicoso_recusado_uma_vez(app):
                 _resp_tool_handoff('cliente pergunta preco de cesta'),
                 _resp_texto('A cesta média sai R$ 120.'),
             ]
-            r = chatbot.responder([{'role': 'user',
+            r = chatbot._responder_modelo_offline([{'role': 'user',
                                     'content': 'quanto custa a cesta media?'}])
         assert M.return_value.messages.create.call_count == 2
         # O tool_result da recusa foi devolvido ao modelo.
@@ -227,7 +228,7 @@ def test_handoff_insistido_passa_na_segunda(app):
                 _resp_tool_handoff('duvida de preco'),
                 _resp_tool_handoff('duvida de preco'),
             ]
-            r = chatbot.responder([{'role': 'user',
+            r = chatbot._responder_modelo_offline([{'role': 'user',
                                     'content': 'quanto custa a cesta media?'}])
         assert M.return_value.messages.create.call_count == 2
     assert r['acao'] == 'handoff'
@@ -242,7 +243,7 @@ def test_handoff_excecao_passa_direto(app):
         with patch('anthropic.Anthropic') as M:
             M.return_value.messages.create.return_value = _resp_tool_handoff(
                 'cliente relata alergia a amendoim')
-            r = chatbot.responder([{'role': 'user',
+            r = chatbot._responder_modelo_offline([{'role': 'user',
                                     'content': 'o brioche tem amendoim? tenho restricao'}])
         assert M.return_value.messages.create.call_count == 1
     assert r['acao'] == 'handoff'
@@ -270,7 +271,7 @@ def test_stop_reason_max_tokens_refaz_uma_vez(app):
                             stop_reason='max_tokens'),
                 _resp_texto('Aqui está o link completo: https://opao.online/carrinho'),
             ]
-            r = chatbot.responder([{'role': 'user',
+            r = chatbot._responder_modelo_offline([{'role': 'user',
                                     'content': 'me manda o link do carrinho'}])
         assert M.return_value.messages.create.call_count == 2
         segunda = M.return_value.messages.create.call_args_list[1]

@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Item 7 (dono, caso E3862E49, 22-23/09/2026): o bot NÃO encerra conversa
 com reclamação em aberto.
 
@@ -53,7 +54,7 @@ def test_camada_1_obrigada_com_reclamacao_vai_pra_fila_sem_resolver(app):
     with app.app_context():
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic') as M:
-            r = chatbot.responder([
+            r = chatbot._responder_modelo_offline([
                 {'role': 'user', 'content': 'veio faltando o pão de queijo'},
                 {'role': 'assistant', 'content': 'Sinto muito! Já estou passando pra equipe.'},
                 {'role': 'user', 'content': 'obrigada'}])
@@ -89,23 +90,23 @@ def test_camada_1_confere_resposta_humana_no_chatwoot(app):
         with patch('anthropic.Anthropic'), \
                 patch('app.services.chatwoot.buscar_historico',
                       return_value=_api_hist(com_humano=True)) as bh:
-            r = chatbot.responder(store, conversa_id=4242)
+            r = chatbot._responder_modelo_offline(store, conversa_id=4242)
         assert r['acao'] == 'encerrar'
         bh.assert_called_once_with(4242, incluir_autoria=True)
         with patch('anthropic.Anthropic'), \
                 patch('app.services.chatwoot.buscar_historico',
                       return_value=_api_hist(com_humano=False)):
-            r = chatbot.responder(store, conversa_id=4242)
+            r = chatbot._responder_modelo_offline(store, conversa_id=4242)
         assert r['acao'] == 'handoff' and r['texto'] == ''
         with patch('anthropic.Anthropic'), \
                 patch('app.services.chatwoot.buscar_historico',
                       side_effect=RuntimeError('chatwoot fora')):
-            r = chatbot.responder(store, conversa_id=4242)
+            r = chatbot._responder_modelo_offline(store, conversa_id=4242)
         assert r['acao'] == 'handoff' and r['texto'] == ''
         # Sem conversa_id nao ha o que conferir: conservador.
         with patch('anthropic.Anthropic'), \
                 patch('app.services.chatwoot.buscar_historico') as bh:
-            r = chatbot.responder(store)
+            r = chatbot._responder_modelo_offline(store)
         assert r['acao'] == 'handoff' and r['texto'] == ''
         bh.assert_not_called()
 
@@ -145,7 +146,7 @@ def test_pergunta_ou_pedido_nao_e_reclamacao_e_o_obrigada_encerra(app, fala):
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic') as M, \
                 patch('app.services.chatwoot.buscar_historico') as bh:
-            r = chatbot.responder([
+            r = chatbot._responder_modelo_offline([
                 {'role': 'user', 'content': fala},
                 {'role': 'assistant', 'content': 'Entregamos das 8h às 18h, sem atraso.'},
                 {'role': 'user', 'content': 'valeu'}], conversa_id=77)
@@ -183,7 +184,7 @@ def test_camada_1_obrigada_sem_reclamacao_segue_encerrando(app):
     with app.app_context():
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic'):
-            r = chatbot.responder([
+            r = chatbot._responder_modelo_offline([
                 {'role': 'assistant', 'content': 'Aqui está o link do carrinho!'},
                 {'role': 'user', 'content': 'Muito obrigada🙏'}])
     assert r['acao'] == 'encerrar'
@@ -200,7 +201,7 @@ def test_tool_encerrar_do_modelo_e_recusada_com_reclamacao_aberta(app, monkeypat
                 create=lambda **kw: SimpleNamespace(content=[blk], stop_reason='tool_use'))
     monkeypatch.setattr('anthropic.Anthropic', FakeClient)
     with app.app_context():
-        r = chatbot.responder([
+        r = chatbot._responder_modelo_offline([
             {'role': 'user', 'content': 'o motoboy foi embora e não entregou'},
             {'role': 'assistant', 'content': 'Sinto muito! Passei pra equipe. Posso ajudar em mais algo?'},
             {'role': 'user', 'content': 'ok'}])
@@ -229,6 +230,7 @@ def test_webhook_fila_silenciosa_vai_para_open_sem_falar(app):
                 self._target()
 
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
             patch('app.services.chatbot.responder',
                   return_value={'acao': 'handoff', 'texto': '',
                                 'motivo': 'reclamação em aberto sem resposta humana'}), \
@@ -267,6 +269,7 @@ def test_webhook_fila_silenciosa_nao_vira_handoff_repetido_falado(app):
                 self._target()
 
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
             patch('app.services.chatbot.responder',
                   return_value={'acao': 'handoff', 'texto': '', 'fila_silenciosa': True,
                                 'motivo': 'reclamação em aberto sem resposta humana'}), \

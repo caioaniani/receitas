@@ -65,6 +65,8 @@ def test_vassoura_nao_transfere_nem_responde_de_novo(app):
         historico = [{'role': 'user', 'content': 'cadê vocês??'}]
         with patch('app.services.chatwoot.listar_conversas_paradas',
                    return_value=paradas), \
+                patch('app.services.chatwoot.consultar_conversa',
+                      return_value={'status': 'pending'}), \
                 patch('app.services.chatwoot.buscar_historico',
                       return_value=historico), \
                 patch('app.services.chatwoot.enviar_mensagem',

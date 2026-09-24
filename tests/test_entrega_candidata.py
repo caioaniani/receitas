@@ -274,6 +274,7 @@ def test_handoff_no_webhook_posta_nota_privada_e_fala_publica_nao_vaza(app):
                  'motivo': 'entregador da Lalamove na Rua Serra da Bocaina, ninguém atende',
                  'tools_usadas': [], 'tools_resumo': []}
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.buscar_historico', return_value=[]), \
          patch('app.services.chatbot.responder', return_value=resultado), \
          patch('app.services.chatwoot.enviar_mensagem', return_value={'ok': True}) as env, \

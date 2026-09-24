@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Leads B2B capturados pelo bot de atendimento (16/07/2026; fluxo revisto
 20/07/2026 — decisão do dono: o bot NÃO envia catálogo; captura nome +
 e-mail + WhatsApp, registra, TRANSFERE a conversa pra equipe e o dono
@@ -202,7 +203,7 @@ def test_loop_do_bot_registra_e_transfere(app):
                 patch('app.services.zapi.enviar_texto',
                       return_value={'ok': True}):
             M.return_value.messages.create.side_effect = [tool_use, handoff]
-            out = chatbot.responder(
+            out = chatbot._responder_modelo_offline(
                 [{'role': 'user',
                   'content': 'quero revender os croissants de vocês'}],
                 telefone_contato='5511988887777', conversa_id=99)

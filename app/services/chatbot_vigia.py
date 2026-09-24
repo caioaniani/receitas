@@ -30,10 +30,17 @@ from collections import deque
 
 from flask import current_app
 
+from app.services.atendimento_humano import (
+    POLITICA_ATENDIMENTO as POLITICA_ATENDIMENTO_RESTRITA,
+)
+
 logger = logging.getLogger(__name__)
 
 MODELO = 'claude-sonnet-5'
 MAX_TOKENS = 400
+# Marcador reservado, persistido SOMENTE a partir do resultado interno do
+# roteador deterministico. Nao inferir pela data nem pelo texto do cliente.
+MARCADOR_POLITICA_RESTRITA = f'__politica_atendimento:{POLITICA_ATENDIMENTO_RESTRITA}'
 # Historico em memoria das ultimas avaliacoes (volatil, reinicia no deploy).
 # Bom o suficiente pra confirmar "ta rodando?" — pra historico durador usar
 # AuditLog ou tabela dedicada no futuro.
@@ -47,6 +54,15 @@ _avisados_abandono = set()
 PROMPT_VIGIA = """Você é o Vigia: supervisor automático do bot de atendimento da O Pão (padaria artesanal).
 Lê a conversa abaixo e classifica a gravidade. SÓ gravidade=alta vira aviso na
 hora no WhatsApp do dono; media entra num resumo diário (não incomoda na hora).
+
+POLÍTICA ATUAL (24/09/2026): o bot só dá respostas fixas de informações
+básicas e encaminha o restante à equipe. Pedidos, complementos, alterações,
+reclamações e negociações exigem atendimento humano. Esse encaminhamento
+é correto, nunca preguiça ou falha. Não recomende aumentar sua autonomia.
+Os turnos identificados com politica_atendimento=restrito_2026_09_24 são
+avaliados deterministicamente antes deste modelo. Os critérios de falta de
+consulta abaixo servem somente a turnos anteriores SEM essa identificação;
+não reclassifique registros antigos como se já seguissem a política nova.
 
 GRAVIDADE=ALTA (urgente — o dono precisa saber AGORA):
 - Cliente IRRITADO, agressivo, SURTANDO/alterado, ofendido, ou prestes a desistir/cancelar
@@ -252,10 +268,40 @@ def _chamar_modelo(api_key, contexto):
 def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=None):
     """Logica de avaliar — multiplos returns, sem efeitos colaterais alem
     do envio via Z-API. O wrapper `avaliar` cuida do registro no historico."""
+    rb = resultado_bot or {}
+    if rb.get('politica_atendimento') == POLITICA_ATENDIMENTO_RESTRITA:
+        # O modelo nao pode desautorizar um encaminhamento obrigatorio.
+        # Reaproveita a deteccao forte de queixa: palavras soltas como
+        # "qualidade" e perguntas hipoteticas nao viram alerta operacional.
+        from app.services.chatbot import _reclamacao_aberta, texto_da_mensagem
+        ultima_cliente = next((texto_da_mensagem(m)
+                               for m in reversed(historico or [])
+                               if isinstance(m, dict) and m.get('role') == 'user'
+                               and not m.get('herdada')), '')
+        reclamacao = bool(_reclamacao_aberta(ultima_cliente))
+        if reclamacao:
+            motivo = ('Reclamação encaminhada corretamente à equipe; '
+                      'o problema operacional precisa de atendimento humano.'
+                      if rb.get('acao') in ('handoff', 'handoff_repetido', 'silencio_humano') else
+                      'Reclamação precisa de atendimento humano; '
+                      'a resposta do bot não registrou encaminhamento.')
+        else:
+            motivo = ('Encaminhamento à equipe conforme política restrita.'
+                      if rb.get('acao') in ('handoff', 'handoff_repetido', 'silencio_humano') else
+                      'Informação básica conforme política restrita.')
+        veredicto = {
+            'alerta': reclamacao,
+            'gravidade': 'alta' if reclamacao else None,
+            'motivo': motivo,
+            'acao_sugerida': ('A equipe deve ler a conversa e atender a reclamação.'
+                             if reclamacao else ''),
+        }
+        if not current_app.config.get('CHATBOT_VIGIA'):
+            return {'silencio': True, 'veredicto': veredicto}
+        return _processar_veredicto(veredicto, nome_contato, conv_id)
+
     if not disponivel():
         return {'pulou': 'vigia desligado'}
-
-    rb = resultado_bot or {}
 
     if rb.get('fila_silenciosa'):
         # Item 7 (caso E3862E49): o bot NAO encerrou um fechamento porque
@@ -429,7 +475,7 @@ def handoff_foi_preguicoso(tools_usadas, conv_id=None, *, motivo=None,
     (`motivo`, ex. "cliente pediu atendente") — NAO e preguica: nao ha o que
     consultar. O detector do vigia ja excluia isso; o auditor contava.
     Fonte unica: `chatbot.pediu_humano`."""
-    if tools_usadas is None:
+    if tools_usadas is None or MARCADOR_POLITICA_RESTRITA in tools_usadas:
         return False
     if motivo or mensagem_cliente:
         try:
@@ -449,7 +495,8 @@ def handoff_foi_preguicoso(tools_usadas, conv_id=None, *, motivo=None,
     def _tem_leitura(lst):
         return any(t for t in (lst or [])
                    if t and t not in ('transferir_para_humano',
-                                      'encerrar_conversa'))
+                                      'encerrar_conversa',
+                                      MARCADOR_POLITICA_RESTRITA))
 
     if _tem_leitura(tools_usadas):
         return False
@@ -588,6 +635,8 @@ def _e_handoff_preguicoso_em_compra(historico, resultado_bot, conv_id=None):
     """True se: bot fez handoff SEM tool de busca + cliente em compra ativa.
     Determinístico pra ser auditavel e nao depender do Haiku."""
     rb = resultado_bot or {}
+    if rb.get('politica_atendimento') == POLITICA_ATENDIMENTO_RESTRITA:
+        return False
     if rb.get('acao') != 'handoff':
         return False
     if rb.get('tools_usadas') is None:
@@ -698,6 +747,13 @@ def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente,
         from app.models import VigiaVeredito
         rb = resultado_bot or {}
         tools = rb.get('tools_usadas')
+        # Nunca aceitar a marca trazida como nome de ferramenta: somente
+        # o campo interno do roteador pode identificar a politica vigente.
+        if isinstance(tools, (list, tuple)):
+            tools = [t for t in tools if t != MARCADOR_POLITICA_RESTRITA]
+        if rb.get('politica_atendimento') == POLITICA_ATENDIMENTO_RESTRITA:
+            tools = (list(tools) if isinstance(tools, (list, tuple)) else [])
+            tools.append(MARCADOR_POLITICA_RESTRITA)
         tools_json = (_json.dumps(list(tools), ensure_ascii=False)
                       if isinstance(tools, (list, tuple))
                       else None)
@@ -814,6 +870,11 @@ def disparar_teste(cenario='estoque'):
 PROMPT_ABANDONO = """Você é o Vigia: supervisor automático do bot de atendimento da O Pão (padaria artesanal).
 Estou te mostrando uma conversa que está PARADA há um tempo — o cliente não respondeu mais.
 Decida se o dono precisa ser AVISADO no WhatsApp pra um humano pegar a conversa.
+
+POLÍTICA ATUAL (24/09/2026): pedidos, complementos e reclamações devem ser
+atendidos pela equipe. Encaminhar à equipe é correto; nunca recomende que
+o bot volte a fechar pedidos ou a insistir no site. Cliente aguardando a
+equipe precisa de atendimento, não de outra mensagem automática do vigia.
 
 ALERTE (gravidade=alta) quando:
 - Cliente claramente DESISTIU de comprar (estava no meio de um pedido, sumiu)
@@ -1200,16 +1261,16 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
                        f'conversa ainda com o BOT (status {status_conv})\n'
                        f'Cliente: {nome} (conversa #{conv_id})\n\n'
                        f'Última mensagem: "{ultima}"\n\n'
-                       'Ninguem da equipe assumiu; o bot segue respondendo. '
-                       'Abra a conversa se o caso pedir humano.'
+                       'A transferência para a equipe está pendente; o robô está em silêncio. '
+                       'Alguém precisa assumir esta conversa.'
                        + (f'\n\n{link}' if link else ''))
             else:
-                msg = (f'🤖 *Conversa devolvida ao BOT* (status {status_conv}) '
+                msg = (f'*Transferência para a equipe pendente* (status {status_conv}) '
                        f'— cliente em espera ha {minutos}min\n'
                        f'Cliente: {nome} (conversa #{conv_id})\n\n'
                        f'Última mensagem: "{ultima}"\n\n'
-                       'Sem alerta do Vigia; o bot responde. Marque como '
-                       'resolvida se nao houver mais o que fazer.'
+                       'O robô está em silêncio. Alguém da equipe precisa '
+                       'abrir a conversa e atender o cliente.'
                        + (f'\n\n{link}' if link else ''))
         else:
             msg = (f'🙋 *Cliente esperando ATENDENTE* ha {minutos}min\n'
@@ -1265,67 +1326,14 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=None,
             _confirmar_envio_veredito(claim)
         else:
             # Z-API fora / segurada pelo teto: devolve o claim pra retentar o
-            # aviso ao DONO no próximo ciclo. A CONTENÇÃO ao cliente (abaixo)
-            # segue mesmo assim — ele espera há N minutos e não tem nada a
-            # ver com o canal do dono estar fora (achado de revisão 20/08).
+            # aviso ao DONO no próximo ciclo. A equipe continua responsável
+            # por responder ao cliente, mesmo com o canal interno fora.
             _desfazer_claim_veredito(claim)
             espera.proximo_aviso_em = agora()
             db.session.commit()
-        # CONTENÇÃO ao CLIENTE (dono 09/08/2026, Dia dos Pais: 12 clientes
-        # esperando 10-14min em conversa open enquanto a equipe entregava —
-        # inclusive VENDA esperando): junto com o alerta ao dono, o cliente
-        # recebe UM aviso de que foi visto ("a equipe já te responde").
-        # Não promete prazo nem responde a dúvida — só tira o cliente do
-        # vácuo. Dedupe herdado do alerta (1x/12h por conversa, o registro
-        # acima). Best-effort: falha nunca derruba o alerta ao dono.
-        # Kill-switch: ESPERA_HUMANO_CONTENCAO=0 (env direto — a armadilha
-        # do Spotify: env nova só chega ao app.config se declarada no
-        # config.py; kill-switch de vigia lê os.environ como os demais).
-        import os as _os
-
-        # `not bot_no_turno`: em conversa pending o BOT esta respondendo —
-        # o gateway ja recusaria (status_esperado='open'), mas nem vale a
-        # consulta HTTP.
-        # Equipe em NOTA PRIVADA (dono 20/09/2026, caso conv 2409: nota
-        # "@Painel" as 19:06 e a contencao saindo ao entregador as 19:20):
-        # nenhuma fala automatica ao contato. `consultar_chatwoot=True` =
-        # rede de seguranca (1 GET) caso o webhook da nota nao tenha
-        # chegado. A COBRANCA ao dono segue ate resolver — so o texto ao
-        # contato e barrado.
-        from app.services import presenca_humana
-        if reclamacao and espera.estado == 'aguardando' and not espera.contencao_em:
-            logger.info('espera-humano: contenção suprimida conv=%s '
-                        '(cliente relata problema/reclamação)', conv_id)
-        if (espera.estado == 'aguardando' and not espera.contencao_em
-                and not bot_no_turno and not reclamacao
-                and _os.environ.get('ESPERA_HUMANO_CONTENCAO', '1') != '0'
-                and not presenca_humana.humano_presente(
-                    conv_id, consultar_chatwoot=True)):
-            # Anti-duplicidade em DUAS camadas (contato duplicado):
-            # (a) o texto ja esta NESTA conversa (re-alerta pos-12h nao
-            # re-manda o mesmo aviso pro cliente); (b) o MESMO CONTATO ja
-            # recebeu contencao em OUTRA conversa nas ultimas 12h — no IG
-            # varias conversas Chatwoot caem numa unica thread do cliente.
-            ja_nesta = any(
-                TEXTO_CONTENCAO_ESPERA[:40] in (m.get('content') or '')
-                for m in historico[-15:] if m.get('role') != 'user')
-            if ja_nesta or _contencao_recente_para_contato(chave_contato,
-                                                          conv_id):
-                logger.info('espera-humano: contenção suprimida conv=%s '
-                            '(duplicaria pro contato)', conv_id)
-            else:
-                try:
-                    # O acompanhamento inclui pending/snoozed, mas esta fala
-                    # exige atendimento humano. O gateway reconfirma o status
-                    # imediatamente antes de enviar a mensagem ao cliente.
-                    resultado_contencao = chatwoot.enviar_mensagem(
-                        conv_id, TEXTO_CONTENCAO_ESPERA, status_esperado='open')
-                    if resultado_contencao and resultado_contencao.get('ok'):
-                        espera.contencao_em = agora()
-                        db.session.commit()
-                except Exception:  # noqa: BLE001
-                    logger.exception('espera-humano: contenção falhou '
-                                     'conv=%s', conv_id)
+        # Politica restrita de 24/09/2026: o vigia acompanha a fila e
+        # avisa a equipe. Nao envia mensagens automaticas ao cliente,
+        # inclusive quando o aviso interno falha. Sem chave de reativacao.
         if envio.get('ok'):
             enviadas += 1
             logger.info('espera-humano alertado conv=%s (%smin)',
@@ -1415,10 +1423,10 @@ def _registrar_espera_humano(conv_id, nome, minutos, ultima_msg, enviado,
             motivo = 'conversa adiada (snoozed) — ninguem respondendo'
         elif grave:
             motivo = (f'caso grave sem atendimento humano (conversa '
-                      f'{status_conv} — bot ainda respondendo)')
+                      f'{status_conv} — robô em silêncio; transferência pendente)')
         else:
-            motivo = (f'espera em conversa {status_conv} devolvida ao bot '
-                      f'(sem alerta do vigia)')
+            motivo = (f'espera em conversa {status_conv}: transferência para a equipe pendente '
+                      f'(robô em silêncio; sem alerta do vigia)')
         row = VigiaVeredito(
             conv_id=str(conv_id),
             cliente=(nome or '')[:200] or None,

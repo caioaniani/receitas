@@ -1,11 +1,7 @@
-"""Bot de atendimento ao cliente (WhatsApp via Agent Bot do Chatwoot).
+"""Atendimento restrito: informações básicas e encaminhamento para a equipe.
 
-FASE 2: além das boas-vindas/info, o bot usa ferramentas pra consultar
-produtos (preço/estoque/SKU), montar link de carrinho e consultar pedido —
-e passa pro humano quando o cliente pede, em reclamações, ou pra entrega/CEP
-(que ainda não é automático). Reusa o Claude do copilot.
-
-Ferramentas em `app.services.bot_tools`; prompt em `app.services.chatbot_prompt`.
+Desde 24/09/2026, a entrada pública não consulta o modelo nem conduz vendas.
+O motor anterior fica privado para avaliação offline; nenhum canal o chama.
 """
 import json
 import logging
@@ -1627,7 +1623,7 @@ def salvar_historico(conv_id, historico, resposta, *, handoff=False,
         if role not in ('user', 'assistant'):
             continue
         c = texto_da_mensagem(m)
-        if c:
+        if c or m.get('handoff_em'):
             entrada = {'role': role, 'content': c}
             if m.get('handoff_em'):        # preserva marcador de turnos velhos
                 entrada['handoff_em'] = m['handoff_em']
@@ -1639,6 +1635,14 @@ def salvar_historico(conv_id, historico, resposta, *, handoff=False,
         if handoff:
             entrada['handoff_em'] = agora().isoformat()
         msgs.append(entrada)
+    elif handoff:
+        # Uma passagem silenciosa também precisa impedir retomada do robô.
+        # O marcador não é uma mensagem enviada ao cliente.
+        if msgs:
+            msgs[-1]['handoff_em'] = agora().isoformat()
+        else:
+            msgs.append({'role': 'assistant', 'content': '',
+                         'handoff_em': agora().isoformat()})
     msgs = msgs[-MAX_HIST_STORE:]
     try:
         conv = ChatbotConversa.query.filter_by(conv_id=str(conv_id)).first()
@@ -1934,8 +1938,8 @@ TOOLS = [
 
 
 def disponivel():
-    return bool(os.environ.get('ANTHROPIC_API_KEY')
-                or current_app.config.get('ANTHROPIC_API_KEY'))
+    # A triagem não depende de uma chave/modelo de IA.
+    return True
 
 
 def _resumo_tool(nome, out):
@@ -2167,8 +2171,16 @@ def _build_messages(historico):
     return messages
 
 
-def responder(historico, *, telefone_contato=None,
-              conversa_id=None):
+def responder(historico, *, telefone_contato=None, conversa_id=None):
+    """Única entrada dos canais: FAQ determinística ou atendimento humano."""
+    from app.services import atendimento_restrito
+
+    return atendimento_restrito.responder(
+        historico, telefone_contato=telefone_contato, conversa_id=conversa_id)
+
+
+def _responder_modelo_offline(historico, *, telefone_contato=None,
+                            conversa_id=None):
     """Processa a conversa (com loop de ferramentas) e decide a resposta.
 
     `historico`: lista cronológica [{'role','content'}] terminando na última
@@ -2182,6 +2194,9 @@ def responder(historico, *, telefone_contato=None,
       {'acao': 'responder', 'texto': str}
       {'acao': 'handoff',   'texto': str, 'motivo': str}
     """
+    if not current_app.testing:
+        raise RuntimeError('Motor autônomo disponível apenas em testes offline.')
+
     # Fora-horario NAO bloqueia mais o bot (decisao do dono 14/06/2026).
     # O bot continua respondendo normal; quem injeta o aviso de horario eh o
     # branch de handoff abaixo (via `_texto_handoff_com_horario`).
@@ -2662,9 +2677,18 @@ def _tem_encaminhamento_humano(historico):
 
 
 def followup_conversas_paradas():
-    """Ciclo do follow-up: acha conversas pending com cliente silencioso
+    """Retomada comercial automática desativada por decisão de 24/09/2026."""
+    return {'pulou': 'atendimento restrito: retomada depende da equipe'}
+
+
+def _followup_modelo_offline():
+    """Ciclo legado mantido apenas para avaliação, sem agendamento.
+
+    Acha conversas pending com cliente silencioso
     na janela configurada e manda UMA mensagem de retomada por conversa.
     Retorna resumo {'avaliadas': n, 'enviadas': n} pro log/teste."""
+    if not current_app.testing:
+        raise RuntimeError('Retomada autônoma disponível apenas em testes offline.')
     from app.services import chatwoot
 
     cfg = current_app.config
@@ -2759,12 +2783,15 @@ def varrer_pendentes_sem_resposta():
     webhook (idempotente), entao sem esta varredura o cliente fica no vacuo
     pra sempre. Espelho do followup, com a condicao INVERSA (la a ultima msg
     e NOSSA; aqui e do cliente). Kill-switch: CHATBOT_VASSOURA=0."""
-    from app.services import chatwoot
+    from app.blueprints.crm.routes import _lock_conv_cross_worker, _lock_para_conv
+    from app.services import atendimento_humano, chatwoot
     from app.utils import telefone_chave
 
     cfg = current_app.config
-    if str(cfg.get('CHATBOT_VASSOURA', '1')) == '0':
+    if str(os.environ.get('CHATBOT_VASSOURA',
+                          cfg.get('CHATBOT_VASSOURA', '1'))) == '0':
         return {'pulou': 'desligado'}
+    atendimento_humano.recuperar_encaminhamentos_pendentes()
     min_sil = int(cfg.get('CHATBOT_VASSOURA_MIN', 10) or 10)
     max_sil = int(cfg.get('CHATBOT_VASSOURA_MAX_MIN', 720) or 720)
     max_ciclo = int(cfg.get('CHATBOT_VASSOURA_MAX_POR_CICLO', 5) or 5)
@@ -2785,7 +2812,16 @@ def varrer_pendentes_sem_resposta():
             # `buscar_historico(somente_bot=True)`, que devolve [] com a
             # nota na listagem e pularia este ramo (revisao 21/09/2026:
             # cliente esperando + webhook da nota perdido ficava no vacuo).
-            chatwoot.definir_status(conv_id, 'open')
+            try:
+                with _lock_para_conv(conv_id), _lock_conv_cross_worker(conv_id):
+                    conversa = chatwoot.consultar_conversa(conv_id)
+                    if conversa and conversa.get('status') == 'pending':
+                        atendimento_humano.registrar_encaminhamento(
+                            conv_id, carregar_historico(conv_id),
+                            nome=c.get('nome_contato') or '')
+                        chatwoot.definir_status(conv_id, 'open')
+            except Exception:  # noqa: BLE001
+                logger.exception('vassoura: recuperar fila humana falhou conv=%s', conv_id)
             continue
         api_hist = chatwoot.buscar_historico(
             conv_id, incluir_autoria=True, somente_bot=True)
@@ -2801,12 +2837,11 @@ def varrer_pendentes_sem_resposta():
         # no store sem serializar com um webhook em voo da mesma conversa
         # (achado da revisao 19/07/2026). Import tardio evita ciclo com o
         # blueprint (que importa este service dentro das rotas).
-        from app.blueprints.crm.routes import (
-            _lock_conv_cross_worker,
-            _lock_para_conv,
-        )
         try:
             with _lock_para_conv(conv_id), _lock_conv_cross_worker(conv_id):
+                conversa = chatwoot.consultar_conversa(conv_id)
+                if not conversa or conversa.get('status') != 'pending':
+                    continue
                 atual = chatwoot.buscar_historico(
                     conv_id, incluir_autoria=True, somente_bot=True)
                 if atual != api_hist:
@@ -2819,11 +2854,13 @@ def varrer_pendentes_sem_resposta():
                 # store; anexa as msgs finais do cliente (texto E imagens)
                 # que o store nao tem.
                 store = carregar_historico(conv_id)
-                if _tem_encaminhamento_humano(store):
+                if atendimento_humano.encaminhamento_pendente(conv_id):
                     # Recuperar um bot interrompido é diferente de devolver
                     # uma espera humana ao bot. Mantém a fila sem nova fala,
                     # mesmo depois da janela de dedupe de 90 minutos.
-                    chatwoot.definir_status(conv_id, 'open')
+                    conversa = chatwoot.consultar_conversa(conv_id)
+                    if conversa and conversa.get('status') == 'pending':
+                        chatwoot.definir_status(conv_id, 'open')
                     continue
                 if store:
                     pendentes = []
@@ -2841,7 +2878,8 @@ def varrer_pendentes_sem_resposta():
                         texto_pendente
                         and store[-1].get('role') == 'user'
                         and (store[-1].get('content') or '').strip()
-                        == texto_pendente)
+                        == texto_pendente
+                        and (store[-1].get('imagens') or []) == imagens_pendentes)
                     if not texto_pendente and not imagens_pendentes \
                             and store[-1].get('role') != 'user':
                         # Nada utilizavel pendente e o store termina em
@@ -2861,10 +2899,21 @@ def varrer_pendentes_sem_resposta():
                                       conversa_id=conv_id)
                 acao = (resultado or {}).get('acao')
                 texto = (resultado or {}).get('texto') or ''
+                finalidade = None
+                if acao == 'handoff':
+                    novo = atendimento_humano.registrar_encaminhamento(
+                        conv_id, historico, nome=c.get('nome_contato') or '')
+                    salvar_historico(conv_id, historico, '', handoff=True,
+                                     contato_key=telefone or None)
+                    if novo:
+                        finalidade = 'encaminhamento_inicial'
+                    else:
+                        texto = ''
                 # Mesmo dedupe do webhook: conversa ja transferida ha pouco
                 # nao ganha 2º "vou te passar pra equipe". A fila silenciosa
                 # (item 7) nao tem texto — fica handoff pra levar a nota.
-                if (acao == 'handoff' and not (resultado or {}).get('fila_silenciosa')
+                if (acao == 'handoff' and finalidade != 'encaminhamento_inicial'
+                        and not (resultado or {}).get('fila_silenciosa')
                         and handoff_recente(conv_id)):
                     acao = 'handoff_repetido'
                     texto = TEXTO_HANDOFF_REPETIDO
@@ -2872,19 +2921,22 @@ def varrer_pendentes_sem_resposta():
                         conv_id, incluir_autoria=True, somente_bot=True) != api_hist:
                     continue
                 if texto:
-                    envio = chatwoot.enviar_mensagem(conv_id, texto)
+                    envio = chatwoot.enviar_mensagem(
+                        conv_id, texto,
+                        politica_atendimento=resultado.get('politica_atendimento'),
+                        finalidade=finalidade)
                     if envio.get('ok'):
                         respondidas += 1
                         salvar_historico(conv_id, historico, texto,
                                          handoff=(acao == 'handoff'),
                                          contato_key=telefone or None)
-            if acao in ('handoff', 'handoff_repetido'):
-                chatwoot.definir_status(conv_id, 'open')
-                if acao == 'handoff':
-                    from app.services import entrega_candidata
-                    entrega_candidata.anotar_handoff(conv_id, resultado, historico)
-            elif acao == 'encerrar':
-                chatwoot.definir_status(conv_id, 'resolved')
+                if acao in ('handoff', 'handoff_repetido'):
+                    conversa = chatwoot.consultar_conversa(conv_id)
+                    if conversa and conversa.get('status') == 'pending':
+                        chatwoot.definir_status(conv_id, 'open')
+                    if acao == 'handoff':
+                        from app.services import entrega_candidata
+                        entrega_candidata.anotar_handoff(conv_id, resultado, historico)
             logger.warning('vassoura: conv=%s recuperada apos %smin sem '
                            'resposta (acao=%s)', conv_id, minutos, acao)
         except Exception:  # noqa: BLE001

@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Nota privada da equipe cala o bot (dono 20/09/2026, caso conv 2409).
 
 "O bot não pode falar quando a gente fala no privado com a equipe." Às
@@ -56,6 +57,7 @@ def test_nota_privada_humana_grava_marcador_e_tira_do_bot(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     c = app.test_client()
     with app.app_context(), patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.definir_status',
                return_value={'ok': True}) as st, \
          patch('app.services.chatbot.responder') as resp:
@@ -78,6 +80,7 @@ def test_nota_privada_em_conversa_open_so_marca(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     c = app.test_client()
     with app.app_context(), patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.definir_status') as st:
         r = c.post('/crm/bot?k=seg', json=_nota(conv_status='open'))
         body = r.get_json()
@@ -92,6 +95,7 @@ def test_segunda_nota_atualiza_o_marcador(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     c = app.test_client()
     with app.app_context(), patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.definir_status', return_value={'ok': True}):
         _marcar(horas_atras=5, autor='Ana')
         c.post('/crm/bot?k=seg', json=_nota(conv_status='open'))
@@ -111,6 +115,7 @@ def test_nota_do_bot_ou_de_automacao_nao_conta(app):
              _nota(content_attributes={'automation_rule_id': 4}),
              _nota(sender=None, sender_type='AgentBot')]
     with app.app_context(), patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.definir_status') as st:
         for p in casos:
             r = c.post('/crm/bot?k=seg', json=p)
@@ -138,6 +143,7 @@ def test_bot_nao_responde_com_humano_presente(app):
     with app.app_context():
         _marcar()
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.buscar_historico', return_value=[]), \
          patch('app.services.chatbot.responder') as resp, \
          patch('app.services.chatwoot.enviar_mensagem') as env, \
@@ -166,6 +172,7 @@ def test_marcador_velho_nao_cala_o_bot(app):
         _marcar(horas_atras=presenca_humana.PRESENCA_HUMANA_HORAS + 1)
         assert not presenca_humana.humano_presente('7')
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.buscar_historico', return_value=[]), \
          patch('app.services.chatbot.responder',
                return_value={'acao': 'responder', 'texto': 'Oi!'}) as resp, \
@@ -186,6 +193,7 @@ def test_audio_com_humano_presente_nao_pede_texto(app):
     payload = _incoming(content='', attachments=[{'file_type': 'audio',
                                                   'data_url': 'https://x/a.ogg'}])
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.enviar_mensagem') as env, \
          patch('app.services.chatwoot.definir_status',
                return_value={'ok': True}) as st:
@@ -195,19 +203,19 @@ def test_audio_com_humano_presente_nao_pede_texto(app):
     st.assert_called_once_with(7, 'open')
 
 
-def test_audio_sem_humano_segue_pedindo_texto(app):
+def test_audio_sem_humano_vai_para_equipe_sem_redigitar(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     c = app.test_client()
     payload = _incoming(content='', attachments=[{'file_type': 'audio',
                                                   'data_url': 'https://x/a.ogg'}])
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.enviar_mensagem',
                return_value={'ok': True}) as env, \
          patch('app.services.chatwoot.definir_status') as st:
         c.post('/crm/bot?k=seg', json=payload)
-    env.assert_called_once()
-    assert 'Pode me escrever' in env.call_args[0][1]
-    st.assert_not_called()
+    env.assert_not_called()
+    st.assert_called_once_with(7, 'open')
 
 
 # ── 3. Follow-up e vassoura ──
@@ -223,7 +231,7 @@ def test_followup_pula_conversa_com_humano_presente(app):
          patch('app.services.chatbot._followup_gerar_texto') as gerar, \
          patch('app.services.chatwoot.enviar_mensagem') as env:
         _marcar()
-        res = chatbot.followup_conversas_paradas()
+        res = chatbot._followup_modelo_offline()
     assert res == {'avaliadas': 0, 'enviadas': 0}
     hist.assert_not_called()
     gerar.assert_not_called()
@@ -236,6 +244,7 @@ def test_vassoura_com_humano_presente_abre_e_nao_responde(app):
                 'telefone': '+5511910935006'}]
     api_hist = [{'role': 'user', 'content': 'alguém?'}]
     with app.app_context(), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.listar_conversas_paradas',
                return_value=paradas), \
          patch('app.services.chatwoot.buscar_historico', return_value=api_hist), \
@@ -275,10 +284,9 @@ def test_contencao_nao_sai_com_nota_privada_mas_dono_e_avisado(app):
     alerta.assert_called_once()
 
 
-def test_contencao_le_a_api_quando_o_webhook_da_nota_nao_chegou(app):
-    """Rede de segurança: sem marcador no banco, a contenção consulta a
-    API do Chatwoot; nota privada humana recente lá = silêncio + marcador
-    persistido."""
+def test_contencao_desligada_independe_do_webhook_da_nota(app):
+    """Sem fala automática ao cliente, não se consulta nota para liberá-la.
+    A ausência do marcador humano continua sem autorizar contenção."""
     from app.models import PresencaHumanaConversa
     from app.services import chatbot_vigia
     base = {'id': 2410, 'nome_contato': 'Ale', 'minutos_paradas': 15}
@@ -296,14 +304,13 @@ def test_contencao_le_a_api_quando_o_webhook_da_nota_nao_chegou(app):
          patch('app.services.zapi.enviar_texto', return_value={'ok': True}):
         chatbot_vigia.alertar_clientes_esperando_humano()
         row = app.extensions['sqlalchemy'].session.get(PresencaHumanaConversa, '2410')
-        assert row is not None and row.autor == 'Caio'
-    leitura.assert_called_once()
+        assert row is None
+    leitura.assert_not_called()
     contem.assert_not_called()
 
 
-def test_contencao_sai_normalmente_sem_nota(app):
-    """Regressão: sem nota privada a contenção continua saindo (contrato de
-    09/08/2026)."""
+def test_contencao_nao_sai_mesmo_sem_nota(app):
+    """A política restrita mantém o vigia em silêncio também sem nota."""
     from app.services import chatbot_vigia
     base = {'id': 2411, 'nome_contato': 'Bia', 'minutos_paradas': 15}
     hist = [{'role': 'user', 'content': 'Vocês têm cesta de café?'}]
@@ -319,8 +326,7 @@ def test_contencao_sai_normalmente_sem_nota(app):
                return_value={'ok': True}) as contem, \
          patch('app.services.zapi.enviar_texto', return_value={'ok': True}):
         chatbot_vigia.alertar_clientes_esperando_humano()
-    contem.assert_called_once()
-    assert 'já vai te responder' in contem.call_args[0][1]
+    contem.assert_not_called()
 
 
 # ── 5. Helpers do Chatwoot ──
@@ -496,6 +502,7 @@ def test_evento_de_status_resolved_ou_pending_encerra_o_episodio(app):
         assert r.get_json()['episodio'] == 'encerrado'
         assert not ph.humano_presente('7')
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.buscar_historico', return_value=[]), \
          patch('app.services.chatbot.responder',
                return_value={'acao': 'responder', 'texto': 'Oi!'}) as resp, \
@@ -562,6 +569,7 @@ def test_nota_escrita_durante_o_turno_descarta_a_resposta(app):
         return {'acao': 'responder', 'texto': 'Olá! Posso ajudar?'}
 
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.buscar_historico', return_value=[]), \
          patch('app.services.chatbot.responder', side_effect=_responder_e_anotar), \
          patch('app.services.chatwoot.enviar_mensagem') as env, \
@@ -584,6 +592,7 @@ def test_fallback_de_excecao_nao_fala_com_humano_presente(app):
     # O marcador barra antes do modelo; força a exceção ANTES da checagem
     # (carregar_historico) pra exercitar o fallback do except.
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatbot.carregar_historico', side_effect=RuntimeError('db')), \
          patch('app.services.chatwoot.enviar_mensagem') as env, \
          patch('app.services.chatwoot.definir_status',
@@ -602,6 +611,7 @@ def test_vassoura_le_a_api_antes_do_gate_e_abre(app):
                 'telefone': '+5511910935006'}]
     na_api = {'quando': agora() - timedelta(minutes=5), 'autor': 'Caio'}
     with app.app_context(), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.listar_conversas_paradas', return_value=paradas), \
          patch('app.services.chatwoot.nota_privada_humana_recente', return_value=na_api), \
          patch('app.services.chatwoot.buscar_historico') as hist, \
@@ -685,6 +695,7 @@ def test_nota_em_conversa_resolvida_nao_conta(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     c = app.test_client()
     with app.app_context(), patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.definir_status') as st:
         r = c.post('/crm/bot?k=seg', json=_nota(conv_status='resolved'))
         assert r.get_json()['ignorado'] == 'nota-em-resolvida'
@@ -738,6 +749,7 @@ def test_handoff_com_nota_durante_o_turno_cala_mas_deixa_a_nota_interna(app):
                 'motivo': 'entregador da Lalamove sem contato', 'tools_resumo': []}
 
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.buscar_historico', return_value=[]), \
          patch('app.services.chatbot.responder', side_effect=_handoff_e_anotar), \
          patch('app.services.chatwoot.enviar_mensagem') as env, \
@@ -760,6 +772,7 @@ def test_encerrar_do_bot_com_nota_durante_o_turno_nao_resolve(app):
         return {'acao': 'encerrar', 'texto': '', 'motivo': 'fechamento'}
 
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.buscar_historico', return_value=[]), \
          patch('app.services.chatbot.responder', side_effect=_encerrar_e_anotar), \
          patch('app.services.chatwoot.enviar_mensagem') as env, \

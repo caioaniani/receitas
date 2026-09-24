@@ -155,7 +155,8 @@ def enviar_mensagem_painel(conversation_id, content):
         return {'ok': False, 'erro': str(exc)}
 
 
-def enviar_mensagem(conversation_id, content, *, status_esperado=None):
+def enviar_mensagem(conversation_id, content, *, status_esperado=None,
+                    politica_atendimento=None, finalidade=None):
     """Posta uma resposta do bot numa conversa. Retorna {'ok': bool}.
 
     Guarda de INSTÂNCIA CANÔNICA (20/08/2026): o Chatwoot é EXTERNO e
@@ -169,6 +170,27 @@ def enviar_mensagem(conversation_id, content, *, status_esperado=None):
                 'erro': 'instancia nao canonica — envio suprimido'}
     if not bot_disponivel():
         return {'ok': False, 'erro': 'Chatwoot bot nao configurado'}
+    from app.services import atendimento_humano, presenca_humana
+    # Respostas livres, follow-up e macros de espera não têm autorização
+    # para falar pelo atendimento. Wi-Fi é validação transacional explícita;
+    # mensagens humanas e templates usam os seus próprios métodos.
+    if finalidade != 'wifi_portal':
+        if politica_atendimento != atendimento_humano.POLITICA_ATENDIMENTO:
+            return {'ok': False, 'pulou': 'atendimento_restrito'}
+        try:
+            if presenca_humana.humano_presente(
+                    conversation_id, consultar_chatwoot=True):
+                return {'ok': False, 'pulou': 'presenca_humana'}
+            pendente = atendimento_humano.encaminhamento_pendente(conversation_id)
+            if finalidade == 'encaminhamento_inicial' and not pendente:
+                return {'ok': False, 'pulou': 'encaminhamento_nao_registrado'}
+            if finalidade != 'encaminhamento_inicial' and pendente:
+                return {'ok': False, 'pulou': 'aguardando_equipe'}
+        except Exception:  # noqa: BLE001
+            logger.exception('chatwoot: nao foi possivel confirmar dono da conversa %s',
+                             conversation_id)
+            return {'ok': False, 'pulou': 'atendimento_nao_confirmado'}
+        status_esperado = 'pending'
     url = f'{_base()}/conversations/{conversation_id}/messages'
     try:
         if status_esperado is not None:
@@ -400,6 +422,20 @@ def nota_privada_humana_recente(conversation_id, horas=12):
 _MAX_PAGINAS_HISTORICO = 20
 
 
+MARCADOR_ANEXO_CLIENTE = '[Cliente enviou áudio/anexo para a equipe]'
+
+
+def anexos_exigem_equipe(anexos):
+    """Legenda não substitui áudio, vídeo ou arquivo que a equipe deve abrir."""
+    return any(not isinstance(a, dict) or a.get('file_type') != 'image'
+               or not a.get('data_url') for a in (anexos or []))
+
+
+def texto_com_anexo_para_equipe(content):
+    """Preserva a legenda e um sinal durável mesmo em históricos só de texto."""
+    return '\n'.join(t for t in ((content or '').strip(), MARCADOR_ANEXO_CLIENTE) if t)
+
+
 def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
                      somente_bot=False):
     """Mensagens recentes da conversa, em ordem cronologica, mapeadas pra
@@ -483,7 +519,14 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
         mt = m.get('message_type')
         imagens = [a.get('data_url') for a in (m.get('attachments') or [])
                    if a.get('file_type') == 'image' and a.get('data_url')]
-        if (incluir_autoria or somente_bot) and not content and m.get('attachments'):
+        anexos_humanos = (mt in ('incoming', 0)
+                         and anexos_exigem_equipe(m.get('attachments')))
+        if anexos_humanos:
+            # O store e a recuperação mesclam conteúdo textual. Gravar só
+            # a legenda ("bom dia", "qual o link?") descartava o pedido
+            # contido no áudio/documento e liberava uma resposta de FAQ.
+            content = texto_com_anexo_para_equipe(content)
+        elif (incluir_autoria or somente_bot) and not content and m.get('attachments'):
             content = '[Mensagem com anexo]'
         if not content and not imagens:
             continue
@@ -496,6 +539,8 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
             ts = None
         if mt in ('incoming', 0):
             item = {'role': 'user', 'content': content, 'created_at': ts}
+            if anexos_humanos:
+                item['anexos'] = True
             if imagens:
                 item['imagens'] = imagens
             hist.append(item)

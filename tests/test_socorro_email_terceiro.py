@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Bot de atendimento — socorro antes de credencial (23/09/2026).
 
 Três decisões do dono, num dia de problemas de entrega:
@@ -132,7 +133,7 @@ def test_falha_operacional_transfere_sem_pedir_nada(app):
         _pedido('SOC00001', telefone='11988887777')
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic') as M:
-            r = chatbot.responder([{'role': 'user', 'content': 'não recebi meu pedido'}],
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'não recebi meu pedido'}],
                                   telefone_contato='5511988887777')
         M.return_value.messages.create.assert_not_called()
     assert r['acao'] == 'handoff'
@@ -159,7 +160,7 @@ def test_falha_operacional_com_codigo_de_terceiro_anota_existencia(app):
         app.config['ANTHROPIC_API_KEY'] = 'test'
         hist = [{'role': 'user', 'content': 'pedido SOC0002A não chegou até agora'}]
         with patch('anthropic.Anthropic') as M:
-            r = chatbot.responder(hist, telefone_contato='5511900000000')
+            r = chatbot._responder_modelo_offline(hist, telefone_contato='5511900000000')
         M.return_value.messages.create.assert_not_called()
         nota = entrega_candidata.nota_de_handoff(r, hist)
     assert r['acao'] == 'handoff'
@@ -178,7 +179,7 @@ def test_falha_operacional_usa_email_da_conversa(app):
                 {'role': 'assistant', 'content': 'Oi! Como posso ajudar?'},
                 {'role': 'user', 'content': 'o motoboy foi embora sem entregar'}]
         with patch('anthropic.Anthropic'):
-            r = chatbot.responder(hist, telefone_contato='')
+            r = chatbot._responder_modelo_offline(hist, telefone_contato='')
     assert r['acao'] == 'handoff'
     assert 'SOC0003A' in r['tools_resumo'][0] and 'AUTORIZADO' in r['tools_resumo'][0]
 
@@ -219,7 +220,7 @@ def test_busca_paralela_falhando_nao_impede_o_socorro(app):
         with patch('anthropic.Anthropic'), \
                 patch('app.services.bot_tools.consultar_pedido',
                       side_effect=RuntimeError('banco fora')):
-            r = chatbot.responder([{'role': 'user', 'content': 'veio errado, faltou a cesta'}],
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'veio errado, faltou a cesta'}],
                                   telefone_contato='5511988887777')
     assert r['acao'] == 'handoff' and r['tools_usadas'] == []
 
@@ -234,7 +235,7 @@ def test_frase_de_venda_vai_pro_modelo(app, texto):
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic') as M:
             M.return_value.messages.create.return_value = _modelo_texto()
-            r = chatbot.responder([{'role': 'user', 'content': texto}])
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': texto}])
         M.return_value.messages.create.assert_called()
     assert r['acao'] != 'handoff'
 
@@ -297,7 +298,7 @@ def test_contencao_nao_sai_sobre_reclamacao_mas_dono_e_avisado(app):
     assert 'NÃO foi enviada' in alerta.call_args[0][1]
 
 
-def test_contencao_segue_para_duvida_comum(app):
+def test_duvida_comum_em_espera_alerta_equipe_sem_contencao(app):
     from app.services import chatbot_vigia
     base = {'id': 4502, 'nome_contato': 'Cau', 'minutos_paradas': 15}
     hist = [{'role': 'user', 'content': 'Vocês têm cesta de café?'}]
@@ -310,7 +311,8 @@ def test_contencao_segue_para_duvida_comum(app):
                   return_value={'ok': True}) as contem, \
             patch('app.services.zapi.enviar_texto', return_value={'ok': True}) as alerta:
         chatbot_vigia.alertar_clientes_esperando_humano()
-    contem.assert_called_once()
+    contem.assert_not_called()
+    alerta.assert_called_once()
     assert 'PROBLEMA' not in alerta.call_args[0][1]
 
 
@@ -430,7 +432,7 @@ def test_nota_interna_nunca_chega_ao_modelo(app):
         _pedido('NOTA0001', telefone='11977776666')
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic', FakeClient):
-            r = chatbot.responder([{'role': 'user', 'content': 'quero ver o pedido NOTA0001'}],
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'quero ver o pedido NOTA0001'}],
                                   telefone_contato='11900000000')
     assert r['acao'] == 'responder'
     segunda = capturado['chamadas'][1]
@@ -504,7 +506,7 @@ def test_conversa_terceiro_pelo_titular_vira_handoff_com_contexto(app):
                 {'role': 'user', 'content': fala.replace('e não chegou até agora',
                                                           'e quero saber da entrega')}]
         with patch('anthropic.Anthropic', FakeClient):
-            r = chatbot.responder(hist, telefone_contato='11900000000')
+            r = chatbot._responder_modelo_offline(hist, telefone_contato='11900000000')
         nota = entrega_candidata.nota_de_handoff(r, hist)
     assert r['acao'] == 'handoff'
     assert r['tools_usadas'] == ['consultar_pedido']
@@ -521,7 +523,7 @@ def test_terceiro_relatando_falha_recebe_socorro_na_primeira_mensagem(app):
         _pedido('TERC0002', telefone='11977776666')
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic') as M:
-            r = chatbot.responder(
+            r = chatbot._responder_modelo_offline(
                 [{'role': 'user', 'content': 'Minha mãe comprou o pedido TERC0002 pra '
                                              'minha avó e não chegou até agora'}],
                 telefone_contato='11900000000')

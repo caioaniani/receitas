@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Item 8 (spec do dono, caso E3862E49, 22/09/2026): vínculo conversa ↔
 pedido e nota privada à equipe quando o status da entrega muda.
 
@@ -133,7 +134,7 @@ def test_bot_autorizado_vincula_a_conversa(app, monkeypatch):
     with app.app_context():
         _pedido()
         _cliente_com_tool(monkeypatch, {'numero': 'E3862E49'})
-        r = chatbot.responder([{'role': 'user', 'content': 'cadê meu pedido E3862E49?'}],
+        r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'cadê meu pedido E3862E49?'}],
                               telefone_contato='11988887777', conversa_id=2431)
         assert r['acao'] == 'responder'
         assert _vinculos() == {('2431', 'bot')}
@@ -167,7 +168,7 @@ def test_bot_pedido_existente_sem_autorizacao_vincula_mas_modelo_nao_ve(app, mon
                 self.messages = SimpleNamespace(create=create)
         monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-x')
         monkeypatch.setattr('anthropic.Anthropic', FakeClient)
-        chatbot.responder([{'role': 'user', 'content': 'vi o pedido E3862E49 da minha esposa'}],
+        chatbot._responder_modelo_offline([{'role': 'user', 'content': 'vi o pedido E3862E49 da minha esposa'}],
                           telefone_contato='11900000000', conversa_id=2432)
         assert _vinculos() == {('2432', 'bot')}
         # Sem prova de posse o vínculo nasce NÃO autorizado (revisão 23/09):
@@ -182,7 +183,7 @@ def test_bot_autorizado_grava_vinculo_autorizado(app, monkeypatch):
     with app.app_context():
         _pedido()
         _cliente_com_tool(monkeypatch, {'numero': 'E3862E49'})
-        chatbot.responder([{'role': 'user', 'content': 'cadê meu pedido E3862E49?'}],
+        chatbot._responder_modelo_offline([{'role': 'user', 'content': 'cadê meu pedido E3862E49?'}],
                           telefone_contato='11988887777', conversa_id=2431)
         assert _autorizacao() == {'2431': True}
 
@@ -198,7 +199,7 @@ def test_lista_de_varios_pedidos_nao_vincula(app, monkeypatch):
         db.session.commit()
         assert p2.telefone_cliente == '11988887777'
         _cliente_com_tool(monkeypatch, {'numero': ''})
-        chatbot.responder([{'role': 'user', 'content': 'cadê meu pedido?'}],
+        chatbot._responder_modelo_offline([{'role': 'user', 'content': 'cadê meu pedido?'}],
                           telefone_contato='11988887777', conversa_id=2440)
         from app.models import ConversaPedido
         assert ConversaPedido.query.count() == 0
@@ -210,7 +211,7 @@ def test_socorro_vincula_o_pedido_localizado(app):
         _pedido()
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic'):
-            r = chatbot.responder([{'role': 'user', 'content': 'não recebi meu pedido'}],
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'não recebi meu pedido'}],
                                   telefone_contato='11988887777', conversa_id=2431)
         assert r['acao'] == 'handoff'
         assert _vinculos() == {('2431', 'socorro')}

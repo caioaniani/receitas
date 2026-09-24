@@ -42,6 +42,7 @@ _BOT_LOCKS_GUARD = _threading.Lock()
 
 def _lock_para_conv(conv_id):
     """Devolve um threading.Lock dedicado a essa conv_id. Cria sob demanda."""
+    conv_id = str(conv_id)
     with _BOT_LOCKS_GUARD:
         lock = _BOT_LOCKS.get(conv_id)
         if lock is None:
@@ -550,8 +551,8 @@ def bot_webhook():
     # PORTAL WI-FI: mensagem com código WIFI-XXXXXX é validação de posse do
     # número — resposta determinística (sem Claude) e fim. O telefone do
     # REMETENTE é a prova; o service resolve a conta do site e devolve o
-    # link de login. Em conversa 'pending' resolvemos (não é atendimento);
-    # em 'open' só respondemos (não roubar a conversa do atendente).
+    # link de login. O código não altera o status do atendimento: outro
+    # pedido pode estar aguardando processamento em paralelo.
     if _eh_codigo_wifi:
         from app.services import chatwoot as _cw
         telefone_raw = (sender.get('phone_number')
@@ -564,9 +565,9 @@ def bot_webhook():
             res_wifi = None
         if res_wifi is not None:
             try:
-                _cw.enviar_mensagem(conv_id, res_wifi['texto'])
-                if (conv.get('status') or '') == 'pending':
-                    _cw.definir_status(conv_id, 'resolved')
+                with _lock_para_conv(conv_id), _lock_conv_cross_worker(conv_id):
+                    _cw.enviar_mensagem(
+                        conv_id, res_wifi['texto'], finalidade='wifi_portal')
             except Exception:  # noqa: BLE001
                 logger.exception('crm/bot: resposta wifi falhou conv=%s',
                                  conv_id)
@@ -583,32 +584,38 @@ def bot_webhook():
     imagens_atuais = [a.get('data_url') for a in anexos
                       if a.get('file_type') == 'image' and a.get('data_url')]
 
-    # ÁUDIO/anexo nao suportado (02/07/2026): antes, msg so de audio caia num
-    # `return` silencioso — conversa PRESA em pending pra sempre (o follow-up
-    # nao dispara porque a ultima msg e do cliente). Agora responde
-    # deterministicamente pedindo texto, sem gastar Claude.
-    if not content and not imagens_atuais and anexos:
+    # A equipe escuta o áudio/lê o anexo: o cliente não precisa redigitar.
+    from app.services import chatwoot as _cw_anexos
+    if _cw_anexos.anexos_exigem_equipe(anexos):
         def _responder_sem_suporte():
             with app.app_context():
-                from app.services import chatbot, chatwoot, presenca_humana
+                from app.services import atendimento_humano, chatbot, chatwoot
                 with _lock_conv, _lock_conv_cross_worker(conv_id):
                     try:
-                        texto = ('Ainda não consigo ouvir áudios ou abrir esse '
-                                 'tipo de arquivo por aqui. Pode me escrever? '
-                                 'Assim te respondo na hora.')
-                        if presenca_humana.humano_presente(conv_id):
-                            # Equipe em nota privada: o bot nao fala nem
-                            # pede texto — a conversa vai pra fila humana.
-                            texto = ''
-                            chatwoot.definir_status(conv_id, 'open')
-                        else:
-                            chatwoot.enviar_mensagem(conv_id, texto)
                         base = chatbot.carregar_historico(conv_id)
+                        historico = base + [{'role': 'user',
+                                            'content': chatwoot.texto_com_anexo_para_equipe(content),
+                                            'anexos': True}]
+                        atual = chatwoot.consultar_conversa(conv_id)
+                        if atual and atual.get('status') != 'pending':
+                            chatbot.salvar_historico(
+                                conv_id, historico, '', contato_key=telefone_contato)
+                            return
+                        novo = atendimento_humano.registrar_encaminhamento(
+                            conv_id, historico, nome=contato)
                         chatbot.salvar_historico(
-                            conv_id,
-                            base + [{'role': 'user',
-                                     'content': '[cliente enviou áudio/anexo não suportado]'}],
-                            texto, contato_key=telefone_contato)
+                            conv_id, historico, '', handoff=True,
+                            contato_key=telefone_contato)
+                        atual = chatwoot.consultar_conversa(conv_id)
+                        if atual and atual.get('status') == 'pending':
+                            res = chatwoot.definir_status(conv_id, 'open')
+                            if not res.get('ok'):
+                                logger.error('crm bot: áudio permanece na fila local conv=%s', conv_id)
+                        if novo:
+                            from app.services import entrega_candidata
+                            entrega_candidata.anotar_handoff(
+                                conv_id, {'motivo': 'Áudio/anexo: a equipe deve atender por aqui.'},
+                                historico)
                     except Exception:
                         logger.exception('crm bot resposta a anexo nao suportado '
                                          'falhou conv=%s', conv_id)
@@ -626,7 +633,7 @@ def bot_webhook():
         with app.app_context():
             import time as _time
 
-            from app.services import chatbot, chatwoot
+            from app.services import atendimento_humano, chatbot, chatwoot
             espera = _debounce_segundos()
             if espera > 0:
                 _time.sleep(espera)
@@ -672,6 +679,17 @@ def bot_webhook():
                     current_app.logger.info('crm/bot: conv %s historico=%d msgs',
                                             conv_id, len(historico))
 
+                    # O status do webhook é um retrato antigo. Uma fala da
+                    # equipe ou resolução durante o debounce prevalece.
+                    atual = chatwoot.consultar_conversa(conv_id)
+                    if not atual or atual.get('status') != 'pending':
+                        if not atual:
+                            atendimento_humano.registrar_encaminhamento(
+                                conv_id, historico, nome=contato)
+                        chatbot.salvar_historico(
+                            conv_id, historico, '', contato_key=telefone_contato)
+                        return
+
                     # Uma segunda mensagem pode entrar enquanto o primeiro
                     # handoff ainda esta mudando `pending` para `open`. Dentro
                     # do lock, o marcador persistido vence o status antigo do
@@ -685,12 +703,14 @@ def bot_webhook():
                             'acao': 'silencio_humano',
                             'texto': '',
                             'motivo': 'equipe em nota privada nesta conversa',
+                            'politica_atendimento': atendimento_humano.POLITICA_ATENDIMENTO,
                         }
-                    elif chatbot.handoff_recente(conv_id):
+                    elif atendimento_humano.encaminhamento_pendente(conv_id):
                         resultado = {
                             'acao': 'handoff_repetido',
                             'texto': '',
-                            'motivo': 'conversa ja transferida recentemente',
+                            'motivo': 'conversa já encaminhada para a equipe',
+                            'politica_atendimento': atendimento_humano.POLITICA_ATENDIMENTO,
                         }
                     else:
                         resultado = chatbot.responder(
@@ -705,7 +725,7 @@ def bot_webhook():
                     # seria falar com o cliente — e o contrato e nao falar.
                     if (resultado.get('acao') == 'handoff'
                             and not resultado.get('fila_silenciosa')
-                            and chatbot.handoff_recente(conv_id)):
+                            and atendimento_humano.encaminhamento_pendente(conv_id)):
                         logger.info('crm bot handoff REPETIDO suavizado '
                                     'conv=%s (motivo=%s)', conv_id,
                                     resultado.get('motivo'))
@@ -727,21 +747,43 @@ def bot_webhook():
                         resultado = dict(resultado, acao='silencio_humano', texto='',
                                          motivo=(resultado.get('motivo')
                                                  or 'equipe em nota privada durante o turno'))
+                    nova_passagem = False
+                    if resultado['acao'] in ('handoff', 'handoff_repetido', 'silencio_humano'):
+                        # Durável ANTES de qualquer HTTP: se o processo morrer,
+                        # a fila e a proteção continuam no próximo worker.
+                        nova_passagem = atendimento_humano.registrar_encaminhamento(
+                            conv_id, historico, nome=contato)
+                        chatbot.salvar_historico(
+                            conv_id, historico, '', handoff=True,
+                            contato_key=telefone_contato)
+                        # Recarregar preserva o marcador ao salvar a resposta.
+                        historico = chatbot.carregar_historico(conv_id)
+                        if not nova_passagem or resultado['acao'] != 'handoff':
+                            resultado = dict(resultado, texto='')
                     if resultado.get('texto'):
-                        chatwoot.enviar_mensagem(conv_id, resultado['texto'])
-                        texto_enviado = True
+                        envio = chatwoot.enviar_mensagem(
+                            conv_id, resultado['texto'],
+                            politica_atendimento=resultado.get('politica_atendimento'),
+                            finalidade=('encaminhamento_inicial' if nova_passagem else None))
+                        texto_enviado = bool(envio.get('ok'))
                     # Persiste o turno (msg atual + resposta) pro proximo contexto
                     chatbot.salvar_historico(
-                        conv_id, historico, resultado.get('texto') or '',
+                        conv_id, historico,
+                        (resultado.get('texto') or '') if texto_enviado else '',
                         handoff=(resultado['acao'] == 'handoff'),
                         contato_key=telefone_contato)
                     if resultado['acao'] in ('handoff', 'handoff_repetido',
                                              'silencio_humano'):
-                        res_status = chatwoot.definir_status(conv_id, 'open')
+                        # Não reabre atendimento que a equipe acabou de
+                        # resolver, nem altera status humano por payload velho.
+                        atual = chatwoot.consultar_conversa(conv_id)
+                        res_status = (chatwoot.definir_status(conv_id, 'open')
+                                      if atual and atual.get('status') == 'pending'
+                                      else {'ok': bool(atual and atual.get('status') == 'open')})
                         if res_status.get('ok'):
                             logger.info('crm bot handoff conv=%s motivo=%s',
                                         conv_id, resultado.get('motivo'))
-                            if resultado['acao'] == 'handoff' or anotar_mesmo_calado:
+                            if nova_passagem or anotar_mesmo_calado:
                                 # O motivo (relato do terceiro, entrega
                                 # candidata pela rua) vai pra equipe como
                                 # NOTA PRIVADA — antes ficava so no log
@@ -756,7 +798,8 @@ def bot_webhook():
                                 'crm bot handoff conv=%s: definir_status FALHOU '
                                 '(%s) — conversa pode ter ficado presa no bot',
                                 conv_id, res_status.get('erro'))
-                    elif resultado['acao'] == 'encerrar':
+                    elif (resultado['acao'] == 'encerrar'
+                          and not atendimento_humano.encaminhamento_pendente(conv_id)):
                         # Cliente fechou com "obrigada/valeu" e o bot ja tinha
                         # resolvido — silencio + resolved no Chatwoot. Quando
                         # cliente mandar nova msg, Chatwoot reabre como pending
@@ -766,18 +809,24 @@ def bot_webhook():
                                     conv_id, resultado.get('motivo'))
                 except Exception:
                     logger.exception('crm bot processamento falhou conv=%s', conv_id)
-                    # Nunca deixa o cliente sem resposta: AVISA o cliente e
-                    # joga pro humano. Antes (02/07/2026) so mudava o status —
-                    # a conversa ia pra fila humana EM SILENCIO e o cliente
-                    # ficava olhando pro nada ate alguem assumir.
+                    resultado = {
+                        'acao': 'handoff', 'texto': '',
+                        'motivo': 'falha no processamento; equipe deve atender',
+                        'politica_atendimento': atendimento_humano.POLITICA_ATENDIMENTO,
+                    }
+                    # Erro vai para a equipe; nunca dispara texto autônomo.
                     try:
-                        from app.services import presenca_humana as _ph
-                        if not texto_enviado and not _ph.humano_presente(conv_id):
-                            chatwoot.enviar_mensagem(conv_id, chatbot.FALLBACK_TEXTO)
+                        atendimento_humano.registrar_encaminhamento(
+                            conv_id, historico or [], nome=contato)
+                        chatbot.salvar_historico(
+                            conv_id, historico or [], '', handoff=True,
+                            contato_key=telefone_contato)
                     except Exception:
-                        logger.exception('crm bot fallback msg falhou conv=%s', conv_id)
+                        logger.exception('crm bot fallback fila local falhou conv=%s', conv_id)
                     try:
-                        chatwoot.definir_status(conv_id, 'open')
+                        atual = chatwoot.consultar_conversa(conv_id)
+                        if atual and atual.get('status') == 'pending':
+                            chatwoot.definir_status(conv_id, 'open')
                     except Exception:
                         logger.exception('crm bot fallback handoff falhou conv=%s', conv_id)
 
@@ -806,14 +855,16 @@ def bot_webhook():
                         # bot disse (caso classico: "bot afirmou esgotado mas tem
                         # na loja"). Lista nova pra nao mutar o original.
                         hist_pra_vigia = list(historico)
-                        if resultado and (resultado.get('texto') or '').strip():
+                        if (texto_enviado and resultado
+                                and (resultado.get('texto') or '').strip()):
                             hist_pra_vigia.append({
                                 'role': 'assistant',
                                 'content': resultado['texto'].strip(),
                             })
                         chatbot_vigia.avaliar(hist_pra_vigia, conv_id=conv_id,
                                               nome_contato=contato,
-                                              resultado_bot=resultado)
+                                              resultado_bot=(resultado if texto_enviado or not resultado
+                                                             else dict(resultado, texto='')))
                 except Exception:
                     logger.exception('crm vigia falhou conv=%s', conv_id)
 

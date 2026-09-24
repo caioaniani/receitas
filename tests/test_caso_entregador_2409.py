@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Caso conv 2409 (20/09/2026) — entregador da Lalamove preso no bot.
 
 O entregador escreveu "Me liga por favor", depois "Preciso de suporte só
@@ -165,7 +166,7 @@ def test_bot_forca_handoff_no_me_liga_com_texto_de_ligacao(app):
     with app.app_context():
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic') as M:
-            r = chatbot.responder([{'role': 'user', 'content': 'Me liga por favor'}])
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'Me liga por favor'}])
         M.return_value.messages.create.assert_not_called()
     assert r['acao'] == 'handoff'
     assert r['motivo'] == 'cliente pediu ligação'
@@ -187,7 +188,7 @@ def test_frase_de_venda_com_me_liga_vai_pro_modelo(app, texto):
             M.return_value.messages.create.return_value = SimpleNamespace(
                 content=[SimpleNamespace(type='text', text='Posso ajudar!')],
                 stop_reason='end_turn')
-            r = chatbot.responder([{'role': 'user', 'content': texto}])
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': texto}])
         M.return_value.messages.create.assert_called()
     assert r['acao'] != 'handoff'
 
@@ -197,7 +198,7 @@ def test_bot_forca_handoff_de_atendente_segue_com_motivo_antigo(app):
     with app.app_context():
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic'):
-            r = chatbot.responder([{'role': 'user', 'content': 'quero falar com atendente'}])
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'quero falar com atendente'}])
     assert r['motivo'] == 'cliente pediu atendente'
 
 
@@ -380,7 +381,7 @@ def test_elogio_ao_motoboy_nao_vira_reclamacao(app, monkeypatch, msg):
     monkeypatch.setattr('anthropic.Anthropic', FakeClient)
     monkeypatch.setattr(chatbot, '_fora_horario_chat', lambda: False)
     with app.app_context():
-        out = chatbot.responder([
+        out = chatbot._responder_modelo_offline([
             {'role': 'assistant', 'content': 'Qualquer coisa é só chamar.'},
             {'role': 'user', 'content': msg},
         ])

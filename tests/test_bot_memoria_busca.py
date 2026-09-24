@@ -132,6 +132,8 @@ def test_vassoura_usa_store_como_base_e_nao_perde_turnos(app):
         with patch('app.services.chatwoot.listar_conversas_paradas',
                    return_value=[{'id': 880, 'minutos_paradas': 30,
                                   'telefone': '+55 11 98888-7777'}]), \
+                patch('app.services.chatwoot.consultar_conversa',
+                      return_value={'status': 'pending'}), \
                 patch('app.services.chatwoot.buscar_historico',
                       return_value=api_hist), \
                 patch('app.services.chatwoot.enviar_mensagem',
@@ -167,6 +169,8 @@ def test_vassoura_nao_duplica_msg_ja_salva_no_store(app):
         api_hist = [{'role': 'user', 'content': 'tem sourdough?'}]
         with patch('app.services.chatwoot.listar_conversas_paradas',
                    return_value=[{'id': 881, 'minutos_paradas': 20}]), \
+                patch('app.services.chatwoot.consultar_conversa',
+                      return_value={'status': 'pending'}), \
                 patch('app.services.chatwoot.buscar_historico',
                       return_value=api_hist), \
                 patch('app.services.chatwoot.enviar_mensagem',
@@ -325,6 +329,8 @@ def test_webhook_conversa_nova_herda_contexto_do_mesmo_contato(app):
         'sender': {'name': 'Maria', 'phone_number': '+5511955554444'},
     }
     with patch('threading.Thread', _SyncThread), \
+            patch('app.services.chatwoot.consultar_conversa',
+                  return_value={'status': 'pending'}), \
             patch('app.services.chatwoot.buscar_historico',
                   return_value=[]), \
             patch('app.services.chatbot.responder',

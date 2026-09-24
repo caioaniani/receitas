@@ -68,33 +68,20 @@
                 quando o app <em>não sobe</em> (nessa situação o Sentry e todos os vigias internos ficam mudos,
                 porque rodam dentro do próprio app). Alerta no seu WhatsApp. Instalação e configuração:
                 pasta <code>uptime_kuma/</code> no repositório.</li>
-            <li><strong>Bot de atendimento</strong> responde clientes no Chatwoot; auditor manda balanço 5×/dia.
-                <strong>Nota privada cala o bot</strong>: quando alguém da equipe escreve uma
-                <em>nota privada</em> na conversa, o bot e todas as mensagens automáticas ao cliente
-                (contenção, follow-up) param por 12h e a conversa vai para a fila humana — quem anotou
-                é quem responde. A cobrança de espera no WhatsApp do dono continua até a conversa ser
-                <em>resolvida</em> no Chatwoot. Ao transferir, o bot deixa uma <em>nota privada</em>
-                com o motivo e, se um entregador ou portaria citou a rua, a entrega candidata
-                (código do pedido) — o contato nunca vê essa nota.
-                <strong>Problema em curso passa na hora</strong> (23/09/2026): "não recebi",
-                "não chegou", "o motoboy foi embora", "veio errado/faltando", "ninguém responde"
-                → o bot transfere na <em>primeira</em> mensagem, <strong>sem pedir CPF, e-mail
-                nem número</strong>, e a nota privada já traz o pedido que ele achou sozinho
-                (pelo telefone, código ou e-mail da conversa). Pra esse cliente a mensagem
-                automática "atendimento em alta demanda" <strong>não sai</strong> — a cobrança
-                no WhatsApp do dono avisa que é reclamação. Quem escreve pelo titular (mãe,
-                marido, filha) e identifica o pedido por qualquer dado também vai direto pra
-                equipe com o contexto, sem interrogatório. O <strong>e-mail da compra</strong>
-                passou a localizar e autorizar pedido como o CPF; CPF que não confere porque o
-                cadastro não tem CPF vira transferência com nota, nunca "não localizei".</li>
-            <li><strong>Bot não encerra conversa com reclamação em aberto</strong> (caso E3862E49,
-                22/09/2026): "obrigada"/"ok" só vira conversa <em>resolvida</em> quando não há
-                reclamação ou falha de entrega sem resposta de alguém da equipe depois dela. Se o
-                cliente reclamou e só o bot falou, o "obrigada" deixa a conversa na
-                <strong>fila da equipe</strong> (aberta), em silêncio, com nota privada dizendo o
-                motivo — nunca resolvida. A resposta humana dada dentro do Chatwoot conta (o
-                sistema confere lá antes de decidir). Vale para o bot, para o turno em que o modelo
-                emudece e para a vassoura que recupera conversas paradas.</li>
+            <li><strong>Atendimento com a equipe</strong> (24/09/2026): o robô responde somente
+                saudações, endereços cadastrados e pedidos explícitos do link/cardápio.
+                <strong>Pedidos, preços, quantidades, complementos, cartões, reclamações,
+                áudios e imagens vão para a equipe</strong>, com o contexto da conversa.
+                Um pedido de 15 lanches e 15 croissants é encaminhado para atendimento;
+                o robô não manda o cliente comprar no site. Ele não consulta nem confirma
+                entrega, não monta carrinho e não encerra a conversa sozinho.</li>
+            <li><strong>Depois de encaminhar, o robô fica em silêncio.</strong> A fila aparece
+                no painel mesmo se houver falha de comunicação com o Chatwoot. Novas mensagens
+                continuam com a equipe. Não há lembretes automáticos ao cliente durante a
+                espera; os alertas internos de reclamação e demora continuam. Quem atende
+                responde e resolve a conversa. O auditor considera o encaminhamento correto.
+                A confirmação do código de acesso ao Wi-Fi continua funcionando e não
+                encerra um atendimento em andamento.</li>
             <li><strong>Corrida Lalamove cancelada, expirada ou recusada</strong> (23/09/2026):
                 o sistema registra o status na corrida, abre um alerta ALTA no
                 <a href="/entregas/painel">painel de entregas</a> (banner + som, como os do vigia,
@@ -111,13 +98,13 @@
                 dois jeitos: alguém da equipe <strong>responde na conversa depois do alerta</strong>
                 (pelo painel ou pelo Chatwoot), ou alguém clica <strong>✔ Resolver</strong> no alerta
                 e escreve o motivo (obrigatório, fica registrado com quem e quando). Marcar a
-                conversa como resolvida <em>não</em> fecha o alerta (o próprio bot resolve conversa
-                num "obrigada") — se resolveu por telefone ou pessoalmente, use o ✔ Resolver e diga
+                conversa como resolvida <em>não</em> fecha o alerta — se resolveu por telefone
+                ou pessoalmente, use o ✔ Resolver e diga
                 como. Alerta que só foi silenciado aparece na pendência "Alertas do vigia do bot sem
                 resolução" da home do dono.</li>
             <li><strong>Conversas do mesmo pedido ficam amarradas</strong> (caso E3862E49,
                 22/09/2026 — um pedido, três conversas: WhatsApp de saída, Instagram da compradora e
-                WhatsApp do marido): quando o bot identifica o pedido numa conversa, quando alguém
+                WhatsApp do marido): nos vínculos já identificados e quando alguém
                 clica "Chamar cliente" ou quando a Lalamove abre a conversa, o sistema grava o
                 vínculo conversa ↔ pedido. Quando o status da entrega muda (a caminho, entregue,
                 corrida Lalamove cancelada/expirada), cada conversa <em>aberta</em> daquele pedido

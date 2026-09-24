@@ -1,5 +1,50 @@
 # Atendimento omnichannel via Chatwoot (runbook)
 
+## Política atual: atendimento com a equipe — 24/09/2026
+
+O robô fica limitado a saudações, endereços do cadastro ativo e envio do
+site/cardápio quando solicitado explicitamente. Perguntas sobre horário da
+loja seguem para a equipe enquanto não houver um cadastro confiável desses
+horários. O horário de atendimento do chat mantém a janela já definida.
+
+Pedidos, quantidades, preços, complementos, mensagens de cartão, andamento
+de entrega, reclamações, anexos e qualquer solicitação ambígua vão para a
+equipe. Por exemplo, **15 lanches + 15 croissants** e **acrescentar um item
+ao pedido** abrem atendimento humano com a mensagem original. O robô não
+consulta pedidos, confirma entrega, monta carrinho nem encerra a conversa.
+
+A fila é gravada antes das chamadas ao Chatwoot e aparece no painel mesmo
+se a comunicação falhar. A recuperação periódica tenta abrir conversas
+pendentes em lotes com rodízio; respeita conversas resolvidas ou adiadas.
+Depois do encaminhamento, novas mensagens ficam no contexto da equipe,
+sem repetir a confirmação. A equipe continua responsável por responder e
+fechar o atendimento.
+
+O vigia continua enviando alertas **internos** sobre reclamações e espera.
+Não há contenção ou follow-up automático ao cliente. O auditor distingue
+os encaminhamentos desta política dos registros antigos e não exige que o
+robô retenha vendas. Mensagens humanas, templates da equipe e validação
+transacional do portal Wi-Fi permanecem nos seus próprios fluxos.
+A validação do Wi-Fi envia o acesso, mas não encerra a conversa: um pedido
+que chega junto com o código continua disponível para atendimento.
+
+### Implementação e verificação
+
+- `atendimento_restrito.responder` é determinístico e não chama IA ou tools.
+- `chatbot.responder` é a única entrada pública. O motor e follow-up antigos
+  têm nomes privados e recusam execução fora de `current_app.testing`.
+- Webhook e recuperação usam a mesma fila durável e os locks por conversa.
+- O gateway exige a política interna para qualquer fala automática; a
+  confirmação inicial tem finalidade própria. Dados do cliente não definem
+  esses campos.
+- Não há alteração de schema. Testes cobrem compras, complemento, entrega,
+  anexos, supervisão, indisponibilidade da rede e concorrência com a equipe.
+- Testes históricos do motor anterior são avaliações offline; os testes
+  `test_atendimento_restrito*` verificam a política que atende clientes.
+
+As seções de implantação abaixo descrevem a infraestrutura. Orientações
+anteriores de autonomia do robô ficam substituídas por esta política.
+
 Inbox de WhatsApp + Instagram + Facebook + site, self-hosted, substituindo
 Jivochat e EDNA.IO. O sistema da padaria **não** vira inbox — ele integra:
 serve o "card do cliente" (histórico de pedidos) dentro do Chatwoot e faz

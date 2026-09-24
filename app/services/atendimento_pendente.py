@@ -9,7 +9,47 @@ from app.utils import BRT, agora
 logger = logging.getLogger(__name__)
 
 
+# Versao otimista sem coluna nova: todos os dados do episodio observado.
+# As leituras externas so podem alterar esta versao, nunca uma espera mais
+# recente gravada pelo webhook/painel enquanto a API respondia.
+_CAMPOS_ESPERA = tuple(c.name for c in EsperaAtendimento.__table__.columns)
+_SNAPSHOT_CANDIDATA = '_espera_observada'
+
+
+def _observar_espera(conv_id):
+    tabela = EsperaAtendimento.__table__
+    registro = db.session.execute(db.select(tabela).where(
+        tabela.c.conversa_id == str(conv_id))).mappings().first()
+    return dict(registro) if registro is not None else None
+
+
+def _salvar_se_inalterada(row, observada):
+    """CAS atomico; `row` e transitória para nunca sofrer autoflush antecipado."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+    tabela = EsperaAtendimento.__table__
+    valores = {c: getattr(row, c) for c in _CAMPOS_ESPERA}
+    valores['grave'] = bool(valores['grave'])
+    valores['estado'] = valores['estado'] or 'aguardando'
+    if observada is None:
+        inserir = pg_insert if db.engine.dialect.name == 'postgresql' else sqlite_insert
+        stmt = inserir(tabela).values(**valores).on_conflict_do_nothing(
+            index_elements=['conversa_id'])
+    else:
+        stmt = tabela.update().where(db.and_(
+            *(tabela.c[c] == observada[c] for c in _CAMPOS_ESPERA))).values(**valores)
+    mudou = db.session.execute(stmt).rowcount == 1
+    db.session.commit()
+    if not mudou:
+        logger.info('espera humana: resultado antigo descartado conv=%s', row.conversa_id)
+        return None
+    return (EsperaAtendimento.query.populate_existing()
+            .filter_by(conversa_id=row.conversa_id).first())
+
+
 def candidatos():
+    from app.blueprints.crm.routes import _lock_conv_cross_worker, _lock_para_conv
     from app.services import chatwoot
     conversas = chatwoot.listar_conversas_paradas(
         min_minutos=0, status='open', limite=None, estrito=True)
@@ -21,49 +61,74 @@ def candidatos():
         db.or_(EsperaAtendimento.resolvido_em.is_(None),
                VigiaVeredito.criado_em > EsperaAtendimento.resolvido_em),
     ))
-    for row in EsperaAtendimento.query.filter(db.or_(
+    ids = [r.conversa_id for r in EsperaAtendimento.query.filter(db.or_(
             EsperaAtendimento.estado.in_(('aguardando', 'em_atendimento')),
             db.and_(EsperaAtendimento.estado == 'respondido', alerta_do_episodio),
-    )).all():
-        if row.conversa_id in vistos:
-            if row.estado == 'respondido':
-                row.estado = 'em_atendimento'
-            continue
-        atual = chatwoot.consultar_conversa(row.conversa_id)
-        if not atual:
-            continue  # indisponibilidade não encerra o incidente
-        if atual.get('status') == 'resolved':
-            row.estado = 'resolvido'
-            row.resolvido_em = agora()
-            row.proximo_aviso_em = None
-            # Conversa resolvida por humano: episodio "equipe em nota
-            # privada" encerrado (sinal alternativo ao evento do webhook).
-            from app.services import presenca_humana
-            presenca_humana.encerrar(row.conversa_id, 'candidatos:resolved')
-            # Conversa resolvida no Chatwoot NAO fecha o alerta ALTA por si
-            # (item 9, regra estrita: so resposta humana depois do alerta ou
-            # motivo por escrito — o proprio BOT resolve conversa num
-            # "obrigada"). Mas a conversa resolvida SAI de `preparar` (o
-            # unico leitor periodico do historico), entao a resposta humana
-            # dada no Chatwoot antes do resolve ficaria sem efeito e o ALTA
-            # preso na fila ate a janela vencer (revisao 23/09/2026, 2ª
-            # rodada). Le o historico UMA vez, so se ha ALTA em aberto.
-            _resolver_alertas_por_historico(row.conversa_id)
-        elif atual.get('status') in ('open', 'pending', 'snoozed'):
-            if row.estado == 'respondido':
-                row.estado = 'em_atendimento'
-            # `status` e `telefone` acompanham a candidata (caso Jessica
-            # 19/09/2026): sem o status, o alerta dizia "esperando ATENDENTE
-            # em conversa open" numa conversa PENDING que o bot atendia; sem
-            # o telefone, a chave de contato saia vazia ("c:") e o dedupe de
-            # contencao por contato ficava cego neste caminho.
-            sender = ((atual.get('meta') or {}).get('sender') or {})
-            conversas.append({'id': row.conversa_id, 'nome_contato': row.nome,
-                              'minutos_paradas': int((agora() - row.inicio_em).total_seconds() / 60),
-                              'status': atual.get('status'),
-                              'telefone': (sender.get('phone_number')
-                                           or sender.get('identifier') or '')})
+    )).all()]
+    for cid in ids:
+        # Mesmo lock do webhook, sempre thread -> advisory. Candidatos só
+        # roda no monitor (nenhum chamador já segura este lock). A exclusão
+        # cobre inclusive mensagens repetidas que deixariam o snapshot igual.
+        with _lock_para_conv(cid), _lock_conv_cross_worker(cid):
+            observada = _observar_espera(cid)
+            if not observada or observada['estado'] not in ('aguardando', 'em_atendimento', 'respondido'):
+                continue
+            row = EsperaAtendimento(**observada)
+            if row.conversa_id in vistos:
+                if row.estado == 'respondido':
+                    row.estado = 'em_atendimento'
+                    _salvar_se_inalterada(row, observada)
+                continue
+            consulta_iniciada = agora()
+            atual = chatwoot.consultar_conversa(row.conversa_id)
+            if not atual:
+                continue  # indisponibilidade não encerra o incidente
+            if atual.get('status') == 'resolved':
+                row.estado = 'resolvido'
+                row.resolvido_em = agora()
+                row.proximo_aviso_em = None
+                row = _salvar_se_inalterada(row, observada)
+                if row is None:
+                    continue
+                # Conversa resolvida por humano: episodio "equipe em nota
+                # privada" encerrado (sinal alternativo ao evento do webhook).
+                from app.services import presenca_humana
+                presenca_humana.encerrar(
+                    row.conversa_id, 'candidatos:resolved',
+                    tolerancia_seg=max(0.000001, (agora() - consulta_iniciada).total_seconds()))
+                # Conversa resolvida no Chatwoot NAO fecha o alerta ALTA por si
+                # (item 9, regra estrita: so resposta humana depois do alerta ou
+                # motivo por escrito — o proprio BOT resolve conversa num
+                # "obrigada"). Mas a conversa resolvida SAI de `preparar` (o
+                # unico leitor periodico do historico), entao a resposta humana
+                # dada no Chatwoot antes do resolve ficaria sem efeito e o ALTA
+                # preso na fila ate a janela vencer (revisao 23/09/2026, 2ª
+                # rodada). Le o historico UMA vez, so se ha ALTA em aberto.
+                _resolver_alertas_por_historico(row.conversa_id)
+            elif atual.get('status') in ('open', 'pending', 'snoozed'):
+                if _observar_espera(cid) != observada:
+                    continue
+                if row.estado == 'respondido':
+                    row.estado = 'em_atendimento'
+                    row = _salvar_se_inalterada(row, observada)
+                    if row is None:
+                        continue
+                # `status` e `telefone` acompanham a candidata (caso Jessica
+                # 19/09/2026): sem o status, o alerta dizia "esperando ATENDENTE
+                # em conversa open" numa conversa PENDING que o bot atendia; sem
+                # o telefone, a chave de contato saia vazia ("c:") e o dedupe de
+                # contencao por contato ficava cego neste caminho.
+                sender = ((atual.get('meta') or {}).get('sender') or {})
+                conversas.append({'id': row.conversa_id, 'nome_contato': row.nome,
+                                  'minutos_paradas': int((agora() - row.inicio_em).total_seconds() / 60),
+                                  'status': atual.get('status'),
+                                  'telefone': (sender.get('phone_number')
+                                               or sender.get('identifier') or '')})
     db.session.commit()
+    # O vigia vai buscar o historico APÓS esta captura. Uma mensagem/acao
+    # humana durante essa leitura invalida o resultado inteiro de preparar.
+    for conversa in conversas:
+        conversa[_SNAPSHOT_CANDIDATA] = _observar_espera(conversa['id'])
     return conversas
 
 
@@ -161,7 +226,14 @@ def preparar(conversa, historico, *, min_minutos=10):
 
     base = agora()
     conv_id = str(conversa['id'])
-    row = db.session.get(EsperaAtendimento, conv_id)
+    observada = _observar_espera(conv_id)
+    if (_SNAPSHOT_CANDIDATA in conversa
+            and conversa[_SNAPSHOT_CANDIDATA] != observada):
+        logger.info('espera humana: historico ultrapassado descartado conv=%s', conv_id)
+        return None
+    # Calcula em objeto nao associado a sessao; consultas auxiliares/commits
+    # jamais podem gravar campos antes do UPDATE condicional abaixo.
+    row = EsperaAtendimento(**observada) if observada is not None else None
     from app.services.chatbot import cliente_ja_falou
     if not cliente_ja_falou(historico):
         # Conversa iniciada pela EQUIPE ("Chamar cliente") em que o cliente
@@ -180,7 +252,7 @@ def preparar(conversa, historico, *, min_minutos=10):
             # curta ao template ("Sim") reabria a cobrança grave.
             row.grave = False
             row.mensagem = ''
-            db.session.commit()
+            _salvar_se_inalterada(row, observada)
         return None
     graves = VigiaVeredito.query.filter(
         VigiaVeredito.conv_id == conv_id, VigiaVeredito.alerta.is_(True),
@@ -205,16 +277,14 @@ def preparar(conversa, historico, *, min_minutos=10):
             row = EsperaAtendimento(conversa_id=conv_id, inicio_em=grave.criado_em,
                                     nome=conversa.get('nome_contato'), mensagem=grave.mensagem_cliente,
                                     grave=True, estado='aguardando')
-            db.session.add(row)
-            db.session.commit()
-        return row if row and row.estado in ('aguardando', 'em_atendimento') else None
+        return (_salvar_se_inalterada(row, observada)
+                if row and row.estado in ('aguardando', 'em_atendimento') else None)
     ultima = efetivas[-1]
     if ultima.get('role') != 'user':
         if row is None and grave:
             row = EsperaAtendimento(conversa_id=conv_id, inicio_em=grave.criado_em,
                                     nome=conversa.get('nome_contato'), mensagem=grave.mensagem_cliente,
                                     grave=True, estado='em_atendimento')
-            db.session.add(row)
         if row:
             if row.estado == 'resolvido':
                 return None
@@ -224,13 +294,14 @@ def preparar(conversa, historico, *, min_minutos=10):
                 row.estado = 'em_atendimento'
             else:
                 row.estado = 'respondido'
-            db.session.commit()
+            row = _salvar_se_inalterada(row, observada)
         return row if row and row.estado == 'em_atendimento' else None
     texto = ultima.get('content') or ''
     # `elogio=True`: "Amamosss 🥰" depois da entrega não é cliente esperando
     # (conv 2375, 19/09/2026). Só aqui — o bot não encerra num elogio.
     if _e_mencao_story(texto) or _e_fechamento(texto, elogio=True):
-        return row if _acompanhar_ate_resolver(row, base, min_minutos) else None
+        return (_salvar_se_inalterada(row, observada)
+                if _acompanhar_ate_resolver(row, base, min_minutos) else None)
     inicio = _instante(ultima, base - timedelta(minutes=conversa.get('minutos_paradas', 0)))
     # `sem_cliente` foi decidido com um histórico SEM fala do cliente, então
     # qualquer fala dele é nova por construção — o guard abaixo não vale
@@ -241,7 +312,6 @@ def preparar(conversa, historico, *, min_minutos=10):
         return None
     if row is None:
         row = EsperaAtendimento(conversa_id=conv_id, inicio_em=inicio, estado='aguardando')
-        db.session.add(row)
     elif row.estado == 'aguardando' and not _acompanhar_ate_resolver(row, None, min_minutos):
         primeira = _primeira_resposta(efetivas, row.inicio_em)
         if primeira and primeira < inicio and primeira < row.inicio_em + timedelta(minutes=min_minutos):
@@ -264,7 +334,9 @@ def preparar(conversa, historico, *, min_minutos=10):
     row.nome = str(conversa.get('nome_contato') or row.nome or '(sem nome)')[:200]
     row.mensagem = texto[:2000]
     row.grave = bool(row.grave or grave)
-    db.session.commit()
+    row = _salvar_se_inalterada(row, observada)
+    if row is None:
+        return None
     if not row.grave and base < row.inicio_em + timedelta(minutes=min_minutos):
         return None
     return row
@@ -330,6 +402,7 @@ def alertas_painel():
             if row.resolvido_em and row.inicio_em <= row.resolvido_em:
                 continue
             if (not row.grave and row.estado == 'aguardando'
+                    and row.proximo_aviso_em is None
                     and base < row.inicio_em + timedelta(minutes=10)):
                 continue
             inicio, grave, estado = row.inicio_em, row.grave, row.estado

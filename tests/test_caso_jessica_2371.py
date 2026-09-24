@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Caso Jéssica Santos — conv 2371, 19/09/2026 (regressões).
 
 O auditor das 12h relatou "bot confundiu pedido dela com o de outra pessoa
@@ -427,22 +428,21 @@ def test_conversa_pending_sem_alta_nao_diz_caso_grave(app):
                  'created_at': time.time() - 1200}]
         r, msg, contencao = _rodar_espera(app, 4244, hist, 'pending')
         assert r['enviadas'] == 1
-        assert 'devolvida ao BOT' in msg
+        assert 'Transferência para a equipe pendente' in msg
+        assert 'robô está em silêncio' in msg
         assert 'Caso grave' not in msg
         assert 'esperando ATENDENTE' not in msg
         contencao.assert_not_called()
         row = VigiaVeredito.query.filter(
             VigiaVeredito.conv_id == '4244',
             VigiaVeredito.mensagem_cliente.like('[ESPERA_HUMANO%')).one()
-        assert 'devolvida ao bot' in row.motivo_vigia
+        assert 'transferência para a equipe pendente' in row.motivo_vigia
         assert 'caso grave' not in row.motivo_vigia
 
 
-def test_alerta_em_pending_nao_cala_contencao_em_conversa_open_do_contato(app):
-    """Revisão 19/09/2026: o registro em conversa pending sai com a chave
-    do contato mas SEM contenção (bot no turno). Uma conversa OPEN do mesmo
-    contato 12h depois ainda tem que receber a contenção — o dedupe por
-    contato só conta contenção de fato enviada."""
+def test_alertas_em_pending_e_open_nao_falam_com_cliente(app):
+    """A política restrita mantém alertas internos sem contenção pública,
+    inclusive quando o mesmo contato tem mais de uma conversa."""
     from app.services import chatbot_vigia
     with app.app_context():
         _incidente_grave(app, 4245)
@@ -473,10 +473,9 @@ def test_alerta_em_pending_nao_cala_contencao_em_conversa_open_do_contato(app):
                       return_value={'ok': True}):
             r2 = chatbot_vigia.alertar_clientes_esperando_humano()
         assert r2['enviadas'] == 1
-        contencao_b.assert_called_once()
-        # E, agora que a contenção SAIU em 4246, uma terceira conversa do
-        # mesmo contato é suprimida (contrato do IG multi-thread intacto)
-        assert chatbot_vigia._contencao_recente_para_contato(chave, 4247) is True
+        contencao_b.assert_not_called()
+        # Nenhuma contenção foi enviada em nenhuma das conversas.
+        assert chatbot_vigia._contencao_recente_para_contato(chave, 4247) is False
 
 
 def test_candidata_da_tabela_carrega_status_e_telefone(app):
@@ -1059,7 +1058,7 @@ def test_bot_forca_handoff_nas_formas_novas(app):
     with app.app_context():
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic') as M:
-            r = chatbot.responder([{'role': 'user', 'content': 'Atendente por favor'}])
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'Atendente por favor'}])
         M.return_value.messages.create.assert_not_called()
     assert r['acao'] == 'handoff'
     assert r['motivo'] == 'cliente pediu atendente'

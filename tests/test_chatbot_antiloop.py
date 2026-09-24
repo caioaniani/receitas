@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Anti-loop com bot externo (03/07/2026 — caso gov.br).
 
 Um bot externo (+55 61 3207-3332, gov.br) entrou em ciclo com o nosso:
@@ -12,7 +13,7 @@ sem nenhum cliente real, gastando Claude a cada turno. Duas defesas:
 """
 from unittest.mock import patch
 
-from app.services.chatbot import _e_loop_repetido, responder
+from app.services.chatbot import _e_loop_repetido, _responder_modelo_offline
 
 
 class _SyncThread:
@@ -77,7 +78,7 @@ def test_normaliza_espacos_e_caixa():
 def test_responder_encerra_loop_sem_chamar_claude(app):
     """Guard determinístico ANTES do Claude: em loop, devolve 'encerrar' sem
     texto (crm/routes marca resolved em silêncio)."""
-    res = responder(_hist_loop(3))
+    res = _responder_modelo_offline(_hist_loop(3))
     assert res['acao'] == 'encerrar'
     assert res['texto'] == ''
     assert 'loop' in res['motivo']
@@ -112,6 +113,7 @@ def test_webhook_numero_normal_processa(app):
     app.config['CHATBOT_NUMEROS_IGNORADOS'] = '+556132073332'
     client = app.test_client()
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatbot.responder',
                return_value={'acao': 'responder', 'texto': 'olá!'}) as resp, \
          patch('app.services.chatwoot.enviar_mensagem',

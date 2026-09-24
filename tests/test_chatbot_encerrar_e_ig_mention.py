@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Bot extrapolando (16/06/2026, 2 casos do dono):
 
 (1) Cliente fechou com 'obrigada' e o bot continuou puxando conversa →
@@ -54,7 +55,7 @@ def test_responder_propaga_encerrar_quando_bot_chama_a_tool(app, monkeypatch):
     monkeypatch.setattr('anthropic.Anthropic', FakeClient)
 
     with app.app_context():
-        out = chatbot.responder([
+        out = chatbot._responder_modelo_offline([
             {'role': 'assistant', 'content': 'Precisa de mais alguma coisa? 😊'},
             {'role': 'user', 'content': 'obrigada!'},
         ])
@@ -94,6 +95,7 @@ def test_crm_routes_resolve_conversa_quando_bot_encerra(app):
                 self._target()
 
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatbot.responder',
                return_value={'acao': 'encerrar', 'texto': '',
                              'motivo': 'encerramento'}) as resp, \
@@ -142,7 +144,7 @@ def test_fechamento_puro_encerra_SEM_chamar_llm(app, monkeypatch):
     monkeypatch.setattr('anthropic.Anthropic', ExplodeClient)
 
     with app.app_context():
-        out = chatbot.responder([
+        out = chatbot._responder_modelo_offline([
             {'role': 'assistant',
              'content': 'Propostas comerciais vão pro contato@opao.online. '
                         'Sucesso!'},
@@ -176,7 +178,7 @@ def test_fechamento_com_pergunta_pendente_NAO_encerra(app, monkeypatch):
     monkeypatch.setattr('anthropic.Anthropic', FakeClient)
 
     with app.app_context():
-        out = chatbot.responder([
+        out = chatbot._responder_modelo_offline([
             {'role': 'assistant', 'content': 'Confirma o pedido de R$50? 💛'},
             {'role': 'user', 'content': 'ok'},
         ])
@@ -215,7 +217,7 @@ def test_enforcement_em_fechamento_orienta_encerrar_nao_consultar(app, monkeypat
     monkeypatch.setattr('anthropic.Anthropic', FakeClient)
 
     with app.app_context():
-        out = chatbot.responder([
+        out = chatbot._responder_modelo_offline([
             {'role': 'assistant', 'content': 'Posso ajudar em algo mais? 😊'},
             {'role': 'user', 'content': 'obrigada'},
         ])

@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Conversa INICIADA PELA EQUIPE ("Chamar cliente") em que o cliente nunca
 escreveu não é conversa do bot nem espera de atendimento (22/09/2026).
 
@@ -88,7 +89,7 @@ def test_followup_nao_cutuca_conversa_sem_fala_do_cliente(app):
                return_value=list(_SO_NOSSAS[:1])), \
          patch('app.services.chatbot._followup_gerar_texto') as gerar, \
          patch('app.services.chatwoot.enviar_mensagem') as envia:
-        r = chatbot.followup_conversas_paradas()
+        r = chatbot._followup_modelo_offline()
     assert r == {'avaliadas': 0, 'enviadas': 0}
     gerar.assert_not_called()
     envia.assert_not_called()

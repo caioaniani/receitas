@@ -1,5 +1,20 @@
 # Convenções de trabalho (Claude)
 
+## Atendimento restrito (decisão do dono, 24/09/2026)
+
+O atendimento artesanal exige participação da equipe. A entrada pública do
+robô só responde saudações, endereços cadastrados e pedidos explícitos do
+link/cardápio. Pedidos, quantidades, preços, complementos, cartões,
+reclamações, áudios, imagens e dúvidas ambíguas ficam com a equipe, com o
+contexto preservado. Nunca confirmar entrega, montar carrinho, insistir no
+site ou encerrar atendimento automaticamente. Transferir é o comportamento
+correto, sem meta de contenção. Follow-up e contenção ao cliente estão
+desativados; avisos internos continuam. A espera é persistida antes da rede
+e não expira para devolver a conversa ao robô. A validação do Wi-Fi continua
+transacional. Esta decisão substitui as orientações históricas de autonomia
+do bot abaixo; o motor anterior só pode executar em testes offline.
+Detalhes: `docs/atendimento-chatwoot.md`.
+
 ## Kits de café da manhã (decisão do dono, 14/09/2026)
 
 O owner monta e publica os kits em `/admin/kits-cafe`, selecionando somente

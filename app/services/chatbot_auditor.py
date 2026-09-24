@@ -37,11 +37,21 @@ Sua função é olhar os dados agregados do dia (ou periodo) e devolver:
 3. Sugestão concreta de ajuste pra cada problema
 
 Tipos de problema relevantes:
-- Bot empurrando pro humano coisa que deveria saber (ex: 3x dúvida de conteúdo de cesta, 2x agendamento, etc)
+- Bot afirmando que fechou, alterou ou entregou um pedido sem confirmação
+- Cliente enviado ao site quando precisava de alguém para concluir a compra
 - Produto recebendo afirmação incorreta repetida (esgotado errado, preço estranho)
 - Clientes desistindo no mesmo ponto (perda de venda recorrente)
 - Cliente irritado/surtando (mesmo só 1 caso, é grave)
 - Bot dando resposta confusa/truncada/contraditória
+
+POLÍTICA ATUAL (24/09/2026): o bot só responde informações básicas fixas.
+Pedidos, complementos, alterações, negociações e reclamações são da equipe.
+`handoffs_restritos` são encaminhamentos corretos, não falhas ou preguiça.
+`contencao_pct` é mantida para o histórico; não é meta de desempenho.
+Não recomende conter mais conversas nem devolver autonomia ao bot.
+Registros sem marcador são históricos: não presuma pela data que seguiram
+a política nova. Compare a qualidade do atendimento e a espera pela equipe,
+sem tratar a queda de contenção após a mudança como piora.
 
 TOM (regra do dono, 02/07/2026): você é o BALANÇO FRIO do dia — alarme em
 tempo real é papel do VIGIA, que já avisou o dono na hora. NUNCA use 🚨,
@@ -83,17 +93,23 @@ PROMPT_AUDITOR_RESUMO = """Você é o Auditor do bot de atendimento da O Pão (p
 Esta é a auditoria de FIM DE DIA — o dono vai ler isto como balanço diário.
 Sempre devolva o relatório, MESMO se o dia foi tranquilo (vai pra registro).
 
-METRICA-MAE: `contencao_pct` = % das conversas que terminaram SEM
-transferir_para_humano. Meta do dono = 90%. Com 10+ conversas, mencione o
-valor real no `destaque` ou `resumo_curto` (ex: "Contenção 87% (meta 90%)").
-NUNCA arredonde pra cima — número exato dos dados. Com MENOS de 10 conversas,
-NÃO manchete porcentagem (1/2 = "50%" é ruído, não tendência): use números
-absolutos ("2 conversas, 1 handoff") e tom neutro.
+POLÍTICA ATUAL (24/09/2026): o bot só responde informações básicas fixas;
+pedidos, complementos, alterações, negociações e reclamações devem ir à
+equipe. `handoffs_restritos` são encaminhamentos corretos, nunca preguiça.
+`conversas_restritas` e `eventos_restritos` identificam a política nova por
+marcador interno. `eventos_sem_marcador_politica` seguem o histórico antigo:
+não reclassifique esses registros pela data. Amostras trazem a política de
+cada turno. Não recomende mais autonomia nem pressionar o cliente a comprar
+no site. Avalie informações erradas, demora da equipe e perda de venda real.
 
-`handoffs_preguicosos` = handoffs em que o bot NAO chamou tool de busca
-antes (so transferir_para_humano ou nada). E SINTOMA DE PROMPT FALHO,
-nao limite de capacidade — sempre vire `problema` no relatorio quando >=1,
-mas descrito FACTUALMENTE (1 caso é 1 caso, sem extrapolar padrão).
+`contencao_pct` permanece nos dados para comparação histórica, SEM META.
+Queda de contenção por encaminhamento correto não é piora de atendimento.
+Prefira números absolutos de conversas e encaminhamentos corretos; não
+apresente conversa sem handoff como venda fechada ou problema resolvido.
+
+`handoffs_preguicosos` considera apenas turnos SEM o marcador da política
+restrita que não consultaram ferramenta. É uma métrica histórica: relate
+o contexto da época sem sugerir restaurar a autonomia anterior.
 Pedido EXPLÍCITO de atendente ou de LIGAÇÃO pelo cliente e handoff por
 alergia, reclamação, atraso de entrega, marketplace, cancelamento/estorno ou
 TERCEIRO na entrega (entregador/portaria com problema em curso) já estão
@@ -121,7 +137,7 @@ DADOS que você recebe (use-os, não invente):
   chave, não compare com dia nenhum.
 
 Devolva:
-1. Destaque do dia (1 frase curta, com contenção real se tiver dado)
+1. Destaque do dia (1 frase curta sobre atendimento e encaminhamentos)
 2. Resumo numérico (1-2 linhas, números reais)
 3. INSIGHTS — o que aprendemos hoje sobre o atendimento (top temas que o cliente perguntou, horário de pico do `por_hora`, funil do site, tendência vs ontem). 1-3 bullets.
 4. PROBLEMAS — só os que viraram padrão (>=2 ocorrências) OU graves. Pode ser lista vazia.
@@ -209,6 +225,17 @@ def _eh_handoff_preguicoso(v):
                                   mensagem_cliente=v.mensagem_cliente)
 
 
+def _politica_de(v):
+    """Identificacao interna do turno; nunca inferida pela data/mensagem."""
+    from app.services.chatbot_vigia import (
+        MARCADOR_POLITICA_RESTRITA,
+        POLITICA_ATENDIMENTO_RESTRITA,
+    )
+    if MARCADOR_POLITICA_RESTRITA in (_tools_de(v) or []):
+        return POLITICA_ATENDIMENTO_RESTRITA
+    return None
+
+
 def _funil_site(inicio, fim):
     """Funil de vendas do SITE no periodo (PedidoOnline): criados, pagos,
     cancelados e faturamento pago. Da ao auditor o elo que faltava entre
@@ -259,7 +286,9 @@ def _funil_site(inicio, fim):
 # So numeros agregados — as amostras/motivos de ontem nao interessam.
 _CHAVES_COMPARATIVO = ('conversas_unicas', 'handoffs', 'contencao_pct',
                        'handoffs_preguicosos', 'gravidade_alta',
-                       'conversas_com_alta', 'gravidade_media', 'funil_site')
+                       'conversas_com_alta', 'gravidade_media', 'funil_site',
+                       'eventos_restritos', 'conversas_restritas',
+                       'handoffs_restritos', 'eventos_sem_marcador_politica')
 
 
 def _resumo_comparativo(dados):
@@ -295,6 +324,8 @@ def _coletar_periodo(inicio, fim):
 
     total = len(veredictos)
     handoffs = [v for v in veredictos if (v.bot_acao or '') == 'handoff']
+    restritos = [v for v in veredictos if _politica_de(v)]
+    handoffs_restritos = [v for v in restritos if (v.bot_acao or '') == 'handoff']
     alta = [v for v in veredictos if v.gravidade == 'alta']
     media = [v for v in veredictos if v.gravidade == 'media']
     conv_unicas = len({v.conv_id for v in veredictos if v.conv_id})
@@ -305,7 +336,7 @@ def _coletar_periodo(inicio, fim):
     conv_preguicosa = len({v.conv_id for v in handoffs_preguicosos if v.conv_id})
 
     # Taxa de contencao = % das conversas distintas que terminaram SEM
-    # handoff. Meta do dono = 90%. Arredonda 1 casa pra evitar ruido.
+    # handoff. Mantida como dado historico, SEM meta de desempenho.
     contencao_pct = (round(100.0 * (conv_unicas - conv_com_handoff) / conv_unicas, 1)
                      if conv_unicas else None)
     preguicosos_pct = (round(100.0 * len(handoffs_preguicosos) / len(handoffs), 1)
@@ -334,6 +365,7 @@ def _coletar_periodo(inicio, fim):
             amostras_handoff.append({'msg': msg, 'motivo': motivo,
                                      'cliente': v.cliente or '',
                                      'hora': _hora(v),
+                                     'politica_atendimento': _politica_de(v),
                                      'tools': _tools_de(v)})
 
     # Casos de alta (raros, mas todos). `conv_id` em cada um + contagem de
@@ -347,6 +379,7 @@ def _coletar_periodo(inicio, fim):
         'cliente': v.cliente or '', 'msg': (v.mensagem_cliente or '')[:200],
         'motivo': (v.motivo_vigia or '')[:200],
         'hora': _hora(v),
+        'politica_atendimento': _politica_de(v),
         'tools': _tools_de(v),
     } for v in alta]
     conv_com_alta = len({v.conv_id for v in alta if v.conv_id})
@@ -361,6 +394,12 @@ def _coletar_periodo(inicio, fim):
         'conversas_unicas': conv_unicas,
         'handoffs': len(handoffs),
         'conversas_com_handoff': conv_com_handoff,
+        'eventos_restritos': len(restritos),
+        'conversas_restritas': len({v.conv_id for v in restritos if v.conv_id}),
+        'handoffs_restritos': len(handoffs_restritos),
+        'conversas_handoff_restrito': len({v.conv_id for v in handoffs_restritos
+                                         if v.conv_id}),
+        'eventos_sem_marcador_politica': total - len(restritos),
         'handoffs_preguicosos': len(handoffs_preguicosos),
         'conversas_preguicosas': conv_preguicosa,
         'contencao_pct': contencao_pct,
@@ -417,6 +456,14 @@ def _linha_contencao(dados):
     porcentagem por numeros absolutos. Vazia se nao tem dados suficientes."""
     if not dados:
         return ''
+    if dados.get('eventos_restritos'):
+        base = (f'*Atendimento restrito:* {dados.get("conversas_restritas", 0)} '
+                f'conversa(s) · {dados.get("handoffs_restritos", 0)} '
+                'encaminhamento(s) correto(s) à equipe')
+        antigos = dados.get('eventos_sem_marcador_politica') or 0
+        if antigos:
+            base += f' · {antigos} turno(s) históricos sem marcador de política'
+        return base
     conv = dados.get('conversas_unicas') or 0
     com_hand = dados.get('conversas_com_handoff') or 0
     pct = dados.get('contencao_pct')

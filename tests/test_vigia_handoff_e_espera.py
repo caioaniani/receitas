@@ -255,14 +255,10 @@ def test_dm_real_do_instagram_continua_alertando(app):
         assert 'esperando ATENDENTE' in tx.call_args[0][1]
 
 
-def test_espera_humano_manda_contencao_ao_cliente(app):
-    """Dono 09/08/2026 (12 clientes no vácuo 10-14min no Dia dos Pais):
-    junto do alerta ao dono, o CLIENTE recebe 1 mensagem de contenção na
-    conversa ("a equipe já te responde"). Dedupe herdado do alerta;
-    ESPERA_HUMANO_CONTENCAO=0 desliga."""
-    import os
-
+def test_espera_humano_apenas_alerta_equipe_sem_chave_de_reativacao(app, monkeypatch):
+    """Mesmo com a antiga chave ativada, o vigia não fala com o cliente."""
     from app.services import chatbot_vigia
+    monkeypatch.setenv('ESPERA_HUMANO_CONTENCAO', '1')
     base = {'id': 320, 'nome_contato': 'Bia', 'minutos_paradas': 15}
     hist = [{'role': 'user', 'content': 'Vocês têm cesta de café?'}]
     with app.app_context(), \
@@ -271,40 +267,19 @@ def test_espera_humano_manda_contencao_ao_cliente(app):
          patch('app.services.chatwoot.listar_conversas_paradas',
                return_value=[base]), \
          patch('app.services.chatwoot.buscar_historico', return_value=hist), \
-         patch('app.services.chatwoot.enviar_mensagem',
-               return_value={'ok': True}) as contem, \
-         patch('app.services.zapi.enviar_texto', return_value={'ok': True}):
-        chatbot_vigia.alertar_clientes_esperando_humano()
-    contem.assert_called_once()
-    assert contem.call_args[0][0] == 320
-    assert 'já vai te responder' in contem.call_args[0][1]
-
-    # Kill-switch desliga só a contenção (alerta ao dono segue).
-    base2 = {'id': 321, 'nome_contato': 'Cau', 'minutos_paradas': 15}
-    os.environ['ESPERA_HUMANO_CONTENCAO'] = '0'
-    try:
-        with app.app_context(), \
-             patch('app.services.chatbot_vigia._numero_destino',
-                   return_value='5511999990000'), \
-             patch('app.services.chatwoot.listar_conversas_paradas',
-                   return_value=[base2]), \
-             patch('app.services.chatwoot.buscar_historico',
-                   return_value=hist), \
-             patch('app.services.chatwoot.enviar_mensagem') as contem2, \
-             patch('app.services.zapi.enviar_texto',
-                   return_value={'ok': True}) as alerta:
-            chatbot_vigia.alertar_clientes_esperando_humano()
-        contem2.assert_not_called()
-        alerta.assert_called_once()
-    finally:
-        os.environ.pop('ESPERA_HUMANO_CONTENCAO', None)
+         patch('app.services.chatwoot.enviar_mensagem') as contem, \
+         patch('app.services.zapi.enviar_texto', return_value={'ok': True}) as alerta:
+        resultado = chatbot_vigia.alertar_clientes_esperando_humano()
+    contem.assert_not_called()
+    alerta.assert_called_once()
+    assert resultado['enviadas'] == 1
 
 
 def test_contencao_nao_duplica_pro_mesmo_contato_em_duas_conversas(app):
     """Caso Lissa (19/08/2026): a MESMA cliente em DUAS conversas do
     Chatwoot (IG junta tudo numa thread) recebia a contenção em cada uma.
     O alerta ao dono segue POR CONVERSA (ele quer saber das duas), mas a
-    contenção ao cliente sai UMA vez por CONTATO em 12h."""
+    nova política não envia contenção ao cliente em nenhuma delas."""
     from app.services import chatbot_vigia
     paradas = [
         {'id': 1723, 'nome_contato': 'Lissa', 'minutos_paradas': 13,
@@ -325,8 +300,7 @@ def test_contencao_nao_duplica_pro_mesmo_contato_em_duas_conversas(app):
                return_value={'ok': True}) as alerta:
         chatbot_vigia.alertar_clientes_esperando_humano()
     assert alerta.call_count == 2          # dono sabe das DUAS conversas
-    contem.assert_called_once()            # cliente recebe UMA contenção
-    assert contem.call_args[0][0] == 1723
+    contem.assert_not_called()            # cliente será atendida pela equipe
 
 
 def test_contencao_nao_repete_se_ja_esta_na_conversa(app):
@@ -450,10 +424,8 @@ def test_segundo_processo_no_mesmo_ciclo_nao_duplica(app):
     assert envia.call_count == 1
 
 
-def test_contencao_ao_cliente_sai_mesmo_com_zapi_fora(app):
-    """Achado de revisão 20/08: o `continue` no envio falho tirava também a
-    CONTENÇÃO ao cliente. Ele espera há 12 min e não tem nada a ver com o
-    WhatsApp do dono estar fora — a contenção tem que sair do mesmo jeito."""
+def test_vigia_nao_fala_ao_cliente_mesmo_com_zapi_fora(app):
+    """Falha no canal interno não autoriza o vigia a falar ao cliente."""
     from app.services import chatbot_vigia
     with app.app_context(), \
          patch('app.services.chatbot_vigia._numero_destino',
@@ -467,8 +439,7 @@ def test_contencao_ao_cliente_sai_mesmo_com_zapi_fora(app):
          patch('app.services.chatwoot.enviar_mensagem',
                return_value={'ok': True}) as contencao:
         chatbot_vigia.alertar_clientes_esperando_humano()
-    assert contencao.called
-    assert chatbot_vigia.TEXTO_CONTENCAO_ESPERA in contencao.call_args[0][1]
+    contencao.assert_not_called()
 
 
 def test_abandono_grava_o_veredito_ANTES_de_enviar(app):

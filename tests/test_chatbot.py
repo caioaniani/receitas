@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Bot de atendimento (Agent Bot do Chatwoot) — Fase 1.
 
 Cobre o cerebro (chatbot.responder, com Claude mockado) e o webhook
@@ -37,7 +38,7 @@ def test_responder_texto(app):
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic') as M:
             M.return_value.messages.create.return_value = _resp_texto('Olá! Bem-vindo à O Pão. 🥖')
-            r = chatbot.responder([{'role': 'user', 'content': 'oi'}])
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'oi'}])
     assert r['acao'] == 'responder'
     assert 'Pão' in r['texto']
 
@@ -52,7 +53,7 @@ def test_responder_handoff_via_tool(app):
         app.config['ANTHROPIC_API_KEY'] = 'test'
         with patch('anthropic.Anthropic') as M:
             M.return_value.messages.create.return_value = _resp_tool('Já te passo pra um atendente!')
-            r = chatbot.responder([{'role': 'user',
+            r = chatbot._responder_modelo_offline([{'role': 'user',
                                     'content': 'esse pão é sem glúten?'}])
     assert r['acao'] == 'handoff'
     assert 'atendente' in r['texto'].lower()
@@ -69,7 +70,7 @@ def test_responder_detector_quer_humano_forca_handoff(app):
         app.config['ANTHROPIC_API_KEY'] = 'test'
         # Claude NEM e chamado — se fosse, o mock estouraria (sem return_value).
         with patch('anthropic.Anthropic') as M:
-            r = chatbot.responder([{'role': 'user',
+            r = chatbot._responder_modelo_offline([{'role': 'user',
                                     'content': 'quero falar com um atendente'}])
         M.return_value.messages.create.assert_not_called()
     assert r['acao'] == 'handoff'
@@ -99,7 +100,7 @@ def test_troca_de_cesta_vai_direto_para_avaliacao_humana(app):
          'Pode trocar a cesta Sweet Coffee pela Caixa Mimo no meu pedido?'},
     ]
     with app.app_context(), patch('anthropic.Anthropic') as modelo:
-        r = chatbot.responder(historico)
+        r = chatbot._responder_modelo_offline(historico)
     modelo.return_value.messages.create.assert_not_called()
     assert r['acao'] == 'handoff'
     assert 'Não consigo oferecer, aceitar ou confirmar trocas' in r['texto']
@@ -122,7 +123,7 @@ def test_responder_sem_api_key_faz_handoff(app):
     with app.app_context():
         app.config['ANTHROPIC_API_KEY'] = ''
         with patch.dict('os.environ', {'ANTHROPIC_API_KEY': ''}):
-            r = chatbot.responder([{'role': 'user', 'content': 'oi'}])
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'oi'}])
     assert r['acao'] == 'handoff'
 
 
@@ -139,6 +140,7 @@ def test_bot_webhook_responde(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     client = app.test_client()
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.buscar_historico',
                return_value=[{'role': 'user', 'content': 'oi'}]), \
          patch('app.services.chatbot.responder',
@@ -156,6 +158,7 @@ def test_bot_webhook_handoff_muda_status(app):
     app.config['CHATWOOT_BOT_SECRET'] = 'seg'
     client = app.test_client()
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.buscar_historico',
                return_value=[{'role': 'user', 'content': 'quero humano'}]), \
          patch('app.services.chatbot.responder',
@@ -179,6 +182,7 @@ def test_bot_webhook_nao_responde_de_novo_durante_handoff(app):
             '7', [{'role': 'user', 'content': 'quero trocar a cesta'}],
             'Encaminhei para avaliação humana.', handoff=True)
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatbot.responder') as resp, \
          patch('app.services.chatwoot.enviar_mensagem') as env, \
          patch('app.services.chatwoot.definir_status',
@@ -310,7 +314,7 @@ def test_responder_loop_consultar_produtos(app):
                    return_value={'produtos': [{'nome': 'Croissant Almond', 'sku': '10007',
                                                'preco': 32.5, 'disponivel': True}]}) as cp:
             M.return_value.messages.create.side_effect = [resp1, resp2]
-            r = chatbot.responder([{'role': 'user', 'content': 'tem croissant de amêndoas?'}])
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'tem croissant de amêndoas?'}])
     assert r['acao'] == 'responder'
     assert 'Croissant' in r['texto']
     cp.assert_called_once()
@@ -847,6 +851,7 @@ def test_webhook_passa_resposta_do_bot_pro_vigia(app):
     resposta_bot = {'acao': 'responder',
                     'texto': 'Infelizmente está esgotado hoje.'}
     with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'pending'}), \
          patch('app.services.chatwoot.buscar_historico',
                return_value=historico_cliente), \
          patch('app.services.chatbot.responder', return_value=resposta_bot), \
@@ -1339,7 +1344,7 @@ def test_responder_erro_produtos_forca_handoff(app):
              patch('app.services.bot_tools.consultar_produtos',
                    return_value={'erro': 'VNDA indisponível no momento'}):
             M.return_value.messages.create.side_effect = [resp1, resp2]
-            r = chatbot.responder([{'role': 'user', 'content': 'quero uma cesta'}])
+            r = chatbot._responder_modelo_offline([{'role': 'user', 'content': 'quero uma cesta'}])
     assert r['acao'] == 'handoff'
     assert 'R$' not in r['texto']   # não vaza preço inventado
 
@@ -1486,7 +1491,7 @@ def test_followup_envia_quando_cliente_sumiu(app):
                return_value='Conseguiu finalizar seu pedido? 😊'), \
          patch('app.services.chatwoot.enviar_mensagem',
                return_value={'ok': True}) as envia:
-        r = chatbot.followup_conversas_paradas()
+        r = chatbot._followup_modelo_offline()
         assert r == {'avaliadas': 1, 'enviadas': 1}
         envia.assert_called_once_with(42, 'Conseguiu finalizar seu pedido? 😊')
         row = VigiaVeredito.query.filter(
@@ -1497,7 +1502,7 @@ def test_followup_envia_quando_cliente_sumiu(app):
         assert row.enviado_whatsapp is True
 
         # Segundo ciclo: dedupe via banco — NAO manda de novo
-        r2 = chatbot.followup_conversas_paradas()
+        r2 = chatbot._followup_modelo_offline()
         assert r2['enviadas'] == 0
         assert envia.call_count == 1
 
@@ -1517,7 +1522,7 @@ def test_followup_nao_cutuca_se_ultima_msg_e_do_cliente(app):
          patch('app.services.chatwoot.buscar_historico',
                return_value=hist), \
          patch('app.services.chatwoot.enviar_mensagem') as envia:
-        r = chatbot.followup_conversas_paradas()
+        r = chatbot._followup_modelo_offline()
     assert r['enviadas'] == 0
     envia.assert_not_called()
 
@@ -1534,7 +1539,7 @@ def test_followup_ignora_conversa_fria(app):
          patch('app.services.chatwoot.listar_conversas_paradas',
                return_value=[{'id': 44, 'minutos_paradas': 1145}]), \
          patch('app.services.chatwoot.enviar_mensagem') as envia:
-        r = chatbot.followup_conversas_paradas()
+        r = chatbot._followup_modelo_offline()
     assert r['enviadas'] == 0
     envia.assert_not_called()
 
@@ -1543,7 +1548,7 @@ def test_followup_kill_switch(app):
     from app.services import chatbot
     with app.app_context():
         app.config['CHATBOT_FOLLOWUP'] = '0'
-        r = chatbot.followup_conversas_paradas()
+        r = chatbot._followup_modelo_offline()
     assert r == {'pulou': 'desligado'}
 
 
@@ -1564,6 +1569,6 @@ def test_followup_respeita_teto_por_ciclo(app):
                return_value='Oi! Tudo certo?'), \
          patch('app.services.chatwoot.enviar_mensagem',
                return_value={'ok': True}) as envia:
-        r = chatbot.followup_conversas_paradas()
+        r = chatbot._followup_modelo_offline()
     assert r['enviadas'] == 3
     assert envia.call_count == 3

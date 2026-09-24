@@ -1,3 +1,4 @@
+# Testes do motor anterior em avaliação offline; os canais usam a política restrita.
 """Turno VAZIO do modelo + atraso de pedido de app (auditor 26/07/2026).
 
 Contexto real (sonda /api/claude/vigia-vereditos, 12-26/07): 'resposta vazia'
@@ -61,7 +62,7 @@ def test_vazio_em_fechamento_encerra_em_silencio(app, modelo_mudo, msg):
     vazio do modelo E o silencio pedido pelo dono — encerra, nao transfere."""
     from app.services import chatbot
     with app.app_context():
-        out = chatbot.responder([
+        out = chatbot._responder_modelo_offline([
             {'role': 'assistant', 'content': 'Qualquer coisa é só chamar.'},
             {'role': 'user', 'content': msg},
         ])
@@ -95,7 +96,7 @@ def test_vazio_com_reclamacao_vira_handoff_com_mensagem_real(app, modelo_mudo):
     chatbot._fora_horario_chat = lambda: False
     try:
         with app.app_context():
-            out = chatbot.responder([
+            out = chatbot._responder_modelo_offline([
                 {'role': 'assistant', 'content': 'Fico à disposição.'},
                 {'role': 'user',
                  'content': 'Eu acabei cancelando\nAs visitas estavam '
@@ -142,7 +143,7 @@ def test_vazio_com_pergunta_pendente_nao_deixa_cliente_no_vacuo(
     chatbot._fora_horario_chat = lambda: False
     try:
         with app.app_context():
-            out = chatbot.responder([
+            out = chatbot._responder_modelo_offline([
                 {'role': 'assistant', 'content': 'Qual o seu CPF?'},
                 {'role': 'user', 'content': '123'},
             ])
@@ -162,7 +163,7 @@ def test_handoff_de_madrugada_avisa_o_horario(app, modelo_mudo):
     chatbot._fora_horario_chat = lambda: True
     try:
         with app.app_context():
-            out = chatbot.responder([
+            out = chatbot._responder_modelo_offline([
                 {'role': 'assistant', 'content': 'Qual o seu CPF?'},
                 {'role': 'user', 'content': '123'},
             ])

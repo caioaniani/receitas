@@ -883,9 +883,9 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
-    # Follow-up do bot — cliente sumiu apos mensagem nossa, o bot cutuca
-    # (1x por conversa, janela 5-120min). Desligar: CHATBOT_FOLLOWUP=0.
-    if os.environ.get('CHATBOT_FOLLOWUP', '1') != '0':
+    # Recuperação de atendimento pendente, sem retomada comercial automática.
+    # Mantém o id do job para não criar dois agendamentos na atualização.
+    if os.environ.get('CHATBOT_VASSOURA', '1') != '0':
         _scheduler.add_job(
             lambda app=app: _run_followup_bot(app),
             'cron', minute='*/5', id='chatbot-followup',
@@ -1140,22 +1140,12 @@ def _run_zapi_saude(app):
 
 
 def _run_followup_bot(app):
-    """Job: follow-up automatico do bot (12/06/2026, pedido do dono).
-    Cliente que sumiu apos mensagem NOSSA em conversa pending recebe um
-    cutucao gentil do proprio bot (1x por conversa, janela 5-120min).
-    Guarda-corpos no servico (chatbot.followup_conversas_paradas).
-
-    No MESMO ciclo roda a VASSOURA (02/07/2026): conversa pending cuja
-    ultima msg e do CLIENTE ha 10+ min = o bot ficou devendo resposta
-    (thread morta num deploy, crash pos-idempotencia) — reprocessa e
-    responde. Kill-switch proprio: CHATBOT_VASSOURA=0."""
+    """Recupera pendências pelo atendimento restrito; não insiste com clientes."""
     from app.services import chatbot, chatwoot
 
     with app.app_context():
         if not chatwoot.bot_disponivel():
             return
-        _com_lock(LOCK_KEY_FOLLOWUP, chatbot.followup_conversas_paradas,
-                  'followup bot')
         _com_lock(LOCK_KEY_FOLLOWUP, chatbot.varrer_pendentes_sem_resposta,
                   'vassoura bot')
 
