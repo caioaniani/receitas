@@ -8,6 +8,8 @@ from datetime import timedelta
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures('pedidos_antes_do_corte')
+
 
 @pytest.fixture
 def cliente(app):

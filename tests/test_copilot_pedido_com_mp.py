@@ -57,7 +57,7 @@ def test_resolver_produto_original_NAO_inclui_mp(app):
         assert all(m['tipo'] != 'mp' for m in ms)
 
 
-def test_executar_criar_pedido_com_mp(app):
+def test_executar_criar_pedido_com_mp(app, pedidos_antes_do_corte):
     """Pedido criado pelo copilot com 1 MP grava PedidoItem com materia_prima_id."""
     from app.models import PedidoItem, Usuario
     from app.services.copilot import _enriquecer_criar_pedido, executar_criar_pedido
@@ -93,7 +93,7 @@ def test_executar_criar_pedido_com_mp(app):
         assert por_tipo['receita'].quantidade == 5
 
 
-def test_executar_editar_pedido_adiciona_mp(app):
+def test_executar_editar_pedido_adiciona_mp(app, pedidos_antes_do_corte):
     """Editar pedido pra trocar/adicionar uma MP grava materia_prima_id."""
     from app.extensions import db
     from app.models import PedidoItem, PedidoLoja, Usuario

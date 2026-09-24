@@ -21,6 +21,21 @@ import pytest
 
 
 @pytest.fixture
+def pedidos_antes_do_corte(monkeypatch):
+    """Cenários de edição usam 11h BRT; a suíte de corte testa as fronteiras.
+
+    O administrador também respeita o prazo. Sem relógio explícito, testes
+    de itens/merge passariam pela manhã e falhariam depois do meio-dia.
+    """
+    from datetime import datetime, time
+
+    from app.services import pedido_corte
+    from app.utils import hoje
+    monkeypatch.setattr(pedido_corte, 'agora',
+                        lambda: datetime.combine(hoje(), time(11)))
+
+
+@pytest.fixture
 def contato_fiscal_tiny(monkeypatch):
     """Cadastro externo para testes de emissão; gateway tem testes próprios."""
     monkeypatch.setattr('app.services.tiny.contato_fiscal_por_documento',

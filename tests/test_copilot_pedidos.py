@@ -7,7 +7,7 @@ Regressoes cobertas:
 """
 
 
-def test_criar_pedido_basico(app, admin_user, loja, catalogo):
+def test_criar_pedido_basico(app, admin_user, loja, catalogo, pedidos_antes_do_corte):
     """End-to-end: enriquece + executa criar pedido com 1 item."""
     from app.models import PedidoItem, PedidoLoja
     from app.services import copilot
@@ -33,7 +33,7 @@ def test_criar_pedido_basico(app, admin_user, loja, catalogo):
     assert itens[0].receita_id == catalogo['receita'].id
 
 
-def test_criar_pedido_com_backup(app, admin_user, loja, catalogo):
+def test_criar_pedido_com_backup(app, admin_user, loja, catalogo, pedidos_antes_do_corte):
     """Item com observacao='backup' eh persistido no PedidoItem."""
     from app.models import PedidoItem
     from app.services import copilot

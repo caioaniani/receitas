@@ -1,5 +1,22 @@
 # Convenções de trabalho (Claude)
 
+## Corte de pedidos às 12h (decisão do dono, 24/09/2026)
+
+Pedidos das lojas para entrega pela indústria no dia seguinte ficam
+fechados a partir das **12h de Brasília**. Até 11:59:59 é possível ajustar;
+depois disso nenhum perfil, inclusive administrador, pode criar, editar,
+cancelar ou excluir a demanda de amanhã. Verificar as datas original e
+nova na edição, sob a trava da loja, e conferir novamente antes de gravar
+para impedir que uma requisição iniciada antes do corte termine depois.
+A grade semanal recusa integralmente uma seleção com dia fechado; a tela
+não envia as colunas bloqueadas. O motor preserva D+1 e recalcula sua
+rodada se atravessar o corte. Refreshes: 06:30/11:30; atualização final das
+ordens futuras: 12:05; lembretes de pedidos: 9h/11h. Ordens semanais às 12h
+e fermentação permanecem. Esta decisão substitui as menções históricas a
+19h e à exceção de administrador abaixo. O regime existente de pedidos
+emergenciais para hoje e de separação/entrega/recebimento permanece.
+O corte não cria um snapshot da tela de pré-preparo.
+
 ## Atendimento restrito (decisão do dono, 24/09/2026)
 
 O atendimento artesanal exige participação da equipe. A entrada pública do

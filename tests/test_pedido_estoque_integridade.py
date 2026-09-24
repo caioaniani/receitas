@@ -169,7 +169,7 @@ def test_copilot_enviar_registra_falta_como_a_web(app, admin_user):
     assert falta is not None and falta.quantidade == 4
 
 
-def test_copilot_cancelar_em_transporte_estorna(app, admin_user):
+def test_copilot_cancelar_em_transporte_estorna(app, admin_user, pedidos_antes_do_corte):
     from app.services import copilot
     r = _receita('Copilot Cancela')
     loja = _loja('Loja F')

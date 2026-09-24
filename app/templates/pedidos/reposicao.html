@@ -12,7 +12,9 @@
     <a href="{{ url_for('pedidos.novo') }}" class="btn btn-primary">Novo pedido</a>
     {% endif %}
 </div>
-<p class="text-muted">Você pode criar pedidos e editar itens e quantidades enquanto estiverem pendentes ou confirmados, respeitando o horário de corte da produção.</p>
+<p class="text-muted">Você pode editar itens e quantidades enquanto o pedido estiver pendente ou confirmado e dentro do prazo.</p>
+{% set corte_fechado = pedido_corte_ativo(pedido.data_entrega) if pedido else pedido_corte_amanha %}
+{% include "pedidos/_corte_aviso.html" %}
 {% if pedido %}
 <div class="card mb-3"><div class="card-body">
     <div class="d-flex gap-4 flex-wrap">
@@ -29,7 +31,7 @@
         {% endfor %}</tbody>
     </table>
 </div>
-{% if pedido.status in ('pendente', 'confirmado') %}
+{% if pedido.status in ('pendente', 'confirmado') and not corte_fechado %}
 <a class="btn btn-primary" href="{{ url_for('pedidos.editar', id=pedido.id) }}">Editar pedido</a>
 {% endif %}
 {% else %}
@@ -40,13 +42,15 @@
 </ul>
 <div class="row g-3">
 {% for p in pedidos %}
+    {% set corte_pedido = pedido_corte_ativo(p.data_entrega) %}
     <div class="col-md-6 col-xl-4"><div class="card h-100"><div class="card-body">
         <div class="d-flex justify-content-between gap-2"><strong>Pedido #{{ p.id }}</strong><span class="badge bg-secondary">{{ p.status|replace('_', ' ') }}</span></div>
         <p class="mt-2 mb-1">Entrega: <strong>{{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else 'A definir' }}</strong></p>
         <p class="text-muted">{{ p.itens|length }} item(ns)</p>
+        {% if corte_pedido %}<p class="small text-muted"><i class="bi bi-lock-fill" aria-hidden="true"></i> Alterações encerradas às {{ pedido_hora_corte }}h</p>{% endif %}
         <div class="d-flex gap-2 flex-wrap">
             <a class="btn btn-outline-secondary" href="{{ url_for('pedidos.detalhe', id=p.id) }}">Ver pedido</a>
-            {% if p.status in ('pendente', 'confirmado') %}<a class="btn btn-primary" href="{{ url_for('pedidos.editar', id=p.id) }}">Editar pedido</a>{% endif %}
+            {% if p.status in ('pendente', 'confirmado') and not corte_pedido %}<a class="btn btn-primary" href="{{ url_for('pedidos.editar', id=p.id) }}">Editar pedido</a>{% endif %}
         </div>
     </div></div></div>
 {% else %}

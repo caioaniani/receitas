@@ -10,6 +10,7 @@
     </a>
 {% endcall %}
 <p class="text-muted mb-3">Acompanhe o abastecimento das lojas, da solicitação ao recebimento. Abra um pedido para conferir os itens.</p>
+{% include "pedidos/_corte_aviso.html" %}
 
 <details class="page-options mb-3">
     <summary>Mais opções</summary>
@@ -122,10 +123,12 @@
         </thead>
         <tbody>
             {% for p in pedidos %}
+            {% set corte_pedido = pedido_corte_ativo(p.data_entrega) %}
             <tr style="cursor:pointer" onclick="window.location='{{ url_for('pedidos.detalhe', id=p.id) }}'">
                 <td class="col-check" onclick="event.stopPropagation()">
                     <input type="checkbox" class="form-check-input pedidos-check"
                            data-id="{{ p.id }}" data-status="{{ p.status }}"
+                           data-corte-bloqueado="{{ '1' if corte_pedido else '0' }}"
                            aria-label="Selecionar pedido {{ p.id }}">
                 </td>
                 <td class="col-acoes" onclick="event.stopPropagation()">
@@ -169,7 +172,7 @@
                                 </form>
                             </li>
                             {% endif %}
-                            {% if p.status not in ('cancelado', 'entregue') %}
+                            {% if p.status not in ('cancelado', 'entregue') and not corte_pedido %}
                             <li><hr class="dropdown-divider"></li>
                             <li>
                                 <form method="POST" action="{{ url_for('pedidos.cancelar', id=p.id) }}" class="d-inline"
@@ -181,7 +184,7 @@
                                 </form>
                             </li>
                             {% endif %}
-                            {% if current_user.is_admin() and p.status in ('cancelado', 'pendente') %}
+                            {% if current_user.is_admin() and p.status in ('cancelado', 'pendente') and not corte_pedido %}
                             <li>
                                 <form method="POST" action="{{ url_for('pedidos.excluir', id=p.id) }}" class="d-inline"
                                       onsubmit="return confirm('Excluir pedido #{{ p.id }} permanentemente? Esta ação não pode ser desfeita.');">
@@ -199,6 +202,11 @@
                 <td>{{ p.loja.nome }}</td>
                 <td>
                     {{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '—' }}
+                    {% if corte_pedido %}
+                    <span class="badge-status ms-1" title="Prazo encerrado às {{ pedido_hora_corte }}h, horário de Brasília">
+                        <i class="bi bi-lock-fill" aria-hidden="true"></i> edição fechada
+                    </span>
+                    {% endif %}
                     {% if p.data_entrega and p.criado_em and p.data_entrega == p.criado_em.date() %}
                     <span class="badge-status ms-1" style="background:#fee2e2; color:#dc2626; font-weight:600;"
                           title="Pedido feito no MESMO dia da entrega — emergência">
@@ -270,6 +278,11 @@
         } else {
             bulkBar.classList.add('d-none');
         }
+        bulkBar.querySelectorAll('[data-acao="cancelar"], [data-acao="excluir"]').forEach(function(btn) {
+            btn.classList.toggle('d-none', sel.length > 0 && sel.every(function(c) {
+                return c.dataset.corteBloqueado === '1';
+            }));
+        });
         var todos = checks();
         if (todos.length > 0) {
             checkAll.checked = sel.length === todos.length;
@@ -316,7 +329,10 @@
             var acao = btn.dataset.acao;
             var validos = ACOES_VALIDAS[acao] || [];
             var sel = selecionados();
-            var aplicaveis = sel.filter(function(c) { return validos.indexOf(c.dataset.status) !== -1; });
+            var aplicaveis = sel.filter(function(c) {
+                var bloqueado = (acao === 'cancelar' || acao === 'excluir') && c.dataset.corteBloqueado === '1';
+                return validos.indexOf(c.dataset.status) !== -1 && !bloqueado;
+            });
 
             if (aplicaveis.length === 0) {
                 alert('Nenhum dos pedidos selecionados pode receber a ação "' + acao + '".');
@@ -330,7 +346,7 @@
                 msg = 'Aplicar "' + label + '" em ' + aplicaveis.length + ' pedido(s)?';
             }
             if (aplicaveis.length < sel.length) {
-                msg += '\n(' + (sel.length - aplicaveis.length) + ' pedido(s) ignorados por status incompatível)';
+                msg += '\n(' + (sel.length - aplicaveis.length) + ' pedido(s) ignorados por status incompatível ou prazo de alteração encerrado)';
             }
             if (!confirm(msg)) return;
 

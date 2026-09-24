@@ -464,7 +464,11 @@ def pedidos_semana_gerar():
     """
     from datetime import date
 
-    from app.services.pedidos_semana import PedidoLoteInvalidoError, aplicar_grade
+    from app.services.pedidos_semana import (
+        PedidoCorteError,
+        PedidoLoteInvalidoError,
+        aplicar_grade,
+    )
 
     def _primeiro_nao_vazio(nome):
         # A ação vem em DOIS lugares com o mesmo nome: o hidden preenchido por
@@ -553,19 +557,16 @@ def pedidos_semana_gerar():
                for k, v in agrupado.items()]
     try:
         res = aplicar_grade(pedidos, current_user.id)
-    except PedidoLoteInvalidoError as exc:
+    except (PedidoCorteError, PedidoLoteInvalidoError) as exc:
+        db.session.rollback()
         msg = f'{exc} Nenhum pedido foi alterado.'
+        corte = isinstance(exc, PedidoCorteError)
+        if corte:
+            msg += ' Para atualizar outros dias, use o botão do dia desejado.'
         if request.form.get('ajax') == '1':
-            return jsonify(ok=False, mudou=False, msg=msg), 400
+            return jsonify(ok=False, mudou=False, msg=msg), 409 if corte else 400
         flash(msg, 'warning')
         return _voltar()
-
-    # Corte do fim do dia (dono 10/08/2026): a tela é admin_required — o
-    # gerar passa — mas o aviso de que o pré-preparo de amanhã já foi
-    # calculado vai junto (mesmo texto do /pedidos/novo pra admin).
-    from app.services.pedido_corte import bloqueio_do_corte
-    _, aviso_corte = bloqueio_do_corte(
-        sorted({p['data_entrega'] for p in pedidos}), user=current_user)
 
     if so_loja is not None:
         from app.models import Loja
@@ -596,8 +597,6 @@ def pedidos_semana_gerar():
             msg = '. '.join(partes_msg) + '.'
         else:
             msg = 'Nada a atualizar (coluna igual ao pedido).'
-        if aviso_corte:
-            msg += ' ' + aviso_corte
         return jsonify(ok=True, mudou=mudou, msg=msg, res=res)
 
     if partes_msg:
@@ -606,9 +605,6 @@ def pedidos_semana_gerar():
     else:
         flash('Nada a criar nem atualizar (grade igual aos pedidos existentes).',
               'info')
-    if aviso_corte:
-        flash(aviso_corte, 'warning')
-
     return _voltar()
 
 

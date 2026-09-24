@@ -2,13 +2,19 @@
 dia SEM pedido vira rascunho; dia COM pedido EDITÁVEL (pendente/confirmado,
 único) tem os itens sincronizados (ajusta/adiciona/remove com 0, carimba
 modificado_em/por); separado+ e dias com 2 pedidos não são tocados."""
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 import pytest
 
 from app.extensions import db
 from app.models import Loja, PedidoItem, PedidoLoja, Receita
-from app.services.pedidos_semana import PedidoLoteInvalidoError, aplicar_grade
+from app.services.pedidos_semana import (
+    PedidoCorteError,
+    PedidoLoteInvalidoError,
+    _sincronizar_itens,
+    aplicar_grade,
+    criar_pedidos_rascunho,
+)
 from app.utils import hoje
 
 
@@ -384,3 +390,255 @@ def test_media_renderiza_botao_atualizar_dia(app, admin_user):
                       '&inicio=0').get_data(as_text=True)
     assert 'btn-atualizar-dia' in body
     assert '%d|%s' % (loja.id, (hoje_d + timedelta(days=1)).isoformat()) in body
+
+
+def _relogio_corte(monkeypatch, hora, minuto=0, segundo=0):
+    from app.services import pedido_corte
+
+    instante = datetime.combine(hoje(), time(hora, minuto, segundo))
+    monkeypatch.setattr(pedido_corte, 'agora', lambda: instante)
+
+
+@pytest.mark.parametrize('acao', ['criar', 'editar', 'remover'])
+@pytest.mark.parametrize('horario,bloqueado', [((11, 59, 59), False), ((12, 0, 0), True)])
+def test_grade_fronteira_meio_dia_inclusive_admin(
+        app, admin_user, monkeypatch, acao, horario, bloqueado):
+    loja = _loja()
+    receita = _receita()
+    dia = hoje() + timedelta(days=1)
+    if acao != 'criar':
+        _pedido(loja, dia, [(receita, 100)])
+    qtd = 0 if acao == 'remover' else 40
+    grade = [{'loja_id': loja.id, 'data_entrega': dia,
+              'itens': [{'receita_id': receita.id, 'qtd': qtd}]}]
+    _relogio_corte(monkeypatch, *horario)
+
+    if bloqueado:
+        with pytest.raises(PedidoCorteError, match='12:00'):
+            aplicar_grade(grade, admin_user.id)
+        # Um commit posterior do chamador não salva nenhuma alteração recusada.
+        db.session.commit()
+        assert PedidoLoja.query.count() == (0 if acao == 'criar' else 1)
+        assert [it.quantidade for it in PedidoItem.query.all()] == (
+            [] if acao == 'criar' else [100])
+    else:
+        aplicar_grade(grade, admin_user.id)
+        assert PedidoLoja.query.count() == 1
+        assert [it.quantidade for it in PedidoItem.query.all()] == (
+            [] if acao == 'remover' else [40])
+
+
+@pytest.mark.parametrize('executar', [aplicar_grade, criar_pedidos_rascunho])
+def test_corte_recusa_lote_misto_sem_salvar_dias_livres(
+        app, admin_user, monkeypatch, executar):
+    loja = _loja()
+    receita = _receita()
+    amanha = hoje() + timedelta(days=1)
+    existente = _pedido(loja, amanha + timedelta(days=1), [(receita, 100)])
+    grade = [
+        {'loja_id': loja.id, 'data_entrega': amanha + timedelta(days=1),
+         'itens': [{'receita_id': receita.id, 'qtd': 30}]},
+        {'loja_id': loja.id, 'data_entrega': amanha + timedelta(days=2),
+         'itens': [{'receita_id': receita.id, 'qtd': 20}]},
+        {'loja_id': loja.id, 'data_entrega': amanha,
+         'itens': [{'receita_id': receita.id, 'qtd': 10}]},
+    ]
+    _relogio_corte(monkeypatch, 12)
+
+    with pytest.raises(PedidoCorteError):
+        executar(grade, admin_user.id)
+
+    db.session.commit()
+    assert PedidoLoja.query.count() == 1
+    assert PedidoItem.query.one().quantidade == 100
+    assert db.session.get(PedidoLoja, existente.id).modificado_por_id is None
+
+
+@pytest.mark.parametrize('executar', [aplicar_grade, criar_pedidos_rascunho])
+def test_grade_reverifica_relogio_depois_de_esperar_pela_trava(
+        app, admin_user, monkeypatch, executar):
+    from app.services import pedidos_semana
+
+    loja = _loja()
+    receita = _receita()
+    dia = hoje() + timedelta(days=1)
+    _relogio_corte(monkeypatch, 11, 59, 59)
+    travar = pedidos_semana.travar_pedidos_lojas
+
+    def travar_apos_meio_dia(ids):
+        travar(ids)
+        _relogio_corte(monkeypatch, 12)
+
+    monkeypatch.setattr(pedidos_semana, 'travar_pedidos_lojas', travar_apos_meio_dia)
+    with pytest.raises(PedidoCorteError):
+        executar([{'loja_id': loja.id, 'data_entrega': dia,
+                   'itens': [{'receita_id': receita.id, 'qtd': 10}]}], admin_user.id)
+
+    db.session.commit()
+    assert PedidoLoja.query.count() == 0
+
+
+@pytest.mark.parametrize('executar', [aplicar_grade, criar_pedidos_rascunho])
+def test_grade_desfaz_transacao_que_atravessa_o_corte(
+        app, admin_user, monkeypatch, executar):
+    from app.services import pedidos_semana
+
+    loja = _loja()
+    receita = _receita()
+    dia = hoje() + timedelta(days=1)
+    _relogio_corte(monkeypatch, 11, 59, 59)
+    validar = pedidos_semana._validar_lotes_da_grade
+
+    def validar_ate_meio_dia(pedidos):
+        validar(pedidos)
+        _relogio_corte(monkeypatch, 12)
+
+    monkeypatch.setattr(pedidos_semana, '_validar_lotes_da_grade', validar_ate_meio_dia)
+    with pytest.raises(PedidoCorteError):
+        executar([
+            {'loja_id': loja.id, 'data_entrega': dia + timedelta(days=1),
+             'itens': [{'receita_id': receita.id, 'qtd': 20}]},
+            {'loja_id': loja.id, 'data_entrega': dia,
+             'itens': [{'receita_id': receita.id, 'qtd': 10}]},
+        ], admin_user.id)
+
+    db.session.commit()
+    assert PedidoLoja.query.count() == 0
+    assert PedidoItem.query.count() == 0
+
+
+@pytest.mark.parametrize('atravessa_corte', [False, True])
+def test_grade_vazia_desfaz_cancelamento_do_cron_em_data_fechada(
+        app, monkeypatch, atravessa_corte):
+    from app.services import pedidos_semana
+
+    loja = _loja()
+    receita = _receita()
+    dia = hoje() + timedelta(days=1)
+    pedido = _pedido(loja, dia, [(receita, 100)])
+    pedido_id = pedido.id
+    pedido.status = 'cancelado'  # O cron cancelou por zero antes de montar a grade.
+    _relogio_corte(monkeypatch, 11 if atravessa_corte else 12)
+    if atravessa_corte:
+        validar = pedidos_semana._validar_lotes_da_grade
+
+        def validar_ate_meio_dia(pedidos):
+            validar(pedidos)
+            _relogio_corte(monkeypatch, 12)
+
+        monkeypatch.setattr(pedidos_semana, '_validar_lotes_da_grade', validar_ate_meio_dia)
+
+    with pytest.raises(PedidoCorteError):
+        aplicar_grade([], None, datas_adicionais_corte=[dia])
+
+    db.session.commit()
+    assert db.session.get(PedidoLoja, pedido_id).status == 'pendente'
+    assert PedidoItem.query.one().quantidade == 100
+
+
+@pytest.mark.parametrize('executar', [aplicar_grade, criar_pedidos_rascunho])
+def test_grade_desfaz_tudo_se_flush_final_atravessa_meio_dia(
+        app, admin_user, monkeypatch, executar):
+    from sqlalchemy import event
+
+    loja = _loja()
+    receita = _receita()
+    dia = hoje() + timedelta(days=1)
+    _relogio_corte(monkeypatch, 11, 59, 59)
+    sessao = db.session()
+    cruzou = []
+
+    def virar_meio_dia_ao_gravar_itens(session, _flush_context, _instances):
+        if any(isinstance(obj, PedidoItem) for obj in session.new):
+            cruzou.append(True)
+            _relogio_corte(monkeypatch, 12)
+
+    event.listen(sessao, 'before_flush', virar_meio_dia_ao_gravar_itens)
+    try:
+        with pytest.raises(PedidoCorteError):
+            executar([{'loja_id': loja.id, 'data_entrega': dia,
+                       'itens': [{'receita_id': receita.id, 'qtd': 10}]}], admin_user.id)
+    finally:
+        event.remove(sessao, 'before_flush', virar_meio_dia_ao_gravar_itens)
+
+    assert cruzou
+    db.session.commit()
+    assert PedidoLoja.query.count() == 0
+    assert PedidoItem.query.count() == 0
+
+
+@pytest.mark.parametrize('autor_humano', [True, False])
+def test_sincronizacao_direta_respeita_corte(
+        app, admin_user, monkeypatch, autor_humano):
+    loja = _loja()
+    receita = _receita()
+    pedido = _pedido(loja, hoje() + timedelta(days=1), [(receita, 100)])
+    _relogio_corte(monkeypatch, 12)
+
+    with pytest.raises(PedidoCorteError):
+        _sincronizar_itens(pedido, [{'receita_id': receita.id, 'qtd': 0}],
+                          admin_user.id if autor_humano else None)
+
+    db.session.commit()
+    assert PedidoItem.query.one().quantidade == 100
+
+
+@pytest.mark.parametrize('ajax', [False, True])
+def test_rota_grade_fechada_recusa_tudo_e_orienta_selecao_individual(
+        app, admin_user, monkeypatch, ajax):
+    loja = _loja()
+    receita = _receita()
+    amanha = hoje() + timedelta(days=1)
+    _pedido(loja, amanha, [(receita, 100)])
+    _relogio_corte(monkeypatch, 12)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(admin_user.id)
+        sess['_fresh'] = True
+
+    resp = client.post('/producao/pedidos-semana/gerar', data={
+        'so_loja': str(loja.id), 'ajax': '1' if ajax else '0',
+        f'qtd|{loja.id}|{amanha.isoformat()}|{receita.id}': '0',
+        f'qtd|{loja.id}|{(amanha + timedelta(days=1)).isoformat()}|{receita.id}': '40',
+    })
+
+    assert PedidoLoja.query.count() == 1
+    assert PedidoItem.query.one().quantidade == 100
+    if ajax:
+        assert resp.status_code == 409
+        assert resp.json['ok'] is False and resp.json['mudou'] is False
+        mensagem = resp.json['msg']
+    else:
+        assert resp.status_code == 302
+        with client.session_transaction() as sess:
+            mensagem = ' '.join(msg for _categoria, msg in sess['_flashes'])
+    assert '12:00' in mensagem
+    assert 'Nenhum pedido foi alterado' in mensagem
+    assert 'botão do dia desejado' in mensagem
+
+
+@pytest.mark.parametrize('dias_adiante', [0, 2])
+def test_rota_selecao_individual_salva_dia_livre_com_amanha_fechado_no_form(
+        app, admin_user, monkeypatch, dias_adiante):
+    loja = _loja()
+    receita = _receita()
+    amanha = hoje() + timedelta(days=1)
+    livre = hoje() + timedelta(days=dias_adiante)
+    fechado = _pedido(loja, amanha, [(receita, 100)])
+    _relogio_corte(monkeypatch, 12)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(admin_user.id)
+        sess['_fresh'] = True
+
+    resp = client.post('/producao/pedidos-semana/gerar', data={
+        'so_dia': f'{loja.id}|{livre.isoformat()}', 'ajax': '1',
+        f'qtd|{loja.id}|{amanha.isoformat()}|{receita.id}': '0',
+        f'qtd|{loja.id}|{livre.isoformat()}|{receita.id}': '40',
+    })
+
+    assert resp.status_code == 200 and resp.json['ok'] is True
+    assert PedidoLoja.query.count() == 2
+    assert PedidoItem.query.filter_by(pedido_id=fechado.id).one().quantidade == 100
+    novo = PedidoLoja.query.filter_by(data_entrega=livre).one()
+    assert novo.itens[0].quantidade == 40

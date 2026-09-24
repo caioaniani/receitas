@@ -86,6 +86,80 @@ def _rascunho_auto(loja, itens, dias=1):
     return p
 
 
+@pytest.mark.parametrize('fase', ['calculo', 'zero', 'absorver', 'gravacao'])
+def test_corte_durante_rodada_desfaz_e_recalcula_com_d1_fechado(
+        app, loja, admin_user, monkeypatch, fase):
+    from app.services import pedidos_semana, previsao_producao
+
+    relogio = [datetime.combine(hoje(), datetime.min.time()).replace(hour=11, minute=59)]
+    meio_dia = relogio[0].replace(hour=12, minute=0)
+    monkeypatch.setattr(pedido_corte, 'agora', lambda: relogio[0])
+    receita = _receita()
+    pedido = _rascunho_auto(loja, [(receita, 20)])
+    pedido_id = pedido.id
+    amanha = hoje() + timedelta(days=1)
+    if fase == 'absorver':
+        db.session.add(PedidoLoja(
+            loja_id=loja.id, data_entrega=amanha, status='pendente',
+            criado_por=admin_user.id))
+        db.session.commit()
+    rodadas = []
+
+    def sugerir(**kwargs):
+        rodadas.append(kwargs)
+        if len(rodadas) == 1:
+            if fase in ('calculo', 'absorver'):
+                relogio[0] = meio_dia
+            return _sugestao(loja, receita, [0 if fase == 'zero' else 90, 10])
+        assert amanha not in kwargs['ressincronizar_datas']
+        assert amanha in kwargs['datas_bloqueadas']
+        return _sugestao(loja, receita, [0, 50])
+
+    monkeypatch.setattr(previsao_producao, 'sugerir_pedidos_por_venda', sugerir)
+    if fase == 'zero':
+        def cancelar_no_corte():
+            relogio[0] = meio_dia
+            return meio_dia
+        monkeypatch.setattr(auto_pedidos, 'agora', cancelar_no_corte)
+    if fase == 'gravacao':
+        sincronizar = pedidos_semana._sincronizar_itens
+
+        def sincronizar_no_corte(*args, **kwargs):
+            resultado = sincronizar(*args, **kwargs)
+            relogio[0] = meio_dia
+            return resultado
+        monkeypatch.setattr(pedidos_semana, '_sincronizar_itens', sincronizar_no_corte)
+
+    resultado = auto_pedidos.gerar_pedidos_automaticos()
+
+    db.session.expire_all()
+    preservado = db.session.get(PedidoLoja, pedido_id)
+    assert preservado.status == 'pendente'
+    assert preservado.itens[0].quantidade == 20
+    seguinte = PedidoLoja.query.filter_by(
+        loja_id=loja.id, data_entrega=amanha + timedelta(days=1)).one()
+    assert seguinte.itens[0].quantidade == 50
+    assert len(rodadas) == 2
+    assert resultado['dias_pulados_corte'] == [amanha.isoformat()]
+    assert resultado['rascunhos_cancelados_zero'] == 0
+    assert resultado['rascunhos_absorvidos'] == 0
+
+
+def test_corte_nao_provoca_retentativas_sem_limite(app, monkeypatch):
+    from app.services.pedidos_semana import PedidoCorteError
+
+    tentativas = []
+
+    def falhar():
+        tentativas.append(1)
+        raise PedidoCorteError('Pedido fechado.')
+
+    monkeypatch.setattr(auto_pedidos, '_gerar_pedidos_automaticos', falhar)
+    with pytest.raises(PedidoCorteError):
+        auto_pedidos.gerar_pedidos_automaticos()
+    assert len(tentativas) == 2
+
+
 def test_cria_rascunhos_3_dias_sem_autor_humano(app, loja, monkeypatch):
     with app.app_context():
         _as_10h(monkeypatch)

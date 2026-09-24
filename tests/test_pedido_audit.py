@@ -30,7 +30,7 @@ def _pedido_pendente(loja, admin_user, catalogo):
 
 
 def test_editar_via_web_seta_modificado_por(
-        app, admin_user, loja, catalogo):
+        app, admin_user, loja, catalogo, pedidos_antes_do_corte):
     from app.models import PedidoLoja
     p = _pedido_pendente(loja, admin_user, catalogo)
     cliente = app.test_client()
@@ -52,7 +52,7 @@ def test_editar_via_web_seta_modificado_por(
 
 
 def test_editar_via_copilot_seta_modificado_por(
-        app, admin_user, loja, catalogo):
+        app, admin_user, loja, catalogo, pedidos_antes_do_corte):
     from app.models import PedidoLoja
     from app.services.copilot import executar_editar_pedido
     p = _pedido_pendente(loja, admin_user, catalogo)

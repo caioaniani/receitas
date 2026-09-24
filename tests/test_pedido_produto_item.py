@@ -31,7 +31,7 @@ def test_picker_do_novo_oferece_produtos(app, admin_user, loja, catalogo, client
     assert ('p_%d' % catalogo['produto'].id) in ids
 
 
-def test_novo_cria_pedido_com_produto(app, admin_user, loja, catalogo, cliente):
+def test_novo_cria_pedido_com_produto(app, admin_user, loja, catalogo, cliente, pedidos_antes_do_corte):
     from app.models import PedidoItem
     from app.utils import hoje
     _login(cliente)
@@ -54,7 +54,7 @@ def test_novo_cria_pedido_com_produto(app, admin_user, loja, catalogo, cliente):
     assert item.materia_prima_id is None
 
 
-def test_editar_mostra_produto_selecionado(app, admin_user, loja, catalogo, cliente):
+def test_editar_mostra_produto_selecionado(app, admin_user, loja, catalogo, cliente, pedidos_antes_do_corte):
     from app.extensions import db
     from app.models import PedidoItem, PedidoLoja
     from app.utils import hoje

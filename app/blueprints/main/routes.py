@@ -2914,7 +2914,7 @@ def slack_diagnostico():
     canais = [
         ('Resumo diario (04:00)', 'SLACK_CANAL_RESUMO_DIARIO',
          (cfg.get('SLACK_CANAL_RESUMO_DIARIO') or '').strip()),
-        ('Lembretes pedido amanha (9/12/16/19h)', 'SLACK_CANAL_PEDIDOS',
+        ('Lembretes pedido amanha (9/11h)', 'SLACK_CANAL_PEDIDOS',
          (cfg.get('SLACK_CANAL_PEDIDOS') or '').strip()),
         ('Alerta desperdicio (20:10/15/20/25)', 'SLACK_CANAL_COPILOT',
          (cfg.get('SLACK_CANAL_COPILOT') or '').strip()),

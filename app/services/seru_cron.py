@@ -62,7 +62,7 @@ LOCK_KEY_TINY_PDV = 7756  # advisory lock pro import do PDV do Tiny (Cantina)
 LOCK_KEY_AUTO_PEDIDOS = 7758  # advisory lock pros pedidos automaticos loja->industria
 LOCK_KEY_AUTO_ENVIO = 7759  # advisory lock pras ordens da SEMANA (dom 12:00 + rede diaria + retro)
 LOCK_KEY_DIGEST_RECEBIMENTOS = 7760  # advisory lock pro digest 12:00 de pedidos recebidos
-LOCK_KEY_ATUALIZA_PLANO = 7761  # advisory lock pro 🔄 automatico da ordem do dia (06:45/19:05)
+LOCK_KEY_ATUALIZA_PLANO = 7761  # advisory lock pro 🔄 automatico das ordens futuras (06:45/12:05)
 LOCK_KEY_HEARTBEAT = 7762  # advisory lock pro heartbeat diario no Slack (08:00)
 LOCK_KEY_ZAPI_SAUDE = 7763  # advisory lock pro status/assinatura da Z-API
 LOCK_KEY_RECOMPRA = 7764  # advisory lock pro e-mail de recompra do site (10:30)
@@ -556,8 +556,8 @@ def iniciar(app):
         max_instances=1, coalesce=True, misfire_grace_time=3600,
     )
 
-    # Lembretes de pedido pra amanha — 4 vezes ao dia
-    for h in (9, 12, 16, 19):
+    # Lembretes de pedido pra amanha, antes do corte de meio-dia.
+    for h in (9, 11):
         _scheduler.add_job(
             lambda app=app: _run_slack_lembretes_amanha(app),
             'cron', hour=h, minute=0, id=f'slack-lembrete-{h}h',
@@ -698,29 +698,30 @@ def iniciar(app):
 
     # Pedidos AUTOMATICOS loja->industria (10/08/2026; janela virou a
     # SEMANA inteira em 17/08/2026 — "os pedidos da semana tambem devem ser
-    # lancados tudo no domingo meio dia"): o job do meio-dia (ordens-semana,
-    # abaixo) abre os pedidos de seg..dom; estas 2 rodadas diarias sao o
+    # lancados tudo no domingo meio dia"): com o corte às 12h, a rodada
+    # das 11:30 abre os pedidos de seg..dom antes das ordens. Estas 2 rodadas sao o
     # REFRESH da mesma janela (amanha..proximo domingo) — 06:30
-    # (planejamento) e 18:30 (venda do dia via estoque atual, 30min antes
-    # do corte de 19:00). Pedido tocado por humano NUNCA e sobrescrito;
+    # (planejamento) e 11:30 (estoque atual, 30min antes
+    # do corte de 12:00). Pedido tocado por humano NUNCA e sobrescrito;
     # D+1 sob corte nunca e tocado. Desligavel por AUTO_PEDIDOS=0.
     if os.environ.get('AUTO_PEDIDOS', '1') != '0':
         _scheduler.add_job(
             lambda app=app: _run_auto_pedidos(app),
-            'cron', hour='6,18', minute=30, id='auto-pedidos',
+            'cron', hour='6,11', minute=30, id='auto-pedidos',
             max_instances=1, coalesce=True,
         )
 
     # SEMANA no meio-dia (dono 17/08/2026, "quanto menos e mais"): DOMINGO
-    # 12:00 solta os PEDIDOS loja->industria de seg..dom (motor
-    # venda+estoque) e em seguida as ORDENS de producao da semana — o
-    # padeiro enxerga a semana inteira de uma vez, com o firme ja criado.
+    # 12:00 solta as ORDENS de producao da semana — o padeiro enxerga
+    # a semana inteira de uma vez, com os pedidos criados no refresh
+    # das 11:30. Pedidos de amanha ja estao fechados; os demais dias
+    # ainda podem ser re-sincronizados pelo motor venda+estoque.
     # O job roda TODO dia ao meio-dia DE PROPOSITO: fora do domingo
     # re-sincroniza pedidos/ordens do cron com a realidade e re-preenche
     # buraco (dia excluido, disparo engolido por deploy — o APScheduler nao
     # persiste misfire e o auto-deploy reinicia o processo a qualquer
     # hora). SUBSTITUI o envio diario das 19:00 (10-17/08/2026) — o numero
-    # final da ordem DE HOJE segue saindo do 🔄 das 06:45/19:05.
+    # final das ordens futuras segue saindo do 🔄 das 06:45/12:05.
     # Desligavel por AUTO_ENVIO_PLANO=0 (a parte de pedidos respeita
     # AUTO_PEDIDOS=0).
     if os.environ.get('AUTO_ENVIO_PLANO', '1') != '0':
@@ -740,14 +741,14 @@ def iniciar(app):
         # 🔄 AUTOMATICO da ordem DE HOJE (17/08/2026, caso do 1o fim de
         # semana): os itens de vespera da ordem (levain/lead-1) sao
         # dirigidos pela demanda do dia seguinte, que o cron de pedidos
-        # re-sincroniza 06:30/18:30 — sem este refresh a ordem amanhecia
+        # re-sincroniza 06:30/11:30 — sem este refresh a ordem amanhecia
         # magra (3 itens vs 8 no grid).
         # MIRA A ORDEM DE AMANHA, NUNCA A DE HOJE (dono 20/08/2026, caso do
         # pao frances 300->400 com o padeiro ja produzindo): "na data de
         # hoje nunca deveriamos mudar o que o padeiro esta produzindo;
         # qualquer mudanca deveria ter sido feita ontem". 06:45 =
-        # pos-refresh da manha; 19:05 = numero FINAL de amanha, logo apos o
-        # corte das 19:00 (quando a demanda de amanha congela). Ordem
+        # pos-refresh da manha; 12:05 = numero FINAL de amanha, logo apos o
+        # corte das 12:00 (quando a demanda de amanha congela). Ordem
         # enviada por HUMANO nunca e tocada. Mesmo kill-switch do envio.
         _scheduler.add_job(
             lambda app=app: _run_atualiza_plano(app),
@@ -756,7 +757,7 @@ def iniciar(app):
         )
         _scheduler.add_job(
             lambda app=app: _run_atualiza_plano(app),
-            'cron', hour=19, minute=5, id='auto-atualiza-plano-corte',
+            'cron', hour=12, minute=5, id='auto-atualiza-plano-corte',
             max_instances=1, coalesce=True,
         )
 
@@ -914,7 +915,7 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
     _scheduler.start()
-    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/12h/16h/19h · pedidos hoje 10-19h · zapi tarefas 07:00 · desperdicio slack 20:10/15/20/25 + whatsapp 20:30 · backup 04:00 · automacoes whatsapp 5min')
+    logger.info('Auto-sync iniciado: Seru + VNDA 15min · resumo 04:00 · lembretes amanha 9h/11h · pedidos hoje 10-19h · zapi tarefas 07:00 · desperdicio slack 20:10/15/20/25 + whatsapp 20:30 · backup 04:00 · automacoes whatsapp 5min')
 
 
 def _run_slack_resumo_diario(app):
@@ -930,7 +931,7 @@ def _run_slack_resumo_diario(app):
 
 
 def _run_slack_lembretes_amanha(app):
-    """Job: posta lembretes pra lojas sem pedido pra amanha (9/12/16/19h BRT)."""
+    """Job: posta lembretes pra lojas sem pedido pra amanha (9/11h BRT)."""
     from app.services import slack_resumos
 
     with app.app_context():
@@ -948,7 +949,7 @@ def _run_zapi_digest_tarefas(app):
 
 def _run_auto_pedidos(app):
     """Job: pedidos automáticos loja→indústria (motor venda+estoque,
-    D+1..D+3). Best-effort: exceção fica no log do _com_lock, o scheduler
+    amanhã..próximo domingo). Best-effort: exceção fica no log do _com_lock, o scheduler
     nunca cai. Pedido de humano é preservado dentro do próprio service."""
     from app.services import auto_pedidos
 
@@ -963,7 +964,8 @@ def _run_ordens_semana(app):
     (motor venda+estoque, amanhã..próximo domingo — "os pedidos da semana
     também devem ser lançados tudo no domingo meio dia"); 2) ORDENS de
     produção da semana (o firme recém-criado alimenta o grid). No domingo
-    12:00 abre seg..dom; nos outros dias re-sincroniza/re-preenche. Pedido
+    12:00 abre as ordens de seg..dom; pedidos de amanhã já fechados pelo
+    corte são preservados. Nos outros dias re-sincroniza/re-preenche. Pedido
     e ordem de humano nunca são tocados (regras nos services)."""
     from app.services import auto_pedidos
 
@@ -1051,7 +1053,7 @@ def _run_ordens_semana_retro(app):
 
 def _run_atualiza_plano(app):
     """Job: re-sincroniza a ordem DE AMANHÃ (criada pelo cron) com o grid —
-    o 🔄 automático das 06:45/19:05. A ordem do dia CORRENTE nunca é tocada
+    o 🔄 automático das 06:45/12:05. A ordem do dia CORRENTE nunca é tocada
     por caminho automático (regra do dono 20/08/2026); ordem de humano
     nunca é tocada em dia nenhum."""
     from app.services import auto_pedidos

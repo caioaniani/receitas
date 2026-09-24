@@ -8,15 +8,16 @@ um dia SEM ordem; ordem já enviada nunca é reescrita por caminho implícito).
 Duas pontas, dois jobs do cron (`seru_cron`):
 
 1. `gerar_pedidos_automaticos()` (meio-dia junto das ordens + refreshes
-   06:30 e 18:30 BRT): roda o motor VENDA+ESTOQUE
+   06:30 e 11:30 BRT): roda o motor VENDA+ESTOQUE
    (`previsao_producao.sugerir_pedidos_por_venda` — o mesmo da tela
    /producao/pedidos-semana/estoque, escolha do dono) pra janela da SEMANA
    (amanhã até o PRÓXIMO DOMINGO — dono 17/08/2026: "os pedidos da semana
    também devem ser lançados tudo no domingo meio dia, prevendo o que vai
    ser vendido durante a semana baseado no histórico de vendas"; era
    D+1..D+3 de 10 a 17/08) e materializa via `pedidos_semana.aplicar_grade`
-   (rascunho 'pendente' com o marcador padrão). No domingo isso abre os
-   pedidos de seg..dom; os refreshes diários re-sincronizam a MESMA janela
+   (rascunho 'pendente' com o marcador padrão). No domingo o refresh das
+   11:30 abre os pedidos de seg..dom; ao meio-dia a segunda já está sob
+   corte. Os refreshes diários re-sincronizam a MESMA janela
    com o ESTOQUE ATUAL da loja (que o sync do Seru drena a cada 15min
    conforme o dia vende) — é por aí que a venda do próprio dia entra (a
    média histórica fecha em ontem).
@@ -31,7 +32,7 @@ Duas pontas, dois jobs do cron (`seru_cron`):
      (criado_por/modificado_por_id preenchidos) é PULADO — a palavra da
      loja/admin vale mais que a do motor. Confirmar/voltar-status também
      carimbam modificado_por_id (o clique de revisão protege o pedido).
-   - D+1 sob o corte (19h) NUNCA é tocado (`pedido_corte.corte_ativo`).
+   - D+1 sob o corte (12h) NUNCA é tocado (`pedido_corte.corte_ativo`).
    - Loja/dia sem sugestão (>0) não cria pedido vazio.
    - Pedido finalizado ANTES da data (entrega antecipada de emergência) não
      protege o dia — mesmo carve-out do motor/aplicar_grade (caso Anesio
@@ -206,6 +207,27 @@ def _seguranca_pct():
 
 
 def gerar_pedidos_automaticos():
+    """Confirma a rodada apenas enquanto suas datas continuam abertas.
+
+    O cálculo pode atravessar o meio-dia. Nesse caso, desfaz também a
+    absorção de rascunhos e os cancelamentos por zero, e recalcula a rodada
+    inteira com o pedido fechado preservado na simulação dos dias seguintes.
+    A conferência final ocorre antes do commit, ainda sob a trava das lojas.
+    """
+    from app.services.pedidos_semana import PedidoCorteError
+
+    for tentativa in range(2):
+        try:
+            return _gerar_pedidos_automaticos()
+        except PedidoCorteError:
+            db.session.rollback()
+            if tentativa:
+                raise
+            logger.info('auto_pedidos: corte alcançado durante a rodada; '
+                        'recalculando com os pedidos fechados preservados')
+
+
+def _gerar_pedidos_automaticos():
     """Materializa a sugestão do motor venda+estoque como pedidos da SEMANA
     (amanhã até o próximo domingo — dono 17/08/2026; era D+1..D+3).
 
@@ -325,7 +347,10 @@ def gerar_pedidos_automaticos():
     # próxima rodada sabe que pode re-sincronizar (e que um toque humano
     # o torna intocável). O commit do aplicar_grade também persiste os
     # cancelamentos por sugestão-zerada feitos acima.
-    out = pedidos_semana.aplicar_grade(grade, user_id=None)
+    # Mesmo se D+1 sumiu da grade ao chegar o corte durante o cálculo,
+    # conferir as datas originais protege absorções/zeros já pendentes.
+    out = pedidos_semana.aplicar_grade(
+        grade, user_id=None, datas_adicionais_corte=datas_ressinc)
     out['dias_pulados_corte'] = sorted(d.isoformat() for d in pulados_corte)
     out['dias_pulados_humano'] = len(pulados_humano)
     out['rascunhos_absorvidos'] = absorvidos
@@ -346,7 +371,7 @@ def atualizar_plano_automatico():
     3 itens/3.274 un e o grid do próprio dia amanhecia pedindo 8 itens/6.577
     — os itens de VÉSPERA (levain, lead-1, pré-preparo) são dirigidos pela
     demanda do dia seguinte, que o cron de pedidos re-sincroniza às
-    06:30/18:30 DEPOIS de a ordem já ter congelado.
+    06:30/11:30 DEPOIS de a ordem já ter congelado.
 
     POR QUE MIRA AMANHÃ, E NUNCA HOJE (dono 20/08/2026, caso "o padeiro ia
     fazer 300 de pão francês e do nada virou 400" — a rodada das 19:05
@@ -356,7 +381,7 @@ def atualizar_plano_automatico():
     ontem."** Então a ordem de um dia recebe seus últimos ajustes na
     VÉSPERA e chega intocável no dia:
       - 06:45 → ajusta a ordem de AMANHÃ com o refresh de pedidos das 06:30;
-      - 19:05 → número FINAL de amanhã, logo após o corte das 19:00 (que é
+      - 12:05 → número FINAL de amanhã, logo após o corte das 12:00 (que é
         justamente quando a demanda de amanhã congela).
     O dia corrente nunca é tocado por caminho automático — `enviar_plano_do_
     dia` tem a trava definitiva (defesa em profundidade).
@@ -523,8 +548,8 @@ def enviar_ordens_da_semana(*, incluir_hoje=False, somente_pendentes=False):
     re-pressável e preserva o já produzido). Ordem enviada por HUMANO é
     intocável — "ordem enviada nunca muda por caminho implícito" vale pra
     gesto humano; ordem de cron sempre foi mantida por refresh automático
-    (mesmo princípio do 🔄 das 06:45/19:05, que segue sendo a precisão do
-    PRÓPRIO dia). Motor: env `AUTO_ENVIO_MOTOR` (default 'vendas').
+    (mesmo princípio do 🔄 das 06:45/12:05, que atualiza dias futuros).
+    Motor: env `AUTO_ENVIO_MOTOR` (default 'vendas').
 
     Uma ficha inválida desfaz o DIA inteiro, sem pular receita ou perder
     a validação de consumo. Dias independentes continuam; dependentes de
@@ -554,7 +579,7 @@ def _executar_ordens(dias, crono, motor, horizonte, *, incluir_hoje=False,
     """Envio e atualização usam as mesmas transações e provas de preparo.
 
     Cada dia inválido é desfeito e fica visível no status. Dias independentes
-    continuam; dependentes aguardam o preparo, inclusive na rodada das 19:05.
+    continuam; dependentes aguardam o preparo, inclusive na rodada das 12:05.
     """
     from app.models import AppConfig, PlanejamentoProducao, Receita
     from app.services.auto_envio_status import ler_status

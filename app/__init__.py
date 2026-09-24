@@ -112,6 +112,26 @@ def create_app(config_class=None):
         return {'now': agora_brt}
 
     @app.context_processor
+    def inject_pedido_corte():
+        from datetime import date, timedelta
+
+        from app.services import pedido_corte
+        instante = pedido_corte.agora()
+        amanha = instante.date() + timedelta(days=1)
+
+        def corte_na_tela(data):
+            if isinstance(data, str):
+                data = date.fromisoformat(data)
+            return pedido_corte.corte_ativo(data, agora_dt=instante)
+
+        return {
+            'pedido_corte_ativo': corte_na_tela,
+            'pedido_hora_corte': pedido_corte.HORA_CORTE,
+            'pedido_data_amanha': amanha.isoformat(),
+            'pedido_corte_amanha': corte_na_tela(amanha),
+        }
+
+    @app.context_processor
     def inject_ui_v2():
         # Interface v2 (ver app/ui_v2.py): o base.html troca o shell
         # (CSS + sidebar) por esta variavel — nunca ler config direto no

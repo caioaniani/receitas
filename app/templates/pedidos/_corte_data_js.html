@@ -1,0 +1,16 @@
+<script>
+(function () {
+    var amanhaFechado = {{ pedido_corte_amanha | tojson }};
+    var amanha = {{ pedido_data_amanha | tojson }};
+    document.querySelectorAll('input[name="data_entrega"]').forEach(function (campo) {
+        function validarData() {
+            campo.setCustomValidity(amanhaFechado && campo.value === amanha
+                ? 'O prazo para pedidos com entrega amanhã terminou às {{ pedido_hora_corte }}h (horário de Brasília). Escolha outra data de entrega.'
+                : '');
+        }
+        campo.addEventListener('input', validarData);
+        campo.addEventListener('change', validarData);
+        validarData();
+    });
+})();
+</script>

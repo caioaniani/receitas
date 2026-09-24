@@ -10,6 +10,8 @@ from datetime import date, timedelta
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures('pedidos_antes_do_corte')
+
 
 def _login(cliente):
     return cliente.post('/auth/login', data={'login': 'admin', 'senha': '123'})

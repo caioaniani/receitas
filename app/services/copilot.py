@@ -2757,13 +2757,11 @@ def executar_criar_pedido(params, user):
     if fora_do_lote:
         return {'ok': False, 'erro': ' | '.join(fora_do_lote)}
 
-    # Corte do fim do dia (dono 10/08/2026): pedido pra AMANHA fecha na
-    # HORA_CORTE —
-    # e o horario de corte do pre-preparo do padeiro. Espelho da tela web,
-    # checado no EXECUTOR (preview re-enviado nao fura); admin passa com
-    # aviso no resultado. ANTES do merge — "criar" pode virar mesclar num
-    # pedido de amanha ja existente.
-    from app.services.pedido_corte import bloqueio_do_corte
+    # Checa após esperar a trava, inclusive para admin. Um preview feito
+    # antes de 12h não autoriza gravar após o fechamento.
+    from app.services.pedido_lock import travar_pedidos_lojas
+    travar_pedidos_lojas([loja_id])
+    from app.services.pedido_corte import bloqueio_do_corte, salvar_no_prazo
     bloqueado_corte, aviso_corte = bloqueio_do_corte([data_entrega], user=user)
     if bloqueado_corte:
         return {'ok': False, 'erro': aviso_corte}
@@ -2780,7 +2778,9 @@ def executar_criar_pedido(params, user):
     if alvo:
         res = mesclar_itens(alvo, itens_norm, modificado_por_id=user.id)
         absorvido = absorver_rascunho_automatico(loja_id, data_entrega, user.id)
-        db.session.commit()
+        erro_corte = salvar_no_prazo([data_entrega])
+        if erro_corte:
+            return {'ok': False, 'erro': erro_corte}
         out = {'ok': True, 'pedido_id': alvo.id, 'mesclado': True,
                'itens_salvos': res['adicionados'] + res['somados'],
                'nao_resolvidos': nao_resolvidos, 'registro_tipo': 'pedido_loja',
@@ -2802,7 +2802,9 @@ def executar_criar_pedido(params, user):
         res_adote = adotar_rascunho_automatico(
             rascunho, itens_norm, user.id,
             observacao=(params.get('observacao') or '').strip() or None)
-        db.session.commit()
+        erro_corte = salvar_no_prazo([data_entrega])
+        if erro_corte:
+            return {'ok': False, 'erro': erro_corte}
         out = {'ok': True, 'pedido_id': rascunho.id, 'adotou_rascunho': True,
                'itens_salvos': res_adote['substituidos'] + res_adote['adicionados'],
                'nao_resolvidos': nao_resolvidos, 'registro_tipo': 'pedido_loja',
@@ -2826,7 +2828,9 @@ def executar_criar_pedido(params, user):
     db.session.flush()
     for it in itens_norm:
         db.session.add(PedidoItem(pedido_id=pedido.id, **it))
-    db.session.commit()
+    erro_corte = salvar_no_prazo([data_entrega])
+    if erro_corte:
+        return {'ok': False, 'erro': erro_corte}
     # Alerta Slack se for emergencia (criado hoje pra entrega hoje)
     try:
         from app.services.slack_resumos import alertar_pedido_emergencia
@@ -2842,6 +2846,16 @@ def executar_criar_pedido(params, user):
 
 
 def executar_editar_pedido(params, user):
+    # O dispatcher pode registrar e confirmar a tentativa após uma falha.
+    # Nunca deixar itens/data parcialmente alterados nessa mesma sessão.
+    try:
+        return _executar_editar_pedido(params, user)
+    except Exception:
+        db.session.rollback()
+        raise
+
+
+def _executar_editar_pedido(params, user):
     """Edita pedido existente. Aceita data_entrega, observacao, e itens (REPLACE
     total). NAO mexe em loja/driver/status. Bloqueia se status fora de
     pendente/confirmado."""
@@ -2863,7 +2877,7 @@ def executar_editar_pedido(params, user):
     # Corte do fim do dia (dono 10/08/2026): olha a data ATUAL e a NOVA —
     # mover um pedido PRA amanha (ou tirar de amanha) depois do corte muda
     # o pre-preparo igual. Espelho da tela web, no executor.
-    from app.services.pedido_corte import bloqueio_do_corte
+    from app.services.pedido_corte import bloqueio_do_corte, salvar_no_prazo
     _datas_corte = [pedido.data_entrega]
     if nova_data:
         try:
@@ -2895,6 +2909,7 @@ def executar_editar_pedido(params, user):
                         f'O rascunho automático #{absorvido.id} do dia de '
                         'destino foi cancelado — o seu pedido manda.')
         except (ValueError, TypeError):
+            db.session.rollback()
             return {'ok': False, 'erro': f'Data invalida: {nova_data}'}
 
     nova_obs = params.get('observacao')
@@ -2924,6 +2939,7 @@ def executar_editar_pedido(params, user):
                           .all())
             if bloqueadas:
                 nomes = ', '.join(m.nome for m in bloqueadas)
+                db.session.rollback()
                 return {'ok': False, 'erro': (
                     f'Materia(s)-prima(s) nao liberada(s) pra pedido de '
                     f'loja: {nomes}. Um admin pode liberar no Banco de MPs '
@@ -2942,6 +2958,7 @@ def executar_editar_pedido(params, user):
             and it['resolvido'].get('id')]
         fora_do_lote = violacoes_por_ids(_itens_lote)
         if fora_do_lote:
+            db.session.rollback()
             return {'ok': False, 'erro': ' | '.join(fora_do_lote)}
         # REPLACE total. Deletar VIA ORM (não Query.delete em massa) pra
         # disparar o cascade 'all, delete-orphan' das fotos de conferência
@@ -2983,13 +3000,14 @@ def executar_editar_pedido(params, user):
 
     pedido.modificado_em = agora()
     pedido.modificado_por_id = user.id
-    db.session.commit()
+    erro_corte = salvar_no_prazo(_datas_corte)
+    if erro_corte:
+        return {'ok': False, 'erro': erro_corte}
     out = {'ok': True, 'pedido_id': pedido.id, 'mudancas': mudancas,
            'nao_resolvidos': nao_resolvidos,
            'registro_tipo': 'pedido_loja', 'registro_id': pedido.id,
            'url': f'/pedidos/{pedido.id}'}
-    # Admin editando sob o corte: passa, mas o aviso vai junto (mesmo
-    # contrato do executar_criar_pedido). Idem pro rascunho absorvido.
+    # Informa a absorção de rascunho, quando houve.
     avisos = [a for a in (aviso_corte, aviso_rascunho) if a]
     if avisos:
         out['aviso'] = ' | '.join(avisos)
@@ -3402,7 +3420,7 @@ def executar_mudar_status_pedido(params, user):
     # de cancelar (a revisão de 13/08 pegou este executor sem o check).
     aviso_corte = None
     if novo == 'cancelar':
-        from app.services.pedido_corte import bloqueio_do_corte
+        from app.services.pedido_corte import bloqueio_do_corte, salvar_no_prazo
         bloqueado_corte, aviso_corte = bloqueio_do_corte(
             [p.data_entrega], user=user)
         if bloqueado_corte:
@@ -3459,7 +3477,12 @@ def executar_mudar_status_pedido(params, user):
         # re-sync do cron (espelho da rota web de confirmar).
         p.modificado_em = agora()
         p.modificado_por_id = user.id
-        db.session.commit()
+        if novo == 'cancelar':
+            erro_corte = salvar_no_prazo([p.data_entrega])
+            if erro_corte:
+                return {'ok': False, 'erro': erro_corte}
+        else:
+            db.session.commit()
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
         logger.exception('mudar_status_pedido %s falhou', novo)

@@ -64,7 +64,7 @@ def test_typeahead_so_oferece_mp_liberada(app, admin_user):
 
 # ── POST /pedidos/novo ───────────────────────────────────────────────────
 
-def test_post_novo_recusa_mp_bloqueada(app, admin_user, loja):
+def test_post_novo_recusa_mp_bloqueada(app, admin_user, loja, pedidos_antes_do_corte):
     from app.models import PedidoLoja
     with app.app_context():
         blo = _mp('Lagarto Cozido', False)
@@ -86,7 +86,7 @@ def test_post_novo_recusa_mp_bloqueada(app, admin_user, loja):
         assert PedidoLoja.query.filter_by(loja_id=lid).count() == 0
 
 
-def test_post_novo_aceita_mp_liberada(app, admin_user, loja):
+def test_post_novo_aceita_mp_liberada(app, admin_user, loja, pedidos_antes_do_corte):
     from app.models import PedidoLoja
     with app.app_context():
         lib = _mp('Saco Pao de Queijo', True)
@@ -109,7 +109,7 @@ def test_post_novo_aceita_mp_liberada(app, admin_user, loja):
 
 # ── POST /pedidos/<id>/editar (grandfather) ──────────────────────────────
 
-def test_editar_grandfather_mantem_mp_antiga(app, admin_user, loja):
+def test_editar_grandfather_mantem_mp_antiga(app, admin_user, loja, pedidos_antes_do_corte):
     """Pedido antigo com MP hoje bloqueada: re-enviar a mesma lista (o form
     faz REPLACE total) NÃO pode ser recusado — senão desmarcar o checkbox
     travaria a edição de pedidos legítimos."""
@@ -136,7 +136,7 @@ def test_editar_grandfather_mantem_mp_antiga(app, admin_user, loja):
         assert ped.itens[0].quantidade == 6
 
 
-def test_editar_recusa_mp_bloqueada_nova(app, admin_user, loja):
+def test_editar_recusa_mp_bloqueada_nova(app, admin_user, loja, pedidos_antes_do_corte):
     from app.models import PedidoLoja
     with app.app_context():
         antiga = _mp('MP Antiga OK', True)
@@ -165,7 +165,7 @@ def test_editar_recusa_mp_bloqueada_nova(app, admin_user, loja):
         assert ped.itens[0].quantidade == 4
 
 
-def test_editar_get_renderiza_mp_grandfathered(app, admin_user, loja):
+def test_editar_get_renderiza_mp_grandfathered(app, admin_user, loja, pedidos_antes_do_corte):
     """A linha do item existente vem pré-preenchida com o id codificado
     mp_<id> mesmo com a MP bloqueada hoje — sem isso, o REPLACE do POST
     derrubaria o item. Com o typeahead a linha carrega o hidden value=mp_<id>
@@ -197,7 +197,7 @@ def test_resolver_item_pedido_filtra_bloqueada(app):
         assert blo.id in {m['id'] for m in ms2 if m['tipo'] == 'mp'}
 
 
-def test_executor_criar_pedido_recusa_mp_bloqueada(app, admin_user, loja):
+def test_executor_criar_pedido_recusa_mp_bloqueada(app, admin_user, loja, pedidos_antes_do_corte):
     """Defesa em profundidade: mesmo que um preview antigo traga MP
     bloqueada resolvida nos params, o executor recusa."""
     from app.models import PedidoLoja
@@ -218,7 +218,7 @@ def test_executor_criar_pedido_recusa_mp_bloqueada(app, admin_user, loja):
         assert PedidoLoja.query.count() == 0
 
 
-def test_executor_editar_pedido_grandfather(app, admin_user, loja):
+def test_executor_editar_pedido_grandfather(app, admin_user, loja, pedidos_antes_do_corte):
     """Executor do editar: MP antiga (já no pedido) passa; MP nova bloqueada
     é recusada sem tocar nos itens."""
     from app.models import PedidoLoja

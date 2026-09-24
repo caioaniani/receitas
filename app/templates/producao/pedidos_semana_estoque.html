@@ -53,6 +53,8 @@
     <a href="{{ url_for('pedidos.lista') }}" class="btn btn-outline-secondary">Ver pedidos das lojas</a>
 </div>
 
+{% include "pedidos/_corte_aviso.html" %}
+
 <details class="page-options mb-3"{% if comparar %} open{% endif %}>
     <summary>Período e opções de planejamento{% if seguranca %} · reserva extra de {{ seguranca }}%{% endif %}{% if comparar %} · comparação ativa{% endif %}</summary>
     <div class="d-flex gap-2 flex-wrap mt-3 mb-3">
@@ -92,7 +94,8 @@
 <div class="alert alert-light border small">
     <strong>Revise as quantidades e gere os pedidos de cada loja.</strong>
     Novos pedidos ficam como rascunho. Quantidades em azul pertencem a pedidos existentes
-    e, quando editáveis, salvam automaticamente; campos bloqueados são ajustados na tela do pedido.
+    e, quando editáveis, salvam automaticamente.
+    A grade salva apenas os dias dentro do prazo; a coluna de amanhã fica bloqueada a partir das {{ pedido_hora_corte }}h.
     <details class="mt-2">
         <summary>Como a sugestão é calculada</summary>
         <p class="mt-2 mb-0">O sistema considera o consumo por dia da semana e projeta o estoque da loja.
@@ -148,7 +151,9 @@
                         <th title="Venda média semanal (por dia-da-semana, do histórico)">Venda/sem</th>
                         <th title="Quanto deste item a loja descartou nos últimos 7 dias (desperdício + sobra) — desperdício alto = não inflar o pedido">Desp. 7d</th>
                         {% for dia in grade.dias %}<th>{{ dia.label }}
-                            {% if dia.data in loja.editaveis %}
+                            {% if pedido_corte_ativo(dia.data) %}
+                            <span class="badge bg-secondary d-block mt-1"><i class="bi bi-lock-fill" aria-hidden="true"></i> fechado · {{ pedido_hora_corte }}h</span>
+                            {% elif dia.data in loja.editaveis %}
                             <button type="submit" class="btn btn-sm btn-outline-primary btn-atualizar-dia d-block mx-auto mt-1"
                                     name="so_dia" value="{{ loja.loja_id }}|{{ dia.data }}"
                                     title="Atualiza SÓ o pedido deste dia desta loja com os valores da coluna (0 remove o item)"
@@ -172,15 +177,16 @@
                         <td class="venda">{{ p.media_semanal }}</td>
                         {{ pbadges.celula_desp(desperdicio.get(loja.loja_id, {}).get(p.item_key, 0)) }}
                         {% for dia in grade.dias %}
+                        {% set corte_dia = pedido_corte_ativo(dia.data) %}
                         {% set travado = dia.data in loja.ja_tem %}
-                        {% set editavel = travado and dia.data in loja.editaveis %}
+                        {% set editavel = travado and dia.data in loja.editaveis and not corte_dia %}
                         {% set pedido_dia = p.ja_pedido[loop.index0] if travado else 0 %}
                         <td class="{{ 'jatem' if travado }}">
                             <input type="number" min="0"
                                    class="form-control form-control-sm pmed-cel{% if travado %} tem-pedido{% endif %}"
                                    name="qtd|{{ loja.loja_id }}|{{ dia.data }}|{{ p.item_key }}"
                                    value="{{ pedido_dia if travado else p.por_dia[loop.index0] }}"
-                                   {% if travado and not editavel %}disabled title="Pedido existente ({{ pedido_dia }} un). Ajuste pela tela do pedido: este dia está em separação/entrega ou tem mais de um pedido."{% endif %}
+                                   {% if corte_dia %}disabled data-corte-bloqueado="1" title="Entrega amanhã: prazo encerrado às {{ pedido_hora_corte }}h (horário de Brasília)."{% elif travado and not editavel %}disabled title="Pedido existente ({{ pedido_dia }} un). Este dia está em separação/entrega ou tem mais de um pedido."{% endif %}
                                    {% if editavel %}title="Pedido existente ({{ pedido_dia }} un). Salva automaticamente após a edição; zero remove o item."{% endif %}>
                             {% if comparar and not travado and p.receita_id %}
                             {% set cp = contraprova.get(loja.loja_id, {}).get(p.receita_id) %}
@@ -246,6 +252,7 @@
     // sozinho). O botão ↻ vira indicador de status + fallback manual.
     (function () {
         var timers = {};
+        var bloqueadas = {};
         var DEBOUNCE_MS = 900;
 
         function botaoDe(chave) {
@@ -256,12 +263,41 @@
             return null;
         }
         function status(chave, texto, title) {
+            if (bloqueadas[chave]) { return; }
             var b = botaoDe(chave);
             if (!b) { return; }
             b.textContent = texto;
             b.title = title || '';
         }
+        function bloquearColuna(chave, form, mensagem) {
+            bloqueadas[chave] = true;
+            clearTimeout(timers[chave]);
+            form.querySelectorAll('.pmed-cel').forEach(function (inp) {
+                var partes = (inp.name || '').split('|');
+                if (partes[1] + '|' + partes[2] !== chave) { return; }
+                inp.disabled = true;
+                inp.dataset.corteBloqueado = '1';
+                inp.title = mensagem;
+            });
+            var b = botaoDe(chave);
+            if (b) {
+                b.disabled = true;
+                b.textContent = '🔒 prazo encerrado';
+                b.title = mensagem;
+            }
+            var card = b && b.closest('.pmed-loja');
+            var local = card || form;
+            var aviso = local.querySelector('.pmed-aviso-corte');
+            if (!aviso) {
+                aviso = document.createElement('div');
+                aviso.className = 'alert alert-warning small m-2 pmed-aviso-corte';
+                aviso.setAttribute('role', 'alert');
+                local.insertBefore(aviso, local.querySelector('.pmed'));
+            }
+            aviso.textContent = mensagem;
+        }
         function salvar(chave, form) {
+            if (bloqueadas[chave]) { return; }
             var fd = new FormData(form);
             fd.set('so_dia', chave);
             fd.set('ajax', '1');
@@ -271,19 +307,26 @@
             fetch(form.action, { method: 'POST', body: fd,
                                  credentials: 'same-origin' })
                 .then(function (r) {
-                    if (!r.ok) { throw new Error('HTTP ' + r.status); }
-                    return r.json();
+                    return r.json().then(function (j) {
+                        if (r.status === 409) {
+                            bloquearColuna(chave, form, j.msg || 'O prazo para alterar este pedido terminou às {{ pedido_hora_corte }}h (horário de Brasília). Nenhum pedido foi alterado.');
+                            return null;
+                        }
+                        if (!r.ok) { throw new Error(j.msg || 'HTTP ' + r.status); }
+                        return j;
+                    });
                 })
                 .then(function (j) {
+                    if (!j || bloqueadas[chave]) { return; }
                     status(chave, j.mudou ? '✓ salvo' : '✓ sem mudança', j.msg);
                     setTimeout(function () {
                         status(chave, '↻ atualizar',
                                'Atualiza SÓ o pedido deste dia desta loja com os valores da coluna (0 remove o item)');
                     }, 3000);
                 })
-                .catch(function () {
+                .catch(function (erro) {
                     status(chave, '⚠ erro — clique p/ salvar',
-                           'O salvamento automático falhou; clique pra atualizar manualmente.');
+                           erro.message || 'O salvamento automático falhou; clique pra atualizar manualmente.');
                 });
         }
         document.querySelectorAll('.pmed-cel.tem-pedido').forEach(function (inp) {
@@ -294,6 +337,7 @@
             var form = inp.form;
             if (!form || !botaoDe(chave)) { return; }
             inp.addEventListener('input', function () {
+                if (inp.disabled || bloqueadas[chave]) { return; }
                 clearTimeout(timers[chave]);
                 status(chave, '✎ digitando…');
                 timers[chave] = setTimeout(function () {

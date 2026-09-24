@@ -169,9 +169,16 @@ def lojas_sem_pedido_amanha():
 
 def enviar_lembretes_pedido_amanha():
     """Posta no canal #producao um lembrete por loja que nao fez pedido
-    pra amanha. Cada lembrete tem 2 botoes (sem pedido / fazer pedido).
+    pra amanha, antes do corte. Cada lembrete tem 2 botoes
+    (sem pedido / fazer pedido).
     """
+    from datetime import timedelta
+
     from app.services import slack as slack_api
+    from app.services.pedido_corte import HORA_CORTE, corte_ativo
+
+    if corte_ativo(hoje_brt() + timedelta(days=1)):
+        return
 
     canal = (current_app.config.get('SLACK_CANAL_PEDIDOS') or '').strip()
     if not canal:
@@ -189,6 +196,10 @@ def enviar_lembretes_pedido_amanha():
                 or 'https://gestao.opaopadariaartesanal.com.br').rstrip('/')
 
     for loja, data in pendentes:
+        # Uma rodada atrasada não deve convidar a loja a criar um pedido
+        # que já fechou, inclusive se o corte chegou durante os envios.
+        if corte_ativo(data):
+            break
         # value codifica loja_id:YYYY-MM-DD pra os botoes
         valor = f'{loja.id}:{data.isoformat()}'
         url_pedido = f'{base_url}/pedidos/novo?loja={loja.id}'
@@ -200,7 +211,8 @@ def enviar_lembretes_pedido_amanha():
              'text': {'type': 'mrkdwn',
                       'text': (f'A *{loja.nome}* ainda nao fez pedido pra entrega '
                                 f'em *{data.strftime("%d/%m/%Y")}*.\n'
-                                'Avisa aqui se nao vai ter pedido, ou cria um agora.')}},
+                                'Avisa aqui se nao vai ter pedido, ou cria um '
+                                f'antes das {HORA_CORTE:02d}:00 de hoje (Brasília).')}},
             {'type': 'actions',
              'elements': [
                  {'type': 'button', 'style': 'danger',

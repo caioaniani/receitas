@@ -51,6 +51,7 @@ from app.models import (
     VendaMapa,
     VendaMapaUso,
 )
+from app.services.pedido_corte import salvar_no_prazo
 from app.services.pedido_lock import reler_pedido_travado, travar_pedidos_lojas
 from app.utils import agora
 from app.utils import hoje as hoje_brt
@@ -501,10 +502,9 @@ def novo():
                                    amanha=amanha, data_min=data_min,
                                    loja_id=loja_id)
 
-        # Corte do fim do dia (dono 10/08/2026): pedido pra AMANHÃ fecha na HORA_CORTE
-        # (pré-preparo do padeiro). Admin passa com aviso; loja é barrada.
-        # Checado ANTES do merge — criar "novo" pode virar mesclar num
-        # pedido de amanhã já existente.
+        # A espera pela trava pode cruzar 12h. Checar antes do merge,
+        # pois criar também pode alterar um pedido de amanhã já existente.
+        travar_pedidos_lojas([sel_loja])
         from app.services.pedido_corte import bloqueio_do_corte
         bloqueado, aviso_corte = bloqueio_do_corte([data_entrega],
                                                    user=current_user)
@@ -599,7 +599,10 @@ def novo():
                 # somar os itens dele seria demanda em dobro.
                 absorvido = absorver_rascunho_automatico(
                     sel_loja, data_entrega, current_user.id)
-                db.session.commit()
+                erro_corte = salvar_no_prazo([data_entrega])
+                if erro_corte:
+                    flash(erro_corte, 'warning')
+                    return redirect(url_for('pedidos.novo'))
                 flash(f'Itens adicionados ao pedido #{alvo.id} — ja existia '
                       'para esta loja nesta data.', 'success')
                 if absorvido is not None:
@@ -615,7 +618,10 @@ def novo():
             if rascunho is not None:
                 res_adote = adotar_rascunho_automatico(
                     rascunho, itens_norm, current_user.id, observacao=obs)
-                db.session.commit()
+                erro_corte = salvar_no_prazo([data_entrega])
+                if erro_corte:
+                    flash(erro_corte, 'warning')
+                    return redirect(url_for('pedidos.novo'))
                 flash(f'Pedido #{rascunho.id} confirmado a partir da sugestão '
                       'automática do dia: suas quantidades substituíram as '
                       'sugeridas.', 'success')
@@ -635,7 +641,10 @@ def novo():
             db.session.flush()
             for it in itens_norm:
                 db.session.add(PedidoItem(pedido_id=pedido.id, **it))
-            db.session.commit()
+            erro_corte = salvar_no_prazo([data_entrega])
+            if erro_corte:
+                flash(erro_corte, 'warning')
+                return redirect(url_for('pedidos.novo'))
         except Exception as exc:  # noqa: BLE001
             db.session.rollback()
             current_app.logger.exception('Falha ao criar pedido')
@@ -677,6 +686,12 @@ def editar(id):
         flash(f'Pedido {pedido.status} nao pode ser editado. Cancele e recrie.', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
 
+    from app.services.pedido_corte import bloqueio_do_corte
+    bloqueado, aviso_corte = bloqueio_do_corte([pedido.data_entrega])
+    if bloqueado:
+        flash(aviso_corte, 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+
     if request.method == 'POST':
         # Mesmo dia liberado pra todos (15/07/2026); passado segue bloqueado.
         data_min = hoje_brt()
@@ -690,6 +705,7 @@ def editar(id):
             flash(f'A data de entrega deve ser a partir de {data_min.strftime("%d/%m")}.', 'warning')
             return redirect(url_for('pedidos.editar', id=id))
 
+        datas_corte = [pedido.data_entrega, data_entrega]
         # Corte do fim do dia (dono 10/08/2026): olha a data ATUAL e a NOVA —
         # mover um pedido PRA amanhã (ou tirar de amanhã) depois do corte
         # muda o pré-preparo do padeiro do mesmo jeito.
@@ -812,7 +828,10 @@ def editar(id):
                 flash('Pedido precisa ter pelo menos 1 item.', 'warning')
                 return redirect(url_for('pedidos.editar', id=id))
 
-            db.session.commit()
+            erro_corte = salvar_no_prazo(datas_corte)
+            if erro_corte:
+                flash(erro_corte, 'warning')
+                return redirect(url_for('pedidos.detalhe', id=id))
         except Exception as exc:  # noqa: BLE001
             db.session.rollback()
             current_app.logger.exception('Falha ao editar pedido')
@@ -869,6 +888,9 @@ def detalhe(id):
 def confirmar(id):
     pedido = PedidoLoja.query.get_or_404(id)
     pedido = reler_pedido_travado(pedido)
+    if pedido.status != 'pendente':
+        flash('Só é possível confirmar pedidos pendentes.', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
     pedido.status = 'confirmado'
     # Carimbo do gesto humano (10/08/2026, auto-pedidos): confirmar um
     # rascunho automático SEM mexer em item é revisão — o carimbo protege o
@@ -1553,7 +1575,10 @@ def cancelar(id):
     # auto-pedidos de recriar o pedido na rodada seguinte.
     pedido.modificado_em = agora()
     pedido.modificado_por_id = current_user.id
-    db.session.commit()
+    erro_corte = salvar_no_prazo([pedido.data_entrega])
+    if erro_corte:
+        flash(erro_corte, 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
     flash('Pedido cancelado.', 'success')
     if pedido.nf_emitida_em:
         flash('Atenção: o pedido tinha NF de transferência emitida '
@@ -1568,6 +1593,12 @@ def cancelar(id):
 @admin_required
 def excluir(id):
     pedido = PedidoLoja.query.get_or_404(id)
+    pedido = reler_pedido_travado(pedido)
+    from app.services.pedido_corte import bloqueio_do_corte
+    bloqueado, aviso_corte = bloqueio_do_corte([pedido.data_entrega])
+    if bloqueado:
+        flash(aviso_corte, 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
     # HandshakeAudit referencia pedido_id sem ondelete cascade — em Postgres
     # bloqueia o delete com FK violation. Limpa antes (audits viram orfaos
     # com pedido_id=NULL).
@@ -1575,7 +1606,10 @@ def excluir(id):
     HandshakeAudit.query.filter_by(pedido_id=pedido.id).update(
         {'pedido_id': None})
     db.session.delete(pedido)
-    db.session.commit()
+    erro_corte = salvar_no_prazo([pedido.data_entrega])
+    if erro_corte:
+        flash(erro_corte, 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
     flash('Pedido excluído.', 'success')
     return redirect(url_for('pedidos.lista'))
 
@@ -3746,9 +3780,8 @@ def sugerir_pedido(loja_id):
         except ValueError:
             flash('Data invalida.', 'danger')
             return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
-        # Corte do fim do dia: a rota é admin (passa), mas o aviso de que o
-        # pré-preparo de amanhã já foi calculado vai junto — mesmo contrato
-        # dos outros caminhos de escrita (defesa em profundidade).
+        # Mesmo corte para admin, verificado depois da espera pela trava.
+        travar_pedidos_lojas([loja_id])
         from app.services.pedido_corte import bloqueio_do_corte
         bloqueado_corte, aviso_corte = bloqueio_do_corte(
             [data_entrega], user=current_user)
@@ -3795,7 +3828,10 @@ def sugerir_pedido(loja_id):
             mesclar_itens(alvo, itens_norm, modificado_por_id=current_user.id)
             absorvido = absorver_rascunho_automatico(
                 loja_id, data_entrega, current_user.id)
-            db.session.commit()
+            erro_corte = salvar_no_prazo([data_entrega])
+            if erro_corte:
+                flash(erro_corte, 'warning')
+                return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
             flash(f'Itens adicionados ao pedido #{alvo.id} — ja existia '
                   'para esta loja nesta data.', 'success')
             if absorvido is not None:
@@ -3809,7 +3845,10 @@ def sugerir_pedido(loja_id):
         if rascunho is not None:
             res_adote = adotar_rascunho_automatico(
                 rascunho, itens_norm, current_user.id)
-            db.session.commit()
+            erro_corte = salvar_no_prazo([data_entrega])
+            if erro_corte:
+                flash(erro_corte, 'warning')
+                return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
             flash(f'Pedido #{rascunho.id} confirmado a partir da sugestão '
                   'automática do dia: suas quantidades substituíram as '
                   'sugeridas.', 'success')
@@ -3825,7 +3864,10 @@ def sugerir_pedido(loja_id):
         db.session.flush()
         for it in itens_norm:
             db.session.add(PedidoItem(pedido_id=pedido.id, **it))
-        db.session.commit()
+        erro_corte = salvar_no_prazo([data_entrega])
+        if erro_corte:
+            flash(erro_corte, 'warning')
+            return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
         flash(f'Pedido #{pedido.id} criado a partir da sugestao.', 'success')
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 

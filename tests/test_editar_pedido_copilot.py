@@ -9,6 +9,10 @@ Cobre:
 """
 from datetime import date, timedelta
 
+import pytest
+
+pytestmark = pytest.mark.usefixtures('pedidos_antes_do_corte')
+
 
 def _pedido_pendente(loja, admin_user, catalogo, status='pendente'):
     """Helper local: cria PedidoLoja com 1 PedidoItem (receita do catalogo)."""

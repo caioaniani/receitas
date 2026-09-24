@@ -109,7 +109,7 @@ def test_post_novo_aceita_multiplo(app, admin_user, loja):
         assert ped.itens[0].quantidade == 6000
 
 
-def test_editar_recusa_fora_do_lote_sem_grandfather(app, admin_user, loja):
+def test_editar_recusa_fora_do_lote_sem_grandfather(app, admin_user, loja, pedidos_antes_do_corte):
     """Decisão do dono: SEM grandfather — o 9360 antigo tem que virar
     9000/12000 ao editar."""
     with app.app_context():

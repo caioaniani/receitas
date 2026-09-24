@@ -9,6 +9,8 @@
     </div>
 </div>
 
+{% include "pedidos/_corte_aviso.html" %}
+
 <form method="GET" class="row g-2 mb-3 align-items-end">
     <div class="col-sm-3">
         <label class="form-label small mb-0">De (data inicial)</label>
@@ -107,4 +109,8 @@
     </div>
 </form>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% include "pedidos/_corte_data_js.html" %}
 {% endblock %}

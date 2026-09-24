@@ -20,6 +20,25 @@ class PedidoLoteInvalidoError(ValueError):
     """A grade contém item inelegível ou quantidade incompatível com o lote."""
 
 
+class PedidoCorteError(ValueError):
+    """A seleção inclui uma data fechada pelo corte dos pedidos."""
+
+
+def _validar_corte_da_grade(pedidos, datas_adicionais=()):
+    """Recusa a seleção inteira, inclusive se o corte chegou durante a escrita.
+
+    Os chamadores adquirem a trava antes de validar. A mesma verificação
+    antes do commit desfaz toda a transação se ela atravessou o corte.
+    """
+    from app.services.pedido_corte import bloqueio_do_corte
+
+    bloqueado, mensagem = bloqueio_do_corte(
+        [ped.get('data_entrega') for ped in pedidos] + list(datas_adicionais))
+    if bloqueado:
+        db.session.rollback()
+        raise PedidoCorteError(mensagem)
+
+
 def _validar_lotes_da_grade(pedidos):
     """Valida toda a seleção antes de criar ou modificar qualquer pedido."""
     from app.services.pedido_lote import violacoes_por_ids
@@ -58,6 +77,7 @@ def criar_pedidos_rascunho(pedidos, user_id):
     """
     pedidos = list(pedidos)
     travar_pedidos_lojas(ped.get('loja_id') for ped in pedidos)
+    _validar_corte_da_grade(pedidos)
     _validar_lotes_da_grade(pedidos)
     criados = pulados = total_itens = 0
     hoje_d = hoje()
@@ -109,6 +129,9 @@ def criar_pedidos_rascunho(pedidos, user_id):
             total_itens += 1
         criados += 1
 
+    # A escrita pendente também pode esperar no banco e atravessar o corte.
+    db.session.flush()
+    _validar_corte_da_grade(pedidos)
     db.session.commit()
     invalidar_sugestao_cache()
     return {'criados': criados, 'pulados_existentes': pulados,
@@ -137,6 +160,7 @@ def _sincronizar_itens(pedido, itens, user_id):
         db.session.expire(pedido, ['itens'])
         if protegido_do_motor(pedido):
             return 0, 0
+    _validar_corte_da_grade([{'data_entrega': pedido.data_entrega}])
     por_chave = {}
     duplicados = set()
     for it in pedido.itens:
@@ -192,17 +216,23 @@ def _sincronizar_itens(pedido, itens, user_id):
     return ajustados, ambiguos
 
 
-def aplicar_grade(pedidos, user_id):
+def aplicar_grade(pedidos, user_id, *, datas_adicionais_corte=()):
     """Aplica a grade da tela de pedidos da semana: (loja, dia) SEM pedido vira
     rascunho novo (como `criar_pedidos_rascunho`); dia COM pedido EDITAVEL
     (pendente/confirmado, e um so) tem os itens sincronizados. Pedido alem de
     confirmado, ou dia com MAIS de um pedido, nao e tocado.
 
+    O cron informa em `datas_adicionais_corte` os dias em que já absorveu ou
+    cancelou rascunhos nesta transação. Eles também precisam continuar abertos
+    até o commit, mesmo quando não sobrou nenhuma linha na grade.
+
     Retorna {'criados', 'itens', 'atualizados', 'itens_ajustados',
              'itens_ambiguos', 'pulados_nao_editavel', 'pulados_multiplos'}.
     """
     pedidos = list(pedidos)
+    datas_adicionais_corte = tuple(datas_adicionais_corte)
     travar_pedidos_lojas(ped.get('loja_id') for ped in pedidos)
+    _validar_corte_da_grade(pedidos, datas_adicionais_corte)
     _validar_lotes_da_grade(pedidos)
     hoje_d = hoje()
     out = {'criados': 0, 'itens': 0, 'atualizados': 0, 'itens_ajustados': 0,
@@ -269,6 +299,8 @@ def aplicar_grade(pedidos, user_id):
         if ajustados:
             out['atualizados'] += 1
 
+    db.session.flush()
+    _validar_corte_da_grade(pedidos, datas_adicionais_corte)
     db.session.commit()
     invalidar_sugestao_cache()
     return out

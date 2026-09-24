@@ -9,6 +9,8 @@
     <a href="{{ url_for('pedidos.detalhe', id=pedido.id) }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
 </div>
 
+{% include "pedidos/_corte_aviso.html" %}
+
 <div class="alert alert-warning small mb-3">
     Status atual: <strong>{{ pedido.status }}</strong>. Edição disponível só em <em>pendente</em>/<em>confirmado</em>.
     Loja (<strong>{{ pedido.loja.nome }}</strong>) e motorista não mudam aqui — cancele e recrie se precisar trocar de loja.
@@ -81,4 +83,5 @@
 
 {% block scripts %}
 {{ ta.typeahead_assets() }}
+{% include "pedidos/_corte_data_js.html" %}
 {% endblock %}
