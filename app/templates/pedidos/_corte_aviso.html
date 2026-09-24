@@ -2,16 +2,11 @@
     {% if pedido_corte_amanha %}
     <i class="bi bi-lock-fill" aria-hidden="true"></i>
     <strong>Pedidos para amanhã fechados desde as {{ pedido_hora_corte }}h.</strong>
-    {% if edicao_livre | default(false) %}
-    Você pode editar pedidos pendentes ou confirmados, informando o que está mudando e o motivo.
-    {% else %}
-    A edição após esse horário exige liberação individual do dono.
-    {% endif %}
-    Criação, cancelamento e exclusão continuam sujeitos ao corte.
+    Não é possível criar, editar, cancelar ou excluir pedidos para entrega amanhã.
     {% else %}
     <i class="bi bi-clock" aria-hidden="true"></i>
     Crie e altere os pedidos para amanhã <strong>antes das {{ pedido_hora_corte }}h</strong>.
-    A edição após esse horário exige liberação individual do dono e justificativa.
+    A partir desse horário, os pedidos ficam fechados para alterações.
     {% endif %}
-    Horário de Brasília.
+    Horário de Brasília. O prazo vale para todos os usuários.
 </div>

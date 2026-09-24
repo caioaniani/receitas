@@ -1,4 +1,3 @@
-import json
 from urllib.parse import urlparse
 
 from flask import abort, flash, redirect, render_template, request, url_for
@@ -124,30 +123,9 @@ def usuarios():
     loja_pedidos = None
     loja_pedidos_configurada = None
     bloqueio_pedidos = None
-    edicao_fora_prazo = False
-    edicao_fora_prazo_configurada = False
-    elegivel_edicao_fora_prazo = False
     if selecionado and current_user.is_owner:
-        from app.models import AcessoPedidosLoja, AppConfig
-        from app.services import permissoes
+        from app.models import AcessoPedidosLoja
         from app.services.acesso_pedidos_loja import loja_liberada
-        from app.services.pedido_edicao_acesso import pode_editar_fora_prazo
-
-        edicao_fora_prazo = pode_editar_fora_prazo(selecionado)
-        elegivel_edicao_fora_prazo = bool(
-            selecionado.papel in ('gerente', 'admin')
-            and not selecionado.somente_treino
-            and (selecionado.is_admin() or (
-                permissoes.pode(selecionado.papel, 'web_pedidos')
-                and permissoes.pode(selecionado.papel, 'web_pedido_operar'))))
-        try:
-            registro_edicao = json.loads(AppConfig.get(
-                f'pedido_edicao_fora_prazo:{selecionado.id}'))
-            edicao_fora_prazo_configurada = (
-                isinstance(registro_edicao, dict)
-                and registro_edicao.get('autorizado') is True)
-        except (TypeError, ValueError):
-            pass
 
         registro_pedidos = db.session.get(AcessoPedidosLoja, selecionado.id)
         loja_pedidos = loja_liberada(selecionado)
@@ -163,52 +141,7 @@ def usuarios():
                            delegados_nf=delegados_nf, selecionado=selecionado,
                            registro_pedidos=registro_pedidos, loja_pedidos=loja_pedidos,
                            loja_pedidos_configurada=loja_pedidos_configurada,
-                           bloqueio_pedidos=bloqueio_pedidos,
-                           edicao_fora_prazo=edicao_fora_prazo,
-                           edicao_fora_prazo_configurada=edicao_fora_prazo_configurada,
-                           elegivel_edicao_fora_prazo=elegivel_edicao_fora_prazo)
-
-
-@auth_bp.route('/usuarios/<int:id>/edicao-pedidos-fora-prazo', methods=['POST'])
-@login_required
-@owner_required
-def delegar_edicao_pedidos_fora_prazo(id):
-    from app.models import AppConfig, AuditLog
-    from app.services.pedido_edicao_acesso import definir_acesso_edicao_fora_prazo
-
-    permitir = request.form.get('permitir')
-    if permitir not in ('0', '1'):
-        abort(400)
-    usuario = Usuario.query.filter_by(id=id).with_for_update().first_or_404()
-    antes = AppConfig.get(f'pedido_edicao_fora_prazo:{usuario.id}')
-    try:
-        antes_json = json.loads(antes) if antes is not None else {'autorizado': False}
-    except (TypeError, ValueError):
-        antes_json = {'registro_invalido': antes}
-    try:
-        registro = definir_acesso_edicao_fora_prazo(
-            usuario, permitir == '1', current_user)
-        db.session.add(AuditLog(
-            tabela='pedido_edicao_acesso', registro_id=usuario.id,
-            acao='update', usuario_id=current_user.id,
-            antes=json.dumps(antes_json), depois=registro.value))
-        db.session.commit()
-    except PermissionError:
-        db.session.rollback()
-        abort(403)
-    except ValueError as exc:
-        db.session.rollback()
-        flash(str(exc), 'warning')
-    except Exception:
-        db.session.rollback()
-        raise
-    else:
-        if permitir == '1':
-            flash(f'Edição fora do prazo liberada para {usuario.nome}. '
-                  'Toda edição exige informar o que muda e por quê.', 'success')
-        else:
-            flash(f'Permissão de edição fora do prazo removida de {usuario.nome}.', 'success')
-    return _voltar_ao_usuario(usuario)
+                           bloqueio_pedidos=bloqueio_pedidos)
 
 
 @auth_bp.route('/usuarios/<int:id>/pedidos-industria', methods=['POST'])

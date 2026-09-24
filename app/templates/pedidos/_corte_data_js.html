@@ -1,6 +1,6 @@
 <script>
 (function () {
-    var amanhaFechado = {{ (pedido_corte_amanha and not (edicao_livre | default(false))) | tojson }};
+    var amanhaFechado = {{ pedido_corte_amanha | tojson }};
     var amanha = {{ pedido_data_amanha | tojson }};
     document.querySelectorAll('input[name="data_entrega"]').forEach(function (campo) {
         function validarData() {

@@ -559,13 +559,6 @@ def novo():
         if aviso_corte:
             flash(aviso_corte, 'warning')
 
-        from app.services.pedido_ajuste_motor import pedido_aberto_para_justificar
-        existente = pedido_aberto_para_justificar(sel_loja, data_entrega, current_user)
-        if existente:
-            flash('Já existe pedido nesta data. Altere o pedido existente e informe '
-                  'o que está mudando e por quê.', 'warning')
-            return redirect(url_for('pedidos.editar', id=existente.id))
-
         # Monta a lista de itens normalizada antes de decidir merge vs novo.
         ids = request.form.getlist('item_id[]')
         qtds = request.form.getlist('item_qtd[]')
@@ -736,33 +729,12 @@ def editar(id):
         return redirect(url_for('pedidos.detalhe', id=id))
 
     from app.services.pedido_corte import bloqueio_do_corte
-    bloqueado, aviso_corte = bloqueio_do_corte(
-        [pedido.data_entrega], user=current_user, acao='editar')
+    bloqueado, aviso_corte = bloqueio_do_corte([pedido.data_entrega])
     if bloqueado:
         flash(aviso_corte, 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
 
-    from app.services.pedido_ajuste_motor import (
-        bloqueio_edicao_livre,
-        preparar_ajuste,
-        registrar_ajuste,
-    )
-    from app.services.pedido_edicao_acesso import pode_editar_fora_prazo
-    edicao_livre = pode_editar_fora_prazo(current_user)
-    if edicao_livre:
-        bloqueio = bloqueio_edicao_livre(pedido)
-        if bloqueio:
-            flash(bloqueio, 'warning')
-            return redirect(url_for('pedidos.detalhe', id=id))
-
     if request.method == 'POST':
-        try:
-            ajuste_motor = preparar_ajuste(pedido, current_user, request.form)
-        except ValueError as exc:
-            flash(str(exc), 'warning')
-            return render_template('pedidos/editar.html', pedido=pedido,
-                                   amanha=hoje_brt() + timedelta(days=1),
-                                   data_min=hoje_brt(), edicao_livre=edicao_livre), 400
         # Mesmo dia liberado pra todos (15/07/2026); passado segue bloqueado.
         data_min = hoje_brt()
         data_str = request.form.get('data_entrega', '')
@@ -781,7 +753,7 @@ def editar(id):
         # muda o pré-preparo do padeiro do mesmo jeito.
         from app.services.pedido_corte import bloqueio_do_corte
         bloqueado, aviso_corte = bloqueio_do_corte(
-            [pedido.data_entrega, data_entrega], user=current_user, acao='editar')
+            [pedido.data_entrega, data_entrega], user=current_user)
         if bloqueado:
             flash(aviso_corte, 'warning')
             return redirect(url_for('pedidos.detalhe', id=id))
@@ -898,10 +870,7 @@ def editar(id):
                 flash('Pedido precisa ter pelo menos 1 item.', 'warning')
                 return redirect(url_for('pedidos.editar', id=id))
 
-            registrar_ajuste(pedido, current_user, ajuste_motor, canal='site')
-            erro_corte = salvar_no_prazo(
-                datas_corte, user=current_user,
-                acao='editar' if ajuste_motor is not None else None)
+            erro_corte = salvar_no_prazo(datas_corte)
             if erro_corte:
                 flash(erro_corte, 'warning')
                 return redirect(url_for('pedidos.detalhe', id=id))
@@ -922,7 +891,7 @@ def editar(id):
     amanha = hoje_brt() + timedelta(days=1)
     data_min = hoje_brt()   # mesmo dia liberado pra todos (15/07/2026)
     return render_template('pedidos/editar.html', pedido=pedido,
-                           amanha=amanha, data_min=data_min, edicao_livre=edicao_livre)
+                           amanha=amanha, data_min=data_min)
 
 
 @pedidos_bp.route('/<int:id>')
@@ -951,12 +920,8 @@ def detalhe(id):
                   .all()):
             if f.etapa in fotos_conf:
                 fotos_conf[f.etapa].append(f)
-    from app.services.pedido_ajuste_motor import historico_ajustes
-    from app.services.pedido_edicao_acesso import pode_editar_fora_prazo
     return render_template('pedidos/detalhe.html', pedido=pedido,
-                            drivers=drivers, fotos_conf=fotos_conf,
-                            edicao_livre=pode_editar_fora_prazo(current_user),
-                            ajustes_motor=historico_ajustes(pedido.id))
+                            drivers=drivers, fotos_conf=fotos_conf)
 
 
 @pedidos_bp.route('/<int:id>/confirmar', methods=['POST'])
@@ -3868,12 +3833,6 @@ def sugerir_pedido(loja_id):
                                     loja_id=loja_id))
         if aviso_corte:
             flash(aviso_corte, 'warning')
-        from app.services.pedido_ajuste_motor import pedido_aberto_para_justificar
-        existente = pedido_aberto_para_justificar(loja_id, data_entrega, current_user)
-        if existente:
-            flash('Já existe pedido nesta data. Altere o pedido existente e informe '
-                  'o que está mudando e por quê.', 'warning')
-            return redirect(url_for('pedidos.editar', id=existente.id))
         refs = request.form.getlist('item_ref[]')
         qtds = request.form.getlist('item_qtd[]')
         itens = []

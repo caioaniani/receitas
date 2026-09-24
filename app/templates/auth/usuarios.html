@@ -81,37 +81,6 @@
 </div>
 {% endif %}
 
-{% if selecionado and current_user.is_owner and (selecionado.papel in ('gerente', 'admin') or edicao_fora_prazo_configurada) %}
-<section class="card mb-4" aria-labelledby="edicao-pedidos-fora-prazo-titulo" id="edicao-pedidos-fora-prazo">
-    <div class="card-body">
-        <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
-            <h2 id="edicao-pedidos-fora-prazo-titulo" class="h4 mb-0">Editar pedidos fora do prazo</h2>
-            {% if edicao_fora_prazo %}<span class="badge bg-success">Liberado</span>{% elif edicao_fora_prazo_configurada %}<span class="badge bg-warning text-dark">Suspenso</span>{% else %}<span class="badge bg-secondary">Não liberado</span>{% endif %}
-        </div>
-        <p class="mb-2">Permite editar pedidos para a indústria depois do horário de corte, enquanto estiverem pendentes ou confirmados.</p>
-        <p class="mb-3">Em toda edição, a pessoa precisa informar <strong>o que está mudando</strong> e <strong>por quê</strong>. O histórico fica registrado para ajudar a melhorar as sugestões do motor.</p>
-        {% if edicao_fora_prazo_configurada %}
-            {% if not edicao_fora_prazo %}<p class="text-muted">A permissão está cadastrada, mas não está válida no momento. Confira o perfil e o acesso a pedidos.</p>{% endif %}
-            <form method="POST" action="{{ url_for('auth.delegar_edicao_pedidos_fora_prazo', id=selecionado.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="voltar_acesso" value="{{ selecionado.id }}">
-                <input type="hidden" name="permitir" value="0">
-                <button type="submit" class="btn btn-outline-danger" aria-label="Remover edição fora do prazo de {{ selecionado.nome }}">Remover edição fora do prazo</button>
-            </form>
-        {% elif elegivel_edicao_fora_prazo %}
-            <form method="POST" action="{{ url_for('auth.delegar_edicao_pedidos_fora_prazo', id=selecionado.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="voltar_acesso" value="{{ selecionado.id }}">
-                <input type="hidden" name="permitir" value="1">
-                <button type="submit" class="btn btn-primary" aria-label="Liberar edição fora do prazo para {{ selecionado.nome }}">Liberar edição fora do prazo</button>
-            </form>
-        {% else %}
-            <p class="text-muted mb-0">Esta liberação exige perfil Gerente ou Admin com acesso a pedidos e sem a restrição de somente treinamento.</p>
-        {% endif %}
-    </div>
-</section>
-{% endif %}
-
 {% if selecionado and current_user.is_owner %}
 <section class="card mb-4 users-orders-access" aria-labelledby="pedidos-industria-titulo" id="pedidos-industria">
     <div class="card-body">
