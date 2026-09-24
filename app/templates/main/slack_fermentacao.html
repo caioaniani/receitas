@@ -16,8 +16,22 @@
     <div class="alert alert-success">Lista enviada ao Slack em {{ envio.enviado_em.strftime('%d/%m às %H:%M') }}.</div>
     {% elif envio.estado == 'aviso_enviado' %}
     <div class="alert alert-warning">Foi enviado um aviso: faltam dados para calcular a lista.</div>
+    {% elif envio.estado == 'correcao_incerta' %}
+    <div class="alert alert-warning">A correção ainda não foi confirmada pelo Slack. A nova tentativa atualiza a mesma mensagem.</div>
     {% else %}
     <div class="alert alert-warning">O envio está em andamento ou não foi confirmado. Confira o canal antes de qualquer nova tentativa.</div>
+    {% endif %}
+    {% if envio.slack_ts and (envio.texto != calculo.texto or envio.estado == 'correcao_incerta') %}
+    <div class="card mb-3"><div class="card-body">
+        <h2 class="h5">Prévia da correção</h2>
+        <div style="white-space: pre-wrap">{{ envio.calculo.correcao_pendente.texto if envio.calculo.correcao_pendente else calculo.texto }}</div>
+        <form method="post" class="mt-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="acao" value="corrigir">
+            <button class="btn btn-primary" type="submit">Corrigir a mensagem no Slack</button>
+            <p class="small text-muted mt-2">Substitui a lista anterior e guarda o histórico da correção.</p>
+        </form>
+    </div></div>
     {% endif %}
 {% else %}
 <form method="post" class="mb-3">
@@ -30,17 +44,29 @@
 {% endif %}
 <details class="mb-3">
     <summary>Como a quantidade foi calculada</summary>
-    <p class="mt-2">Soma das vendas simples nas três datas anteriores do mesmo dia da semana, dividida por três e arredondada para cima. Não desconta estoque nem acrescenta margem.</p>
-    <p>O tradicional reúne os nomes do PDV “Croissant Francês”, “Croissant Tradicional” e “Croissant Esquentado”. Recheados, sanduíches, minis e bicolor ficam de fora.</p>
-    {% set base = envio.calculo if envio else calculo %}
+    <p class="mt-2">Soma das unidades consumidas nas vendas das três datas anteriores do mesmo dia da semana, dividida por três e arredondada para cima. Não desconta estoque nem acrescenta margem.</p>
+    <p>Inclui os dois produtos vendidos sozinhos e nas composições dos lanches e preparações na chapa. Nutella e Nutella com morango também entram como croissants tradicionais para fermentar, mesmo quando a ficha usa retorno. Almond fica fora da conta. Minis e bicolor têm massas próprias.</p>
+    {% set base = calculo %}
+    {% if not base.ok %}<div class="alert alert-warning">{% for erro in base.erros %}<div>{{ erro }}</div>{% endfor %}</div>{% endif %}
     {% for loja in base.lojas %}
     <h3 class="h6">{{ loja.nome }}</h3>
     <div class="table-responsive"><table class="table table-sm">
         <thead><tr><th>Data</th><th>Croissant tradicional</th><th>Pain au chocolat</th></tr></thead>
         <tbody>{% for dia in loja.dias %}
-        <tr><td>{{ dia.data[8:10] }}/{{ dia.data[5:7] }}</td><td>{{ dia.croissant|int }}</td><td>{{ dia.pain|int }}</td></tr>
+        <tr><td>{{ dia.data[8:10] }}/{{ dia.data[5:7] }}</td><td>{{ '%g'|format(dia.croissant|float) }}</td><td>{{ '%g'|format(dia.pain|float) }}</td></tr>
         {% endfor %}</tbody>
     </table></div>
+    {% for dia in loja.dias %}
+    <details class="mb-2">
+        <summary>Vendas consideradas em {{ dia.data[8:10] }}/{{ dia.data[5:7] }}</summary>
+        <div class="table-responsive"><table class="table table-sm">
+            <thead><tr><th>Produto vendido</th><th>Vendas</th><th>Composição considerada</th><th>Unidades</th></tr></thead>
+            <tbody>{% for fonte in dia.fontes %}{% for componente in fonte.componentes %}
+            <tr><td>{{ fonte.nome }}</td><td>{{ '%g'|format(fonte.qtd|float) }}</td><td>{{ componente.caminho|join(' → ') }}{% if not componente.grupo %}<br><small>{{ componente.motivo }}</small>{% endif %}</td><td>{{ '%g'|format(componente.unidades|float) if componente.grupo else 'Não exige fermentação' }}</td></tr>
+            {% endfor %}{% endfor %}</tbody>
+        </table></div>
+    </details>
+    {% endfor %}
     {% endfor %}
     <p class="small text-muted">Fonte: vendas registradas no sistema pelo PDV Seru. Vendas sem itens detalhados ou dias sem histórico fechado impedem o cálculo.</p>
 </details>

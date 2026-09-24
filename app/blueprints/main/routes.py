@@ -2942,7 +2942,10 @@ def slack_fermentacao():
     from app.utils import hoje
 
     if request.method == 'POST':
-        resultado = fermentacao.enviar_amanha()
+        if request.form.get('acao') == 'corrigir':
+            resultado = fermentacao.enviar_amanha(corrigir=True)
+        else:
+            resultado = fermentacao.enviar_amanha()
         flash(resultado['mensagem'],
               'success' if resultado['estado'] == 'enviado' else 'warning')
         return redirect(url_for('main.slack_fermentacao'))

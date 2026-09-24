@@ -1,8 +1,8 @@
-"""Média de três dias equivalentes de vendas simples; não movimenta estoque.
+"""Média do consumo dos dois folhados em três dias equivalentes de vendas.
 
 Decisão do owner em 23/09/2026: diariamente às 12h, para o dia seguinte,
-Ribeiro do Vale e Anésio, no canal do desperdício. Não expandir composição
-de recheados/sanduíches nem usar pedidos, estoque ou margem de segurança.
+Ribeiro do Vale e Anésio, no canal do desperdício. Inclui o consumo nas
+composições dos lanches, inclusive na chapa; não movimenta estoque.
 """
 import logging
 import unicodedata
@@ -28,13 +28,6 @@ LOCK_KEY = 7767
 LOJAS = ('Ribeiro do Vale', 'Anésio Pinto Rosa')
 DIAS_SEMANA = ('segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira',
                'sexta-feira', 'sábado', 'domingo')
-# Lista positiva conferida no PDV. SKU sozinho não identifica venda simples.
-PRODUTOS = {
-    'croissant frances': ('croissant', '272'),
-    'croissant tradicional': ('croissant', '272'),
-    'croissant esquentado': ('croissant', '355'),
-    'pain au chocolat': ('pain', '271'),
-}
 
 
 def _normalizar(nome):
@@ -47,10 +40,18 @@ def datas_base(data_alvo):
 
 
 def calcular(data_alvo=None):
+    from app.services.fermentacao_consumo import ConsumoFermentacao
+
     data_alvo = data_alvo or hoje() + timedelta(days=1)
     datas = datas_base(data_alvo)
     resultado = {'data_alvo': data_alvo.isoformat(),
                  'datas': [d.isoformat() for d in datas], 'lojas': [], 'erros': []}
+    try:
+        consumo = ConsumoFermentacao()
+    except ValueError as exc:
+        resultado.update(ok=False, erros=[str(exc)])
+        resultado['texto'] = formatar(resultado, data_alvo)
+        return resultado
     lojas = Loja.query.filter_by(ativa=True).all()
     for nome in LOJAS:
         candidatos = [l for l in lojas
@@ -98,19 +99,15 @@ def calcular(data_alvo=None):
             quantidades = {'croissant': Decimal(0), 'pain': Decimal(0)}
             fontes = []
             for linha in linhas:
-                produto = PRODUTOS.get(_normalizar(linha.seru_nome))
-                if not produto:
+                try:
+                    contribuicao = consumo.resolver(linha)
+                except ValueError as exc:
+                    resultado['erros'].append(f'{prefixo}: {exc}')
                     continue
-                grupo, sku = produto
-                qtd = Decimal(str(linha.qtd))
-                if (str(linha.sku or '').strip() != sku or not qtd.is_finite()
-                        or qtd < 0 or qtd != qtd.to_integral_value()):
-                    resultado['erros'].append(
-                        f'{prefixo}: conferir cadastro/quantidade de {linha.seru_nome}.')
-                    continue
-                quantidades[grupo] += qtd
-                fontes.append({'nome': linha.seru_nome, 'sku': linha.sku,
-                               'qtd': str(qtd), 'capturado_em': linha.atualizado_em.isoformat()})
+                for grupo in quantidades:
+                    quantidades[grupo] += contribuicao[grupo]
+                if contribuicao.get('fonte', {}).get('componentes'):
+                    fontes.append(contribuicao['fonte'])
             observacoes.append({'data': dia.isoformat(),
                                 **{k: str(v) for k, v in quantidades.items()},
                                 'fontes': fontes})
@@ -139,13 +136,14 @@ def formatar(resultado, data_alvo):
         linhas.extend(['', f'{loja["nome"]}:',
                        f'{loja["croissant"]} croissants tradicionais',
                        f'{loja["pain"]} pain au chocolat'])
-    linhas.extend(['', 'Base: média das vendas simples registradas no PDV em '
+    linhas.extend(['', 'Base: média do consumo nas vendas do PDV em '
                    + ', '.join(d[8:10] + '/' + d[5:7] for d in resultado['datas'])
-                   + '; arredondada para cima.'])
+                   + '; arredondada para cima.',
+                   'Inclui lanches, preparações na chapa, Nutella e Nutella com morango. Almond não entra.'])
     return '\n'.join(linhas)
 
 
-def enviar_amanha():
+def enviar_amanha(corrigir=False):
     """Cron e botão do owner usam a mesma trava e o mesmo registro por data.
 
     Reserva persistida ANTES da rede. Resposta incerta não é reenviada
@@ -170,8 +168,12 @@ def enviar_amanha():
         alvo = hoje() + timedelta(days=1)
         anterior = db.session.get(FermentacaoEnvio, alvo)
         if anterior:
+            if corrigir:
+                return _corrigir(anterior)
             return {'estado': anterior.estado,
                     'mensagem': 'Esta data já tem uma tentativa registrada. Confira o estado abaixo.'}
+        if corrigir:
+            return {'estado': 'indisponivel', 'mensagem': 'Não há mensagem para corrigir.'}
         calculo = calcular(alvo)
         envio = FermentacaoEnvio(data_alvo=alvo, canal=canal, estado='enviando',
                                 calculo=calculo, texto=calculo['texto'])
@@ -197,3 +199,46 @@ def enviar_amanha():
                 conn.execute(text('SELECT pg_advisory_unlock(:k)'), {'k': LOCK_KEY})
         finally:
             conn.close()
+
+
+def _corrigir(envio):
+    """Substitui o mesmo ts sob a trava do envio, preservando a auditoria.
+
+    Se a resposta se perder, o retry explícito repete o mesmo chat.update,
+    nunca publica uma segunda instrução. A tentativa fica salva antes da rede.
+    """
+    from app.services import slack
+
+    if not envio.slack_ts:
+        return {'estado': 'indisponivel',
+                'mensagem': 'Sem confirmação da mensagem original. Confira o canal.'}
+    salvo = dict(envio.calculo)
+    pendente = salvo.get('correcao_pendente')
+    if not pendente:
+        calculo = calcular(envio.data_alvo)
+        texto = calculo['texto']
+        if texto == envio.texto:
+            return {'estado': envio.estado, 'mensagem': 'A mensagem já está atualizada.'}
+        pendente = {'calculo': calculo, 'texto': texto,
+                    'solicitado_em': agora().isoformat()}
+        salvo['correcao_pendente'] = pendente
+        envio.calculo = salvo
+        envio.estado = 'correcao_incerta'
+        db.session.commit()
+    resposta = slack.update_message(envio.canal, envio.slack_ts,
+                                    text=pendente['texto'])
+    if not resposta.get('ok'):
+        return {'estado': 'correcao_incerta',
+                'mensagem': 'O Slack não confirmou a correção. A tentativa foi guardada; confira o canal.'}
+    historico = list(salvo.get('historico_correcoes', []))
+    historico.append({'texto': envio.texto,
+                      'calculo': {k: v for k, v in salvo.items()
+                                  if k not in ('historico_correcoes', 'correcao_pendente')},
+                      'corrigido_em': agora().isoformat()})
+    envio.calculo = dict(pendente['calculo'], historico_correcoes=historico)
+    envio.texto = pendente['texto']
+    envio.estado = 'enviado' if pendente['calculo']['ok'] else 'aviso_enviado'
+    envio.enviado_em = agora()
+    db.session.commit()
+    return {'estado': envio.estado,
+            'mensagem': 'Mensagem corrigida no Slack, sem duplicar a lista.'}
