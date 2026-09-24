@@ -267,13 +267,16 @@ class ConsumoFermentacao:
         if ('frances' in nome_norm.split() and 'croissant' not in nome_norm
                 and any(g == 'croissant' for g, _, _, _ in folhas)):
             raise ValueError(f'{nome}: pão francês vinculado a croissant; corrigir o cadastro do PDV.')
-        if relevante and mapa.sku and linha.sku and str(mapa.sku).strip() != str(linha.sku).strip():
-            raise ValueError(f'{nome}: SKU da venda diverge do vínculo cadastrado.')
+        # VendaMapa é identificado por (canal, nome_externo), não por SKU.
+        # O código legado do mapa pode diferir do Colibri no snapshot fechado
+        # (ex.: Croissant Francês 1 no mapa e 272 nas vendas). Preserve ambos
+        # para auditoria, sem invalidar um vínculo nominal já cadastrado.
         qtd = _numero(linha.qtd, nome)
         if any(grupo for grupo, _, _, _ in folhas) and qtd != qtd.to_integral_value():
             raise ValueError(f'{nome}: quantidade de vendas em unidades deve ser inteira.')
         fator = _numero(mapa.fator_quantidade, f'{nome}: fator do PDV', positivo=True)
-        fonte.update({'mapa_id': mapa.id, 'tipo': tipo, 'alvo_id': item_id, 'fator': str(fator)})
+        fonte.update({'mapa_id': mapa.id, 'sku_vinculo': mapa.sku, 'tipo': tipo,
+                      'alvo_id': item_id, 'fator': str(fator)})
         for grupo, consumo, caminho, motivo in folhas:
             total = qtd * fator * consumo
             fonte['componentes'].append({'grupo': grupo, 'unidades': str(total),

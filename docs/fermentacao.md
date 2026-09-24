@@ -9,7 +9,9 @@ nas vendas simples, recheados, sanduíches e preparações na chapa, conforme
 esclarecimento do owner em 24/09/2026. Nebraska e pedidos para indústria
 ficam fora. Minis/bicolor não viram tradicional por terem massa em comum.
 
-`VendaMapa` identifica o item por nome (SKU é conferência, não classificação).
+`VendaMapa` identifica o item por canal e nome. O SKU antigo do vínculo pode
+diferir do SKU do snapshot do PDV; ambos são auditados, sem classificar por
+código nem bloquear o vínculo nominal por essa diferença histórica.
 O fator do mapa é aplicado uma vez. `ProdutoItem` e sub-receitas são expandidos
 recursivamente até os dois alvos, respeitando o rendimento, com quantidades
 em Decimal e sem arredondamento intermediário. Regra explícita do owner em
