@@ -57,6 +57,48 @@ from app.utils import agora
 from app.utils import hoje as hoje_brt
 
 
+@pedidos_bp.route('/corrigir-minis-setembro', methods=['GET', 'POST'])
+@login_required
+@owner_required
+def corrigir_minis_setembro():
+    """Correção pontual autorizada pelo owner, com prévia e desfazer."""
+    from app.services.correcao_minis_pedidos import (
+        CorrecaoMinisError,
+        aplicar_correcao_minis,
+        prever_correcao_minis,
+        restaurar_correcao_minis,
+    )
+
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+        if acao not in ('remover', 'restaurar'):
+            abort(400)
+        try:
+            funcao = (aplicar_correcao_minis if acao == 'remover'
+                      else restaurar_correcao_minis)
+            funcao(current_user.id, request.form.get('fingerprint', ''))
+        except CorrecaoMinisError as exc:
+            db.session.rollback()
+            flash(str(exc), 'warning')
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('Falha na correção pontual de minis')
+            raise
+        else:
+            flash('Minis retirados dos pedidos. Correção registrada.'
+                  if acao == 'remover' else 'Correção desfeita. Itens restaurados.',
+                  'success')
+        return redirect(url_for('pedidos.corrigir_minis_setembro'), code=303)
+
+    try:
+        relatorio = prever_correcao_minis()
+    except CorrecaoMinisError as exc:
+        return render_template('pedidos/corrigir_minis_setembro.html',
+                               relatorio=None, erro=str(exc)), 409
+    return render_template('pedidos/corrigir_minis_setembro.html',
+                           relatorio=relatorio, erro=None)
+
+
 def _mps_pediveis():
     """MPs que a loja PODE pedir da indústria — só as marcadas no checkbox
     "sugerir pedido loja" do Banco de MPs (decisão do dono 07/07/2026: loja

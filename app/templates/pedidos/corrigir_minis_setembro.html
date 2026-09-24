@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Correção dos minis nos pedidos{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+    <h1 class="page-title mb-0">Correção dos minis nos pedidos</h1>
+    <a class="btn btn-outline-secondary" href="{{ url_for('pedidos.lista') }}">Ver pedidos</a>
+</div>
+<p>Correção pontual dos pedidos de 25 a 27/09/2026, autorizada pelo owner.</p>
+{% if erro %}
+<div class="alert alert-warning" role="alert">{{ erro }}</div>
+{% elif relatorio %}
+{% if relatorio.estado == 'aplicada' %}
+<div class="alert alert-success" role="status">
+    <strong>Correção concluída.</strong> {{ relatorio.total_unidades }} minis retirados de
+    {{ relatorio.pedidos|length }} pedidos. Os demais itens foram preservados.
+</div>
+{% elif relatorio.estado == 'restaurada' %}
+<div class="alert alert-info" role="status">A correção foi desfeita. Os itens originais foram restaurados.</div>
+{% else %}
+<p>Confira abaixo os itens que serão retirados. Cada pedido continuará com os demais itens e quantidades.</p>
+{% endif %}
+<div class="card p-3 mb-3">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead><tr><th>Pedido</th><th>Loja</th><th>Entrega</th><th>Item</th><th class="text-end">Quantidade</th></tr></thead>
+            <tbody>
+            {% for pedido in relatorio.pedidos %}
+            <tr>
+                <td><a href="{{ url_for('pedidos.detalhe', id=pedido.id) }}">#{{ pedido.id }}</a></td>
+                <td>{{ pedido.loja }}</td><td>{{ pedido.data_entrega }}</td>
+                <td>{{ pedido.item }}</td><td class="text-end">{{ pedido.quantidade }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<p class="text-muted">A correção fica registrada no histórico e não movimenta estoque.</p>
+{% if relatorio.estado == 'disponivel' %}
+<form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="fingerprint" value="{{ relatorio.fingerprint }}">
+    <input type="hidden" name="acao" value="remover">
+    <button type="submit" class="btn btn-primary">Retirar minis destes pedidos</button>
+</form>
+{% elif relatorio.estado == 'aplicada' %}
+<form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="fingerprint" value="{{ relatorio.fingerprint }}">
+    <input type="hidden" name="acao" value="restaurar">
+    <button type="submit" class="btn btn-outline-secondary">Desfazer correção</button>
+</form>
+<p class="small text-muted mt-2">É possível desfazer enquanto os pedidos não tiverem sido alterados ou enviados.</p>
+{% endif %}
+{% endif %}
+{% endblock %}
