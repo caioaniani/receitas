@@ -211,7 +211,7 @@ def test_produto_so_pedido_no_historico_aparece_sem_inventar_consumo(app, loja):
     assert linha['n_datas'] == 0
 
 
-def test_auto_produto_cria_e_ressincroniza_pedido_real(app, loja):
+def test_auto_produto_cria_e_ressincroniza_pedido_real(app, loja, pedidos_antes_do_corte):
     produto, saldo = _produto(loja, diario=2)
     primeiro = gerar_pedidos_automaticos()
     amanha = hoje() + timedelta(days=1)

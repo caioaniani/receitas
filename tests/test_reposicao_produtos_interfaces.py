@@ -58,7 +58,8 @@ def test_grid_e_api_expoem_produto_sem_confundir_com_receita(app, admin_user, lo
     assert item['por_dia'] == [2, 2]
 
 
-def test_post_cria_atualiza_e_remove_produto_sem_tocar_receita(app, admin_user, loja):
+def test_post_cria_atualiza_e_remove_produto_sem_tocar_receita(
+        app, admin_user, loja, pedidos_antes_do_corte):
     produto, _ = _produto(loja)
     receita = Receita(nome='Pão controle', rendimento_qtd=1,
                       rendimento_unidade='un', peso_base=100)

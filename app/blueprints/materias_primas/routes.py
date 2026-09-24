@@ -24,8 +24,7 @@ def banco():
 
     if ui_v2_ativo():
         page = request.args.get('page', 1, type=int)
-        paginacao = db.paginate(
-            query.order_by(MateriaPrima.nome),
+        paginacao = query.order_by(MateriaPrima.nome).paginate(
             page=max(page, 1),
             per_page=30,
             error_out=False,
