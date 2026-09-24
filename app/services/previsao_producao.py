@@ -46,7 +46,6 @@ from app.constants import (
 )
 from app.extensions import db
 from app.models import EstoqueProducao, Loja, PedidoItem, PedidoLoja, Receita
-from app.services.pedido_loja_catalogo import permite_item_loja
 from app.utils import SUB_RECEITA_TIPOS, hoje, unidades_subreceita
 
 logger = logging.getLogger(__name__)
@@ -1404,8 +1403,7 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     # de Amendoas, que vai dentro do Croissant Almond e nunca e pedido direto).
     receitas = {r.id: r for r in Receita.query
                 .filter(Receita.arquivada_em.is_(None),
-                        Receita.sugerir_pedido_loja.isnot(False)).all()
-                if permite_item_loja(receita=r)}
+                        Receita.sugerir_pedido_loja.isnot(False)).all()}
     lojas_op = (Loja.query
                 .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
                 .order_by(Loja.nome).all())
@@ -1591,8 +1589,7 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
 
     receitas = {r.id: r for r in Receita.query
                 .filter(Receita.arquivada_em.is_(None),
-                        Receita.sugerir_pedido_loja.isnot(False)).all()
-                if permite_item_loja(receita=r)}
+                        Receita.sugerir_pedido_loja.isnot(False)).all()}
     lojas_op = (Loja.query
                 .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
                 .order_by(Loja.nome).all())
@@ -1898,8 +1895,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
 
     receitas = {r.id: r for r in Receita.query
                 .filter(Receita.arquivada_em.is_(None),
-                        Receita.sugerir_pedido_loja.isnot(False)).all()
-                if permite_item_loja(receita=r)}
+                        Receita.sugerir_pedido_loja.isnot(False)).all()}
     lojas_op = (Loja.query
                 .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
                 .order_by(Loja.nome).all())
@@ -1922,7 +1918,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     produtos_diretos = {
         p.id: p for p in Produto.query.filter(Produto.ativo.is_(True))
         .options(selectinload(Produto.itens)).all()
-        if produto_reposicao_direta(p) and permite_item_loja(produto=p)
+        if produto_reposicao_direta(p)
     }
 
     def _token(rid, mid, pid):

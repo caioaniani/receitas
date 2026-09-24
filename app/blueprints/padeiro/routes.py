@@ -745,12 +745,6 @@ def separar(id):
     if pedido.status not in _A_SEPARAR:
         flash(f'Pedido #{pedido.id} nao esta mais aguardando separacao.', 'warning')
         return redirect(url_for('padeiro.index', data=data_str))
-    from app.services.pedido_loja_catalogo import MinisPedidoLojaError, validar_itens_loja
-    try:
-        validar_itens_loja(pedido.itens)
-    except MinisPedidoLojaError as exc:
-        flash(str(exc), 'warning')
-        return redirect(url_for('padeiro.index', data=data_str))
     pedido.status = 'separado'
     db.session.commit()
     flash(f'Pedido #{pedido.id} separado.', 'success')
@@ -810,12 +804,6 @@ def gerar_qr(id):
 
     data_str = (request.form.get('data') or '').strip() or None
     pedido = PedidoLoja.query.get_or_404(id)
-    from app.services.pedido_loja_catalogo import MinisPedidoLojaError, validar_itens_loja
-    try:
-        validar_itens_loja(pedido.itens)
-    except MinisPedidoLojaError as exc:
-        flash(str(exc), 'warning')
-        return redirect(url_for('padeiro.index', data=data_str))
     if pedido.status != 'separado':
         flash(f'Pedido #{pedido.id} precisa estar separado (atual: {pedido.status}).',
               'warning')
@@ -941,7 +929,6 @@ def juntar_repetidos():
     dia visto num so; os absorvidos viram 'cancelado'. (A criacao nova ja junta
     sozinha; isto eh pros que ja existiam antes do recurso.)"""
     from app.services.pedido_lock import travar_pedidos_lojas
-    from app.services.pedido_loja_catalogo import MinisPedidoLojaError
     from app.services.pedido_merge import STATUS_MESCLAVEL, consolidar_loja_data
     data_str = (request.form.get('data') or '').strip() or None
     hj = hoje()
@@ -959,14 +946,9 @@ def juntar_repetidos():
     # da primeira releitura/mutação, como o motor e a grade de pedidos fazem.
     travar_pedidos_lojas(loja_id for loja_id, _status, _data in grupos)
     juntados = 0
-    try:
-        for loja_id, status, d_ent in grupos:
-            _alvo, absorvidos = consolidar_loja_data(loja_id, d_ent, status, current_user.id)
-            juntados += absorvidos
-    except MinisPedidoLojaError as exc:
-        db.session.rollback()
-        flash(str(exc), 'warning')
-        return redirect(url_for('padeiro.index', data=data_str))
+    for loja_id, status, d_ent in grupos:
+        _alvo, absorvidos = consolidar_loja_data(loja_id, d_ent, status, current_user.id)
+        juntados += absorvidos
     if juntados:
         db.session.commit()
         flash(f'{juntados} pedido(s) repetido(s) juntado(s) no mais antigo.', 'success')

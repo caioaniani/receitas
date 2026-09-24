@@ -15,8 +15,6 @@ from app.utils import agora
 def gerar_qr_saida(pedido, criado_por_id):
     """Reusa o QR de saida ativo do pedido ou cria um novo (TTL 2h).
     Retorna o PedidoQRCode."""
-    from app.services.pedido_loja_catalogo import validar_itens_loja
-    validar_itens_loja(pedido.itens)
     qr = (PedidoQRCode.query
           .filter_by(pedido_id=pedido.id, tipo='saida', usado_em=None)
           .filter(PedidoQRCode.expira_em > agora())

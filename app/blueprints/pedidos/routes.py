@@ -46,7 +46,6 @@ from app.models import (
     PedidoQRCode,
     PrecoLojaReceita,
     Produto,
-    ProdutoItem,
     Receita,
     VendaB2B,
     VendaMapa,
@@ -54,23 +53,8 @@ from app.models import (
 )
 from app.services.pedido_corte import salvar_no_prazo
 from app.services.pedido_lock import reler_pedido_travado, travar_pedidos_lojas
-from app.services.pedido_loja_catalogo import (
-    MinisPedidoLojaError,
-    permite_item_loja,
-    validar_itens_loja,
-)
 from app.utils import agora
 from app.utils import hoje as hoje_brt
-
-
-def _itens_liberados_loja(itens):
-    """Mostra a regra de catálogo antes de alterar pedido ou expedição."""
-    try:
-        validar_itens_loja(itens)
-    except MinisPedidoLojaError as exc:
-        flash(str(exc), 'warning')
-        return False
-    return True
 
 
 def _mps_pediveis():
@@ -358,13 +342,10 @@ def buscar_itens():
              'em_gramas': r.medida_em_gramas,
              'lote': int(r.lote_pedido or 0) if r.medida_em_gramas else 0}
             for r in Receita.ativas().order_by(Receita.nome).all()
-            if _casa(r.nome) and permite_item_loja(receita=r)]
+            if _casa(r.nome)]
     out += [{'id': f'p_{p.id}', 'nome': p.nome, 'em_gramas': False}
-            for p in Produto.query.filter_by(ativo=True).options(
-                selectinload(Produto.itens).joinedload(ProdutoItem.receita),
-                selectinload(Produto.itens).joinedload(ProdutoItem.produto_componente),
-            ).order_by(Produto.nome).all()
-            if _casa(p.nome) and permite_item_loja(produto=p)]
+            for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+            if _casa(p.nome)]
     out += [{'id': f'mp_{m.id}', 'nome': m.nome,
              'em_gramas': (m.unidade or '').strip().lower() in ('g', 'ml', 'kg', 'l')}
             for m in _mps_pediveis().all() if _casa(m.nome)]
@@ -577,8 +558,6 @@ def novo():
         # MP só entra se liberada pra pedido de loja (checkbox no Banco de
         # MPs — decisão do dono 07/07/2026). O typeahead já não oferece as
         # bloqueadas; isto barra POST direto/aba desatualizada.
-        if not _itens_liberados_loja(itens_norm):
-            return redirect(url_for('pedidos.novo'))
         bloqueadas = _mps_nao_pediveis(itens_norm)
         if bloqueadas:
             flash('Matéria(s)-prima(s) não liberada(s) pra pedido de loja: '
@@ -767,22 +746,13 @@ def editar(id):
         _qtds = request.form.getlist('item_qtd[]')
         for i in range(len(_ids)):
             t, iid = _parse_item_id(_ids[i])
-            if t not in ('receita', 'produto', 'mp'):
+            if t != 'receita':
                 continue
             try:
                 q = int(_qtds[i]) if i < len(_qtds) else 0
             except (TypeError, ValueError):
                 continue
-            if q <= 0:
-                continue
-            itens_lote.append({
-                'receita_id': iid if t == 'receita' else None,
-                'produto_id': iid if t == 'produto' else None,
-                'materia_prima_id': iid if t == 'mp' else None,
-                'quantidade': q,
-            })
-        if not _itens_liberados_loja(itens_lote):
-            return redirect(url_for('pedidos.editar', id=id))
+            itens_lote.append({'receita_id': iid, 'quantidade': q})
         fora_do_lote = violacoes_por_ids(itens_lote)
         if fora_do_lote:
             for msg in fora_do_lote:
@@ -921,8 +891,6 @@ def confirmar(id):
     if pedido.status != 'pendente':
         flash('Só é possível confirmar pedidos pendentes.', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
-    if not _itens_liberados_loja(pedido.itens):
-        return redirect(url_for('pedidos.detalhe', id=id))
     pedido.status = 'confirmado'
     # Carimbo do gesto humano (10/08/2026, auto-pedidos): confirmar um
     # rascunho automático SEM mexer em item é revisão — o carimbo protege o
@@ -943,8 +911,6 @@ def separar(id):
     pedido = reler_pedido_travado(pedido)
     if pedido.status not in ('pendente', 'confirmado'):
         flash('Pedido deve estar pendente ou confirmado para ser separado.', 'warning')
-        return redirect(url_for('pedidos.detalhe', id=id))
-    if not _itens_liberados_loja(pedido.itens):
         return redirect(url_for('pedidos.detalhe', id=id))
     pedido.status = 'separado'
     db.session.commit()
@@ -1027,8 +993,6 @@ def atribuir_motorista(id):
     do dia (cria se nao existir) + descricao do pedido."""
     from app.models import Driver
     pedido = PedidoLoja.query.get_or_404(id)
-    if not _itens_liberados_loja(pedido.itens):
-        return redirect(url_for('pedidos.detalhe', id=id))
     drv_id = request.form.get('driver_id', type=int)
     if not drv_id:
         flash('Selecione um motorista.', 'warning')
@@ -1071,8 +1035,6 @@ def qr_saida(id):
     from app.services.qrcode_svc import gerar_png_data_url
 
     pedido = PedidoLoja.query.get_or_404(id)
-    if not _itens_liberados_loja(pedido.itens):
-        return redirect(url_for('pedidos.detalhe', id=id))
     if pedido.status != 'separado':
         flash(f'Pedido precisa estar separado (atual: {pedido.status}).', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
@@ -3854,8 +3816,6 @@ def sugerir_pedido(loja_id):
             'quantidade': it['quantidade'], 'estado': None, 'observacao': None,
         } for it in itens]
 
-        if not _itens_liberados_loja(itens_norm):
-            return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
         from app.services.pedido_merge import (
             absorver_rascunho_automatico,
             adotar_rascunho_automatico,
@@ -3865,8 +3825,6 @@ def sugerir_pedido(loja_id):
         )
         alvo = pedido_aberto_para_merge(loja_id, data_entrega, 'confirmado')
         if alvo:
-            if not _itens_liberados_loja(alvo.itens):
-                return redirect(url_for('pedidos.detalhe', id=alvo.id))
             mesclar_itens(alvo, itens_norm, modificado_por_id=current_user.id)
             absorvido = absorver_rascunho_automatico(
                 loja_id, data_entrega, current_user.id)
@@ -3885,8 +3843,6 @@ def sugerir_pedido(loja_id):
         # regra do /pedidos/novo — nunca um segundo pedido no mesmo dia).
         rascunho = rascunho_automatico_aberto(loja_id, data_entrega)
         if rascunho is not None:
-            if not _itens_liberados_loja(rascunho.itens):
-                return redirect(url_for('pedidos.detalhe', id=rascunho.id))
             res_adote = adotar_rascunho_automatico(
                 rascunho, itens_norm, current_user.id)
             erro_corte = salvar_no_prazo([data_entrega])

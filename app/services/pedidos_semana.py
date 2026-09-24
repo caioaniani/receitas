@@ -41,15 +41,7 @@ def _validar_corte_da_grade(pedidos, datas_adicionais=()):
 
 def _validar_lotes_da_grade(pedidos):
     """Valida toda a seleção antes de criar ou modificar qualquer pedido."""
-    from app.services.pedido_loja_catalogo import validar_itens_loja
     from app.services.pedido_lote import violacoes_por_ids
-
-    # Qtd zero é remoção; a trava impede incluir/manter minis na seleção.
-    try:
-        validar_itens_loja(it for ped in pedidos for it in (ped.get('itens') or [])
-                          if int(it.get('qtd') or 0) > 0)
-    except ValueError as exc:
-        raise PedidoLoteInvalidoError(str(exc)) from exc
 
     itens = [{'receita_id': int(it['receita_id']), 'quantidade': it.get('qtd')}
              for ped in pedidos for it in (ped.get('itens') or [])
@@ -169,7 +161,6 @@ def _sincronizar_itens(pedido, itens, user_id):
         if protegido_do_motor(pedido):
             return 0, 0
     _validar_corte_da_grade([{'data_entrega': pedido.data_entrega}])
-    _validar_lotes_da_grade([{'itens': itens}])
     por_chave = {}
     duplicados = set()
     for it in pedido.itens:

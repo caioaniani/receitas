@@ -21,11 +21,6 @@ from flask import current_app
 
 from app.extensions import db
 from app.models import Loja, MateriaPrima, Produto, Receita
-from app.services.pedido_loja_catalogo import (
-    MinisPedidoLojaError,
-    permite_item_loja,
-    validar_itens_loja,
-)
 from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
@@ -1244,7 +1239,7 @@ PADRAO DE INTENCAO — CRITICO:
   NAO crie tarefa substituta.
 
 TOOLS DISPONIVEIS — ACOES:
-- criar_pedido: encomenda da LOJA pra industria entregar numa data. Cobre produtos, receitas E materias-primas (ex: queijo mussarela pra salada, lagarto cozido, saco de pao de queijo) — qualquer item do catalogo que a industria mande pra loja. Minis de padaria não entram em pedidos das lojas, inclusive na edição; não substitua por uma versão de tamanho normal. **NAO confunda com receber_mp** — receber_mp eh quando a INDUSTRIA registra entrada de MP do FORNECEDOR (compra/entrada externa). Se uma loja pede MP, eh criar_pedido normal.
+- criar_pedido: encomenda da LOJA pra industria entregar numa data. Cobre produtos, receitas E materias-primas (ex: queijo mussarela pra salada, lagarto cozido, saco de pao de queijo) — qualquer item do catalogo que a industria mande pra loja. **NAO confunda com receber_mp** — receber_mp eh quando a INDUSTRIA registra entrada de MP do FORNECEDOR (compra/entrada externa). Se uma loja pede MP, eh criar_pedido normal.
   **Estado dos itens (campo `estado` em cada item):**
   - `null` (default): viennoiserie sai cru congelado (loja descongela, fermenta, assa); pao/sourdough sai congelado assado (loja so descongela); fornada especial sai assada fresca.
   - `backup`: pre-fermentado congelado, assa rapido. Usuario fala "X backup" / "backup de X" / "X de backup" / "X fermentado(s) e congelado(s)" / "X pre-fermentado(s)" / "X fermentado(s) congelado(s)". So pra viennoiserie. **REGRA**: se o pedido descreve estado de processamento (qualquer mencao a "fermentado" combinado com "congelado", ou "pre-fermentado"), eh backup — popule `estado: "backup"` no item.
@@ -2290,14 +2285,6 @@ def _resolver_item_pedido(nome, mp_ids_extras=None):
     vistos = set()
     out = []
     for m in matches:
-        # O catálogo geral continua atendendo B2B e estoque; a restrição
-        # de minis vale apenas para encomendas da loja à indústria.
-        if m['tipo'] == 'receita' and not permite_item_loja(
-                receita=db.session.get(Receita, m['id'])):
-            continue
-        if m['tipo'] == 'produto' and not permite_item_loja(
-                produto=db.session.get(Produto, m['id'])):
-            continue
         chave = (m['tipo'], m['id'])
         if chave in vistos:
             continue
@@ -2702,14 +2689,6 @@ def _calcular_saldo_mp(mp_id):
 # ── Executores WRITE (aprovacao obrigatoria) ──────────────────────────
 
 def executar_criar_pedido(params, user):
-    try:
-        return _executar_criar_pedido(params, user)
-    except MinisPedidoLojaError as exc:
-        db.session.rollback()
-        return {'ok': False, 'erro': str(exc)}
-
-
-def _executar_criar_pedido(params, user):
     from app.models import PedidoItem, PedidoLoja
     loja_id = params.get('loja_id')
     if not loja_id:
@@ -2752,9 +2731,6 @@ def _executar_criar_pedido(params, user):
         })
     if not itens_norm:
         return {'ok': False, 'erro': f'Nenhum item resolvido. Nao achei: {", ".join(nao_resolvidos)}'}
-
-    # Revalida IDs de previews antigos ou enviados diretamente ao executor.
-    validar_itens_loja(itens_norm)
 
     # MP so entra em pedido de loja se estiver liberada no Banco de MPs
     # (checkbox "sugerir pedido loja" — decisao do dono 07/07/2026). O
@@ -2874,9 +2850,6 @@ def executar_editar_pedido(params, user):
     # Nunca deixar itens/data parcialmente alterados nessa mesma sessão.
     try:
         return _executar_editar_pedido(params, user)
-    except MinisPedidoLojaError as exc:
-        db.session.rollback()
-        return {'ok': False, 'erro': str(exc)}
     except Exception:
         db.session.rollback()
         raise
@@ -2897,27 +2870,6 @@ def _executar_editar_pedido(params, user):
     pedido = reler_pedido_travado(pedido)
     if pedido.status not in ('pendente', 'confirmado'):
         return {'ok': False, 'erro': f'Pedido {pid} em status "{pedido.status}" — nao pode ser editado. Cancele e recrie.'}
-
-    itens_novos = params.get('itens')
-    if itens_novos is None:
-        validar_itens_loja(pedido.itens)
-    else:
-        # Valida a composição final antes de alterar data, observações ou
-        # itens; substituir o pedido por itens permitidos corrige legados.
-        validar_itens_loja([
-            {
-                'receita_id': it['resolvido']['id']
-                if it['resolvido'].get('tipo') == 'receita' else None,
-                'produto_id': it['resolvido']['id']
-                if it['resolvido'].get('tipo') == 'produto' else None,
-                'materia_prima_id': it['resolvido']['id']
-                if it['resolvido'].get('tipo') == 'mp' else None,
-                'quantidade': it.get('quantidade'),
-            }
-            for it in itens_novos
-            if it.get('resolvido') and it['resolvido'].get('id')
-            and int(it.get('quantidade') or 0) > 0
-        ])
 
     mudancas = []
 
@@ -3462,13 +3414,6 @@ def executar_mudar_status_pedido(params, user):
                          'agora é obrigatório anexar foto do pedido recebido. '
                          'Abra a ficha do pedido no app e confirme com a foto — '
                          f'/pedidos/{pid}')}
-
-    if novo in ('confirmar', 'separar', 'enviar'):
-        try:
-            validar_itens_loja(p.itens)
-        except MinisPedidoLojaError as exc:
-            db.session.rollback()
-            return {'ok': False, 'erro': str(exc)}
 
     # Corte do fim do dia (dono 10/08/2026): CANCELAR o pedido de amanhã
     # depois do corte muda o pré-preparo já calculado — mesmo bloqueio da rota web
