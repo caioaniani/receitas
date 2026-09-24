@@ -2,7 +2,8 @@
 
 Pedidos para amanhã podem ser ajustados até 11:59:59. A partir das 12h,
 criação, edição, cancelamento e exclusão ficam bloqueados para todos os
-perfis, inclusive administrador, e para a automação. A edição verifica
+perfis, inclusive administrador, e para a automação. O dono pode conceder
+a uma pessoa a exceção explícita somente para edição. A edição verifica
 as datas original e proposta, impedindo contornar o corte movendo o pedido.
 A guarda deve rodar depois da trava da loja.
 
@@ -33,14 +34,19 @@ def corte_ativo(data_entrega, *, agora_dt=None):
             and data_entrega == now.date() + timedelta(days=1))
 
 
-def bloqueio_do_corte(datas, user=None, *, agora_dt=None):
+def bloqueio_do_corte(datas, user=None, *, agora_dt=None, acao=None):
     """Retorna (bloqueado, mensagem) para todas as datas tocadas pelo gesto.
 
-    `user` permanece aceito por compatibilidade; nenhum perfil ignora o
-    corte. Na edição, fornecer tanto a data atual quanto a nova.
+    Nenhum perfil ignora o corte automaticamente. A exceção individual exige
+    `acao='editar'`; na edição, fornecer tanto a data atual quanto a nova.
     """
     if not any(corte_ativo(d, agora_dt=agora_dt) for d in datas):
         return False, None
+    if acao == 'editar':
+        from app.services.pedido_edicao_acesso import pode_editar_fora_prazo
+
+        if pode_editar_fora_prazo(user):
+            return False, None
     return True, (
         f'O pedido de AMANHÃ está fechado desde as {HORA_CORTE}:00 '
         '(horário de Brasília), horário de corte dos pedidos para a indústria. '
@@ -49,7 +55,7 @@ def bloqueio_do_corte(datas, user=None, *, agora_dt=None):
     )
 
 
-def salvar_no_prazo(datas):
+def salvar_no_prazo(datas, user=None, *, acao=None):
     """Grava a transação ou desfaz tudo se o processamento cruzou o corte.
 
     Retorna a mensagem de bloqueio, ou None após sucesso. O chamador deve
@@ -58,7 +64,7 @@ def salvar_no_prazo(datas):
     from app.extensions import db
 
     db.session.flush()
-    bloqueado, mensagem = bloqueio_do_corte(datas)
+    bloqueado, mensagem = bloqueio_do_corte(datas, user=user, acao=acao)
     if bloqueado:
         db.session.rollback()
         return mensagem

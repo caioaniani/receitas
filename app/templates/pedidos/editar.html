@@ -69,6 +69,22 @@
         </table>
     </div>
 
+    {% if edicao_livre %}
+    <section class="card mb-3" aria-labelledby="ajuste-motor-titulo">
+        <div class="card-body">
+            <h2 class="h5" id="ajuste-motor-titulo">Explique o ajuste do pedido</h2>
+            <p class="text-muted">Preencha os dois campos em toda alteração. O sistema guarda o pedido antes e depois para ajudar a aprimorar o motor de sugestões.</p>
+            <div class="mb-3">
+                <label for="descricao-alteracao" class="form-label fw-semibold">O que você está mudando?</label>
+                <textarea id="descricao-alteracao" name="descricao_alteracao" class="form-control" rows="2" required minlength="10" maxlength="1000" placeholder="Ex.: aumentar o croissant de 20 para 35 unidades.">{{ request.form.get('descricao_alteracao', '') }}</textarea>
+            </div>
+            <div>
+                <label for="motivo-alteracao" class="form-label fw-semibold">Por que precisa mudar?</label>
+                <textarea id="motivo-alteracao" name="motivo_alteracao" class="form-control" rows="3" required minlength="10" maxlength="1000" placeholder="Ex.: ontem faltou antes das 10h e temos uma encomenda para amanhã.">{{ request.form.get('motivo_alteracao', '') }}</textarea>
+            </div>
+        </div>
+    </section>
+    {% endif %}
     <div class="d-flex gap-2">
         <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-item">
             <i class="bi bi-plus-lg"></i> Adicionar Item
