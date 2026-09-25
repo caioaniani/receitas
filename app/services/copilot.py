@@ -81,7 +81,7 @@ TOOL_EDITAR_PEDIDO = {
         "e a edicao e bloqueada. NAO muda loja nem driver (pra isso cancele e recrie). "
         "Se for mexer em itens, mande a LISTA COMPLETA — REPLACE total. Use "
         "consultar_pedido antes pra saber a composicao atual. "
-        "Usuarios com liberacao individual de horario devem informar em TODA edicao "
+        "Usuarios com liberacao de horario pelo acesso da conta devem informar em TODA edicao "
         "descricao_alteracao e motivo_alteracao. Pergunte ao usuario o que muda e por que; "
         "nao invente a justificativa nem a deduza da quantidade."
     ),
@@ -89,7 +89,7 @@ TOOL_EDITAR_PEDIDO = {
         "type": "object",
         "properties": {
             "pedido_id": {"type": "integer", "description": "ID do pedido a editar."},
-            "descricao_alteracao": {"type": ["string", "null"], "description": "O que o usuario disse que vai mudar (10 a 1000 caracteres). Obrigatorio para quem tem liberacao individual de horario."},
+            "descricao_alteracao": {"type": ["string", "null"], "description": "O que o usuario disse que vai mudar (10 a 1000 caracteres). Obrigatorio para quem tem liberacao de horario pelo acesso da conta."},
             "motivo_alteracao": {"type": ["string", "null"], "description": "Por que o usuario disse que precisa mudar (10 a 1000 caracteres). Nao inventar: pergunte se ainda nao informou."},
             "data_entrega": {"type": ["string", "null"], "description": "Nova data YYYY-MM-DD, ou null pra manter a atual."},
             "observacao": {"type": ["string", "null"], "description": "Nova observacao do pedido. String vazia limpa; null mantem."},

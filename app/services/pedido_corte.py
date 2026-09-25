@@ -1,9 +1,9 @@
 """Corte dos pedidos loja→indústria às 12h BRT (dono, 24/09/2026).
 
 Pedidos para amanhã podem ser ajustados até 11:59:59. A partir das 12h,
-criação, edição, cancelamento e exclusão ficam bloqueados para todos os
-perfis, inclusive administrador, e para a automação. O dono pode conceder
-a uma pessoa a exceção explícita somente para edição. A edição verifica
+criação, cancelamento e exclusão ficam bloqueados para todos os perfis e
+para a automação. A política de acesso pode liberar somente a edição com
+justificativa para contas já autorizadas a editar. A edição verifica
 as datas original e proposta, impedindo contornar o corte movendo o pedido.
 A guarda deve rodar depois da trava da loja.
 
@@ -37,7 +37,8 @@ def corte_ativo(data_entrega, *, agora_dt=None):
 def bloqueio_do_corte(datas, user=None, *, agora_dt=None, acao=None):
     """Retorna (bloqueado, mensagem) para todas as datas tocadas pelo gesto.
 
-    Nenhum perfil ignora o corte automaticamente. A exceção individual exige
+    A política de acesso só dispensa o corte de edição, nunca outras ações.
+    A exceção exige
     `acao='editar'`; na edição, fornecer tanto a data atual quanto a nova.
     """
     if not any(corte_ativo(d, agora_dt=agora_dt) for d in datas):

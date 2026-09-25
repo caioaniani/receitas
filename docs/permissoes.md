@@ -1,10 +1,14 @@
 # Mapa de permissões
 
-## Edição individual de pedidos fora do prazo (24/09/2026)
+## Edição de pedidos conforme o acesso da conta (25/09/2026)
 
-O owner pode liberar uma conta de Gerente/Admin em **Usuários → Permissões
-de acesso → Editar pedidos fora do prazo**. A concessão é individual e
-revogável; não troca perfil, lojas permitidas ou acesso a outras áreas.
+A liberação após o corte acompanha a autorização que a conta já possui para
+editar pedidos: Admin/dono, perfis com operação de pedidos na web ou edição
+no Copilot, e funcionários com autorização individual válida de uma loja.
+Os controles de cada canal e de cada loja continuam sendo aplicados. A regra
+não concede edição a contas de leitura nem remove a restrição de treinamento;
+a delegação válida de uma loja conserva sua exceção limitada ao treinamento.
+Ao perder o acesso à edição, a conta também perde a liberação de horário.
 
 Essa pessoa pode editar pedidos pendentes/confirmados após o corte das 12h.
 Em **toda edição**, inclusive antes do corte, deve preencher **o que está
@@ -23,9 +27,14 @@ motor. A trilha fica em `AuditLog`, tabela lógica `pedido_ajuste_motor`.
 A dispensa vale apenas para edição, não para criar, cancelar ou excluir após
 o corte. Também não reabre pedidos com nota, motorista, conferência,
 recebimento ou estoque movimentado, nem permite datas passadas. A automação
-e usuários sem concessão continuam sujeitos ao corte. A concessão e revogação
-ficam auditadas em `pedido_edicao_acesso`; a configuração individual usa
-`AppConfig`, sem migração ou concessão automática no deploy.
+e usuários sem autorização continuam sujeitos ao corte.
+
+A migração desta publicação ativa `pedido_edicao_por_perfil` em `AppConfig`
+e registra a ativação como política do sistema. A tela **Usuários → Permissões
+de acesso → Editar pedidos fora do prazo** mostra o acesso efetivo e explica
+a regra automática; não exige concessão individual. A configuração anterior
+do João é preservada para compatibilidade com a versão anterior. Ambientes
+sem a política ativa continuam usando as concessões individuais legadas.
 
 ## Consulta de recebimentos de uma loja (17/09/2026)
 

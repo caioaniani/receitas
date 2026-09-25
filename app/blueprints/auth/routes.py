@@ -127,19 +127,21 @@ def usuarios():
     edicao_fora_prazo = False
     edicao_fora_prazo_configurada = False
     elegivel_edicao_fora_prazo = False
+    edicao_por_perfil = False
     if selecionado and current_user.is_owner:
         from app.models import AcessoPedidosLoja, AppConfig
-        from app.services import permissoes
         from app.services.acesso_pedidos_loja import loja_liberada
-        from app.services.pedido_edicao_acesso import pode_editar_fora_prazo
+        from app.services.pedido_edicao_acesso import (
+            elegivel_edicao_fora_prazo as conta_elegivel,
+        )
+        from app.services.pedido_edicao_acesso import (
+            pode_editar_fora_prazo,
+            politica_por_perfil_ativa,
+        )
 
+        edicao_por_perfil = politica_por_perfil_ativa()
         edicao_fora_prazo = pode_editar_fora_prazo(selecionado)
-        elegivel_edicao_fora_prazo = bool(
-            selecionado.papel in ('gerente', 'admin')
-            and not selecionado.somente_treino
-            and (selecionado.is_admin() or (
-                permissoes.pode(selecionado.papel, 'web_pedidos')
-                and permissoes.pode(selecionado.papel, 'web_pedido_operar'))))
+        elegivel_edicao_fora_prazo = conta_elegivel(selecionado)
         try:
             registro_edicao = json.loads(AppConfig.get(
                 f'pedido_edicao_fora_prazo:{selecionado.id}'))
@@ -166,6 +168,7 @@ def usuarios():
                            bloqueio_pedidos=bloqueio_pedidos,
                            edicao_fora_prazo=edicao_fora_prazo,
                            edicao_fora_prazo_configurada=edicao_fora_prazo_configurada,
+                           edicao_por_perfil=edicao_por_perfil,
                            elegivel_edicao_fora_prazo=elegivel_edicao_fora_prazo)
 
 

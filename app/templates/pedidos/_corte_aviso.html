@@ -5,13 +5,13 @@
     {% if edicao_livre | default(false) %}
     Você pode editar pedidos pendentes ou confirmados, informando o que está mudando e o motivo.
     {% else %}
-    A edição após esse horário exige liberação individual do dono.
+    A edição após esse horário exige acesso autorizado à edição de pedidos e justificativa.
     {% endif %}
     Criação, cancelamento e exclusão continuam sujeitos ao corte.
     {% else %}
     <i class="bi bi-clock" aria-hidden="true"></i>
     Crie e altere os pedidos para amanhã <strong>antes das {{ pedido_hora_corte }}h</strong>.
-    A edição após esse horário exige liberação individual do dono e justificativa.
+    A edição após esse horário exige acesso autorizado à edição de pedidos e justificativa.
     {% endif %}
     Horário de Brasília.
 </div>
