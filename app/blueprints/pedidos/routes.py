@@ -52,6 +52,7 @@ from app.models import (
     VendaMapaUso,
 )
 from app.services.pedido_corte import salvar_no_prazo
+from app.services.pedido_formulario import PedidoSemItens, linhas_formulario, validar_itens
 from app.services.pedido_lock import reler_pedido_travado, travar_pedidos_lojas
 from app.utils import agora
 from app.utils import hoje as hoje_brt
@@ -566,43 +567,16 @@ def novo():
                   'o que está mudando e por quê.', 'warning')
             return redirect(url_for('pedidos.editar', id=existente.id))
 
-        # Monta a lista de itens normalizada antes de decidir merge vs novo.
-        ids = request.form.getlist('item_id[]')
-        qtds = request.form.getlist('item_qtd[]')
-        notas = request.form.getlist('item_obs[]')
-        estados = request.form.getlist('item_estado[]')
-        itens_norm = []
-        for i in range(len(ids)):
-            if not ids[i] or not qtds[i]:
-                continue
-            tipo, item_id = _parse_item_id(ids[i])
-            if not tipo:
-                continue
-            try:
-                qtd = int(qtds[i])
-            except (TypeError, ValueError):
-                continue
-            if qtd <= 0:
-                continue
-            est = (estados[i].strip().lower() if i < len(estados) else '') or None
-            if est not in (None, 'backup', 'assado'):
-                est = None
-            itens_norm.append({
-                'receita_id': item_id if tipo == 'receita' else None,
-                'produto_id': item_id if tipo == 'produto' else None,
-                'materia_prima_id': item_id if tipo == 'mp' else None,
-                'quantidade': qtd,
-                'observacao': notas[i].strip() if i < len(notas) else None,
-                'estado': est,
-            })
-
-        # Sem o <select required> antigo, o form pode chegar sem nenhum item
-        # valido (texto digitado sem escolher). Barra aqui pra nao criar pedido vazio.
-        if not itens_norm:
-            flash('Adicione ao menos um item ao pedido.', 'warning')
+        linhas = linhas_formulario(request.form, _parse_item_id)
+        try:
+            itens_norm = validar_itens(linhas)
+        except ValueError as exc:
+            flash(str(exc), 'warning')
             lojas = _lojas_operacionais()
+            status = 200 if isinstance(exc, PedidoSemItens) else 400
             return render_template('pedidos/novo.html', lojas=lojas,
-                                   amanha=amanha, data_min=data_min, loja_id=loja_id)
+                                   amanha=amanha, data_min=data_min,
+                                   loja_id=sel_loja, itens_digitados=linhas), status
 
         # MP só entra se liberada pra pedido de loja (checkbox no Banco de
         # MPs — decisão do dono 07/07/2026). O typeahead já não oferece as
@@ -756,13 +730,20 @@ def editar(id):
             return redirect(url_for('pedidos.detalhe', id=id))
 
     if request.method == 'POST':
+        if not any(request.form.getlist(f'item_{campo}[]')
+                   for campo in ('id', 'nome', 'qtd', 'estado', 'obs')):
+            flash('Pedido precisa ter pelo menos 1 item.', 'warning')
+            return redirect(url_for('pedidos.editar', id=id))
+        linhas = linhas_formulario(request.form, _parse_item_id)
         try:
+            itens_norm = validar_itens(linhas)
             ajuste_motor = preparar_ajuste(pedido, current_user, request.form)
         except ValueError as exc:
             flash(str(exc), 'warning')
             return render_template('pedidos/editar.html', pedido=pedido,
                                    amanha=hoje_brt() + timedelta(days=1),
-                                   data_min=hoje_brt(), edicao_livre=edicao_livre), 400
+                                   data_min=hoje_brt(), edicao_livre=edicao_livre,
+                                   itens_digitados=linhas), 400
         # Mesmo dia liberado pra todos (15/07/2026); passado segue bloqueado.
         data_min = hoje_brt()
         data_str = request.form.get('data_entrega', '')
@@ -859,44 +840,8 @@ def editar(id):
                 db.session.delete(_it)
             db.session.flush()
 
-            ids = request.form.getlist('item_id[]')
-            qtds = request.form.getlist('item_qtd[]')
-            notas = request.form.getlist('item_obs[]')
-            estados = request.form.getlist('item_estado[]')
-
-            salvos = 0
-            for i in range(len(ids)):
-                if not ids[i] or not qtds[i]:
-                    continue
-                tipo, item_id = _parse_item_id(ids[i])
-                if not tipo:
-                    continue
-                try:
-                    qtd = int(qtds[i])
-                except (TypeError, ValueError):
-                    continue
-                if qtd <= 0:
-                    continue
-                est = (estados[i].strip().lower()
-                       if i < len(estados) else '') or None
-                if est not in (None, 'backup', 'assado'):
-                    est = None
-                item = PedidoItem(
-                    pedido_id=pedido.id,
-                    receita_id=item_id if tipo == 'receita' else None,
-                    produto_id=item_id if tipo == 'produto' else None,
-                    materia_prima_id=item_id if tipo == 'mp' else None,
-                    quantidade=qtd,
-                    observacao=notas[i].strip() if i < len(notas) else None,
-                    estado=est,
-                )
-                db.session.add(item)
-                salvos += 1
-
-            if salvos == 0:
-                db.session.rollback()
-                flash('Pedido precisa ter pelo menos 1 item.', 'warning')
-                return redirect(url_for('pedidos.editar', id=id))
+            for item in itens_norm:
+                db.session.add(PedidoItem(pedido_id=pedido.id, **item))
 
             registrar_ajuste(pedido, current_user, ajuste_motor, canal='site')
             erro_corte = salvar_no_prazo(

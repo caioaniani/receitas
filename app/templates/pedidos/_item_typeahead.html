@@ -17,22 +17,23 @@
 {% macro item_row(item_id='', item_nome='', qtd=1, estado='', obs='', is_template=False, em_gramas=False, lote=0) %}
 <tr class="item-row{% if is_template %} d-none{% endif %}"{% if is_template %} id="row-template"{% endif %}>
     <td>
-        <input type="text" class="form-control form-control-sm item-busca"
-               placeholder="Digite o nome..." autocomplete="off" value="{{ item_nome }}">
+        <input type="text" name="item_nome[]" class="form-control form-control-sm item-busca"
+               placeholder="Digite e selecione o produto..." autocomplete="off" value="{{ item_nome }}" required {% if is_template %}disabled{% endif %}>
+        <div class="form-text text-danger small d-none item-aviso-selecao">Selecione o produto na lista de resultados.</div>
         <input type="hidden" name="item_id[]" class="item-id" value="{{ item_id }}"
                data-em-gramas="{{ '1' if em_gramas else '' }}"
-               data-lote="{{ lote or '' }}">
+               data-lote="{{ lote or '' }}" {% if is_template %}disabled{% endif %}>
     </td>
     <td>
         <input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue"
-               min="1" value="{{ qtd }}">
+               min="1" step="1" value="{{ qtd }}" required {% if is_template %}disabled{% endif %}>
         {# Aviso de item medido em g/ml (caso granola 18/08/2026 — 5 potes
            lancados onde era 5000). O texto é montado no JS: qtd pequena
            = "isso parece potes"; item com lote = "múltiplo de N". #}
         <div class="form-text text-warning small d-none item-aviso-gramas"></div>
     </td>
     <td>
-        <select name="item_estado[]" class="form-select form-select-sm">
+        <select name="item_estado[]" class="form-select form-select-sm" {% if is_template %}disabled{% endif %}>
             <option value="" {% if not estado %}selected{% endif %}>Padrão</option>
             <option value="backup" {% if estado == 'backup' %}selected{% endif %}>Backup</option>
             <option value="assado" {% if estado == 'assado' %}selected{% endif %}>Assado</option>
@@ -40,13 +41,20 @@
     </td>
     <td>
         <input type="text" name="item_obs[]" class="form-control form-control-sm"
-               value="{{ obs }}" placeholder="">
+               value="{{ obs }}" placeholder="" {% if is_template %}disabled{% endif %}>
     </td>
     <td class="text-center">
         <button type="button" class="btn btn-sm btn-outline-danger btn-remove-item"
                 onclick="this.closest('tr').remove()"><i class="bi bi-x"></i></button>
     </td>
 </tr>
+{% endmacro %}
+
+{% macro linhas_digitadas(linhas) %}
+    {% for linha in linhas %}
+        {{ item_row(linha.id if linha.encontrado|default(false) else '', linha.nome, linha.qtd, linha.estado, linha.obs,
+                    em_gramas=linha.em_gramas|default(false), lote=linha.lote|default(0)) }}
+    {% endfor %}
 {% endmacro %}
 
 {% macro typeahead_assets() %}
@@ -81,6 +89,7 @@
     var timer;
     var activeInput = null;
     var activeHidden = null;
+    var searchSequence = 0;
 
     // Dropdown único anexado ao <body>: flutua livre acima de tudo, sem
     // clipping do .table-responsive nem de contexto de empilhamento.
@@ -90,6 +99,8 @@
     document.body.appendChild(pop);
 
     function hidePop() {
+        clearTimeout(timer);
+        searchSequence += 1;
         pop.style.display = 'none';
         activeInput = null;
         activeHidden = null;
@@ -124,22 +135,45 @@
     // Digitar: zera o id antigo (só volta a valer ao escolher) e busca.
     tbody.addEventListener('input', function (e) {
         if (!e.target.classList.contains('item-busca')) return;
-        var input = e.target;
+        buscarItem(e.target);
+    });
+
+    // Ao voltar a uma linha recusada, oferece novamente as opções sem
+    // obrigar a pessoa a apagar e redigitar o nome que já preencheu.
+    tbody.addEventListener('focusin', function (e) {
+        if (e.target.classList.contains('item-busca') &&
+                !e.target.closest('td').querySelector('.item-id').value) buscarItem(e.target);
+    });
+
+    function buscarItem(input) {
         var hidden = input.closest('td').querySelector('.item-id');
+        hidePop();
         hidden.value = '';
         hidden.dataset.emGramas = '';
         hidden.dataset.lote = '';
+        checarSelecao(input.closest('tr'));
         checarAvisoGramas(input.closest('tr'));
         var val = input.value.trim();
-        clearTimeout(timer);
         if (val.length < 2) { hidePop(); return; }
+        var sequence = searchSequence;
         timer = setTimeout(function () {
             fetch('/pedidos/buscar-itens.json?q=' + encodeURIComponent(val))
-                .then(function (r) { return r.json(); })
-                .then(function (data) { renderPop(input, hidden, data.itens); })
-                .catch(hidePop);
+                .then(function (r) { if (!r.ok) throw new Error('Busca indisponível'); return r.json(); })
+                .then(function (data) {
+                    if (sequence === searchSequence && document.activeElement === input && input.value.trim() === val) {
+                        renderPop(input, hidden, data.itens);
+                    }
+                })
+                .catch(function () { if (sequence === searchSequence) hidePop(); });
         }, 250);
-    });
+    }
+
+    function checarSelecao(tr) {
+        var input = tr.querySelector('.item-busca');
+        var pendente = input.value.trim() !== '' && !tr.querySelector('.item-id').value;
+        input.setCustomValidity(pendente ? 'Selecione o produto na lista de resultados antes de salvar.' : '');
+        tr.querySelector('.item-aviso-selecao').classList.toggle('d-none', !pendente);
+    }
 
     // Aviso "item em g/ml" (caso granola 18/08/2026): item medido em gramas
     // com quantidade < 100 quase sempre é gente lançando POTES; e item com
@@ -170,7 +204,10 @@
 
     // Linhas pré-preenchidas (editar): avalia no load.
     Array.prototype.forEach.call(
-        tbody.querySelectorAll('tr.item-row:not(#row-template)'), checarAvisoGramas);
+        tbody.querySelectorAll('tr.item-row:not(#row-template)'), function (tr) {
+            checarAvisoGramas(tr);
+            checarSelecao(tr);
+        });
 
     // Escolher uma opção: preenche o texto visível + o hidden da linha ativa.
     pop.addEventListener('click', function (e) {
@@ -180,6 +217,7 @@
         activeHidden.value = opt.dataset.id;
         activeHidden.dataset.emGramas = opt.dataset.emGramas || '';
         activeHidden.dataset.lote = opt.dataset.lote || '';
+        checarSelecao(activeHidden.closest('tr'));
         checarAvisoGramas(activeHidden.closest('tr'));
         hidePop();
     });
@@ -203,11 +241,13 @@
         var tr = template.cloneNode(true);
         tr.classList.remove('d-none');
         tr.removeAttribute('id');
+        tr.querySelectorAll('input, select').forEach(function (field) { field.disabled = false; });
         tr.querySelector('.item-busca').value = '';
         tr.querySelector('.item-id').value = '';
         tr.querySelector('.item-id').dataset.emGramas = '';
         tr.querySelector('.item-id').dataset.lote = '';
         tr.querySelector('.item-aviso-gramas').classList.add('d-none');
+        tr.querySelector('.item-aviso-selecao').classList.add('d-none');
         tr.querySelector('input[name="item_qtd[]"]').value = '1';
         tr.querySelector('input[name="item_obs[]"]').value = '';
         tr.querySelector('select[name="item_estado[]"]').selectedIndex = 0;

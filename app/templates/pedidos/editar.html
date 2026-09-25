@@ -28,12 +28,12 @@
         <div class="col-md-3">
             <label class="form-label fw-semibold">Data de Entrega</label>
             <input type="date" name="data_entrega" class="form-control form-control-sm"
-                   value="{{ pedido.data_entrega.strftime('%Y-%m-%d') }}" min="{{ data_min }}" required>
+                   value="{{ request.form.get('data_entrega', pedido.data_entrega.strftime('%Y-%m-%d')) }}" min="{{ data_min }}" required>
         </div>
         <div class="col-md-5">
             <label class="form-label fw-semibold">Observação</label>
             <input type="text" name="observacao" class="form-control form-control-sm"
-                   value="{{ pedido.observacao or '' }}" placeholder="Opcional...">
+                   value="{{ request.form.get('observacao', pedido.observacao or '') }}" placeholder="Opcional...">
         </div>
     </div>
 
@@ -56,6 +56,9 @@
 
                 {# Itens existentes, pré-preenchidos. FK manda; nome é o rótulo
                    visível (pode ser re-editado pela busca). #}
+                {% if itens_digitados is defined %}
+                    {{ ta.linhas_digitadas(itens_digitados) }}
+                {% else %}
                 {% for it in pedido.itens %}
                     {% if it.receita_id %}
                         {{ ta.item_row('r_' ~ it.receita_id, it.receita.nome if it.receita else '', it.quantidade, it.estado or '', it.observacao or '', em_gramas=(it.receita.medida_em_gramas if it.receita else False), lote=((it.receita.lote_pedido or 0) if it.receita and it.receita.medida_em_gramas else 0)) }}
@@ -65,6 +68,7 @@
                         {{ ta.item_row('mp_' ~ it.materia_prima_id, it.materia_prima.nome if it.materia_prima else '', it.quantidade, it.estado or '', it.observacao or '', em_gramas=((it.materia_prima.unidade or '')|lower in ('g', 'ml', 'kg', 'l') if it.materia_prima else False)) }}
                     {% endif %}
                 {% endfor %}
+                {% endif %}
             </tbody>
         </table>
     </div>

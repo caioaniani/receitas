@@ -202,10 +202,8 @@ def test_post_novo_pedido_cria_com_item_r(app, admin_user, loja):
         assert peds[0].itens[0].quantidade == 5
 
 
-def test_post_novo_pedido_ignora_item_sem_id(app, admin_user, loja):
-    """Linha com texto mas sem item_id (typeahead sem escolher / id limpo ao
-    reescrever) é ignorada — não vira item fantasma. Rede de segurança do
-    fix de 'id velho' no JS."""
+def test_post_novo_pedido_recusa_item_sem_id(app, admin_user, loja):
+    """Uma linha sem seleção impede salvar parcialmente os outros itens."""
     from app.extensions import db
     from app.models import PedidoLoja, Receita
     from app.utils import hoje
@@ -229,14 +227,12 @@ def test_post_novo_pedido_ignora_item_sem_id(app, admin_user, loja):
         'item_estado[]': ['', ''],
         'item_obs[]': ['', ''],
     }, follow_redirects=False)
-    assert resp.status_code in (302, 303)
+    assert resp.status_code == 400
+    assert 'selecione o produto' in resp.get_data(as_text=True).lower()
 
     with app.app_context():
         peds = PedidoLoja.query.filter_by(loja_id=lid).all()
-        assert len(peds) == 1
-        # só a linha com id válido virou item; a vazia foi ignorada
-        assert len(peds[0].itens) == 1
-        assert peds[0].itens[0].receita_id == rid
+        assert len(peds) == 0
 
 
 def test_post_novo_pedido_sem_itens_nao_cria(app, admin_user, loja):
