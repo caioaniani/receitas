@@ -59,7 +59,7 @@ def test_editar_get_renderiza_form_com_dados_atuais(
 
 
 def test_editar_post_replace_itens_persiste(
-        app, cliente, admin_user, loja, catalogo):
+        app, cliente, admin_user, loja, catalogo, pedido_versao_form):
     """POST atualiza data + obs + REPLACE itens com estado='backup'."""
     from app.models import PedidoItem, PedidoLoja
     p = _pedido_pendente(loja, admin_user, catalogo)
@@ -67,6 +67,7 @@ def test_editar_post_replace_itens_persiste(
 
     nova_data = (date.today() + timedelta(days=3)).strftime('%Y-%m-%d')
     r = cliente.post(f'/pedidos/{p.id}/editar', data={
+        'versao_edicao': pedido_versao_form(cliente, p.id),
         'data_entrega': nova_data,
         'observacao': 'editado pelo teste',
         'item_id[]': [f'r_{catalogo["receita"].id}'],
@@ -88,7 +89,7 @@ def test_editar_post_replace_itens_persiste(
 
 
 def test_editar_pedido_com_foto_de_conferencia_nao_quebra(
-        app, cliente, admin_user, loja, catalogo):
+        app, cliente, admin_user, loja, catalogo, pedido_versao_form):
     """Regressão (caso real #396): item com foto de conferência
     (pedido_item_foto) travava o REPLACE do editar com FK violation — o bulk
     `Query.delete()` pulava o cascade 'all, delete-orphan' das fotos. Agora o
@@ -105,6 +106,7 @@ def test_editar_pedido_com_foto_de_conferencia_nao_quebra(
 
     nova_data = (date.today() + timedelta(days=2)).strftime('%Y-%m-%d')
     r = cliente.post(f'/pedidos/{p.id}/editar', data={
+        'versao_edicao': pedido_versao_form(cliente, p.id),
         'data_entrega': nova_data,
         'observacao': '',
         'item_id[]': [f'r_{catalogo["receita"].id}'],
@@ -146,9 +148,10 @@ def test_editar_post_zero_itens_rejeita(
         'observacao': 'tentativa',
         # sem item_id[]/item_qtd[]
     })
-    assert r.status_code == 302
-    # Redirect de volta pra /editar (mesma pagina) sinaliza rejeicao
-    assert '/editar' in r.headers['Location']
+    assert r.status_code == 400
+    # A rejeição mantém os campos digitados na página para corrigir a lista.
+    assert b'tentativa' in r.data
+    assert nova_data.encode() in r.data
 
     # Banco mantem o item original
     itens = PedidoItem.query.filter_by(pedido_id=p.id).all()

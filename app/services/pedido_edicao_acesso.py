@@ -23,6 +23,76 @@ def _conta(usuario):
     return db.session.get(Usuario, usuario_id, populate_existing=True)
 
 
+def _capacidade_atual(papel, capacidade):
+    """Lê o valor persistido sem o cache por worker da matriz de permissões."""
+    from app.models import PermissaoPapel
+    from app.services.permissoes import CAP_DEFAULT
+
+    if capacidade not in CAP_DEFAULT:
+        return False
+    # Consulta escalar: um objeto ORM já carregado também pode estar antigo.
+    override = (db.session.query(PermissaoPapel.permitido)
+                .filter_by(papel=papel, capacidade=capacidade).first())
+    if override is not None:
+        return bool(override[0])
+    return papel in CAP_DEFAULT[capacidade]
+
+
+def _loja_delegada_atual(usuario):
+    """Mesmo vínculo válido de acesso_pedidos_loja, sem reutilizar seu ORM."""
+    from app.models import AcessoPedidosLoja, Funcionario, Loja
+
+    if usuario.papel != 'funcionario' or usuario.is_dono():
+        return None
+    # Os filtros espelham acesso_pedidos_loja.liberacao. Ler somente a coluna
+    # evita que uma concessão já carregada conserve a loja anterior na sessão.
+    return (db.session.query(AcessoPedidosLoja.loja_id)
+            .join(Usuario, AcessoPedidosLoja.usuario_id == Usuario.id)
+            .join(Funcionario, AcessoPedidosLoja.funcionario_id == Funcionario.id)
+            .join(Loja, AcessoPedidosLoja.loja_id == Loja.id)
+            .filter(AcessoPedidosLoja.usuario_id == usuario.id,
+                    AcessoPedidosLoja.ativo.is_(True),
+                    Usuario.papel == 'funcionario',
+                    Usuario.is_owner.is_not(True),
+                    Funcionario.usuario_id == usuario.id,
+                    Funcionario.ativo.is_(True),
+                    Loja.ativa.is_(True),
+                    Loja.nome != 'Industria')
+            .scalar())
+
+
+def validar_acesso_edicao(pedido, usuario, *, canal='site'):
+    """Exige autorização atual do canal e da loja, independente do corte.
+
+    Chamar após adquirir a trava/reler o pedido e novamente antes de gravar.
+    Não recarrega o pedido, não confirma a transação e não descarta as mudanças
+    pendentes. O chamador deve desfazê-las se receber PermissionError.
+    """
+    capacidades = {'site': 'web_pedido_operar', 'copilot': 'editar_pedido'}
+    if canal not in capacidades:
+        raise PermissionError('Canal de edição de pedidos inválido.')
+    with db.session.no_autoflush:
+        conta = _conta(usuario)
+        if (conta is None or conta.papel in ('observador', 'relatorio_loja')
+                or conta.senha_provisoria):
+            raise PermissionError('Esta conta não pode editar pedidos.')
+        # A delegação de loja é uma exceção dos endpoints web de pedidos.
+        # Não concede Copilot nem remove a restrição de treinamento por lá.
+        loja_delegada = (_loja_delegada_atual(conta) if canal == 'site' else None)
+        if conta.somente_treino and loja_delegada is None:
+            raise PermissionError('Esta conta está restrita ao treinamento.')
+        if (not conta.is_admin() and loja_delegada is None
+                and not _capacidade_atual(conta.papel, capacidades[canal])):
+            raise PermissionError('O acesso à edição de pedidos foi revogado ou não está autorizado.')
+        if conta.is_admin() or conta.is_gerente():
+            return
+        loja_id = loja_delegada if loja_delegada is not None else conta.loja_id
+        if loja_id is None and conta.papel == 'funcionario':
+            raise PermissionError('Vincule esta conta a uma loja para editar pedidos.')
+        if loja_id is not None and pedido.loja_id != loja_id:
+            raise PermissionError('Esta conta não pode editar pedidos de outra loja.')
+
+
 def _elegivel_legado(usuario):
     if (usuario is None or usuario.somente_treino
             or usuario.papel not in ('gerente', 'admin')):

@@ -109,7 +109,8 @@ def test_post_novo_aceita_multiplo(app, admin_user, loja):
         assert ped.itens[0].quantidade == 6000
 
 
-def test_editar_recusa_fora_do_lote_sem_grandfather(app, admin_user, loja, pedidos_antes_do_corte):
+def test_editar_recusa_fora_do_lote_sem_grandfather(
+        app, admin_user, loja, pedidos_antes_do_corte, pedido_versao_form):
     """Decisão do dono: SEM grandfather — o 9360 antigo tem que virar
     9000/12000 ao editar."""
     with app.app_context():
@@ -126,12 +127,15 @@ def test_editar_recusa_fora_do_lote_sem_grandfather(app, admin_user, loja, pedid
         data = (hoje() + timedelta(days=1)).isoformat()
     client = app.test_client()
     _login(client, admin_user)
+    versao = pedido_versao_form(client, pid)
     resp = client.post(f'/pedidos/{pid}/editar', data={
+        'versao_edicao': versao,
         'data_entrega': data, 'observacao': '',
         'item_id[]': f'r_{rid}', 'item_qtd[]': '9360',
         'item_estado[]': '', 'item_obs[]': '',
     }, follow_redirects=False)
-    assert resp.status_code in (302, 303)
+    assert resp.status_code == 400
+    assert '9360' in resp.get_data(as_text=True)
     with app.app_context():
         # nada mudou — a edição foi recusada antes do REPLACE
         ped = db.session.get(PedidoLoja, pid)
@@ -139,6 +143,7 @@ def test_editar_recusa_fora_do_lote_sem_grandfather(app, admin_user, loja, pedid
         assert ped.itens[0].quantidade == 9360
     # corrigindo pra múltiplo, salva
     resp2 = client.post(f'/pedidos/{pid}/editar', data={
+        'versao_edicao': versao,
         'data_entrega': data, 'observacao': '',
         'item_id[]': f'r_{rid}', 'item_qtd[]': '9000',
         'item_estado[]': '', 'item_obs[]': '',

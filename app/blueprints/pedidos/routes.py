@@ -513,6 +513,15 @@ def novo():
     # amanha). Passado continua bloqueado. O default do form segue amanha.
     data_min = hoje_brt()
 
+    def formulario(status=200):
+        return render_template(
+            'pedidos/novo.html', lojas=_lojas_operacionais(),
+            amanha=amanha, data_min=data_min,
+            loja_id=(request.form.get('loja_id', type=int)
+                     if pode_qualquer_loja else loja_id),
+            itens_digitados=linhas_formulario(request.form, _parse_item_id),
+        ), status
+
     if request.method == 'POST':
         try:
             sel_loja = (int(request.form.get('loja_id', 0)) if pode_qualquer_loja
@@ -525,10 +534,7 @@ def novo():
         # Loja precisa existir e estar ativa
         if not sel_loja or not Loja.query.filter_by(id=sel_loja, ativa=True).first():
             flash('Selecione uma loja valida.', 'warning')
-            lojas = _lojas_operacionais()
-            return render_template('pedidos/novo.html', lojas=lojas,
-                                   amanha=amanha, data_min=data_min,
-                                   loja_id=loja_id)
+            return formulario()
 
         data_str = request.form.get('data_entrega', '')
         obs = request.form.get('observacao', '').strip()
@@ -540,10 +546,7 @@ def novo():
 
         if data_entrega < data_min:
             flash(f'A data de entrega deve ser a partir de {data_min.strftime("%d/%m")}.', 'warning')
-            lojas = _lojas_operacionais()
-            return render_template('pedidos/novo.html', lojas=lojas,
-                                   amanha=amanha, data_min=data_min,
-                                   loja_id=loja_id)
+            return formulario()
 
         # A espera pela trava pode cruzar 12h. Checar antes do merge,
         # pois criar também pode alterar um pedido de amanhã já existente.
@@ -553,10 +556,7 @@ def novo():
                                                    user=current_user)
         if bloqueado:
             flash(aviso_corte, 'warning')
-            lojas = _lojas_operacionais()
-            return render_template('pedidos/novo.html', lojas=lojas,
-                                   amanha=amanha, data_min=data_min,
-                                   loja_id=loja_id)
+            return formulario()
         if aviso_corte:
             flash(aviso_corte, 'warning')
 
@@ -572,11 +572,8 @@ def novo():
             itens_norm = validar_itens(linhas)
         except ValueError as exc:
             flash(str(exc), 'warning')
-            lojas = _lojas_operacionais()
             status = 200 if isinstance(exc, PedidoSemItens) else 400
-            return render_template('pedidos/novo.html', lojas=lojas,
-                                   amanha=amanha, data_min=data_min,
-                                   loja_id=sel_loja, itens_digitados=linhas), status
+            return formulario(status)
 
         # MP só entra se liberada pra pedido de loja (checkbox no Banco de
         # MPs — decisão do dono 07/07/2026). O typeahead já não oferece as
@@ -586,10 +583,7 @@ def novo():
             flash('Matéria(s)-prima(s) não liberada(s) pra pedido de loja: '
                   + ', '.join(bloqueadas) + '. Um admin pode liberar no '
                   'Banco de MPs (checkbox "sugerir pedido loja").', 'warning')
-            lojas = _lojas_operacionais()
-            return render_template('pedidos/novo.html', lojas=lojas,
-                                   amanha=amanha, data_min=data_min,
-                                   loja_id=loja_id)
+            return formulario()
 
         # Item em g/ml com lote definido só aceita MÚLTIPLO do lote
         # (iogurte 3000 / granola 5000 — dono 18/08/2026, caso "potes").
@@ -598,10 +592,7 @@ def novo():
         if fora_do_lote:
             for msg in fora_do_lote:
                 flash(msg, 'warning')
-            lojas = _lojas_operacionais()
-            return render_template('pedidos/novo.html', lojas=lojas,
-                                   amanha=amanha, data_min=data_min,
-                                   loja_id=loja_id)
+            return formulario()
 
         try:
             from app.services.pedido_merge import (
@@ -625,7 +616,7 @@ def novo():
                 erro_corte = salvar_no_prazo([data_entrega])
                 if erro_corte:
                     flash(erro_corte, 'warning')
-                    return redirect(url_for('pedidos.novo'))
+                    return formulario(400)
                 flash(f'Itens adicionados ao pedido #{alvo.id} — ja existia '
                       'para esta loja nesta data.', 'success')
                 if absorvido is not None:
@@ -644,7 +635,7 @@ def novo():
                 erro_corte = salvar_no_prazo([data_entrega])
                 if erro_corte:
                     flash(erro_corte, 'warning')
-                    return redirect(url_for('pedidos.novo'))
+                    return formulario(400)
                 flash(f'Pedido #{rascunho.id} confirmado a partir da sugestão '
                       'automática do dia: suas quantidades substituíram as '
                       'sugeridas.', 'success')
@@ -667,12 +658,12 @@ def novo():
             erro_corte = salvar_no_prazo([data_entrega])
             if erro_corte:
                 flash(erro_corte, 'warning')
-                return redirect(url_for('pedidos.novo'))
+                return formulario(400)
         except Exception as exc:  # noqa: BLE001
             db.session.rollback()
             current_app.logger.exception('Falha ao criar pedido')
             flash(f'Erro ao criar pedido: {exc}', 'danger')
-            return redirect(url_for('pedidos.novo'))
+            return formulario(400)
         # Alerta Slack se for emergencia (criado hoje pra entrega hoje)
         try:
             from app.services.slack_resumos import alertar_pedido_emergencia
@@ -699,12 +690,20 @@ def editar(id):
     via REPLACE total — DELETE + INSERT da lista nova."""
     from app.constants import STATUS_PEDIDO_EDITAVEIS
     pedido = PedidoLoja.query.get_or_404(id)
-    from app.services.acesso_pedidos_loja import loja_liberada
-    individual = loja_liberada(current_user)
-    if individual and pedido.loja_id != individual.id:
+    from app.services.pedido_edicao_acesso import validar_acesso_edicao
+    from app.services.pedido_versao_edicao import (
+        dados_revisao_edicao,
+        gerar_versao_edicao,
+        validar_versao_edicao,
+    )
+    # O formulário e sua versão precisam representar a mesma leitura também
+    # no GET; uma edição concorrente não pode assinar dados diferentes dos vistos.
+    pedido = reler_pedido_travado(pedido)
+    try:
+        validar_acesso_edicao(pedido, current_user)
+    except PermissionError:
+        db.session.rollback()
         abort(403)
-    if request.method == 'POST':
-        pedido = reler_pedido_travado(pedido)
     if pedido.status not in STATUS_PEDIDO_EDITAVEIS:
         flash(f'Pedido {pedido.status} nao pode ser editado. Cancele e recrie.', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
@@ -729,21 +728,32 @@ def editar(id):
             flash(bloqueio, 'warning')
             return redirect(url_for('pedidos.detalhe', id=id))
 
+    def formulario(status=200, *, conflito=False):
+        # Erros comuns conservam a versão vista pelo usuário; somente uma
+        # revisão explícita pode adotar a versão atual sem perder o rascunho.
+        versao = (gerar_versao_edicao(pedido, current_user, revisao=True)
+                  if conflito else request.form.get('versao_edicao', ''))
+        contexto = dict(
+            pedido=pedido, amanha=hoje_brt() + timedelta(days=1),
+            data_min=hoje_brt(), edicao_livre=edicao_livre,
+            itens_digitados=linhas_formulario(request.form, _parse_item_id),
+            versao_edicao=versao,
+            revisao_atual=dados_revisao_edicao(pedido) if conflito else None,
+        )
+        return render_template('pedidos/editar.html', **contexto), status
+
     if request.method == 'POST':
         if not any(request.form.getlist(f'item_{campo}[]')
                    for campo in ('id', 'nome', 'qtd', 'estado', 'obs')):
             flash('Pedido precisa ter pelo menos 1 item.', 'warning')
-            return redirect(url_for('pedidos.editar', id=id))
+            return formulario(400)
         linhas = linhas_formulario(request.form, _parse_item_id)
         try:
             itens_norm = validar_itens(linhas)
             ajuste_motor = preparar_ajuste(pedido, current_user, request.form)
         except ValueError as exc:
             flash(str(exc), 'warning')
-            return render_template('pedidos/editar.html', pedido=pedido,
-                                   amanha=hoje_brt() + timedelta(days=1),
-                                   data_min=hoje_brt(), edicao_livre=edicao_livre,
-                                   itens_digitados=linhas), 400
+            return formulario(400)
         # Mesmo dia liberado pra todos (15/07/2026); passado segue bloqueado.
         data_min = hoje_brt()
         data_str = request.form.get('data_entrega', '')
@@ -751,10 +761,11 @@ def editar(id):
         try:
             data_entrega = datetime.strptime(data_str, '%Y-%m-%d').date()
         except ValueError:
-            data_entrega = pedido.data_entrega
+            flash('Informe uma data de entrega válida.', 'warning')
+            return formulario(400)
         if data_entrega < data_min:
             flash(f'A data de entrega deve ser a partir de {data_min.strftime("%d/%m")}.', 'warning')
-            return redirect(url_for('pedidos.editar', id=id))
+            return formulario(400)
 
         datas_corte = [pedido.data_entrega, data_entrega]
         # Corte do fim do dia (dono 10/08/2026): olha a data ATUAL e a NOVA —
@@ -765,7 +776,7 @@ def editar(id):
             [pedido.data_entrega, data_entrega], user=current_user, acao='editar')
         if bloqueado:
             flash(aviso_corte, 'warning')
-            return redirect(url_for('pedidos.detalhe', id=id))
+            return formulario(400)
         if aviso_corte:
             flash(aviso_corte, 'warning')
 
@@ -784,7 +795,7 @@ def editar(id):
             flash('Matéria(s)-prima(s) não liberada(s) pra pedido de loja: '
                   + ', '.join(bloqueadas) + '. Um admin pode liberar no '
                   'Banco de MPs (checkbox "sugerir pedido loja").', 'warning')
-            return redirect(url_for('pedidos.editar', id=id))
+            return formulario(400)
 
         # Item em g/ml com lote definido só aceita MÚLTIPLO do lote
         # (iogurte 3000 / granola 5000 — dono 18/08/2026, caso "potes").
@@ -808,7 +819,15 @@ def editar(id):
         if fora_do_lote:
             for msg in fora_do_lote:
                 flash(msg, 'warning')
-            return redirect(url_for('pedidos.editar', id=id))
+            return formulario(400)
+
+        try:
+            validar_versao_edicao(
+                pedido, current_user, request.form.get('versao_edicao'),
+                confirmou_revisao=request.form.get('confirmar_revisao') == 'sim')
+        except ValueError as exc:
+            flash(str(exc), 'warning')
+            return formulario(409, conflito=True)
 
         try:
             data_mudou = (data_entrega != pedido.data_entrega)
@@ -843,18 +862,23 @@ def editar(id):
             for item in itens_norm:
                 db.session.add(PedidoItem(pedido_id=pedido.id, **item))
 
+            validar_acesso_edicao(pedido, current_user)
             registrar_ajuste(pedido, current_user, ajuste_motor, canal='site')
+            validar_acesso_edicao(pedido, current_user)
             erro_corte = salvar_no_prazo(
                 datas_corte, user=current_user,
                 acao='editar' if ajuste_motor is not None else None)
             if erro_corte:
                 flash(erro_corte, 'warning')
-                return redirect(url_for('pedidos.detalhe', id=id))
+                return formulario(400)
+        except PermissionError:
+            db.session.rollback()
+            abort(403)
         except Exception as exc:  # noqa: BLE001
             db.session.rollback()
             current_app.logger.exception('Falha ao editar pedido')
             flash(f'Erro ao editar pedido: {exc}', 'danger')
-            return redirect(url_for('pedidos.editar', id=id))
+            return formulario(400)
 
         flash('Pedido atualizado.', 'success')
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
@@ -867,7 +891,8 @@ def editar(id):
     amanha = hoje_brt() + timedelta(days=1)
     data_min = hoje_brt()   # mesmo dia liberado pra todos (15/07/2026)
     return render_template('pedidos/editar.html', pedido=pedido,
-                           amanha=amanha, data_min=data_min, edicao_livre=edicao_livre)
+                           amanha=amanha, data_min=data_min, edicao_livre=edicao_livre,
+                           versao_edicao=gerar_versao_edicao(pedido, current_user))
 
 
 @pedidos_bp.route('/<int:id>')
@@ -984,6 +1009,7 @@ def _executar_envio_pedido(pedido, user, ref_extra=None):
     falha pra caller fazer rollback. `ref_extra` adiciona texto na
     referencia do movimento (ex: 'via QR / motorista Joao').
     """
+    pedido = reler_pedido_travado(pedido)
     if pedido.status != 'separado':
         return False, f'Pedido precisa estar separado (atual: {pedido.status}).'
 
@@ -1138,6 +1164,7 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
 
     Retorna (ok, msg, divergencias). Exception em caller faz rollback.
     """
+    pedido = reler_pedido_travado(pedido)
     if pedido.status != 'em_transporte':
         return False, f'Pedido precisa estar em transporte (atual: {pedido.status}).', []
 

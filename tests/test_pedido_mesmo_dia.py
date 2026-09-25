@@ -77,7 +77,7 @@ def test_data_no_passado_continua_recusada(app, loja, admin_user):
         assert PedidoLoja.query.filter_by(loja_id=lid).count() == 0
 
 
-def test_editar_para_hoje_liberado(app, loja, admin_user):
+def test_editar_para_hoje_liberado(app, loja, admin_user, pedido_versao_form):
     """Editar a data para HOJE também liberado (funcionário não edita —
     capacidade web_pedido_operar, regra pré-existente e intocada)."""
     from app.extensions import db
@@ -96,6 +96,7 @@ def test_editar_para_hoje_liberado(app, loja, admin_user):
     client = app.test_client()
     _login(client, admin_user.id)
     resp = client.post(f'/pedidos/{pid}/editar', data={
+        'versao_edicao': pedido_versao_form(client, pid),
         'data_entrega': hoje().isoformat(),
         'observacao': '',
         'item_id[]': f'r_{rid}',

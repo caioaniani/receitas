@@ -21,6 +21,23 @@ import pytest
 
 
 @pytest.fixture
+def pedido_versao_form():
+    """Carrega a versão exibida pelo formulário antes de simular a edição."""
+    import html
+    import re
+
+    def carregar(cliente, pedido_id):
+        resposta = cliente.get(f'/pedidos/{pedido_id}/editar')
+        assert resposta.status_code == 200
+        campo = re.search(r'name="versao_edicao" value="([^"]+)"',
+                          resposta.get_data(as_text=True))
+        assert campo is not None
+        return html.unescape(campo.group(1))
+
+    return carregar
+
+
+@pytest.fixture
 def pedidos_antes_do_corte(monkeypatch):
     """Cenários de edição usam 11h BRT; a suíte de corte testa as fronteiras.
 

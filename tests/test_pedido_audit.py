@@ -30,7 +30,7 @@ def _pedido_pendente(loja, admin_user, catalogo):
 
 
 def test_editar_via_web_seta_modificado_por(
-        app, admin_user, loja, catalogo, pedidos_antes_do_corte):
+        app, admin_user, loja, catalogo, pedidos_antes_do_corte, pedido_versao_form):
     from app.models import PedidoLoja
     p = _pedido_pendente(loja, admin_user, catalogo)
     cliente = app.test_client()
@@ -38,6 +38,7 @@ def test_editar_via_web_seta_modificado_por(
 
     nova_data = (date.today() + timedelta(days=3)).strftime('%Y-%m-%d')
     cliente.post(f'/pedidos/{p.id}/editar', data={
+        'versao_edicao': pedido_versao_form(cliente, p.id),
         'data_entrega': nova_data,
         'observacao': '',
         'item_id[]': [f'r_{catalogo["receita"].id}'],

@@ -177,7 +177,7 @@ def test_web_cancelar_amanha_no_corte_barrado(app, loja, monkeypatch):
         assert db.session.get(PedidoLoja, pid).status == 'confirmado'
 
 
-def test_web_editar_amanha_antes_do_corte_livre(app, loja, monkeypatch):
+def test_web_editar_amanha_antes_do_corte_livre(app, loja, monkeypatch, pedido_versao_form):
     instante = datetime.combine(hoje(), datetime.min.time()).replace(
         hour=11, minute=59, second=59)
     monkeypatch.setattr(pedido_corte, 'agora', lambda: instante)
@@ -196,6 +196,7 @@ def test_web_editar_amanha_antes_do_corte_livre(app, loja, monkeypatch):
         c = app.test_client()
         _login(c, ger)
         c.post(f'/pedidos/{pid}/editar', data={
+            'versao_edicao': pedido_versao_form(c, pid),
             'data_entrega': (hoje() + timedelta(days=1)).isoformat(),
             'observacao': 'ajuste',
             'item_id[]': f'r_{rid}',

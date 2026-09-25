@@ -109,7 +109,8 @@ def test_post_novo_aceita_mp_liberada(app, admin_user, loja, pedidos_antes_do_co
 
 # ── POST /pedidos/<id>/editar (grandfather) ──────────────────────────────
 
-def test_editar_grandfather_mantem_mp_antiga(app, admin_user, loja, pedidos_antes_do_corte):
+def test_editar_grandfather_mantem_mp_antiga(
+        app, admin_user, loja, pedidos_antes_do_corte, pedido_versao_form):
     """Pedido antigo com MP hoje bloqueada: re-enviar a mesma lista (o form
     faz REPLACE total) NÃO pode ser recusado — senão desmarcar o checkbox
     travaria a edição de pedidos legítimos."""
@@ -121,6 +122,7 @@ def test_editar_grandfather_mantem_mp_antiga(app, admin_user, loja, pedidos_ante
     client = app.test_client()
     _login(client, admin_user)
     resp = client.post(f'/pedidos/{ped_id}/editar', data={
+        'versao_edicao': pedido_versao_form(client, ped_id),
         'data_entrega': (hoje() + timedelta(days=2)).isoformat(),
         'observacao': '',
         'item_id[]': f'mp_{blo_id}',
