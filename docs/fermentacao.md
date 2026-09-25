@@ -24,9 +24,18 @@ com identificação do mapa, fator e caminho da composição gravados na auditor
 Vínculos relevantes ausentes, ciclos, componentes órfãos ou quantidades
 inválidas impedem o envio de uma lista parcial.
 
-Quantidade = teto da soma das vendas das últimas três ocorrências do mesmo
-dia da semana / 3. Exemplo: 24/09/2026 usa 03, 10 e 17/09. Zero só é válido
-quando há histórico fechado da loja naquele dia. Não desconta estoque.
+Decisão do owner em 25/09/2026, para Ribeiro do Vale: usar as últimas sete
+ocorrências do mesmo dia da semana, ordenar o consumo de cada produto do
+maior para o menor e calcular `teto((maior + quarto maior) / 2)`. Vale tanto
+para croissant tradicional quanto para pain au chocolat, com ordenação
+independente. Empates contam como observações distintas. Exemplo:
+`[60, 57, 52, 51, 43, 41, 40]` resulta em `teto(55,5) = 56`.
+Para sábado 26/09/2026, usar os sábados 08, 15, 22 e 29/08 e 05, 12 e 19/09.
+Anésio Pinto Rosa mantém a média das últimas três ocorrências do mesmo dia
+da semana, arredondada para cima. A mudança não alcança Nebraska, pedidos
+das lojas ou ordens de produção industrial.
+Zero só é válido quando há histórico fechado da loja naquele dia. Não
+substituir dias ausentes por zero nem por outras datas. Não desconta estoque.
 
 Fonte: `VendaSeruDiaria`, com vínculo confirmado de `SeruLojaMap`. O serviço
 lê o histórico existente, sem recapturar ou alterar estoque. Datas sem
@@ -36,7 +45,7 @@ nunca uma ordem parcial de preparo. O timestamp é uma guarda contra
 histórico intradia, não garantia de completude da API externa.
 
 Conferência do owner: `/admin/slack/fermentacao`, também acessível pelo
-diagnóstico Slack. Mostra a prévia, as três observações, os produtos vendidos
+diagnóstico Slack. Mostra a prévia, as observações de cada loja, os produtos vendidos
 e suas contribuições, e o resultado do envio. O botão manual usa a mesma
 deduplicação do cron. O owner pode corrigir uma mensagem confirmada: atualiza
 o mesmo canal/ts, preservando mensagem e cálculo anteriores. Uma correção
@@ -44,7 +53,8 @@ sem resposta confirmada mantém a tentativa persistida; o retry explícito
 repete o mesmo texto no mesmo ts, sem criar uma segunda instrução.
 
 `FermentacaoEnvio` é uma tabela nova criada no startup por `db.create_all`.
-Guarda a mensagem, datas, linhas de origem, médias, destino e confirmação
+Guarda a mensagem, datas, linhas de origem, método por loja, consumos ordenados,
+maior/quarto maior quando aplicável, referência antes do arredondamento, destino e confirmação
 do Slack. Trava PostgreSQL 7767 + chave única data-alvo impedem repetição.
 Reserva persistida antes da rede; timeout/crash deixa envio incerto e
 exige conferir o canal antes de qualquer recuperação deliberada.

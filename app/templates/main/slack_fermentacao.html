@@ -44,7 +44,7 @@
 {% endif %}
 <details class="mb-3">
     <summary>Como a quantidade foi calculada</summary>
-    <p class="mt-2">Soma das unidades consumidas nas vendas das três datas anteriores do mesmo dia da semana, dividida por três e arredondada para cima. Não desconta estoque nem acrescenta margem.</p>
+    <p class="mt-2">Ribeiro do Vale: últimas sete ocorrências do mesmo dia da semana. Para cada produto, ordena o consumo do maior para o menor e calcula (maior + 4º maior) ÷ 2. Anésio Pinto Rosa mantém a média das últimas três ocorrências. Arredonda o resultado para cima, sem descontar estoque nem acrescentar margem.</p>
     <p>Inclui os dois produtos vendidos sozinhos e nas composições dos lanches e preparações na chapa. Nutella e Nutella com morango também entram como croissants tradicionais para fermentar, mesmo quando a ficha usa retorno. Almond fica fora da conta. Minis e bicolor têm massas próprias.</p>
     {% set base = calculo %}
     {% if not base.ok %}<div class="alert alert-warning">{% for erro in base.erros %}<div>{{ erro }}</div>{% endfor %}</div>{% endif %}
@@ -56,6 +56,17 @@
         <tr><td>{{ dia.data[8:10] }}/{{ dia.data[5:7] }}</td><td>{{ '%g'|format(dia.croissant|float) }}</td><td>{{ '%g'|format(dia.pain|float) }}</td></tr>
         {% endfor %}</tbody>
     </table></div>
+    {% if base.ok %}
+    {% for grupo, titulo in [('croissant', 'Croissant tradicional'), ('pain', 'Pain au chocolat')] %}
+    {% set conta = loja.calculos[grupo] %}
+    <p><strong>{{ titulo }}:</strong>
+        {% if loja.metodo == 'maior_quarto_7' %}
+        ({{ '%g'|format(conta.maior|float) }} + {{ '%g'|format(conta.quarto_maior|float) }}) ÷ 2
+        {% else %}Média das {{ loja.semanas }} datas{% endif %}
+        = {{ '%g'|format(conta.referencia|float) }} → <strong>{{ loja[grupo] }} unidades para fermentar.</strong>
+    </p>
+    {% endfor %}
+    {% endif %}
     {% for dia in loja.dias %}
     <details class="mb-2">
         <summary>Vendas consideradas em {{ dia.data[8:10] }}/{{ dia.data[5:7] }}</summary>

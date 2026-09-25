@@ -1,5 +1,17 @@
 # Convenções de trabalho (Claude)
 
+## Fermentação da Ribeiro (decisão do dono, 25/09/2026)
+
+Na lista diária de fermentação (`app/services/fermentacao.py`), Ribeiro do
+Vale passa a usar as últimas sete ocorrências do mesmo dia da semana.
+Para croissant tradicional e pain au chocolat, ordenar separadamente e usar
+`teto((maior consumo + quarto maior consumo) / 2)`. Incluir lanches, chapa
+e Nutella; excluir Almond. Não acrescentar margem nem descontar estoque.
+Anésio mantém a média das últimas três ocorrências. Não altera pedidos das
+lojas, Nebraska ou ordens industriais. Histórico incompleto bloqueia a lista.
+O envio às 12h continua; correção manual atualiza a mesma mensagem no Slack.
+Detalhes e auditoria em `docs/fermentacao.md`.
+
 ## Corte de pedidos às 12h (decisão do dono, 24/09/2026)
 
 Pedidos das lojas para entrega pela indústria no dia seguinte ficam

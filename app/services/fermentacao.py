@@ -1,8 +1,10 @@
-"""Média do consumo dos dois folhados em três dias equivalentes de vendas.
+"""Previsão de consumo dos dois folhados em dias equivalentes de vendas.
 
 Decisão do owner em 23/09/2026: diariamente às 12h, para o dia seguinte,
 Ribeiro do Vale e Anésio, no canal do desperdício. Inclui o consumo nas
 composições dos lanches, inclusive na chapa; não movimenta estoque.
+Em 25/09, Ribeiro passa a usar (maior + quarto maior) / 2 em sete semanas,
+separadamente para croissant tradicional e pain au chocolat.
 """
 import logging
 import unicodedata
@@ -35,17 +37,36 @@ def _normalizar(nome):
                            if not unicodedata.combining(c)).lower().split())
 
 
-def datas_base(data_alvo):
-    return [data_alvo - timedelta(weeks=n) for n in (3, 2, 1)]
+def datas_base(data_alvo, semanas=3):
+    return [data_alvo - timedelta(weeks=n) for n in range(semanas, 0, -1)]
+
+
+def resumir_consumo(valores, metodo):
+    """Ordena cada produto separadamente; só arredonda a quantidade final."""
+    valores = [Decimal(v) for v in valores]
+    semanas = 7 if metodo == 'maior_quarto_7' else 3
+    if metodo not in ('maior_quarto_7', 'media_3') or len(valores) != semanas:
+        raise ValueError('Método ou quantidade de observações inválidos.')
+    if any(not v.is_finite() or v < 0 for v in valores):
+        raise ValueError('Consumo inválido.')
+    ordenadas = sorted(valores, reverse=True)
+    calculo = {'ordenadas': [str(v) for v in ordenadas]}
+    if metodo == 'maior_quarto_7':
+        referencia = (ordenadas[0] + ordenadas[3]) / Decimal(2)
+        calculo.update(maior=str(ordenadas[0]), quarto_maior=str(ordenadas[3]))
+    else:
+        referencia = sum(ordenadas) / Decimal(3)
+    calculo.update(referencia=str(referencia),
+                   quantidade=int(referencia.to_integral_value(rounding=ROUND_CEILING)))
+    return calculo
 
 
 def calcular(data_alvo=None):
     from app.services.fermentacao_consumo import ConsumoFermentacao
 
     data_alvo = data_alvo or hoje() + timedelta(days=1)
-    datas = datas_base(data_alvo)
     resultado = {'data_alvo': data_alvo.isoformat(),
-                 'datas': [d.isoformat() for d in datas], 'lojas': [], 'erros': []}
+                 'datas': [], 'lojas': [], 'erros': []}
     try:
         consumo = ConsumoFermentacao()
     except ValueError as exc:
@@ -54,6 +75,10 @@ def calcular(data_alvo=None):
         return resultado
     lojas = Loja.query.filter_by(ativa=True).all()
     for nome in LOJAS:
+        metodo = 'maior_quarto_7' if nome == 'Ribeiro do Vale' else 'media_3'
+        semanas = 7 if metodo == 'maior_quarto_7' else 3
+        datas = datas_base(data_alvo, semanas)
+        resultado['datas'] = sorted(set(resultado['datas']) | {d.isoformat() for d in datas})
         candidatos = [l for l in lojas
                       if _normalizar(l.nome).removeprefix('loja ') == _normalizar(nome)]
         if len(candidatos) != 1:
@@ -111,13 +136,16 @@ def calcular(data_alvo=None):
             observacoes.append({'data': dia.isoformat(),
                                 **{k: str(v) for k, v in quantidades.items()},
                                 'fontes': fontes})
-        if len(observacoes) != 3:
+        if len(observacoes) != semanas:
             continue
-        item = {'nome': nome, 'loja_id': loja.id, 'dias': observacoes}
+        item = {'nome': nome, 'loja_id': loja.id, 'dias': observacoes,
+                'metodo': metodo, 'semanas': semanas, 'calculos': {}}
         for grupo in ('croissant', 'pain'):
-            media = sum(Decimal(d[grupo]) for d in observacoes) / Decimal(3)
-            item[grupo] = int(media.to_integral_value(rounding=ROUND_CEILING))
-            item[f'media_{grupo}'] = str(media)
+            calculo = resumir_consumo([d[grupo] for d in observacoes], metodo)
+            item['calculos'][grupo] = calculo
+            item[grupo] = calculo['quantidade']
+            if metodo == 'media_3':
+                item[f'media_{grupo}'] = calculo['referencia']
         resultado['lojas'].append(item)
     resultado['ok'] = not resultado['erros'] and len(resultado['lojas']) == 2
     resultado['texto'] = formatar(resultado, data_alvo)
@@ -133,12 +161,16 @@ def formatar(resultado, data_alvo):
                 + '\n\nConferir o histórico de vendas no sistema antes de separar.')
     linhas = [titulo]
     for loja in resultado['lojas']:
+        base = ('(maior consumo + 4º maior consumo) ÷ 2, nos últimos 7 dias equivalentes'
+                if loja['metodo'] == 'maior_quarto_7'
+                else 'média do consumo nos últimos 3 dias equivalentes')
         linhas.extend(['', f'{loja["nome"]}:',
                        f'{loja["croissant"]} croissants tradicionais',
-                       f'{loja["pain"]} pain au chocolat'])
-    linhas.extend(['', 'Base: média do consumo nas vendas do PDV em '
-                   + ', '.join(d[8:10] + '/' + d[5:7] for d in resultado['datas'])
-                   + '; arredondada para cima.',
+                       f'{loja["pain"]} pain au chocolat',
+                       f'Base: {base}; arredondado para cima.',
+                       'Datas: ' + ', '.join(d['data'][8:10] + '/' + d['data'][5:7]
+                                             for d in loja['dias']) + '.'])
+    linhas.extend(['',
                    'Inclui lanches, preparações na chapa, Nutella e Nutella com morango. Almond não entra.'])
     return '\n'.join(linhas)
 
