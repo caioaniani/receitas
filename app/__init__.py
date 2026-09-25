@@ -404,6 +404,9 @@ def create_app(config_class=None):
         não age (testes usam test_client em HTTP por design)."""
         if app.config.get('TESTING') or os.environ.get('PYTEST_RUNNING'):
             return None
+        # A sonda interna do Railway chega por HTTP e exige resposta 200.
+        if request.endpoint == 'health' and request.method in ('GET', 'HEAD'):
+            return None
         host = (request.host or '').split(':')[0].lower()
         if host in ('localhost', '127.0.0.1', '0.0.0.0'):
             return None

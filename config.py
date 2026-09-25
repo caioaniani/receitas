@@ -7,9 +7,13 @@ os.makedirs(DB_DIR, exist_ok=True)
 DB_PATH = os.path.join(DB_DIR, 'padaria.db')
 
 DATABASE_URL = os.environ.get('DATABASE_URL', f'sqlite:///{DB_PATH}')
-# Railway usa 'postgres://' mas SQLAlchemy precisa de 'postgresql://'
-if DATABASE_URL.startswith('postgres://'):
-    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+# Usa o driver instalado, sem depender do padrão da versão do SQLAlchemy.
+# URLs que já escolhem um driver explicitamente permanecem como configuradas.
+for _postgres_prefix in ('postgres://', 'postgresql://'):
+    if DATABASE_URL.startswith(_postgres_prefix):
+        DATABASE_URL = DATABASE_URL.replace(
+            _postgres_prefix, 'postgresql+psycopg2://', 1)
+        break
 
 
 class Config:

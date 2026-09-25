@@ -80,12 +80,17 @@ TOOL_EDITAR_PEDIDO = {
         "depois disso (separado/em_transporte/entregue) o estoque ja foi tocado "
         "e a edicao e bloqueada. NAO muda loja nem driver (pra isso cancele e recrie). "
         "Se for mexer em itens, mande a LISTA COMPLETA — REPLACE total. Use "
-        "consultar_pedido antes pra saber a composicao atual."
+        "consultar_pedido antes pra saber a composicao atual. "
+        "Usuarios com liberacao individual de horario devem informar em TODA edicao "
+        "descricao_alteracao e motivo_alteracao. Pergunte ao usuario o que muda e por que; "
+        "nao invente a justificativa nem a deduza da quantidade."
     ),
     "input_schema": {
         "type": "object",
         "properties": {
             "pedido_id": {"type": "integer", "description": "ID do pedido a editar."},
+            "descricao_alteracao": {"type": ["string", "null"], "description": "O que o usuario disse que vai mudar (10 a 1000 caracteres). Obrigatorio para quem tem liberacao individual de horario."},
+            "motivo_alteracao": {"type": ["string", "null"], "description": "Por que o usuario disse que precisa mudar (10 a 1000 caracteres). Nao inventar: pergunte se ainda nao informou."},
             "data_entrega": {"type": ["string", "null"], "description": "Nova data YYYY-MM-DD, ou null pra manter a atual."},
             "observacao": {"type": ["string", "null"], "description": "Nova observacao do pedido. String vazia limpa; null mantem."},
             "itens": {
@@ -2154,6 +2159,8 @@ def _enriquecer_editar_pedido(tool_input):
     return {
         'pedido_id': pid,
         'pedido_atual': pedido_atual,
+        'descricao_alteracao': tool_input.get('descricao_alteracao'),
+        'motivo_alteracao': tool_input.get('motivo_alteracao'),
         'data_entrega': tool_input.get('data_entrega'),
         'observacao': tool_input.get('observacao'),
         'itens': itens_enriq,  # None = mantem; lista = REPLACE
@@ -2766,6 +2773,14 @@ def executar_criar_pedido(params, user):
     if bloqueado_corte:
         return {'ok': False, 'erro': aviso_corte}
 
+    from app.services.pedido_ajuste_motor import pedido_aberto_para_justificar
+    existente = pedido_aberto_para_justificar(loja_id, data_entrega, user)
+    if existente:
+        return {'ok': False, 'erro': (
+            f'Já existe o pedido #{existente.id}. Use editar_pedido e peça ao usuário '
+            'o que está mudando e por quê, antes de alterar as quantidades.'),
+            'pedido_id': existente.id, 'url': f'/pedidos/{existente.id}/editar'}
+
     # Ja existe pedido aberto da loja nessa data? Junta nele em vez de duplicar.
     from app.services.pedido_merge import (
         absorver_rascunho_automatico,
@@ -2885,9 +2900,20 @@ def _executar_editar_pedido(params, user):
                 datetime.strptime(nova_data, '%Y-%m-%d').date())
         except (ValueError, TypeError):
             pass                       # data invalida ja falha logo abaixo
-    bloqueado_corte, aviso_corte = bloqueio_do_corte(_datas_corte, user=user)
+    bloqueado_corte, aviso_corte = bloqueio_do_corte(
+        _datas_corte, user=user, acao='editar')
     if bloqueado_corte:
         return {'ok': False, 'erro': aviso_corte}
+
+    from app.services.pedido_ajuste_motor import preparar_ajuste, registrar_ajuste
+    try:
+        ajuste_motor = preparar_ajuste(pedido, user, params)
+    except ValueError as exc:
+        return {'ok': False, 'erro': str(exc)}
+    if ajuste_motor is not None:
+        from app.utils import hoje as hoje_brt
+        if any(d < hoje_brt() for d in _datas_corte if d):
+            return {'ok': False, 'erro': 'A data de entrega não pode estar no passado.'}
 
     aviso_rascunho = None
     if nova_data:
@@ -3000,7 +3026,9 @@ def _executar_editar_pedido(params, user):
 
     pedido.modificado_em = agora()
     pedido.modificado_por_id = user.id
-    erro_corte = salvar_no_prazo(_datas_corte)
+    registrar_ajuste(pedido, user, ajuste_motor, canal='copilot')
+    erro_corte = salvar_no_prazo(
+        _datas_corte, user=user, acao='editar' if ajuste_motor is not None else None)
     if erro_corte:
         return {'ok': False, 'erro': erro_corte}
     out = {'ok': True, 'pedido_id': pedido.id, 'mudancas': mudancas,

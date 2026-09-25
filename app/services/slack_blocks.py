@@ -150,6 +150,15 @@ def _preview_editar_pedido(p, token):
         _section(f'{itens_header}\n{itens_txt[:2000]}'),
         _botoes(token, 'Salvar alteracoes', 'Cancelar'),
     ]
+    justificativas = [
+        {'type': 'plain_text', 'text': f'{rotulo}:\n{str(p[campo])[:1000]}'}
+        for campo, rotulo in (
+            ('descricao_alteracao', 'O que está mudando'),
+            ('motivo_alteracao', 'Por que precisa mudar'),
+        ) if p.get(campo)
+    ]
+    if justificativas:
+        blocks.insert(-1, {'type': 'section', 'fields': justificativas})
     return blocks
 
 

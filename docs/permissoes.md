@@ -1,5 +1,32 @@
 # Mapa de permissões
 
+## Edição individual de pedidos fora do prazo (24/09/2026)
+
+O owner pode liberar uma conta de Gerente/Admin em **Usuários → Permissões
+de acesso → Editar pedidos fora do prazo**. A concessão é individual e
+revogável; não troca perfil, lojas permitidas ou acesso a outras áreas.
+
+Essa pessoa pode editar pedidos pendentes/confirmados após o corte das 12h.
+Em **toda edição**, inclusive antes do corte, deve preencher **o que está
+mudando** e **por quê** (10 a 1.000 caracteres por campo). Site e Copilot
+validam os mesmos campos no servidor. O Copilot deve pedir a justificativa
+ao usuário, sem inventá-la. Tentar criar outro pedido para a mesma loja/data
+encaminha à edição do existente, evitando alterar as quantidades por merge
+sem justificativa.
+
+Pedido e registro são gravados na mesma transação: autor, horário, loja,
+data, itens/quantidades/estados/observações anteriores e novos e justificativa.
+O detalhe do pedido exibe **Ajustes para aprimorar o motor**, com comparação
+antes/depois. É uma base para análise; não treina nem muda automaticamente o
+motor. A trilha fica em `AuditLog`, tabela lógica `pedido_ajuste_motor`.
+
+A dispensa vale apenas para edição, não para criar, cancelar ou excluir após
+o corte. Também não reabre pedidos com nota, motorista, conferência,
+recebimento ou estoque movimentado, nem permite datas passadas. A automação
+e usuários sem concessão continuam sujeitos ao corte. A concessão e revogação
+ficam auditadas em `pedido_edicao_acesso`; a configuração individual usa
+`AppConfig`, sem migração ou concessão automática no deploy.
+
 ## Consulta de recebimentos de uma loja (17/09/2026)
 
 O perfil fixo `relatorio_loja` consulta **somente** `/pedidos/relatorio`
