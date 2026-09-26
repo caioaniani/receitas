@@ -1,7 +1,15 @@
 # Lista diária de fermentação
 
 Decisão do owner em 23/09/2026: envio às 12h de Brasília, para amanhã,
-no canal já configurado em `SLACK_CANAL_COPILOT` (desperdício).
+com destinos separados por loja desde a decisão de 26/09/2026:
+
+- Anésio Pinto Rosa: `SLACK_CANAL_FERMENTACAO_ANESIO`, padrão `C09C7P4KJD6`.
+- Ribeiro do Vale: `SLACK_CANAL_FERMENTACAO_RIBEIRO`, padrão `C09BD3S3FTP`.
+
+Cada canal recebe somente a lista de sua loja. O desperdício continua usando
+`SLACK_CANAL_COPILOT`. Os novos destinos têm os IDs acima como padrão de produção,
+e podem ser substituídos por configuração. Canal vazio impede o envio daquela loja;
+não há redirecionamento para Copilot. O bot precisa ter acesso aos canais.
 
 Somente Ribeiro do Vale e Anésio Pinto Rosa. A mensagem contém apenas
 Croissant Tradicional e Pain au Chocolat. Inclui o consumo desses dois itens
@@ -52,13 +60,23 @@ o mesmo canal/ts, preservando mensagem e cálculo anteriores. Uma correção
 sem resposta confirmada mantém a tentativa persistida; o retry explícito
 repete o mesmo texto no mesmo ts, sem criar uma segunda instrução.
 
-`FermentacaoEnvio` é uma tabela nova criada no startup por `db.create_all`.
+`FermentacaoEnvio` preserva os envios unificados anteriores. Se já houver uma
+tentativa para a data nesse histórico (inclusive incerta), não se publica outra
+lista nos novos canais. A transição vale para os próximos disparos.
+`FermentacaoEnvioLoja` é uma tabela nova criada no startup por `db.create_all`,
+serializado pela trava de schema existente, sem ALTER da tabela anterior.
 Guarda a mensagem, datas, linhas de origem, método por loja, consumos ordenados,
 maior/quarto maior quando aplicável, referência antes do arredondamento, destino e confirmação
-do Slack. Trava PostgreSQL 7767 + chave única data-alvo impedem repetição.
+do Slack. Trava PostgreSQL 7767 + chave única (data-alvo, loja) impedem repetição mesmo se o canal mudar.
 Reserva persistida antes da rede; timeout/crash deixa envio incerto e
 exige conferir o canal antes de qualquer recuperação deliberada.
 
 Job `slack-fermentacao` usa o agendador existente (`SERU_AUTO_SYNC`), com
 proteção de instância canônica do Slack. Nenhuma automação do Codex é
 necessária para a operação: o envio funciona no servidor de produção.
+
+Cada tentativa é reservada antes de chamar Slack, com confirmação independente.
+Falha ou timeout em uma loja não impede enviar à outra. Uma reserva incerta nunca
+é reenviada automaticamente. A correção usa o canal e o ts confirmados daquela
+loja, conserva o histórico e não muda as instruções da outra loja. A tela mostra
+os destinos configurados e o canal/estado efetivo de cada envio.

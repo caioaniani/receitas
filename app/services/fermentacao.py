@@ -1,7 +1,7 @@
 """Previsão de consumo dos dois folhados em dias equivalentes de vendas.
 
 Decisão do owner em 23/09/2026: diariamente às 12h, para o dia seguinte,
-Ribeiro do Vale e Anésio, no canal do desperdício. Inclui o consumo nas
+Ribeiro do Vale e Anésio. Desde 26/09, cada loja tem seu canal. Inclui o consumo nas
 composições dos lanches, inclusive na chapa; não movimenta estoque.
 Em 25/09, Ribeiro passa a usar (maior + quarto maior) / 2 em sete semanas,
 separadamente para croissant tradicional e pain au chocolat.
@@ -17,6 +17,7 @@ from sqlalchemy import or_, text
 from app.extensions import db
 from app.models import (
     FermentacaoEnvio,
+    FermentacaoEnvioLoja,
     Loja,
     SeruLojaMap,
     VendaSeruDiaBreakdown,
@@ -28,6 +29,8 @@ from app.utils import agora, hoje
 logger = logging.getLogger(__name__)
 LOCK_KEY = 7767
 LOJAS = ('Ribeiro do Vale', 'Anésio Pinto Rosa')
+CONFIG_CANAIS = dict(zip(LOJAS, (
+    'SLACK_CANAL_FERMENTACAO_RIBEIRO', 'SLACK_CANAL_FERMENTACAO_ANESIO')))
 DIAS_SEMANA = ('segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira',
                'sexta-feira', 'sábado', 'domingo')
 
@@ -61,10 +64,18 @@ def resumir_consumo(valores, metodo):
     return calculo
 
 
-def calcular(data_alvo=None):
+def destinos():
+    return {nome: (current_app.config.get(chave) or '').strip()
+            for nome, chave in CONFIG_CANAIS.items()}
+
+
+def calcular(data_alvo=None, nome_loja=None):
     from app.services.fermentacao_consumo import ConsumoFermentacao
 
     data_alvo = data_alvo or hoje() + timedelta(days=1)
+    if nome_loja is not None and nome_loja not in LOJAS:
+        raise ValueError('Loja fora da lista de fermentação.')
+    lojas_alvo = (nome_loja,) if nome_loja else LOJAS
     resultado = {'data_alvo': data_alvo.isoformat(),
                  'datas': [], 'lojas': [], 'erros': []}
     try:
@@ -74,7 +85,7 @@ def calcular(data_alvo=None):
         resultado['texto'] = formatar(resultado, data_alvo)
         return resultado
     lojas = Loja.query.filter_by(ativa=True).all()
-    for nome in LOJAS:
+    for nome in lojas_alvo:
         metodo = 'maior_quarto_7' if nome == 'Ribeiro do Vale' else 'media_3'
         semanas = 7 if metodo == 'maior_quarto_7' else 3
         datas = datas_base(data_alvo, semanas)
@@ -147,7 +158,7 @@ def calcular(data_alvo=None):
             if metodo == 'media_3':
                 item[f'media_{grupo}'] = calculo['referencia']
         resultado['lojas'].append(item)
-    resultado['ok'] = not resultado['erros'] and len(resultado['lojas']) == 2
+    resultado['ok'] = not resultado['erros'] and len(resultado['lojas']) == len(lojas_alvo)
     resultado['texto'] = formatar(resultado, data_alvo)
     return resultado
 
@@ -175,16 +186,17 @@ def formatar(resultado, data_alvo):
     return '\n'.join(linhas)
 
 
-def enviar_amanha(corrigir=False):
-    """Cron e botão do owner usam a mesma trava e o mesmo registro por data.
+def enviar_amanha(corrigir=False, nome_loja=None):
+    """Cron e botão do owner usam a mesma trava e registros por loja/data.
 
     Reserva persistida ANTES da rede. Resposta incerta não é reenviada
     automaticamente: evita duas instruções de preparo após timeout/restart.
     """
     from app.services import instancia, slack
 
-    canal = (current_app.config.get('SLACK_CANAL_COPILOT') or '').strip()
-    if not canal or not (current_app.config.get('SLACK_BOT_TOKEN') or '').strip():
+    if nome_loja is not None and nome_loja not in LOJAS:
+        return {'estado': 'indisponivel', 'mensagem': 'Loja fora da lista de fermentação.'}
+    if not (current_app.config.get('SLACK_BOT_TOKEN') or '').strip():
         return {'estado': 'indisponivel', 'mensagem': 'Canal ou bot do Slack não configurado.'}
     if not instancia.pode_falar_com_o_mundo('slack-fermentacao'):
         return {'estado': 'indisponivel', 'mensagem': 'Envio desativado nesta instância.'}
@@ -204,27 +216,55 @@ def enviar_amanha(corrigir=False):
                 return _corrigir(anterior)
             return {'estado': anterior.estado,
                     'mensagem': 'Esta data já tem uma tentativa registrada. Confira o estado abaixo.'}
-        if corrigir:
-            return {'estado': 'indisponivel', 'mensagem': 'Não há mensagem para corrigir.'}
-        calculo = calcular(alvo)
-        envio = FermentacaoEnvio(data_alvo=alvo, canal=canal, estado='enviando',
-                                calculo=calculo, texto=calculo['texto'])
-        db.session.add(envio)
-        db.session.commit()
-        resposta = slack.post_message(canal, envio.texto, retry=False)
-        if resposta.get('ok'):
-            envio.estado = 'enviado' if calculo['ok'] else 'aviso_enviado'
-            envio.slack_ts = resposta.get('ts')
-            envio.enviado_em = agora()
-        else:
-            envio.estado = 'incerto'
-            logger.error('fermentacao: Slack não confirmou o envio de %s', alvo)
-        db.session.commit()
-        return {'estado': envio.estado, 'mensagem': {
-            'enviado': 'Lista de amanhã enviada ao Slack.',
-            'aviso_enviado': 'Aviso de histórico incompleto enviado ao Slack.',
-            'incerto': 'O Slack não confirmou. Confira o canal antes de tentar novamente.',
-        }[envio.estado]}
+        resultados = []
+        for nome, canal in destinos().items():
+            if nome_loja and nome != nome_loja:
+                continue
+            envio = db.session.get(FermentacaoEnvioLoja, (alvo, nome))
+            if envio:
+                if corrigir:
+                    resultados.append(_corrigir(envio))
+                else:
+                    resultados.append({'estado': envio.estado,
+                                       'mensagem': f'{nome}: tentativa já registrada.'})
+                continue
+            if corrigir:
+                resultados.append({'estado': 'indisponivel',
+                                   'mensagem': f'{nome}: não há mensagem para corrigir.'})
+                continue
+            if not canal:
+                resultados.append({'estado': 'indisponivel',
+                                   'mensagem': f'{nome}: canal não configurado.'})
+                continue
+            calculo = calcular(alvo, nome_loja=nome)
+            envio = FermentacaoEnvioLoja(
+                data_alvo=alvo, loja=nome, canal=canal, estado='enviando',
+                calculo=calculo, texto=calculo['texto'])
+            db.session.add(envio)
+            db.session.commit()
+            try:
+                resposta = slack.post_message(canal, envio.texto, retry=False)
+            except Exception:  # noqa: BLE001 — resultado de rede incerto; continuar outra loja.
+                logger.exception('fermentacao: falha no envio para %s', nome)
+                resposta = {'ok': False}
+            if resposta.get('ok') and resposta.get('ts'):
+                envio.estado = 'enviado' if calculo['ok'] else 'aviso_enviado'
+                envio.slack_ts = resposta['ts']
+                envio.canal = resposta.get('channel') or canal
+                envio.enviado_em = agora()
+            else:
+                envio.estado = 'incerto'
+                logger.error('fermentacao: Slack não confirmou %s para %s', alvo, nome)
+            db.session.commit()
+            resultados.append({'estado': envio.estado, 'mensagem': {
+                'enviado': f'{nome}: lista enviada ao canal da loja.',
+                'aviso_enviado': f'{nome}: aviso de histórico incompleto enviado.',
+                'incerto': f'{nome}: envio não confirmado; confira o canal.',
+            }[envio.estado]})
+        estados = {r['estado'] for r in resultados}
+        estado = estados.pop() if len(estados) == 1 else 'parcial'
+        return {'estado': estado,
+                'mensagem': ' '.join(r['mensagem'] for r in resultados)}
     finally:
         try:
             if pg and obtido:
@@ -247,7 +287,7 @@ def _corrigir(envio):
     salvo = dict(envio.calculo)
     pendente = salvo.get('correcao_pendente')
     if not pendente:
-        calculo = calcular(envio.data_alvo)
+        calculo = calcular(envio.data_alvo, nome_loja=getattr(envio, 'loja', None))
         texto = calculo['texto']
         if texto == envio.texto:
             return {'estado': envio.estado, 'mensagem': 'A mensagem já está atualizada.'}
@@ -257,8 +297,12 @@ def _corrigir(envio):
         envio.calculo = salvo
         envio.estado = 'correcao_incerta'
         db.session.commit()
-    resposta = slack.update_message(envio.canal, envio.slack_ts,
-                                    text=pendente['texto'])
+    try:
+        resposta = slack.update_message(envio.canal, envio.slack_ts,
+                                        text=pendente['texto'])
+    except Exception:  # noqa: BLE001 — mantém a correção persistida e permite outra loja.
+        logger.exception('fermentacao: falha ao corrigir %s', envio.data_alvo)
+        resposta = {'ok': False}
     if not resposta.get('ok'):
         return {'estado': 'correcao_incerta',
                 'mensagem': 'O Slack não confirmou a correção. A tentativa foi guardada; confira o canal.'}

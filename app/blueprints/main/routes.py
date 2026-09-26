@@ -2908,7 +2908,7 @@ def slack_diagnostico():
     """
     from flask import current_app
 
-    from app.services import desperdicio_alerta, slack
+    from app.services import desperdicio_alerta, fermentacao, slack
 
     cfg = current_app.config
     canais = [
@@ -2919,6 +2919,8 @@ def slack_diagnostico():
         ('Alerta desperdicio (20:10/15/20/25)', 'SLACK_CANAL_COPILOT',
          (cfg.get('SLACK_CANAL_COPILOT') or '').strip()),
     ]
+    canais.extend((f'Fermentação {nome} (12h)', chave, fermentacao.destinos()[nome])
+                  for nome, chave in fermentacao.CONFIG_CANAIS.items())
     info = {
         'bot_token_setado': bool((cfg.get('SLACK_BOT_TOKEN') or '').strip()),
         'signing_setado': bool((cfg.get('SLACK_SIGNING_SECRET') or '').strip()),
@@ -2937,22 +2939,40 @@ def slack_fermentacao():
 
     from flask import flash
 
-    from app.models import FermentacaoEnvio
+    from app.models import FermentacaoEnvio, FermentacaoEnvioLoja
     from app.services import fermentacao, seru_cron
     from app.utils import hoje
 
     if request.method == 'POST':
         if request.form.get('acao') == 'corrigir':
-            resultado = fermentacao.enviar_amanha(corrigir=True)
+            resultado = fermentacao.enviar_amanha(
+                corrigir=True, nome_loja=request.form.get('loja') or None)
         else:
             resultado = fermentacao.enviar_amanha()
         flash(resultado['mensagem'],
               'success' if resultado['estado'] == 'enviado' else 'warning')
         return redirect(url_for('main.slack_fermentacao'))
     alvo = hoje() + timedelta(days=1)
+    envio = db.session.get(FermentacaoEnvio, alvo)
+    lojas_envio = []
+    if envio:
+        calculo = fermentacao.calcular(alvo)
+    else:
+        for nome, canal in fermentacao.destinos().items():
+            lojas_envio.append({
+                'nome': nome, 'canal': canal,
+                'envio': db.session.get(FermentacaoEnvioLoja, (alvo, nome)),
+                'calculo': fermentacao.calcular(alvo, nome_loja=nome),
+            })
+        calculo = {
+            'ok': all(l['calculo']['ok'] for l in lojas_envio),
+            'lojas': [item for l in lojas_envio for item in l['calculo']['lojas']],
+            'erros': [erro for l in lojas_envio for erro in l['calculo']['erros']],
+        }
     return render_template(
-        'main/slack_fermentacao.html', calculo=fermentacao.calcular(alvo),
-        envio=db.session.get(FermentacaoEnvio, alvo),
+        'main/slack_fermentacao.html', calculo=calculo, envio=envio,
+        lojas_envio=lojas_envio, destinos=fermentacao.destinos(),
+        lojas_calculo_ok=[l['nome'] for l in lojas_envio if l['calculo']['ok']],
         agendador_ativo=seru_cron.status()['ativo'],
     )
 

@@ -261,6 +261,11 @@ class Config:
     # Canal #copilot — recebe lembretes 20:10/15/20/25 BRT de lojas que ainda
     # nao lancaram desperdicio (escalada antes do WhatsApp). Vazio = desligado.
     SLACK_CANAL_COPILOT = os.environ.get('SLACK_CANAL_COPILOT', '')
+    # Destinos de fermentação definidos pelo owner em 26/09/2026.
+    SLACK_CANAL_FERMENTACAO_ANESIO = os.environ.get(
+        'SLACK_CANAL_FERMENTACAO_ANESIO', 'C09C7P4KJD6')
+    SLACK_CANAL_FERMENTACAO_RIBEIRO = os.environ.get(
+        'SLACK_CANAL_FERMENTACAO_RIBEIRO', 'C09BD3S3FTP')
 
     # Z-API (WhatsApp) — envia digest diario de tarefas.
     # Cadastro: https://z-api.io/ → cria instancia → copia ID + token.

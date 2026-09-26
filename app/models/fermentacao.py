@@ -15,3 +15,18 @@ class FermentacaoEnvio(db.Model):
     slack_ts = db.Column(db.String(50))
     criado_em = db.Column(db.DateTime, nullable=False, default=agora)
     enviado_em = db.Column(db.DateTime)
+
+
+class FermentacaoEnvioLoja(db.Model):
+    """Uma instrução por loja/data; conserva o histórico do envio unificado."""
+    __tablename__ = 'fermentacao_envio_loja'
+
+    data_alvo = db.Column(db.Date, primary_key=True)
+    loja = db.Column(db.String(100), primary_key=True)
+    canal = db.Column(db.String(100), nullable=False)
+    estado = db.Column(db.String(20), nullable=False)
+    texto = db.Column(db.Text, nullable=False)
+    calculo = db.Column(db.JSON, nullable=False)
+    slack_ts = db.Column(db.String(50))
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora)
+    enviado_em = db.Column(db.DateTime)

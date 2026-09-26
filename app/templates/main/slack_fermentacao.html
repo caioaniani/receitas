@@ -2,45 +2,34 @@
 {% block title %}Fermentação de amanhã{% endblock %}
 {% block content %}
 <h1 class="page-title">Fermentação de amanhã</h1>
-<p>Envio diário às <strong>12h, horário de Brasília</strong>, no mesmo canal do desperdício.</p>
+<p>Envio diário às <strong>12h, horário de Brasília</strong>, no canal de cada loja.</p>
+<ul>
+{% for nome, canal in (destinos or {}).items() %}
+    <li>{{ nome }}: <code>{{ canal or 'Canal não configurado' }}</code></li>
+{% endfor %}
+</ul>
 <p>Somente croissant tradicional e pain au chocolat, para Ribeiro do Vale e Anésio Pinto Rosa.</p>
 {% if not agendador_ativo %}
 <div class="alert alert-warning">O envio automático está parado nesta instância. Confira o agendador do sistema.</div>
 {% endif %}
-<div class="card mb-3"><div class="card-body">
-    <h2 class="h5">{% if envio %}Mensagem registrada{% else %}Prévia da próxima mensagem{% endif %}</h2>
-    <div style="white-space: pre-wrap">{{ envio.texto if envio else calculo.texto }}</div>
-</div></div>
 {% if envio %}
-    {% if envio.estado == 'enviado' %}
-    <div class="alert alert-success">Lista enviada ao Slack em {{ envio.enviado_em.strftime('%d/%m às %H:%M') }}.</div>
-    {% elif envio.estado == 'aviso_enviado' %}
-    <div class="alert alert-warning">Foi enviado um aviso: faltam dados para calcular a lista.</div>
-    {% elif envio.estado == 'correcao_incerta' %}
-    <div class="alert alert-warning">A correção ainda não foi confirmada pelo Slack. A nova tentativa atualiza a mesma mensagem.</div>
-    {% else %}
-    <div class="alert alert-warning">O envio está em andamento ou não foi confirmado. Confira o canal antes de qualquer nova tentativa.</div>
-    {% endif %}
-    {% if envio.slack_ts and (envio.texto != calculo.texto or envio.estado == 'correcao_incerta') %}
-    <div class="card mb-3"><div class="card-body">
-        <h2 class="h5">Prévia da correção</h2>
-        <div style="white-space: pre-wrap">{{ envio.calculo.correcao_pendente.texto if envio.calculo.correcao_pendente else calculo.texto }}</div>
-        <form method="post" class="mt-3">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="acao" value="corrigir">
-            <button class="btn btn-primary" type="submit">Corrigir a mensagem no Slack</button>
-            <p class="small text-muted mt-2">Substitui a lista anterior e guarda o histórico da correção.</p>
-        </form>
-    </div></div>
-    {% endif %}
+<p class="text-muted">Esta data já tem uma mensagem no canal anterior. Os próximos disparos serão separados por loja.</p>
+{% include 'main/_fermentacao_envio.html' %}
+{% elif lojas_envio is not defined %}
+{% include 'main/_fermentacao_envio.html' %}
 {% else %}
+{% for item in lojas_envio %}
+{% with envio=item.envio, calculo=item.calculo, nome_loja=item.nome %}
+{% include 'main/_fermentacao_envio.html' %}
+{% endwith %}
+{% endfor %}
+{% if not lojas_envio or lojas_envio|selectattr('envio')|list|length < lojas_envio|length %}
 <form method="post" class="mb-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="btn btn-primary" type="submit">
-        {{ 'Enviar lista de amanhã agora' if calculo.ok else 'Enviar aviso de dados incompletos' }}
-    </button>
-    <p class="small text-muted mt-2">Uma mensagem por data. O envio manual também impede duplicação pelo automático.</p>
+    <button class="btn btn-primary" type="submit">Enviar mensagens pendentes de amanhã</button>
+    <p class="small text-muted mt-2">Envia somente para lojas sem tentativa registrada nesta data. Envios incertos precisam de conferência no canal.</p>
 </form>
+{% endif %}
 {% endif %}
 <details class="mb-3">
     <summary>Como a quantidade foi calculada</summary>
@@ -56,7 +45,7 @@
         <tr><td>{{ dia.data[8:10] }}/{{ dia.data[5:7] }}</td><td>{{ '%g'|format(dia.croissant|float) }}</td><td>{{ '%g'|format(dia.pain|float) }}</td></tr>
         {% endfor %}</tbody>
     </table></div>
-    {% if base.ok %}
+    {% if base.ok or loja.nome in (lojas_calculo_ok or []) %}
     {% for grupo, titulo in [('croissant', 'Croissant tradicional'), ('pain', 'Pain au chocolat')] %}
     {% set conta = loja.calculos[grupo] %}
     <p><strong>{{ titulo }}:</strong>
@@ -81,5 +70,5 @@
     {% endfor %}
     <p class="small text-muted">Fonte: vendas registradas no sistema pelo PDV Seru. Vendas sem itens detalhados ou dias sem histórico fechado impedem o cálculo.</p>
 </details>
-<a href="{{ url_for('main.slack_diagnostico') }}" class="btn btn-outline-secondary">Voltar ao Slack</a>
+<a href="{{ url_for('main.slack_diagnostico') }}" class="btn btn-outline-secondary">Voltar ao diagnóstico Slack</a>
 {% endblock %}

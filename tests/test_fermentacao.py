@@ -10,7 +10,7 @@ import pytest
 
 from app.extensions import db
 from app.models import (
-    FermentacaoEnvio,
+    FermentacaoEnvioLoja,
     Loja,
     Produto,
     ProdutoItem,
@@ -249,7 +249,8 @@ def test_consumo_inclui_lanches_chapa_e_nutella_exclui_almond_e_outros_retornos(
 
 @pytest.fixture
 def slack_habilitado(app, monkeypatch):
-    app.config['SLACK_CANAL_COPILOT'] = 'canal-teste-fermentacao'
+    app.config['SLACK_CANAL_FERMENTACAO_RIBEIRO'] = 'canal-teste-fermentacao'
+    app.config['SLACK_CANAL_FERMENTACAO_ANESIO'] = 'canal-teste-anesio'
     app.config['SLACK_BOT_TOKEN'] = 'token-falso-apenas-teste'
     monkeypatch.setattr('app.services.instancia.pode_falar_com_o_mundo', lambda *a: True)
 
@@ -259,16 +260,17 @@ def test_envio_persiste_calculo_e_repeticao_nao_publica_de_novo(cenario, slack_h
 
     def publicar(canal, texto, **kwargs):
         chamadas.append((canal, texto, kwargs))
-        assert db.session.get(FermentacaoEnvio, ALVO).estado == 'enviando'
+        nome = 'Ribeiro do Vale' if canal == 'canal-teste-fermentacao' else 'Anésio Pinto Rosa'
+        assert db.session.get(FermentacaoEnvioLoja, (ALVO, nome)).estado == 'enviando'
         return {'ok': True, 'ts': '123.456'}
 
     monkeypatch.setattr('app.services.slack.post_message', publicar)
     assert fermentacao.enviar_amanha()['estado'] == 'enviado'
     assert fermentacao.enviar_amanha()['estado'] == 'enviado'
-    assert len(chamadas) == 1
+    assert len(chamadas) == 2
     assert chamadas[0][2] == {'retry': False}
-    assert FermentacaoEnvio.query.count() == 1
-    envio = db.session.get(FermentacaoEnvio, ALVO)
+    assert FermentacaoEnvioLoja.query.count() == 2
+    envio = db.session.get(FermentacaoEnvioLoja, (ALVO, 'Ribeiro do Vale'))
     assert envio.slack_ts == '123.456'
     assert _resultado_loja(envio.calculo, cenario['ribeiro'])['croissant'] == 56
 
@@ -276,7 +278,7 @@ def test_envio_persiste_calculo_e_repeticao_nao_publica_de_novo(cenario, slack_h
 def test_correcao_atualiza_mesma_mensagem_e_preserva_historico(cenario, slack_habilitado, monkeypatch):
     monkeypatch.setattr('app.services.slack.post_message', lambda *a, **kw: {'ok': True, 'ts': '123.456'})
     fermentacao.enviar_amanha()
-    envio = db.session.get(FermentacaoEnvio, ALVO)
+    envio = db.session.get(FermentacaoEnvioLoja, (ALVO, 'Ribeiro do Vale'))
     texto_original = envio.texto
     linha = VendaSeruDiaria.query.filter_by(
         loja_id=cenario['ribeiro'].id, data=SABADOS[-1], seru_nome='Croissant Francês').one()
@@ -285,15 +287,15 @@ def test_correcao_atualiza_mesma_mensagem_e_preserva_historico(cenario, slack_ha
     chamadas = []
     monkeypatch.setattr('app.services.slack.update_message', lambda canal, ts, **kw:
                         chamadas.append((canal, ts, kw['text'])) or {'ok': True})
-    assert fermentacao.enviar_amanha(corrigir=True)['estado'] == 'enviado'
+    assert fermentacao.enviar_amanha(corrigir=True, nome_loja='Ribeiro do Vale')['estado'] == 'enviado'
     assert len(chamadas) == 1
     assert chamadas[0][:2] == ('canal-teste-fermentacao', '123.456')
     assert chamadas[0][2] != texto_original
     assert envio.calculo['historico_correcoes'][0]['texto'] == texto_original
     assert _resultado_loja(envio.calculo, cenario['ribeiro'])['croissant'] == 66
-    fermentacao.enviar_amanha(corrigir=True)
+    fermentacao.enviar_amanha(corrigir=True, nome_loja='Ribeiro do Vale')
     assert len(chamadas) == 1
-    assert FermentacaoEnvio.query.count() == 1
+    assert FermentacaoEnvioLoja.query.count() == 2
 
 
 def test_correcao_incerta_repete_texto_persistido_no_mesmo_ts(cenario, slack_habilitado, monkeypatch):
@@ -310,13 +312,13 @@ def test_correcao_incerta_repete_texto_persistido_no_mesmo_ts(cenario, slack_hab
         return {'ok': len(chamadas) > 1}
 
     monkeypatch.setattr('app.services.slack.update_message', atualizar)
-    assert fermentacao.enviar_amanha(corrigir=True)['estado'] == 'correcao_incerta'
+    assert fermentacao.enviar_amanha(corrigir=True, nome_loja='Ribeiro do Vale')['estado'] == 'correcao_incerta'
     linha.qtd = 99  # Retry conclui a tentativa anterior, mesmo se o histórico mudou.
     db.session.commit()
-    assert fermentacao.enviar_amanha(corrigir=True)['estado'] == 'enviado'
+    assert fermentacao.enviar_amanha(corrigir=True, nome_loja='Ribeiro do Vale')['estado'] == 'enviado'
     assert len(chamadas) == 2
     assert chamadas[0] == chamadas[1]
-    envio = db.session.get(FermentacaoEnvio, ALVO)
+    envio = db.session.get(FermentacaoEnvioLoja, (ALVO, 'Ribeiro do Vale'))
     assert 'correcao_pendente' not in envio.calculo
     assert len(envio.calculo['historico_correcoes']) == 1
     assert _resultado_loja(envio.calculo, cenario['ribeiro'])['croissant'] == 66
