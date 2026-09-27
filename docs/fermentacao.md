@@ -45,6 +45,23 @@ das lojas ou ordens de produção industrial.
 Zero só é válido quando há histórico fechado da loja naquele dia. Não
 substituir dias ausentes por zero nem por outras datas. Não desconta estoque.
 
+Correção em 27/09/2026: para um dia-alvo normal, excluir feriados da referência
+histórica e buscar ocorrências anteriores do mesmo dia até completar sete ou
+três datas. O calendário da cidade de São Paulo inclui feriados nacionais,
+estaduais e municipais recorrentes, fixos e móveis (Paixão de Cristo e Corpus
+Christi). Fonte: https://clic.prefeitura.sp.gov.br/calendario . Não inclui
+pontos facultativos, emendas, recessos ou datas comerciais. Não altera outros
+motores nem usa o calendário de entregas do site como calendário de feriados.
+As exclusões ficam na auditoria e na mensagem. Se a data substituta não tiver
+histórico fechado, o cálculo continua bloqueado; não reduz o denominador.
+Para 28/09/2026, sai 07/09 (Independência do Brasil); entram 03/08 na Ribeiro e
+31/08 na Anésio. As fórmulas e as composições dos produtos são preservadas.
+Se o próprio alvo for feriado, mantém a seleção semanal anterior, com aviso
+explícito de que a quantidade não tem ajuste específico de feriado. Uma regra
+para comparar feriados entre si ainda não foi definida pelo owner.
+Registros já persistidos mantêm a auditoria original; a atualização de uma
+mensagem confirmada usa “Corrigir a mensagem no Slack”, no mesmo canal/ts.
+
 Fonte: `VendaSeruDiaria`, com vínculo confirmado de `SeruLojaMap`. O serviço
 lê o histórico existente, sem recapturar ou alterar estoque. Datas sem
 totais/itens ou com captura anterior ao fechamento, vínculos divergentes,
@@ -96,8 +113,12 @@ ambíguas, inclusive as anteriores a esta melhoria, é obrigatória uma leitura
 completa do histórico pelo próprio bot: texto e autor iguais identificam a mensagem
 já existente, sem publicar de novo. Falhas de consulta, paginação incompleta, mais
 de uma correspondência ou ausência de permissão bloqueiam o reenvio. Tentativas
-recentes aguardam cinco minutos. Só a ausência confirmada permite publicar a lista
-salva, reservando a nova tentativa antes da rede e mantendo o histórico.
+recentes aguardam cinco minutos. Só a ausência confirmada ou uma recusa explícita
+permite publicar novamente. Desde o ajuste de feriados, confere o cálculo atual
+antes dessa nova postagem e preserva texto/cálculo antigos em `historico_recalculos`.
+Histórico atual incompleto bloqueia reenvio de uma lista antiga. A consulta procura
+sempre o texto original; se ele já existe, recupera o ts e a correção segue pelo
+botão existente, atualizando a mesma mensagem. Reserva a tentativa antes da rede.
 
 O envio normal do cron continua sem repetir tentativas persistidas. O link “Abrir
 mensagem no Slack” é obtido pela API apenas para um canal/ts confirmado, com acesso

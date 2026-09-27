@@ -104,7 +104,11 @@ def _resultado_loja(resultado, loja):
 def test_sete_ocorrencias_sao_do_mesmo_dia_da_semana(deslocamento):
     alvo = ALVO + timedelta(days=deslocamento)
     datas = fermentacao.datas_base(alvo, semanas=7)
-    assert datas == [alvo - timedelta(weeks=n) for n in range(7, 0, -1)]
+    esperadas = [alvo - timedelta(weeks=n) for n in range(7, 0, -1)]
+    if alvo == date(2026, 9, 28):
+        esperadas.remove(date(2026, 9, 7))
+        esperadas.insert(0, date(2026, 8, 3))
+    assert datas == esperadas
     assert len(set(datas)) == 7
     assert all(dia.weekday() == alvo.weekday() and dia < alvo for dia in datas)
     if deslocamento == 0:

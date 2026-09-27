@@ -2974,6 +2974,9 @@ def slack_fermentacao():
             'ok': all(l['calculo']['ok'] for l in lojas_envio),
             'lojas': [item for l in lojas_envio for item in l['calculo']['lojas']],
             'erros': [erro for l in lojas_envio for erro in l['calculo']['erros']],
+            'feriado_alvo': lojas_envio[0]['calculo'].get('feriado_alvo') if lojas_envio else None,
+            'exclusoes_por_loja': [item for l in lojas_envio
+                                  for item in l['calculo'].get('exclusoes_por_loja', [])],
         }
     return render_template(
         'main/slack_fermentacao.html', calculo=calculo, envio=envio,

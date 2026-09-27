@@ -25,6 +25,7 @@ from app.models import (
     VendaSeruDiaLoja,
     VendaSeruDiaria,
 )
+from app.services.fermentacao_calendario import feriado, selecionar_datas
 from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ def _normalizar(nome):
 
 
 def datas_base(data_alvo, semanas=3):
-    return [data_alvo - timedelta(weeks=n) for n in range(semanas, 0, -1)]
+    return selecionar_datas(data_alvo, semanas)[0]
 
 
 def resumir_consumo(valores, metodo):
@@ -78,7 +79,8 @@ def calcular(data_alvo=None, nome_loja=None):
         raise ValueError('Loja fora da lista de fermentação.')
     lojas_alvo = (nome_loja,) if nome_loja else LOJAS
     resultado = {'data_alvo': data_alvo.isoformat(),
-                 'datas': [], 'lojas': [], 'erros': []}
+                 'datas': [], 'lojas': [], 'erros': [],
+                 'feriado_alvo': feriado(data_alvo), 'exclusoes_por_loja': []}
     try:
         consumo = ConsumoFermentacao()
     except ValueError as exc:
@@ -89,7 +91,8 @@ def calcular(data_alvo=None, nome_loja=None):
     for nome in lojas_alvo:
         metodo = 'maior_quarto_7' if nome == 'Ribeiro do Vale' else 'media_3'
         semanas = 7 if metodo == 'maior_quarto_7' else 3
-        datas = datas_base(data_alvo, semanas)
+        datas, excluidas = selecionar_datas(data_alvo, semanas)
+        resultado['exclusoes_por_loja'].append({'nome': nome, 'datas': excluidas})
         resultado['datas'] = sorted(set(resultado['datas']) | {d.isoformat() for d in datas})
         candidatos = [l for l in lojas
                       if _normalizar(l.nome).removeprefix('loja ') == _normalizar(nome)]
@@ -151,7 +154,8 @@ def calcular(data_alvo=None, nome_loja=None):
         if len(observacoes) != semanas:
             continue
         item = {'nome': nome, 'loja_id': loja.id, 'dias': observacoes,
-                'metodo': metodo, 'semanas': semanas, 'calculos': {}}
+                'metodo': metodo, 'semanas': semanas, 'calculos': {},
+                'datas_excluidas': excluidas}
         for grupo in ('croissant', 'pain'):
             calculo = resumir_consumo([d[grupo] for d in observacoes], metodo)
             item['calculos'][grupo] = calculo
@@ -172,6 +176,9 @@ def formatar(resultado, data_alvo):
                 + '\n'.join(resultado['erros'])
                 + '\n\nConferir o histórico de vendas no sistema antes de separar.')
     linhas = [titulo]
+    if resultado.get('feriado_alvo'):
+        linhas.extend(['', f'Atenção: amanhã é feriado ({resultado["feriado_alvo"]}). '
+                       'Referência semanal sem ajuste específico para feriado; conferir a quantidade.'])
     for loja in resultado['lojas']:
         base = ('(maior consumo + 4º maior consumo) ÷ 2, nos últimos 7 dias equivalentes'
                 if loja['metodo'] == 'maior_quarto_7'
@@ -182,6 +189,10 @@ def formatar(resultado, data_alvo):
                        f'Base: {base}; arredondado para cima.',
                        'Datas: ' + ', '.join(d['data'][8:10] + '/' + d['data'][5:7]
                                              for d in loja['dias']) + '.'])
+        if loja.get('datas_excluidas'):
+            linhas.append('Feriados fora da conta: ' + '; '.join(
+                f'{d["data"][8:10]}/{d["data"][5:7]} ({d["motivo"]})'
+                for d in loja['datas_excluidas']) + '.')
     linhas.extend(['',
                    'Inclui lanches, preparações na chapa, Nutella e Nutella com morango. Almond não entra.'])
     return '\n'.join(linhas)
@@ -337,6 +348,29 @@ def _publicar(envio):
     return {'estado': envio.estado, 'mensagem': mensagem_erro_entrega(codigo)}
 
 
+def _publicar_recuperacao(envio):
+    """Após comprovar ausência/recusa, usa o cálculo atual e guarda o anterior."""
+    calculo = calcular(envio.data_alvo, nome_loja=getattr(envio, 'loja', None))
+    if not calculo['ok']:
+        return {'estado': 'indisponivel',
+                'mensagem': 'O cálculo atual está incompleto. Confira a prévia; nenhuma lista antiga foi reenviada.'}
+    anterior = dict(envio.calculo)
+    negocio_anterior = {k: v for k, v in anterior.items()
+                        if k not in ('_entrega', 'historico_recalculos',
+                                     'historico_correcoes', 'correcao_pendente')}
+    if calculo != negocio_anterior or calculo['texto'] != envio.texto:
+        historico = list(anterior.get('historico_recalculos', []))
+        historico.append({'texto': envio.texto,
+                          'calculo': {k: v for k, v in anterior.items()
+                                      if k not in ('historico_recalculos', '_entrega')},
+                          'recalculado_em': agora().isoformat()})
+        envio.calculo = dict(calculo, historico_recalculos=historico,
+                             historico_correcoes=anterior.get('historico_correcoes', []),
+                             _entrega=anterior.get('_entrega') or {})
+        envio.texto = calculo['texto']
+    return _publicar(envio)
+
+
 def _recuperar(envio):
     """Só repete POST rejeitado explicitamente ou após consulta completa do Slack."""
     from app.services import slack_entrega
@@ -345,7 +379,7 @@ def _recuperar(envio):
         return {'estado': envio.estado, 'mensagem': 'Já existe uma mensagem confirmada. Use a opção de abrir ou corrigir.'}
     entrega = dict(envio.calculo.get('_entrega') or {})
     if envio.estado == 'falhou' and entrega.get('rejeitado') is True:
-        return _publicar(envio)
+        return _publicar_recuperacao(envio)
     desde = envio.criado_em
     if entrega.get('ultima_tentativa_em'):
         try:
@@ -370,7 +404,7 @@ def _recuperar(envio):
         return {'estado': envio.estado, 'mensagem': 'Mensagem localizada no Slack, sem reenviar.'}
     db.session.commit()
     if estado == 'ausente':
-        return _publicar(envio)
+        return _publicar_recuperacao(envio)
     if estado == 'ambiguo':
         return {'estado': 'indisponivel', 'mensagem': 'Há mais de uma mensagem correspondente. Confira o canal; nenhum reenvio foi feito.'}
     return {'estado': 'indisponivel', 'mensagem': mensagem_erro_entrega(consulta.get('codigo_erro')) + ' Nenhum reenvio foi feito.'}

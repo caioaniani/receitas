@@ -9,6 +9,9 @@
 {% endfor %}
 </ul>
 <p>Somente croissant tradicional e pain au chocolat, para Ribeiro do Vale e Anésio Pinto Rosa.</p>
+{% if calculo.feriado_alvo %}
+<div class="alert alert-warning">Amanhã é feriado ({{ calculo.feriado_alvo }}). A referência semanal ainda não tem ajuste específico para feriado; confira a quantidade antes de separar.</div>
+{% endif %}
 {% if not agendador_ativo %}
 <div class="alert alert-warning">O envio automático está parado nesta instância. Confira o agendador do sistema.</div>
 {% endif %}
@@ -34,8 +37,13 @@
 <details class="mb-3">
     <summary>Como a quantidade foi calculada</summary>
     <p class="mt-2">Ribeiro do Vale: últimas sete ocorrências do mesmo dia da semana. Para cada produto, ordena o consumo do maior para o menor e calcula (maior + 4º maior) ÷ 2. Anésio Pinto Rosa mantém a média das últimas três ocorrências. Arredonda o resultado para cima, sem descontar estoque nem acrescentar margem.</p>
+    <p>Para um dia normal, feriados não entram na referência: o sistema busca semanas anteriores até completar as sete ou três datas. Considera os feriados nacionais e os feriados do estado e da cidade de São Paulo. Emendas e pontos facultativos não são excluídos automaticamente.</p>
     <p>Inclui os dois produtos vendidos sozinhos e nas composições dos lanches e preparações na chapa. Nutella e Nutella com morango também entram como croissants tradicionais para fermentar, mesmo quando a ficha usa retorno. Almond fica fora da conta. Minis e bicolor têm massas próprias.</p>
     {% set base = calculo %}
+    {% for exclusao in base.exclusoes_por_loja or [] %}
+    {% if exclusao.datas %}<p><strong>{{ exclusao.nome }} — feriados fora da conta:</strong>
+    {% for dia in exclusao.datas %}{{ dia.data[8:10] }}/{{ dia.data[5:7] }} ({{ dia.motivo }}){% if not loop.last %}; {% endif %}{% endfor %}.</p>{% endif %}
+    {% endfor %}
     {% if not base.ok %}<div class="alert alert-warning">{% for erro in base.erros %}<div>{{ erro }}</div>{% endfor %}</div>{% endif %}
     {% for loja in base.lojas %}
     <h3 class="h6">{{ loja.nome }}</h3>

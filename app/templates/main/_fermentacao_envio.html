@@ -24,13 +24,20 @@
     {% if envio.slack_ts %}
     <p><a class="btn btn-outline-primary" href="{{ url_for('main.slack_fermentacao_mensagem', data=envio.data_alvo.isoformat(), loja=nome_loja or '') }}" target="_blank" rel="noopener">Abrir mensagem no Slack</a></p>
     {% elif envio.estado in ('incerto', 'enviando', 'falhou') %}
+    {% if envio.texto != calculo.texto %}
+    <div class="card mb-3"><div class="card-body">
+        <h2 class="h5">Prévia do cálculo atualizado</h2>
+        <div style="white-space: pre-wrap">{{ calculo.texto }}</div>
+        <p class="small text-muted mt-2">A tentativa acima guarda o cálculo anterior. A recuperação verifica primeiro se aquela mensagem chegou ao Slack.</p>
+    </div></div>
+    {% endif %}
     <form method="post" class="mb-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="acao" value="recuperar">
         <input type="hidden" name="data_alvo" value="{{ envio.data_alvo.isoformat() }}">
         {% if nome_loja %}<input type="hidden" name="loja" value="{{ nome_loja }}">{% endif %}
         <button class="btn btn-primary" type="submit">Verificar e recuperar envio</button>
-        <p class="small text-muted mt-2">Localiza a mensagem existente ou envia a lista salva quando a ausência for confirmada. Uma rejeição explícita do Slack permite tentar novamente após corrigir o acesso.</p>
+        <p class="small text-muted mt-2">Localiza a mensagem existente. Se ela não foi publicada, confere o cálculo atual antes de enviar, guardando o anterior. Se já existe, uma mudança de cálculo pode ser aplicada em “Corrigir a mensagem no Slack”.</p>
     </form>
     {% endif %}
     {% if envio.slack_ts and (envio.texto != calculo.texto or envio.estado == 'correcao_incerta') %}
