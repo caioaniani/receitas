@@ -7,6 +7,7 @@ Em 25/09, Ribeiro passa a usar (maior + quarto maior) / 2 em sete semanas,
 separadamente para croissant tradicional e pain au chocolat.
 """
 import logging
+import re
 import unicodedata
 from datetime import datetime, time, timedelta
 from decimal import ROUND_CEILING, Decimal
@@ -186,14 +187,16 @@ def formatar(resultado, data_alvo):
     return '\n'.join(linhas)
 
 
-def enviar_amanha(corrigir=False, nome_loja=None):
+def enviar_amanha(corrigir=False, nome_loja=None, recuperar=False):
     """Cron e botão do owner usam a mesma trava e registros por loja/data.
 
     Reserva persistida ANTES da rede. Resposta incerta não é reenviada
     automaticamente: evita duas instruções de preparo após timeout/restart.
     """
-    from app.services import instancia, slack
+    from app.services import instancia
 
+    if corrigir and recuperar:
+        return {'estado': 'indisponivel', 'mensagem': 'Escolha uma ação por vez.'}
     if nome_loja is not None and nome_loja not in LOJAS:
         return {'estado': 'indisponivel', 'mensagem': 'Loja fora da lista de fermentação.'}
     if not (current_app.config.get('SLACK_BOT_TOKEN') or '').strip():
@@ -212,6 +215,8 @@ def enviar_amanha(corrigir=False, nome_loja=None):
         alvo = hoje() + timedelta(days=1)
         anterior = db.session.get(FermentacaoEnvio, alvo)
         if anterior:
+            if recuperar:
+                return _recuperar(anterior)
             if corrigir:
                 return _corrigir(anterior)
             return {'estado': anterior.estado,
@@ -222,15 +227,17 @@ def enviar_amanha(corrigir=False, nome_loja=None):
                 continue
             envio = db.session.get(FermentacaoEnvioLoja, (alvo, nome))
             if envio:
-                if corrigir:
+                if recuperar:
+                    resultados.append(_recuperar(envio))
+                elif corrigir:
                     resultados.append(_corrigir(envio))
                 else:
                     resultados.append({'estado': envio.estado,
                                        'mensagem': f'{nome}: tentativa já registrada.'})
                 continue
-            if corrigir:
+            if corrigir or recuperar:
                 resultados.append({'estado': 'indisponivel',
-                                   'mensagem': f'{nome}: não há mensagem para corrigir.'})
+                                   'mensagem': f'{nome}: não há tentativa registrada para esta ação.'})
                 continue
             if not canal:
                 resultados.append({'estado': 'indisponivel',
@@ -241,26 +248,7 @@ def enviar_amanha(corrigir=False, nome_loja=None):
                 data_alvo=alvo, loja=nome, canal=canal, estado='enviando',
                 calculo=calculo, texto=calculo['texto'])
             db.session.add(envio)
-            db.session.commit()
-            try:
-                resposta = slack.post_message(canal, envio.texto, retry=False)
-            except Exception:  # noqa: BLE001 — resultado de rede incerto; continuar outra loja.
-                logger.exception('fermentacao: falha no envio para %s', nome)
-                resposta = {'ok': False}
-            if resposta.get('ok') and resposta.get('ts'):
-                envio.estado = 'enviado' if calculo['ok'] else 'aviso_enviado'
-                envio.slack_ts = resposta['ts']
-                envio.canal = resposta.get('channel') or canal
-                envio.enviado_em = agora()
-            else:
-                envio.estado = 'incerto'
-                logger.error('fermentacao: Slack não confirmou %s para %s', alvo, nome)
-            db.session.commit()
-            resultados.append({'estado': envio.estado, 'mensagem': {
-                'enviado': f'{nome}: lista enviada ao canal da loja.',
-                'aviso_enviado': f'{nome}: aviso de histórico incompleto enviado.',
-                'incerto': f'{nome}: envio não confirmado; confira o canal.',
-            }[envio.estado]})
+            resultados.append(_publicar(envio))
         estados = {r['estado'] for r in resultados}
         estado = estados.pop() if len(estados) == 1 else 'parcial'
         return {'estado': estado,
@@ -271,6 +259,121 @@ def enviar_amanha(corrigir=False, nome_loja=None):
                 conn.execute(text('SELECT pg_advisory_unlock(:k)'), {'k': LOCK_KEY})
         finally:
             conn.close()
+
+
+# Somente códigos curtos entram na auditoria/tela, nunca respostas brutas ou tokens.
+ERROS_ENTREGA = {
+    'not_in_channel': 'O aplicativo da padaria não está neste canal. Adicione o mesmo aplicativo que envia no Copilot.',
+    'channel_not_found': 'O Slack não encontrou o canal ou o aplicativo não tem acesso. Confira o ID e adicione o aplicativo ao canal.',
+    'missing_scope': 'Falta uma permissão do aplicativo no Slack. Confira a configuração da integração.',
+    'no_permission': 'O aplicativo não tem permissão para publicar neste canal.',
+    'is_archived': 'O canal está arquivado.',
+    'invalid_auth': 'O Slack recusou a autenticação do aplicativo.',
+    'not_authed': 'O Slack não recebeu uma autenticação válida.',
+    'token_revoked': 'O acesso do aplicativo foi revogado no Slack.',
+    'token_expired': 'O acesso do aplicativo expirou no Slack.',
+    'account_inactive': 'O aplicativo ou workspace está inativo.',
+    'restricted_action': 'Uma regra do workspace impede publicar neste canal.',
+    'rate_limited': 'O Slack limitou as consultas temporariamente.',
+    'ratelimited': 'O Slack limitou as consultas temporariamente.',
+}
+
+
+def mensagem_erro_entrega(codigo):
+    return ERROS_ENTREGA.get(codigo, 'Não foi possível confirmar a operação com o Slack.')
+
+
+def _codigo_seguro(codigo):
+    return codigo if isinstance(codigo, str) and re.fullmatch(r'[a-z0-9_]{1,80}', codigo) else 'resposta_indisponivel'
+
+
+def _gravar_entrega(envio, **dados):
+    calculo = dict(envio.calculo)
+    entrega = dict(calculo.get('_entrega') or {})
+    entrega.update(dados)
+    calculo['_entrega'] = entrega
+    envio.calculo = calculo
+    return entrega
+
+
+def _resultado_confirmado(envio):
+    return {'estado': envio.estado,
+            'mensagem': ('Lista confirmada no Slack.' if envio.estado == 'enviado'
+                         else 'Aviso de histórico incompleto confirmado no Slack.')}
+
+
+def _publicar(envio):
+    """Reserva cada tentativa antes da rede, inclusive a recuperação autorizada."""
+    from app.services import slack
+
+    anterior = dict((envio.calculo or {}).get('_entrega') or {})
+    historico = list(anterior.pop('historico', []))
+    if anterior:
+        historico.append(dict(anterior, estado=envio.estado))
+    _gravar_entrega(envio, historico=historico,
+                   ultima_tentativa_em=agora().isoformat(), codigo_erro=None,
+                   rejeitado=False, verificacao=None, url=None)
+    envio.estado = 'enviando'
+    db.session.commit()
+    try:
+        resposta = slack.post_message(envio.canal, envio.texto, retry=False)
+    except Exception:  # noqa: BLE001 — resposta ambígua nunca autoriza repetir POST.
+        logger.exception('fermentacao: falha no envio para %s', getattr(envio, 'loja', 'lojas'))
+        resposta = {'ok': False}
+    if resposta.get('ok') and resposta.get('ts'):
+        envio.estado = 'enviado' if envio.calculo['ok'] else 'aviso_enviado'
+        envio.slack_ts = resposta['ts']
+        envio.canal = resposta.get('channel') or envio.canal
+        envio.enviado_em = agora()
+        db.session.commit()
+        return _resultado_confirmado(envio)
+    codigo = _codigo_seguro(resposta.get('codigo_erro'))
+    rejeitado = resposta.get('rejeitado') is True
+    envio.estado = 'falhou' if rejeitado else 'incerto'
+    _gravar_entrega(envio, codigo_erro=codigo, rejeitado=rejeitado)
+    db.session.commit()
+    logger.error('fermentacao: entrega %s para %s (%s)', envio.estado,
+                 getattr(envio, 'loja', 'lojas'), codigo)
+    return {'estado': envio.estado, 'mensagem': mensagem_erro_entrega(codigo)}
+
+
+def _recuperar(envio):
+    """Só repete POST rejeitado explicitamente ou após consulta completa do Slack."""
+    from app.services import slack_entrega
+
+    if envio.slack_ts or envio.estado in ('enviado', 'aviso_enviado', 'correcao_incerta'):
+        return {'estado': envio.estado, 'mensagem': 'Já existe uma mensagem confirmada. Use a opção de abrir ou corrigir.'}
+    entrega = dict(envio.calculo.get('_entrega') or {})
+    if envio.estado == 'falhou' and entrega.get('rejeitado') is True:
+        return _publicar(envio)
+    desde = envio.criado_em
+    if entrega.get('ultima_tentativa_em'):
+        try:
+            desde = datetime.fromisoformat(entrega['ultima_tentativa_em'])
+        except (TypeError, ValueError):
+            return {'estado': 'indisponivel', 'mensagem': 'Horário da tentativa inválido. É necessária conferência.'}
+    if not desde or desde.tzinfo is not None:
+        return {'estado': 'indisponivel', 'mensagem': 'Horário da tentativa indisponível. É necessária conferência.'}
+    if agora() - desde < timedelta(minutes=5):
+        return {'estado': envio.estado, 'mensagem': 'A tentativa é recente. Aguarde cinco minutos antes de verificar.'}
+    consulta = slack_entrega.verificar_mensagem(envio.canal, envio.texto, desde=desde)
+    estado = consulta.get('estado')
+    _gravar_entrega(envio, verificacao=estado, verificado_em=agora().isoformat(),
+                   codigo_erro=_codigo_seguro(consulta.get('codigo_erro')) if consulta.get('codigo_erro') else None)
+    if estado == 'encontrada' and consulta.get('ts') and consulta.get('canal') == envio.canal:
+        envio.slack_ts = consulta['ts']
+        envio.estado = 'enviado' if envio.calculo['ok'] else 'aviso_enviado'
+        # Momento de confirmação; a publicação original está identificada pelo ts.
+        envio.enviado_em = agora()
+        _gravar_entrega(envio, url=consulta.get('url'))
+        db.session.commit()
+        return {'estado': envio.estado, 'mensagem': 'Mensagem localizada no Slack, sem reenviar.'}
+    db.session.commit()
+    if estado == 'ausente':
+        return _publicar(envio)
+    if estado == 'ambiguo':
+        return {'estado': 'indisponivel', 'mensagem': 'Há mais de uma mensagem correspondente. Confira o canal; nenhum reenvio foi feito.'}
+    return {'estado': 'indisponivel', 'mensagem': mensagem_erro_entrega(consulta.get('codigo_erro')) + ' Nenhum reenvio foi feito.'}
 
 
 def _corrigir(envio):
@@ -311,7 +414,8 @@ def _corrigir(envio):
                       'calculo': {k: v for k, v in salvo.items()
                                   if k not in ('historico_correcoes', 'correcao_pendente')},
                       'corrigido_em': agora().isoformat()})
-    envio.calculo = dict(pendente['calculo'], historico_correcoes=historico)
+    envio.calculo = dict(pendente['calculo'], historico_correcoes=historico,
+                         _entrega=salvo.get('_entrega') or {})
     envio.texto = pendente['texto']
     envio.estado = 'enviado' if pendente['calculo']['ok'] else 'aviso_enviado'
     envio.enviado_em = agora()

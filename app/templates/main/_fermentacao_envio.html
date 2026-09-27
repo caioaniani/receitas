@@ -1,17 +1,37 @@
 <div class="card mb-3"><div class="card-body">
-    <h2 class="h5">{% if nome_loja %}{{ nome_loja }} — {% endif %}{% if envio %}Mensagem registrada{% else %}Prévia da próxima mensagem{% endif %}</h2>
+    <h2 class="h5">{% if nome_loja %}{{ nome_loja }} — {% endif %}{% if envio and envio.estado in ('enviado', 'aviso_enviado') %}Mensagem enviada{% elif envio %}Envio não confirmado{% else %}Prévia da próxima mensagem{% endif %}</h2>
     {% if envio %}<p class="small">Canal do envio: <code>{{ envio.canal }}</code></p>{% endif %}
     <div style="white-space: pre-wrap">{{ envio.texto if envio else calculo.texto }}</div>
 </div></div>
 {% if envio %}
     {% if envio.estado == 'enviado' %}
-    <div class="alert alert-success">Lista enviada ao Slack em {{ envio.enviado_em.strftime('%d/%m às %H:%M') }}.</div>
+    <div class="alert alert-success">Lista confirmada no Slack em {{ envio.enviado_em.strftime('%d/%m às %H:%M') }}.</div>
     {% elif envio.estado == 'aviso_enviado' %}
     <div class="alert alert-warning">Foi enviado um aviso: faltam dados para calcular a lista.</div>
     {% elif envio.estado == 'correcao_incerta' %}
     <div class="alert alert-warning">A correção ainda não foi confirmada pelo Slack. A nova tentativa atualiza a mesma mensagem.</div>
+    {% elif envio.estado == 'falhou' %}
+    <div class="alert alert-danger">O Slack recusou o envio. A mensagem não foi publicada.</div>
     {% else %}
-    <div class="alert alert-warning">O envio está em andamento ou não foi confirmado. Confira o canal antes de qualquer nova tentativa.</div>
+    <div class="alert alert-warning">A tentativa foi salva, mas a publicação no Slack não foi confirmada.</div>
+    {% endif %}
+    {% set entrega = envio.calculo.get('_entrega', {}) %}
+    {% if entrega.codigo_erro and erro_entrega is defined %}
+    <p>{{ erro_entrega(entrega.codigo_erro) }} <span class="text-muted">({{ entrega.codigo_erro }})</span></p>
+    {% elif envio.estado in ('incerto', 'enviando') %}
+    <p>Esta tentativa não tem um erro detalhado registrado. Verifique a entrega para consultar o Slack.</p>
+    {% endif %}
+    {% if envio.slack_ts %}
+    <p><a class="btn btn-outline-primary" href="{{ url_for('main.slack_fermentacao_mensagem', data=envio.data_alvo.isoformat(), loja=nome_loja or '') }}" target="_blank" rel="noopener">Abrir mensagem no Slack</a></p>
+    {% elif envio.estado in ('incerto', 'enviando', 'falhou') %}
+    <form method="post" class="mb-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="acao" value="recuperar">
+        <input type="hidden" name="data_alvo" value="{{ envio.data_alvo.isoformat() }}">
+        {% if nome_loja %}<input type="hidden" name="loja" value="{{ nome_loja }}">{% endif %}
+        <button class="btn btn-primary" type="submit">Verificar e recuperar envio</button>
+        <p class="small text-muted mt-2">Localiza a mensagem existente ou envia a lista salva quando a ausência for confirmada. Uma rejeição explícita do Slack permite tentar novamente após corrigir o acesso.</p>
+    </form>
     {% endif %}
     {% if envio.slack_ts and (envio.texto != calculo.texto or envio.estado == 'correcao_incerta') %}
     <div class="card mb-3"><div class="card-body">

@@ -5,11 +5,42 @@ Tudo single-workspace: token bot fixo em SLACK_BOT_TOKEN.
 import hashlib
 import hmac
 import logging
+import re
 import time
 
 from flask import current_app
 
 logger = logging.getLogger(__name__)
+
+# Apenas recusas explícitas documentadas de chat.postMessage. Erros internos,
+# timeouts e falhas de transporte podem ocorrer DEPOIS de a mensagem ser criada.
+_POST_RECUSADO = frozenset({
+    'not_in_channel', 'channel_not_found', 'missing_scope', 'no_permission',
+    'is_archived', 'invalid_auth', 'not_authed', 'token_revoked',
+    'token_expired', 'account_inactive', 'restricted_action',
+    'restricted_action_read_only_channel', 'restricted_action_thread_only_channel',
+    'restricted_action_non_threadable_channel', 'restricted_action_thread_locked',
+    'ekm_access_denied', 'not_allowed_token_type',
+})
+
+
+def _codigo_erro_api(exc):
+    """Código estruturado do Slack; nunca inferido do texto da exceção."""
+    try:
+        from slack_sdk.errors import SlackApiError
+    except ImportError:
+        return None
+    if not isinstance(exc, SlackApiError):
+        return None
+    try:
+        if exc.response.get('ok') is not False:
+            return None
+        codigo = exc.response.get('error')
+    except (AttributeError, TypeError):
+        return None
+    if isinstance(codigo, str) and re.fullmatch(r'[a-z0-9_]{1,80}', codigo):
+        return codigo
+    return None
 
 
 def _client():
@@ -85,7 +116,11 @@ def post_message(channel, text=None, blocks=None, thread_ts=None, retry=True):
         return {'ok': True, 'ts': resp.get('ts'), 'channel': resp.get('channel')}
     except Exception as exc:  # noqa: BLE001
         logger.exception('slack post_message falhou')
-        return {'ok': False, 'erro': str(exc)}
+        resultado = {'ok': False, 'erro': str(exc)}
+        codigo = _codigo_erro_api(exc)
+        if codigo:
+            resultado.update(codigo_erro=codigo, rejeitado=codigo in _POST_RECUSADO)
+        return resultado
 
 
 def update_message(channel, ts, text=None, blocks=None):

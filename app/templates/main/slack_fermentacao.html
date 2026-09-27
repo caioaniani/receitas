@@ -13,7 +13,7 @@
 <div class="alert alert-warning">O envio automático está parado nesta instância. Confira o agendador do sistema.</div>
 {% endif %}
 {% if envio %}
-<p class="text-muted">Esta data já tem uma mensagem no canal anterior. Os próximos disparos serão separados por loja.</p>
+<p class="text-muted">Esta data já tem uma tentativa registrada no canal anterior. Os próximos disparos serão separados por loja.</p>
 {% include 'main/_fermentacao_envio.html' %}
 {% elif lojas_envio is not defined %}
 {% include 'main/_fermentacao_envio.html' %}

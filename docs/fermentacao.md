@@ -80,3 +80,26 @@ Falha ou timeout em uma loja não impede enviar à outra. Uma reserva incerta nu
 é reenviada automaticamente. A correção usa o canal e o ts confirmados daquela
 loja, conserva o histórico e não muda as instruções da outra loja. A tela mostra
 os destinos configurados e o canal/estado efetivo de cada envio.
+
+
+## Conferência e recuperação do Slack (27/09/2026)
+
+Salvar uma tentativa não é confirmação de publicação. A tela usa “Mensagem enviada”
+apenas para estados confirmados; tentativas ambíguas aparecem como “Envio não confirmado”.
+Rejeições explícitas conhecidas do Slack ficam em `falhou`, com código sanitizado
+na auditoria JSON `_entrega`; timeout, erros internos e respostas desconhecidas
+continuam em `incerto`. Nenhuma resposta bruta ou credencial é exibida.
+
+O owner pode “Verificar e recuperar envio” individualmente. Rejeição explícita
+permite uma nova tentativa deliberada depois de corrigir o acesso. Para tentativas
+ambíguas, inclusive as anteriores a esta melhoria, é obrigatória uma leitura
+completa do histórico pelo próprio bot: texto e autor iguais identificam a mensagem
+já existente, sem publicar de novo. Falhas de consulta, paginação incompleta, mais
+de uma correspondência ou ausência de permissão bloqueiam o reenvio. Tentativas
+recentes aguardam cinco minutos. Só a ausência confirmada permite publicar a lista
+salva, reservando a nova tentativa antes da rede e mantendo o histórico.
+
+O envio normal do cron continua sem repetir tentativas persistidas. O link “Abrir
+mensagem no Slack” é obtido pela API apenas para um canal/ts confirmado, com acesso
+restrito ao owner e URL HTTPS do Slack validada. Confirmar que o aplicativo está
+nos canais de destino faz parte da configuração; mudar o ID não concede acesso.

@@ -2947,6 +2947,12 @@ def slack_fermentacao():
         if request.form.get('acao') == 'corrigir':
             resultado = fermentacao.enviar_amanha(
                 corrigir=True, nome_loja=request.form.get('loja') or None)
+        elif request.form.get('acao') == 'recuperar':
+            if request.form.get('data_alvo') != (hoje() + timedelta(days=1)).isoformat():
+                flash('A data desta página está desatualizada. Confira a lista atual antes de recuperar o envio.', 'warning')
+                return redirect(url_for('main.slack_fermentacao'))
+            resultado = fermentacao.enviar_amanha(
+                recuperar=True, nome_loja=request.form.get('loja') or None)
         else:
             resultado = fermentacao.enviar_amanha()
         flash(resultado['mensagem'],
@@ -2973,8 +2979,36 @@ def slack_fermentacao():
         'main/slack_fermentacao.html', calculo=calculo, envio=envio,
         lojas_envio=lojas_envio, destinos=fermentacao.destinos(),
         lojas_calculo_ok=[l['nome'] for l in lojas_envio if l['calculo']['ok']],
+        erro_entrega=fermentacao.mensagem_erro_entrega,
         agendador_ativo=seru_cron.status()['ativo'],
     )
+
+
+@main_bp.route('/admin/slack/fermentacao/mensagem')
+@owner_required
+def slack_fermentacao_mensagem():
+    """Abre o permalink consultado no Slack, somente de uma tentativa confirmada."""
+    from datetime import date
+
+    from app.models import FermentacaoEnvio, FermentacaoEnvioLoja
+    from app.services import fermentacao, slack_entrega
+
+    nome = request.args.get('loja') or None
+    try:
+        alvo = date.fromisoformat(request.args.get('data', ''))
+    except ValueError:
+        abort(400)
+    if nome is not None and nome not in fermentacao.LOJAS:
+        abort(400)
+    envio = (db.session.get(FermentacaoEnvioLoja, (alvo, nome)) if nome
+             else db.session.get(FermentacaoEnvio, alvo))
+    if not envio or not envio.slack_ts:
+        abort(404)
+    url = slack_entrega.permalink(envio.canal, envio.slack_ts)
+    if url:
+        return redirect(url)
+    flash('Não foi possível abrir a mensagem no Slack. Confira o acesso do aplicativo ao canal.', 'warning')
+    return redirect(url_for('main.slack_fermentacao'))
 
 
 @main_bp.route('/admin/slack/diagnostico/testar-canal', methods=['POST'])
