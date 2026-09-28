@@ -535,6 +535,13 @@ def _geocodificar_impl(endereco_ou_cep, canal=CANAL_CHECKOUT):
         geo = _geocodificar_texto(_formatar_cep(cep), cep_ref=cep)
         if geo and geo[0] is not None:
             return geo, True, 'cep_centroide'
+    if (not geo or geo[0] is None) and coord_brasilapi:
+        # ÚLTIMO RECURSO MESMO: a coordenada do CEP na BrasilAPI. Mesma classe
+        # do centroide acima (IMPRECISO → o chamador alerta o dono e registra
+        # no sensor), com fonte própria pra dar pra distinguir no painel.
+        logger.warning('frete: só a coordenada do CEP na BrasilAPI resolveu '
+                       '%r — cotação imprecisa', texto[:200])
+        return coord_brasilapi, True, 'brasilapi'
     if not geo or geo[0] is None:
         logger.warning('geocodificacao falhou em todas as tentativas: %r',
                        texto[:200])
@@ -558,7 +565,7 @@ def geocodificar_entrega(endereco):
     numero = _extrair_numero(texto)
     if not numero:
         return None
-    g = _google_geocode(texto, numero_entrega=numero)
+    g = _google_geocode(texto, numero_entrega=numero, canal=CANAL_DESPACHO)
     if g:
         return g[0], g[1], texto
     cep = _extrair_cep(texto)
@@ -568,23 +575,29 @@ def geocodificar_entrega(endereco):
         canonico = ', '.join(x for x in (
             ref['rua'], numero, ref.get('bairro'), ref['cidade'],
             _formatar_cep(cep)) if x)
-        if canonico != texto:
-            g = _google_geocode(canonico, numero_entrega=numero)
+        if _chave_geocode(canonico) != _chave_geocode(texto):
+            g = _google_geocode(canonico, numero_entrega=numero,
+                                canal=CANAL_DESPACHO)
             if g:
                 return g[0], g[1], canonico
     logger.warning('Endereço sem ponto validado para despacho: %r', texto[:200])
     return None
 
 
-def geocodificar(endereco_ou_cep):
+def geocodificar(endereco_ou_cep, *, canal=CANAL_CHECKOUT):
     """(lat, lng, rotulo) pra um CEP ou endereço livre, ou None. Wrapper
     compatível para estimativas. Despacho usa geocodificar_entrega()."""
-    geo, _impreciso, _fonte = _geocodificar_impl(endereco_ou_cep)
+    geo, _impreciso, _fonte = _geocodificar_impl(endereco_ou_cep, canal=canal)
     return geo
 
 
-def consultar_frete(endereco_ou_cep):
+def consultar_frete(endereco_ou_cep, *, canal=CANAL_CHECKOUT):
     """Estimativa de frete pra um CEP ou endereço.
+
+    `canal` decide de qual cota do Google sai a chamada remota (cache é
+    grátis): CANAL_PREVIEW pra cotação ANÔNIMA (/loja/api/frete — sub-teto,
+    não consegue esgotar o Google do checkout), CANAL_CHECKOUT (padrão —
+    fail-safe: quem não informa é tratado como checkout).
 
     Retorna:
       {'ok': True, 'valor': 15.0, 'gratis': False, 'fora_area': False,
@@ -595,16 +608,17 @@ def consultar_frete(endereco_ou_cep):
     """
     if not (endereco_ou_cep or '').strip():
         return {'ok': False, 'erro': 'endereco_vazio'}
-    geo, impreciso, fonte = _geocodificar_impl(endereco_ou_cep)
+    geo, impreciso, fonte = _geocodificar_impl(endereco_ou_cep, canal=canal)
     if not geo:
         return {'ok': False, 'erro': 'nao_encontrado'}
 
     lat, lng, rotulo = geo
     km = distancia_km(lat, lng)
     valor = valor_para_distancia(km)
-    # `impreciso` = resolveu SÓ pelo centroide do CEP (frete é chute grosseiro).
-    # `fonte` = de onde veio a coordenada (google/gratis/cep_centroide) — pro
-    # sensor. O caller (checkout) alerta o dono nos casos de risco (dono 09/07).
+    # `impreciso` = resolveu SÓ pelo CEP (centroide no Nominatim ou coordenada
+    # da BrasilAPI — frete é chute grosseiro). `fonte` = de onde veio a
+    # coordenada (google/gratis/cep_centroide/brasilapi) — pro sensor. O
+    # caller (checkout) alerta o dono nos casos de risco (dono 09/07).
     if valor is None:
         return {'ok': True, 'fora_area': True, 'distancia_km': round(km, 1),
                 'endereco': rotulo, 'impreciso': impreciso, 'fonte': fonte,
