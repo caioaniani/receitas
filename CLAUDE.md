@@ -930,12 +930,13 @@ CHAMADA — o resultado de cada `criar` passa por `recusa()`/
 - **Sem ferramentas** (vigia, auditor, follow-up, OCRs, SEO, reviews,
   treino, cadastro, planejamento): `opcoes_sem_raciocinio(modelo)`. No
   5.5 = `thinking={'type': 'between_tools'}` + `output_config.effort
-  'high'` (`disabled` da 400 no 5.5; `between_tools` so o 5.5 aceita e so
-  com effort <= high, sem outro campo). Sonnet 5/Opus 5/4.x = `disabled`;
-  Opus 5.5/Fable = effort `low` (nao desligam); Haiku/desconhecido = nada.
+  'medium'` (`disabled` da 400 no 5.5; `between_tools` so o 5.5 aceita e so
+  com effort <= high, sem outro campo). Sonnet 5/Opus 5/4.x = `disabled` +
+  effort `medium`; Opus 5.5/Fable = effort `low` (nao desligam);
+  Sonnet 4.5/Haiku/desconhecido = nada.
 - **Com ferramentas** (copilot, bot): `opcoes_com_ferramentas(modelo)` =
   adaptativo + `display: 'updates'` + beta
-  `thinking-display-updates-2026-08-18` + effort `high`. MOTIVO: no 5.5 o
+  `thinking-display-updates-2026-08-18` + effort `medium`. MOTIVO: no 5.5 o
   texto escrito junto de uma tool (mais de uma frase) volta como bloco
   THINKING (vazio sem o display) — era a explicacao do preview do copilot.
   Ler com `ia_modelos.textos_visiveis(resp, progresso=...)`. Blocos
@@ -986,9 +987,21 @@ CHAMADA — o resultado de cada `criar` passa por `recusa()`/
   Anthropic — so esta rota prova que a API aceita os parametros. Os testes
   `test_sdk_*` provam so que o SDK INSTALADO serializa os campos. NAO
   exercita o fallback de recusa (nao ha como provocar uma recusa).
-- **Effort**: `EFFORT_PADRAO='high'` explicito (os niveis do 5.5 foram
-  recalibrados; sem eval medida no trafego real, manteve-se o nominal).
-  Varredura de effort contra eval = decisao/projeto separado.
+- **Effort = MODO MEDIO (decisao do dono, 28/09/2026: "Colocar no modo
+  medio")**: `EFFORT_PADRAO='medium'` explicito em TODA familia com
+  `aceita_effort` (o 5.5 de todas as funcoes, o Sonnet 5 do fallback de
+  recusa e os modelos de env; com e sem ferramentas). Excecoes: Opus
+  5.5/Fable sem ferramentas ficam no `low` (o minimo deles, nao desligam o
+  raciocinio); Sonnet 4.5/Haiku sem o parametro (suporte nao garantido).
+  O padrao da API seria `high`; no 5.5 os niveis foram recalibrados e o
+  guia indica `medium` como ponto de partida para uso de ferramentas.
+  NUNCA passar de `high`: `between_tools` da 400 em xhigh/max (teste
+  trava). `/admin/debug-ia` e a sonda mostram `effort` e
+  `effort_por_funcao` (o effort que cada funcao envia, pelas MESMAS opcoes
+  da chamada; a rota com/sem ferramentas vem de
+  `ia_modelos.FUNCOES_COM_FERRAMENTAS`, travado por AST). Se a qualidade
+  cair numa funcao, o gesto e subir o effort (nao prompt pedindo "pense
+  mais"); varredura contra eval = projeto separado.
 - **Sampling**: `temperature`/`top_p`/`top_k` nao-default = 400 desde o
   Sonnet 5. Nenhum call site usa — NAO introduzir. `tool_choice` forcado
   (`any`/`tool`) = 400 no 5.5 — nenhum call site usa, NAO introduzir.
