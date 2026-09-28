@@ -536,9 +536,9 @@ def test_detalhe_owner_pago_ve_acoes(app):
 # ── Reenviar e-mails (24/06/2026): caso do email com typo no domínio ──────
 
 def test_reenviar_emails_pago_dispara_confirmado(app):
-    """Pedido pago: reenvia 'recebido' + 'confirmado' pro email_cliente atual.
-    Cobre o caso da cliente que digitou hotmail.con — corrige email, salva,
-    reenvia."""
+    """Pedido pago: reenvia só o 'confirmado' pro email_cliente atual (o
+    'recebido' diz "aguardando pagamento" — auditoria 27/09/2026). Cobre o
+    caso da cliente que digitou hotmail.con — corrige email, salva, reenvia."""
     from unittest.mock import patch
 
     from app.extensions import db
@@ -549,14 +549,14 @@ def test_reenviar_emails_pago_dispara_confirmado(app):
         r = c.post(f'/admin/loja-online/pedidos/{p.codigo}/reenviar-emails',
                    follow_redirects=False)
     assert r.status_code in (302, 303)
-    # "recebido" + "confirmado" = 2 envios
-    assert mock_env.call_count == 2
+    # só "confirmado"
+    assert mock_env.call_count == 1
     # foi pro email do pedido
     assert all(call.args[0] == 'm@x.com' for call in mock_env.call_args_list)
 
 
 def test_reenviar_emails_entregue_inclui_entregue(app):
-    """Pedido entregue: recebido + confirmado + entregue."""
+    """Pedido entregue: confirmado + entregue."""
     from unittest.mock import patch
 
     from app.extensions import db
@@ -565,7 +565,33 @@ def test_reenviar_emails_entregue_inclui_entregue(app):
     with patch('app.services.email.enviar',
                return_value={'ok': True}) as mock_env:
         c.post(f'/admin/loja-online/pedidos/{p.codigo}/reenviar-emails')
-    assert mock_env.call_count == 3
+    assert mock_env.call_count == 2
+
+
+def test_reenviar_emails_aguardando_manda_so_o_recebido(app):
+    from unittest.mock import patch
+
+    from app.extensions import db
+    c = _owner(app)
+    p = _pedido(db, codigo='AGU001', status='aguardando_pagamento')
+    with patch('app.services.email.enviar',
+               return_value={'ok': True}) as mock_env:
+        c.post(f'/admin/loja-online/pedidos/{p.codigo}/reenviar-emails')
+    assert mock_env.call_count == 1
+    assert 'aguardando' in str(mock_env.call_args).lower()
+
+
+def test_reenviar_emails_cancelado_nao_manda_nada(app):
+    from unittest.mock import patch
+
+    from app.extensions import db
+    c = _owner(app)
+    p = _pedido(db, codigo='CAN001', status='cancelado')
+    with patch('app.services.email.enviar') as mock_env:
+        r = c.post(f'/admin/loja-online/pedidos/{p.codigo}/reenviar-emails',
+                   follow_redirects=True)
+    mock_env.assert_not_called()
+    assert 'não há e-mail de status' in r.get_data(as_text=True)
 
 
 def test_reenviar_emails_sem_email_recusa(app):

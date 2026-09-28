@@ -6161,12 +6161,15 @@ def loja_online_pedido_reenviar_emails(codigo):
     Fluxo: editar e-mail -> Salvar -> Reenviar e-mails.
 
     Quais manda, por status:
-    - pago/em_preparo/a_caminho/entregue: "confirmado" (todos já pagaram).
+    - aguardando_pagamento: "recebemos seu pedido" (com o link de pagamento).
+    - pago/em_preparo/a_caminho/entregue: "confirmado" (todos já pagaram) —
+      NUNCA o "recebemos", que diz "aguardando pagamento — você ainda não foi
+      cobrado" e convidava a pagar de novo (auditoria 27/09/2026).
     - a_caminho: + "a caminho".
     - entregue: + "entregue".
-    - se a NF foi emitida: + "nota fiscal".
-    Sempre manda "recebemos seu pedido" (base). Best-effort por e-mail —
-    reporta quantos saíram OK."""
+    - se a NF foi emitida: + "nota fiscal" (fora do cancelado).
+    - cancelado/divulgação: nenhum e-mail de status — avisa na tela.
+    Best-effort por e-mail — reporta quantos saíram OK."""
     from flask import flash
 
     from app.models import PedidoOnline
@@ -6180,7 +6183,9 @@ def loja_online_pedido_reenviar_emails(codigo):
         return _detalhe_redirect(codigo)
 
     # Monta a lista de e-mails a reenviar conforme o status atual.
-    envios = [('Recebemos seu pedido', email_svc.enviar_pedido_recebido)]
+    envios = []
+    if p.status == 'aguardando_pagamento':
+        envios.append(('Recebemos seu pedido', email_svc.enviar_pedido_recebido))
     pago_ou_alem = p.status in ('pago', 'em_preparo', 'a_caminho', 'entregue')
     if pago_ou_alem:
         envios.append(('Pedido confirmado', email_svc.enviar_confirmacao_pedido))
@@ -6188,9 +6193,15 @@ def loja_online_pedido_reenviar_emails(codigo):
         envios.append(('A caminho', email_svc.enviar_pedido_a_caminho))
     if p.status == 'entregue':
         envios.append(('Entregue', email_svc.enviar_pedido_entregue))
-    if getattr(p, 'nf_emitida_em', None):
+    if getattr(p, 'nf_emitida_em', None) and p.status != 'cancelado':
         from app.services.loja_fiscal import enviar_danfe
         envios.append(('Nota fiscal', lambda pedido: enviar_danfe(pedido, reenviar=True)))
+    if not envios:
+        situacao = ('cancelado' if p.status == 'cancelado'
+                    else 'de divulgação' if p.divulgacao else p.status)
+        flash(f'Pedido {situacao} — não há e-mail de status para reenviar.',
+              'info')
+        return _detalhe_redirect(codigo)
 
     ok, falhas = 0, []
     for nome_email, fn in envios:
