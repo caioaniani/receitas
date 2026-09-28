@@ -412,9 +412,16 @@ def test_chamadas_com_ferramentas_batem_com_a_visao_por_funcao():
     atualizar o conjunto."""
     por_arquivo = {}
     for arq, _, no in _chamadas_criar():
-        if any(k.arg == 'ferramentas' and isinstance(k.value, ast.Constant)
-               and k.value.value is True for k in no.keywords):
-            por_arquivo[arq.name] = por_arquivo.get(arq.name, 0) + 1
+        for k in no.keywords:
+            if k.arg != 'ferramentas':
+                continue
+            # por variavel a contagem nao enxergaria a rota
+            assert isinstance(k.value, ast.Constant) and \
+                isinstance(k.value.value, bool), (
+                    f'{arq.name}:{no.lineno} use ferramentas=True/False '
+                    'literal')
+            if k.value.value:
+                por_arquivo[arq.name] = por_arquivo.get(arq.name, 0) + 1
     assert por_arquivo == {'chatbot.py': 1, 'copilot.py': 1}
     assert ia_modelos.FUNCOES_COM_FERRAMENTAS == {
         'bot_atendimento', 'copilot_slack', 'copilot_whatsapp'}

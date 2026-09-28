@@ -447,12 +447,34 @@ def test_debug_ia_owner_ve_modelos_sem_chamar_api(app, owner_user,
 
 
 def test_debug_ia_testar_roda_a_verificacao(app, owner_user, api):
-    api(_texto('ok'), _resp_tool())
+    # ordem alfabetica: o Sonnet 5 (do fallback) e verificado primeiro
+    fake = api(_texto('ok', model='claude-sonnet-5'),
+               _resp_tool('claude-sonnet-5'), _texto('ok'), _resp_tool())
     client = app.test_client()
     _login(client, owner_user)
     d = client.get('/admin/debug-ia?testar=1').get_json()
     assert d['verificacao']['ok'] is True
+    assert d['verificacao']['modelos'] == ['claude-sonnet-5',
+                                           'claude-sonnet-5-5']
+    assert d['verificacao']['fallback'] == ['claude-sonnet-5']
+    # o Sonnet 5 recebeu os parametros que o fallback envia (modo medio)
+    sem, com = [c for c in fake.chamadas if c['model'] == 'claude-sonnet-5']
+    assert sem['thinking'] == {'type': 'disabled'}
+    assert sem['output_config'] == {'effort': 'medium'}
+    assert 'thinking' not in com
+    assert com['output_config'] == {'effort': 'medium'}
+
+
+def test_debug_ia_sem_fallback_nao_verifica_o_sonnet_5(app, owner_user, api,
+                                                       monkeypatch):
+    monkeypatch.setenv('IA_FALLBACK_RECUSA', '0')
+    fake = api(_texto('ok'), _resp_tool())
+    client = app.test_client()
+    _login(client, owner_user)
+    d = client.get('/admin/debug-ia?testar=1').get_json()
     assert d['verificacao']['modelos'] == ['claude-sonnet-5-5']
+    assert d['verificacao']['fallback'] == []
+    assert {c['model'] for c in fake.chamadas} == {'claude-sonnet-5-5'}
 
 
 def test_debug_ia_exige_owner(app, admin_user):
@@ -491,15 +513,19 @@ def test_debug_ia_mostra_o_modo_medio_de_cada_funcao(app, owner_user,
 
 def test_effort_por_funcao_segue_o_modelo_da_env(app, monkeypatch):
     """Env que troca o modelo: o effort mostrado e o que a chamada daquele
-    modelo leva — Opus 5.5 sem ferramentas fica no low (nao desliga o
-    raciocinio); Haiku nao recebe o parametro."""
+    modelo leva. O MESMO Opus 5.5 da low numa funcao sem ferramentas
+    (avaliacao_google) e medium numa com ferramentas (copilot_whatsapp) — a
+    visao nao pode ignorar a rota. Haiku nao recebe o parametro."""
+    from app.services import conta_pagar_ia
     monkeypatch.setenv('GOOGLE_REVIEWS_IA_MODELO', 'claude-opus-5-5')
+    monkeypatch.setattr(conta_pagar_ia, 'MODELO', 'claude-haiku-4-5')
     with app.app_context():
-        app.config['ZAPI_BOT_MODELO'] = 'claude-haiku-4-5'
+        app.config['ZAPI_BOT_MODELO'] = 'claude-opus-5-5'
         info = ia_modelos.modelos_por_funcao()
     ef = info['effort_por_funcao']
     assert ef['avaliacao_google'] == 'low'
-    assert ef['copilot_whatsapp'] is None
+    assert ef['copilot_whatsapp'] == 'medium'
+    assert ef['ocr_nf'] is None
     assert ef['vigia'] == 'medium'
     assert ef['copilot_slack'] == 'medium'
 
@@ -804,20 +830,24 @@ def test_auditor_erro_de_rede_nao_avanca(app, monkeypatch):
 def test_debug_ia_testar_cobre_os_modelos_das_envs(app, owner_user, api,
                                                    monkeypatch):
     monkeypatch.setenv('GOOGLE_REVIEWS_IA_MODELO', 'claude-opus-4-8')
-    # ordem alfabetica: o Opus 4.8 e verificado primeiro
+    # ordem alfabetica: Opus 4.8, Sonnet 5 (do fallback), Sonnet 5.5
     fake = api(_texto('ok', model='claude-opus-4-8'),
-               _resp_tool('claude-opus-4-8'), _texto('ok'), _resp_tool())
+               _resp_tool('claude-opus-4-8'),
+               _texto('ok', model='claude-sonnet-5'),
+               _resp_tool('claude-sonnet-5'), _texto('ok'), _resp_tool())
     client = app.test_client()
     _login(client, owner_user)
     d = client.get('/admin/debug-ia?testar=1').get_json()
     assert d['verificacao']['modelos'] == ['claude-opus-4-8',
+                                           'claude-sonnet-5',
                                            'claude-sonnet-5-5']
     assert d['verificacao']['ok'] is True
     assert all(r['ok'] for r in d['verificacao']['por_modelo'].values())
-    assert set(d['verificacao']['por_modelo']) == {'claude-opus-4-8',
-                                                   'claude-sonnet-5-5'}
+    assert set(d['verificacao']['por_modelo']) == {
+        'claude-opus-4-8', 'claude-sonnet-5', 'claude-sonnet-5-5'}
     usados = [c['model'] for c in fake.chamadas]
     assert usados.count('claude-opus-4-8') == 2
+    assert usados.count('claude-sonnet-5') == 2
     assert usados.count('claude-sonnet-5-5') == 2
     # o Opus 4.8 recebeu os parametros DELE
     opus = [c for c in fake.chamadas if c['model'] == 'claude-opus-4-8']
@@ -845,12 +875,15 @@ def test_debug_ia_um_modelo_falhando_derruba_o_ok(app, owner_user, api,
     """A API respondeu com outro modelo para a env: ok geral False."""
     monkeypatch.setenv('GOOGLE_REVIEWS_IA_MODELO', 'claude-opus-4-8')
     api(_texto('ok', model='claude-sonnet-5'),
+        _resp_tool('claude-sonnet-5'),
+        _texto('ok', model='claude-sonnet-5'),
         _resp_tool('claude-sonnet-5'), _texto('ok'), _resp_tool())
     client = app.test_client()
     _login(client, owner_user)
     v = client.get('/admin/debug-ia?testar=1').get_json()['verificacao']
     assert v['ok'] is False
     assert v['por_modelo']['claude-opus-4-8']['ok'] is False
+    assert v['por_modelo']['claude-sonnet-5']['ok'] is True
     assert v['por_modelo']['claude-sonnet-5-5']['ok'] is True
 
 

@@ -982,11 +982,13 @@ CHAMADA — o resultado de cada `criar` passa por `recusa()`/
   `fora_do_padrao`) ou no bloco `ia` da sonda `/api/claude/deploy`.
 - **Verificacao REAL depois de deploy que mexa na IA**:
   `/admin/debug-ia?testar=1` — para CADA modelo distinto em uso (o padrao e
-  os de env), duas chamadas minimas com os mesmos parametros do sistema
-  (sem e com ferramenta), centavos, UsoIA 'verificacao_ia'. A suite mocka a
+  os de env) e, com o fallback ligado, o destino dele (Sonnet 5, chave
+  `fallback` na resposta, com os parametros que a chamada refeita leva),
+  duas chamadas minimas com os mesmos parametros do sistema (sem e com
+  ferramenta), centavos, UsoIA 'verificacao_ia'. A suite mocka a
   Anthropic — so esta rota prova que a API aceita os parametros. Os testes
-  `test_sdk_*` provam so que o SDK INSTALADO serializa os campos. NAO
-  exercita o fallback de recusa (nao ha como provocar uma recusa).
+  `test_sdk_*` provam so que o SDK INSTALADO serializa os campos. A RECUSA
+  em si nao se provoca (o gatilho do fallback fica sem prova ao vivo).
 - **Effort = MODO MEDIO (decisao do dono, 28/09/2026: "Colocar no modo
   medio")**: `EFFORT_PADRAO='medium'` explicito em TODA familia com
   `aceita_effort` (o 5.5 de todas as funcoes, o Sonnet 5 do fallback de

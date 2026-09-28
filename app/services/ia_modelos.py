@@ -21,9 +21,11 @@ Regras (guia oficial de migração, skill claude-api):
   effort `high` ou abaixo e sem nenhum outro campo dentro de `thinking`.
 - Effort (decisão do dono, 28/09/2026: "modo médio"): `medium` explícito em
   toda família que aceita o parâmetro, com e sem ferramentas — inclusive o
-  Sonnet 5 do fallback de recusa e os modelos que uma env põe no lugar. O
-  padrão da API seria `high`; no 5.5 os níveis foram recalibrados e o guia
-  indica `medium` como ponto de partida para uso de ferramentas.
+  Sonnet 5 do fallback de recusa e os modelos que uma env põe no lugar.
+  Exceção: nas rotas sem ferramentas, Opus 5.5 e Fable ficam no `low` (o
+  mínimo deles, que não desligam o raciocínio). O padrão da API seria
+  `high`; no 5.5 os níveis foram recalibrados e o guia indica `medium` como
+  ponto de partida para uso de ferramentas.
 - Sonnet 5.5, Opus 5.5 e Fable: o texto que o modelo escreve junto de uma
   chamada de ferramenta (mais de uma ou duas frases) volta como bloco
   `thinking` — vazio no padrão. O copilot usa esse texto como explicação do
@@ -48,10 +50,11 @@ logger = logging.getLogger(__name__)
 
 MODELO_PADRAO = 'claude-sonnet-5-5'
 
-# Nível de effort de toda chamada (decisão do dono, 28/09/2026: "modo médio").
-# Vale para toda família com `aceita_effort` — o 5.5, o Sonnet 5 do fallback
-# de recusa e os modelos de env. Precisa ficar em `high` ou abaixo: acima
-# disso o `between_tools` das rotas sem ferramentas do 5.5 dá 400.
+# Nível de effort das famílias com `aceita_effort` (decisão do dono,
+# 28/09/2026: "modo médio") — o 5.5, o Sonnet 5 do fallback de recusa e os
+# modelos de env; exceto as rotas sem ferramentas do Opus 5.5/Fable, que
+# ficam no `low`. Precisa ficar em `high` ou abaixo: acima disso o
+# `between_tools` das rotas sem ferramentas do 5.5 dá 400.
 EFFORT_PADRAO = 'medium'
 
 BETA_PROGRESSO = 'thinking-display-updates-2026-08-18'
@@ -533,9 +536,21 @@ def verificar_modelos_em_uso():
     """`verificar_ao_vivo` para CADA modelo distinto que as funções usam de
     fato (o padrão e os que alguma env do Railway pôs no lugar) — uma env
     antiga recebe parâmetros de OUTRA família, e só uma chamada real prova
-    que a API os aceita. Cobertura: os modelos de `modelos_por_funcao`, com
-    os dois formatos de chamada (sem e com ferramentas)."""
-    modelos = sorted(set(modelos_por_funcao()['por_funcao'].values()))
+    que a API os aceita. Com o fallback de recusa ligado, entra também o
+    modelo em que ele refaz (o Sonnet 5 do 5.5): nenhuma função o usa direto,
+    mas a chamada refeita leva os parâmetros DELE. Cobertura: esses modelos,
+    com os dois formatos de chamada (sem e com ferramentas); a recusa em si
+    não se provoca."""
+    em_uso = set(modelos_por_funcao()['por_funcao'].values())
+    fallback = set()
+    if _fallback_ligado():
+        for m in em_uso:
+            regra = _FALLBACK_RECUSA.get(familia(m) or '')
+            if regra:
+                fallback.add(regra[0])
+    modelos = sorted(em_uso | fallback)
     por_modelo = {m: verificar_ao_vivo(m) for m in modelos}
     return {'ok': all(r.get('ok') for r in por_modelo.values()),
-            'modelos': modelos, 'por_modelo': por_modelo}
+            'modelos': modelos,
+            'fallback': sorted(fallback - em_uso),
+            'por_modelo': por_modelo}
