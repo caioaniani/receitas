@@ -558,8 +558,10 @@
       if (!aviso) return;
       var data = dataEl.value;
       if (!data) { aviso.style.display = 'none'; return; }
+      // qtd vai junto: o servidor soma as linhas do mesmo item (inteiro +
+      // fatiado, menus diferentes) e confere contra o Plano do dia.
       var itensCart = Carrinho.ler().map(function (it) {
-        return { kind: it.kind, id: it.id };
+        return { kind: it.kind, id: it.id, qtd: it.qtd || 1 };
       });
       if (!itensCart.length) { aviso.style.display = 'none'; return; }
       aviso.style.display = 'block';
@@ -591,7 +593,12 @@
           // Tem item(ns) esgotado(s) — mostra lista + acoes.
           var html = '<strong>⚠ Itens sem disponibilidade pra essa data:</strong><ul style="margin:8px 0 10px 18px;">';
           j.esgotados.forEach(function (it) {
-            html += '<li>' + escapeHtml(it.nome) +
+            var falta = (it.disponivel > 0)
+              ? ' <span>(só ' + escapeHtml(String(it.disponivel)) +
+                ' disponíve' + (it.disponivel === 1 ? 'l' : 'is') +
+                ' — diminua a quantidade)</span>'
+              : '';
+            html += '<li>' + escapeHtml(it.nome) + falta +
               ' <button type="button" class="btn-link-vermelho" ' +
               'data-remover-kind="' + escapeHtml(it.kind) +
               '" data-remover-id="' + escapeHtml(String(it.id)) +

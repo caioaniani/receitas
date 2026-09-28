@@ -853,6 +853,7 @@ def _resolver_prefill_carrinho(add):
 # navegador. Guarda só {kind,id,qtd} (cabe no cookie); preço/nome/estoque são
 # resolvidos no servidor a cada render (autoritativo).
 _CARRINHO_MAX_ITENS = 60  # teto pra caber no cookie de sessão (~4KB)
+_CARRINHO_MAX_QTD = 99    # teto de unidades por linha do carrinho
 # Orçamento de pares [pi_id, qtd] da composição de MENUS somados no carrinho
 # inteiro (26/07/2026). Cada par custa ~8 bytes no cookie; 120 pares ≈ 1KB,
 # folgado dentro dos ~4KB. Um menu real tem ~6 slots, então isso é ~20 menus
@@ -1305,19 +1306,28 @@ def produto(slug_completo):
 
 
 @loja_bp.route('/api/disponibilidade-checkout', methods=['POST'])
+@limiter.limit('60 per minute')
 def api_disponibilidade_checkout():
     """Pro checkout AO MUDAR A DATA: verifica quais itens do carrinho NAO tem
     saldo pra essa data. Devolve a lista dos esgotados (nome + kind + id) e a
     proxima data disponivel pra TODOS — pra o cliente decidir entre trocar a
     data ou remover o(s) item(ns).
 
-    Body JSON: {data: "YYYY-MM-DD", itens: [{kind, id}, ...]}.
+    Body JSON: {data: "YYYY-MM-DD", itens: [{kind, id, qtd?}, ...]}.
     Decisao do dono 23/06/2026: incidente "checkout avancava sem avisar quais
-    produtos esgotaram pra data escolhida"."""
+    produtos esgotaram pra data escolhida".
+
+    A QUANTIDADE conta (auditoria 27/09/2026), somada por item — mesma regra
+    do `criar_pedido`: pedir 30 com 10 no plano aparece aqui como
+    insuficiente (`disponivel` = quanto ainda cabe). `qtd` ausente (aba
+    antiga) vale 1. Carrinho tem no máximo 60 linhas; mais que isso é
+    requisição forjada e fica de fora."""
     from datetime import date, timedelta
 
     from app.utils import hoje
-    dados = request.get_json(silent=True) or {}
+    dados = request.get_json(silent=True)
+    if not isinstance(dados, dict):
+        return jsonify(ok=False, erro='payload invalido'), 400
     try:
         d = date.fromisoformat(dados.get('data') or '')
     except (TypeError, ValueError):
@@ -1325,11 +1335,13 @@ def api_disponibilidade_checkout():
     if d < hoje() or d > hoje() + timedelta(days=30):
         return jsonify(ok=False, erro='data fora da janela'), 400
 
-    itens_raw = dados.get('itens') or []
-    esgotados = []
-    nomes_esgotados = []
-    fora_do_catalogo = False
-    for raw in itens_raw:
+    itens_raw = dados.get('itens')
+    if not isinstance(itens_raw, list):
+        itens_raw = []
+    pedidos = {}   # (kind, id) -> qtd somada (ordem de chegada preservada)
+    for raw in itens_raw[:_CARRINHO_MAX_ITENS]:
+        if not isinstance(raw, dict):
+            continue
         kind = str(raw.get('kind') or '').strip()
         if kind not in ('receita', 'produto'):
             continue
@@ -1337,11 +1349,25 @@ def api_disponibilidade_checkout():
             item_id = int(raw.get('id'))
         except (TypeError, ValueError):
             continue
+        try:
+            qtd = int(raw.get('qtd') or 1)
+        except (TypeError, ValueError):
+            qtd = 1
+        qtd = max(1, min(qtd, _CARRINHO_MAX_QTD))
+        pedidos[(kind, item_id)] = pedidos.get((kind, item_id), 0) + qtd
+
+    esgotados = []
+    nomes_esgotados = []
+    fora_do_catalogo = False
+    for (kind, item_id), qtd in pedidos.items():
         cat = loja_catalogo.por_id_publicado(kind, item_id)
         if cat is None:
             fora_do_catalogo = True
-        if cat is not None and loja_catalogo.tem_estoque_para_dia(kind, item_id, d):
-            continue
+            saldo = 0
+        else:
+            saldo = loja_catalogo.saldo_do_plano(kind, item_id, d)
+            if saldo is None or qtd <= saldo:
+                continue
         # Esgotado: pega o nome canonico do catalogo (nao confia no nome do
         # carrinho que pode estar desatualizado).
         nome = (cat or {}).get('nome')
@@ -1360,29 +1386,25 @@ def api_disponibilidade_checkout():
                     Produto.ativo.is_(True), Produto.preco_site > 0)
                 nome = pausado.with_entities(Produto.nome).scalar()
         nome = nome or 'produto'
-        esgotados.append({'kind': kind, 'id': item_id, 'nome': nome})
+        esgotados.append({'kind': kind, 'id': item_id, 'nome': nome,
+                          'disponivel': saldo or 0, 'pedido': qtd})
         nomes_esgotados.append(nome)
 
-    # Proxima data em que TODOS os itens do carrinho tem saldo (ate +30 dias).
+    # Proxima data em que TODOS os itens do carrinho tem saldo pra
+    # quantidade pedida (ate +30 dias).
     proxima = None
     if esgotados and not fora_do_catalogo:
-        ids_carrinho = []
-        for raw in itens_raw:
-            kind = str(raw.get('kind') or '').strip()
-            if kind not in ('receita', 'produto'):
-                continue
-            try:
-                ids_carrinho.append((kind, int(raw.get('id'))))
-            except (TypeError, ValueError):
-                continue
+        def _cabe(dia):
+            for (k, iid), q in pedidos.items():
+                s = loja_catalogo.saldo_do_plano(k, iid, dia)
+                if s is not None and q > s:
+                    return False
+            return True
         for i in range(1, 31):
             d2 = hoje() + timedelta(days=i)
             if d2 == d:
                 continue
-            todos_ok = all(
-                loja_catalogo.tem_estoque_para_dia(k, iid, d2)
-                for k, iid in ids_carrinho)
-            if todos_ok:
+            if _cabe(d2):
                 proxima = d2.isoformat()
                 break
 
