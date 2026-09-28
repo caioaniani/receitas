@@ -10,9 +10,13 @@ O valor daqui é ESTIMATIVA pro atendimento (bot/equipe) — o valor que
 vale é o do checkout do site. Se o dono redesenhar o mapa, atualizar as
 constantes abaixo (e o teste de faixas).
 
-Geocodificação (sem chave de API):
-  1. CEP -> BrasilAPI v2 (devolve lat/lng pra maioria dos CEPs urbanos);
-  2. fallback/endereço livre -> Nominatim (OpenStreetMap).
+Geocodificação (ordem completa em `_geocodificar_impl`):
+  1. Google (preciso, com teto diário POR CANAL e cache — o preview anônimo
+     tem sub-teto próprio);
+  2. BrasilAPI v2 pelo CEP — só os metadados oficiais (logradouro, bairro,
+     cidade) pra re-tentar o Google e validar o Nominatim; a coordenada do
+     CEP é só o ÚLTIMO recurso, marcada imprecisa;
+  3. Nominatim (OpenStreetMap) com guards de homônimo.
 """
 import logging
 import re
@@ -154,7 +158,17 @@ def _geocodificar_texto(texto, ref=None, cep_ref=None, postcode_estrito=False):
                          headers=_UA, timeout=_TIMEOUT)
         if r.status_code != 200:
             return None
-        for h in r.json():
+        candidatos = r.json()
+        if not isinstance(candidatos, list):
+            # Resposta de erro em JSON (objeto) no lugar da lista: iterar as
+            # chaves estourava AttributeError fora do except — o checkout
+            # virava 500 em vez de seguir pra próxima tentativa da cadeia.
+            logger.warning('Nominatim devolveu resposta inesperada pra %r',
+                           texto[:80])
+            return None
+        for h in candidatos:
+            if not isinstance(h, dict):
+                continue
             addr = h.get('address') or {}
             nome = (h.get('display_name') or '')[:120]
             cand_cidade = _norm_cidade(
@@ -227,6 +241,29 @@ def simplificar_endereco(texto):
 # nível de porta. Mas o /api/frete é PÚBLICO: por isso o Google entra com
 # TETO DIÁRIO (custo/abuso não pode disparar) + kill-switch + cache permanente
 # (paga 1x por endereço) + FALLBACK pra cadeia grátis se faltar/cair.
+#
+# Cota POR CANAL (auditoria do checkout, 27/09/2026): o teto era um contador
+# único, e o preview ANÔNIMO (/loja/api/frete, qualquer texto) podia esgotá-lo
+# sozinho — aí o geocode preciso sumia até a meia-noite também do POST do
+# checkout e do despacho da Lalamove. Agora o preview tem um SUB-TETO
+# (`FRETE_GOOGLE_MAX_DIA_PREVIEW`, padrão 60% do teto) e checkout/despacho
+# usam o restante do teto total. O teto total continua sendo o limite de
+# custo do dia (o preview nunca passa do sub-teto; o checkout pode usar o que
+# o preview não usou).
+
+CANAL_CHECKOUT = 'checkout'   # POST do checkout (autoritativo) — padrão
+CANAL_PREVIEW = 'preview'     # cotação anônima (/loja/api/frete)
+CANAL_DESPACHO = 'despacho'   # ponto de entrega da Lalamove/painel
+CANAIS = (CANAL_CHECKOUT, CANAL_PREVIEW, CANAL_DESPACHO)
+
+_TETO_PADRAO = 500
+_PREVIEW_PADRAO_PCT = 60      # limite do preview anônimo, em % do teto total
+# Contador do dia em AppConfig: 'AAAA-MM-DD|total|preview'. O formato antigo
+# ('AAAA-MM-DD|total') é lido como preview=0 — o total do dia sobrevive ao
+# deploy que trouxe o sub-teto.
+_CHAVE_USO_GOOGLE = 'frete_google_dia'
+_TENTATIVAS_RESERVA = 5
+
 
 def _google_frete_ativo():
     from flask import current_app
@@ -234,49 +271,179 @@ def _google_frete_ativo():
         not in ('0', 'false', 'no', '')
 
 
-def _google_sob_teto():
-    """Reserva 1 slot do teto DIÁRIO de chamadas REMOTAS ao Google (cost cap).
-    Best-effort via AppConfig (sobrevive a deploy). Devolve True se cabe."""
+def _normalizar_canal(canal):
+    """Canal válido; desconhecido = checkout (fail-safe) com ERROR no log —
+    é erro de programação, mas não pode derrubar a cotação do cliente."""
+    if canal in CANAIS:
+        return canal
+    logger.error('frete: canal desconhecido %r — tratado como checkout', canal)
+    return CANAL_CHECKOUT
+
+
+def _int_config(nome, padrao):
+    """Inteiro >= 0 do app.config. Vazio = padrão; ilegível = padrão com
+    WARNING (config torta não pode sumir em silêncio)."""
     from flask import current_app
+    bruto = current_app.config.get(nome)
+    if bruto is None or str(bruto).strip() == '':
+        return padrao
+    try:
+        return max(0, int(str(bruto).strip()))
+    except ValueError:
+        logger.warning('frete: %s=%r ilegível — usando %s', nome, bruto, padrao)
+        return padrao
+
+
+def tetos_google():
+    """(teto_total, teto_preview) de chamadas REMOTAS ao Google por dia.
+
+    `FRETE_GOOGLE_MAX_DIA` = teto total (padrão 500). 0 = nenhuma chamada
+    remota (cache continua valendo); pra desligar o Google de vez, use o
+    kill-switch `FRETE_GOOGLE=0`.
+    `FRETE_GOOGLE_MAX_DIA_PREVIEW` = sub-teto do preview anônimo: número
+    absoluto ('200') ou percentual do total ('60%'). Vazio = 60% do total.
+    Nunca passa do total."""
+    from flask import current_app
+    teto = _int_config('FRETE_GOOGLE_MAX_DIA', _TETO_PADRAO)
+    padrao = teto * _PREVIEW_PADRAO_PCT // 100
+    bruto = str(current_app.config.get('FRETE_GOOGLE_MAX_DIA_PREVIEW')
+                or '').strip()
+    preview = padrao
+    if bruto:
+        try:
+            if bruto.endswith('%'):
+                pct = float(bruto[:-1].strip().replace(',', '.'))
+                preview = int(teto * pct / 100)
+            else:
+                preview = int(bruto)
+        except ValueError:
+            logger.warning('frete: FRETE_GOOGLE_MAX_DIA_PREVIEW=%r ilegível — '
+                           'usando %s%% do teto', bruto, _PREVIEW_PADRAO_PCT)
+            preview = padrao
+    return teto, max(0, min(preview, teto))
+
+
+def _ler_uso(bruto, hoje_iso):
+    """'AAAA-MM-DD|total[|preview]' -> (total, preview) de HOJE; outro dia ou
+    vazio = (0, 0)."""
+    partes = (bruto or '').split('|')
+    if len(partes) < 2 or partes[0] != hoje_iso:
+        return 0, 0
+    total = int(partes[1]) if partes[1].isdigit() else 0
+    preview = int(partes[2]) if len(partes) > 2 and partes[2].isdigit() else 0
+    return total, preview
+
+
+def uso_google_hoje():
+    """Uso do teto hoje, pro painel do dono: {'total', 'preview', 'teto',
+    'teto_preview'}."""
+    from app.models import AppConfig
+    from app.utils import hoje
+    total, preview = _ler_uso(AppConfig.get(_CHAVE_USO_GOOGLE), hoje().isoformat())
+    teto, teto_preview = tetos_google()
+    return {'total': total, 'preview': preview, 'teto': teto,
+            'teto_preview': teto_preview}
+
+
+def _reservar_vaga_google(canal):
+    """Reserva 1 vaga do teto DIÁRIO de chamadas REMOTAS ao Google. True se
+    coube. Preview precisa caber no sub-teto E no total; checkout/despacho,
+    só no total.
+
+    Atômico entre workers: compare-and-swap no valor do AppConfig (UPDATE ...
+    WHERE value = <lido>); perdeu a corrida, relê e tenta de novo. Antes era
+    ler→somar→gravar e dois workers podiam passar do teto juntos. Commita na
+    hora (como antes): segurar a linha até o fim do checkout serializaria
+    todas as cotações.
+
+    Isolamento da transação do chamador: as pendências DELE vão ao banco
+    antes (`flush` — erro delas continua sendo dele e sobe como antes); o que
+    é NOSSO roda num savepoint por tentativa, então falha de banco nossa
+    desfaz só o savepoint — nunca descarta nem envenena o que o chamador já
+    gravou. Sem vaga ou com erro nosso = sem Google (a cadeia grátis segue)."""
+    from sqlalchemy import select, update
+    from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
     from app.extensions import db
     from app.models import AppConfig
     from app.utils import hoje
-    try:
-        teto = int(current_app.config.get('FRETE_GOOGLE_MAX_DIA') or 500)
-    except (TypeError, ValueError):
-        teto = 500
+
+    teto, teto_preview = tetos_google()
     hoje_iso = hoje().isoformat()
-    dia, _, n = (AppConfig.get('frete_google_dia') or '').partition('|')
-    n = int(n) if n.isdigit() and dia == hoje_iso else 0
-    if n >= teto:
-        return False
-    AppConfig.set('frete_google_dia', f'{hoje_iso}|{n + 1}')
-    db.session.commit()
-    return True
+    db.session.flush()
+    for _ in range(_TENTATIVAS_RESERVA):
+        esgotado = None
+        gravou = False
+        try:
+            with db.session.begin_nested():
+                linha = db.session.execute(
+                    select(AppConfig.value)
+                    .where(AppConfig.key == _CHAVE_USO_GOOGLE)).first()
+                bruto = linha[0] if linha else None
+                total, preview = _ler_uso(bruto, hoje_iso)
+                if total >= teto:
+                    esgotado = (f'teto diário do Google esgotado '
+                                f'({total}/{teto}, canal {canal})')
+                elif canal == CANAL_PREVIEW and preview >= teto_preview:
+                    esgotado = (f'sub-teto do preview do Google esgotado '
+                                f'({preview}/{teto_preview}) — checkout/'
+                                'despacho seguem com o restante')
+                else:
+                    novo = (f'{hoje_iso}|{total + 1}|'
+                            f'{preview + (1 if canal == CANAL_PREVIEW else 0)}')
+                    if linha is None:
+                        # Unique da chave: se outro worker criou a linha
+                        # agora, o flush da saída do savepoint levanta.
+                        db.session.add(AppConfig(key=_CHAVE_USO_GOOGLE,
+                                                 value=novo))
+                        gravou = True
+                    else:
+                        atual = (AppConfig.value.is_(None) if bruto is None
+                                 else AppConfig.value == bruto)
+                        res = db.session.execute(
+                            update(AppConfig)
+                            .where(AppConfig.key == _CHAVE_USO_GOOGLE, atual)
+                            .values(value=novo)
+                            .execution_options(synchronize_session=False))
+                        gravou = res.rowcount == 1
+        except IntegrityError:
+            continue                  # outro worker criou a linha: relê
+        except SQLAlchemyError:
+            logger.exception('frete: falha ao reservar vaga do teto do Google')
+            return False
+        if esgotado:
+            logger.warning('frete: %s', esgotado)
+            return False
+        if gravou:
+            db.session.commit()
+            return True
+        # CAS perdeu (outro worker gravou entre a leitura e o UPDATE): relê.
+    logger.warning('frete: reserva no teto do Google perdeu %s corridas '
+                   'seguidas — sem Google nesta cotação', _TENTATIVAS_RESERVA)
+    return False
 
 
-def _google_geocode(texto, numero_entrega=None):
-    """Google (cacheado) pro frete. (lat, lng) ou None. Cache HIT não consome
-    o teto (custo zero); só a chamada REMOTA conta. Nunca levanta — fora de app
-    context (thread do bot) ou sem chave, retorna None e cai na cadeia grátis."""
+def _google_geocode(texto, numero_entrega=None, canal=CANAL_CHECKOUT):
+    """Google (cacheado) pro frete. (lat, lng) ou None. Cache (positivo OU
+    negativo — `google_maps.cache_preciso`) não consome o teto (custo zero);
+    só a chamada REMOTA reserva vaga, e só se houver chave configurada.
+    `canal` decide de qual cota sai a vaga (ver `_reservar_vaga_google`).
+    Nunca levanta — fora de app context (thread do bot) ou sem chave, retorna
+    None e cai na cadeia grátis."""
     if not texto:
         return None
     try:
         if not _google_frete_ativo():
             return None
-        from app.models import GeocodeCache
         from app.services import google_maps
-        chave = google_maps._normalizar_chave(texto)
-        if chave:
-            cache = GeocodeCache.query.filter_by(chave=chave).first()
-            if cache and cache.lat is not None:
-                if cache.fonte == 'google_entrega' or (cache.fonte == 'google' and numero_entrega is None):
-                    return cache.lat, cache.lng   # hit PRECISO: sem custo/teto
-                if cache.fonte == 'google_aprox':
-                    return None                   # hit aproximado: cai na grátis
-        if not _google_sob_teto():
-            logger.warning('frete: teto diário de geocode Google atingido')
+        estado, coords = google_maps.cache_preciso(texto, numero_entrega)
+        if estado == 'preciso':
+            return coords                     # hit PRECISO: sem custo/teto
+        if estado == 'negativo':
+            return None                       # aproximado/ZERO_RESULTS: grátis
+        if not google_maps.tem_chave():
+            return None                       # sem chave não há chamada remota
+        if not _reservar_vaga_google(_normalizar_canal(canal)):
             return None
         # geocode_preciso: só devolve quando o Google achou o ENDEREÇO (não o
         # centroide da cidade) — senão None e cai na cadeia grátis (com guards).
@@ -288,15 +455,33 @@ def _google_geocode(texto, numero_entrega=None):
         return None
 
 
-def _geocodificar_impl(endereco_ou_cep):
+def _chave_geocode(texto):
+    """Chave do cache de geocode (mesma normalização do google_maps)."""
+    from app.services import google_maps
+    return google_maps._normalizar_chave(texto)
+
+
+def _geocodificar_impl(endereco_ou_cep, canal=CANAL_CHECKOUT):
     """Núcleo do geocode. Devolve `(geo, impreciso, fonte)`:
     - `geo` = (lat, lng, rotulo) ou None;
-    - `impreciso` = True quando SÓ o CEP resolveu (centroide do distrito);
-    - `fonte` in {'latlng','google','gratis','cep_centroide'} — pro sensor.
+    - `impreciso` = True quando SÓ o CEP resolveu (centroide do distrito ou a
+      coordenada do CEP na BrasilAPI);
+    - `fonte` in {'latlng','google','gratis','cep_centroide','brasilapi'} —
+      pro sensor.
 
-    Ordem: 0. "lat,lng" colado; 1. GOOGLE (preciso, se ativo); depois a cadeia
-    grátis como fallback: 2. BrasilAPI; 3. texto; 4. simplificado; 5. rua+cidade
-    (postcode estrito); 6. só o CEP (centroide — IMPRECISO)."""
+    Ordem: 0. "lat,lng" colado; 1. GOOGLE com o texto (preciso, se ativo);
+    2. BrasilAPI pelo CEP — só METADADOS (logradouro/bairro/cidade oficiais):
+       2a. GOOGLE com o logradouro OFICIAL; 2b. Nominatim com o endereço
+       oficial (validado por cidade); depois 3. texto; 4. simplificado;
+    5. rua+cidade (postcode estrito); 6. só o CEP no Nominatim (centroide —
+    IMPRECISO); 7. ÚLTIMO recurso: a coordenada do CEP na BrasilAPI (IMPRECISO).
+
+    A coordenada da BrasilAPI NÃO é confiável: devolveu o MESMO centro de São
+    Paulo para CEPs diferentes (corridas 373/375/370, 03/09/2026). Até a
+    auditoria de 27/09/2026 ela era aceita como PRECISA e pulava a retentativa
+    do Google — frete cotado num ponto que pode estar a km do endereço, sem
+    alerta ao dono. Agora ela só resgata a venda quando nada mais resolveu, e
+    marcada como imprecisa (o chamador alerta o dono e registra no sensor)."""
     texto = (endereco_ou_cep or '').strip()
     if not texto:
         return None, False, None
@@ -304,33 +489,37 @@ def _geocodificar_impl(endereco_ou_cep):
     if m:
         return (float(m.group(1)), float(m.group(2)), texto), False, 'latlng'
     # Google primeiro (preciso a nível de porta; conserta homônimo e Lalamove).
-    g = _google_geocode(texto)
+    g = _google_geocode(texto, canal=canal)
     if g:
         return (g[0], g[1], texto), False, 'google'
     geo = None
     ref = None
+    coord_brasilapi = None
     cep = _extrair_cep(texto)
     if cep:
         cep_geo = _geocodificar_cep(cep)
         if cep_geo:
             ref = cep_geo[3]             # {'cidade','bairro','rua'} do Correios
             if cep_geo[0] is not None:
-                return cep_geo[:3], False, 'gratis'   # BrasilAPI tinha coord
-            # BrasilAPI conhece o CEP mas nao tem coordenada. ANTES da cadeia
-            # grátis, re-tenta o GOOGLE com o logradouro OFICIAL dos Correios:
-            # o passo 1 (texto cru) falha quando o cliente digitou o nome da
-            # rua errado/incompleto, mas o nome oficial resolve (caso Mirelle
+                coord_brasilapi = cep_geo[:3]   # só como ÚLTIMO recurso
+            # BrasilAPI conhece o logradouro: ANTES da cadeia grátis, re-tenta
+            # o GOOGLE com o logradouro OFICIAL dos Correios — com ou sem
+            # coordenada do CEP (ela não é confiável; ver docstring). O passo
+            # 1 (texto cru) falha quando o cliente digitou o nome da rua
+            # errado/incompleto, mas o nome oficial resolve (caso Mirelle
             # 17/07/2026: "Rua Cândido de Azevedo Marques" sem o "Joaquim" →
             # nao_encontrado; com o oficial → Google 1,9km, R$5). Mesmo teto/
-            # cache/kill-switch do passo 1; falhou → cadeia grátis intocada.
+            # cache/kill-switch/canal do passo 1; falhou → cadeia grátis.
             if (ref or {}).get('rua'):
                 numero = _extrair_numero(texto)
                 canonico = ', '.join(x for x in (
                     ref['rua'], numero, ref.get('bairro'), ref.get('cidade'),
                     _formatar_cep(cep)) if x)
-                g2 = _google_geocode(canonico)
-                if g2:
-                    return (g2[0], g2[1], canonico), False, 'google'
+                # Mesmo texto do passo 1 = mesma chave de cache: não paga 2x.
+                if _chave_geocode(canonico) != _chave_geocode(texto):
+                    g2 = _google_geocode(canonico, canal=canal)
+                    if g2:
+                        return (g2[0], g2[1], canonico), False, 'google'
             # Cadeia grátis: geocodifica o endereço resolvido (rua + bairro +
             # cidade), mais preciso que o texto cru. Valida por CIDADE (barra
             # Arujá) — o rótulo carrega o bairro, então o postcode frouxo do
@@ -370,6 +559,13 @@ def _geocodificar_impl(endereco_ou_cep):
         geo = _geocodificar_texto(_formatar_cep(cep), cep_ref=cep)
         if geo and geo[0] is not None:
             return geo, True, 'cep_centroide'
+    if (not geo or geo[0] is None) and coord_brasilapi:
+        # ÚLTIMO RECURSO MESMO: a coordenada do CEP na BrasilAPI. Mesma classe
+        # do centroide acima (IMPRECISO → o chamador alerta o dono e registra
+        # no sensor), com fonte própria pra dar pra distinguir no painel.
+        logger.warning('frete: só a coordenada do CEP na BrasilAPI resolveu '
+                       '%r — cotação imprecisa', texto[:200])
+        return coord_brasilapi, True, 'brasilapi'
     if not geo or geo[0] is None:
         logger.warning('geocodificacao falhou em todas as tentativas: %r',
                        texto[:200])
@@ -393,7 +589,7 @@ def geocodificar_entrega(endereco):
     numero = _extrair_numero(texto)
     if not numero:
         return None
-    g = _google_geocode(texto, numero_entrega=numero)
+    g = _google_geocode(texto, numero_entrega=numero, canal=CANAL_DESPACHO)
     if g:
         return g[0], g[1], texto
     cep = _extrair_cep(texto)
@@ -403,23 +599,29 @@ def geocodificar_entrega(endereco):
         canonico = ', '.join(x for x in (
             ref['rua'], numero, ref.get('bairro'), ref['cidade'],
             _formatar_cep(cep)) if x)
-        if canonico != texto:
-            g = _google_geocode(canonico, numero_entrega=numero)
+        if _chave_geocode(canonico) != _chave_geocode(texto):
+            g = _google_geocode(canonico, numero_entrega=numero,
+                                canal=CANAL_DESPACHO)
             if g:
                 return g[0], g[1], canonico
     logger.warning('Endereço sem ponto validado para despacho: %r', texto[:200])
     return None
 
 
-def geocodificar(endereco_ou_cep):
+def geocodificar(endereco_ou_cep, *, canal=CANAL_CHECKOUT):
     """(lat, lng, rotulo) pra um CEP ou endereço livre, ou None. Wrapper
     compatível para estimativas. Despacho usa geocodificar_entrega()."""
-    geo, _impreciso, _fonte = _geocodificar_impl(endereco_ou_cep)
+    geo, _impreciso, _fonte = _geocodificar_impl(endereco_ou_cep, canal=canal)
     return geo
 
 
-def consultar_frete(endereco_ou_cep):
+def consultar_frete(endereco_ou_cep, *, canal=CANAL_CHECKOUT):
     """Estimativa de frete pra um CEP ou endereço.
+
+    `canal` decide de qual cota do Google sai a chamada remota (cache é
+    grátis): CANAL_PREVIEW pra cotação ANÔNIMA (/loja/api/frete — sub-teto,
+    não consegue esgotar o Google do checkout), CANAL_CHECKOUT (padrão —
+    fail-safe: quem não informa é tratado como checkout).
 
     Retorna:
       {'ok': True, 'valor': 15.0, 'gratis': False, 'fora_area': False,
@@ -430,16 +632,17 @@ def consultar_frete(endereco_ou_cep):
     """
     if not (endereco_ou_cep or '').strip():
         return {'ok': False, 'erro': 'endereco_vazio'}
-    geo, impreciso, fonte = _geocodificar_impl(endereco_ou_cep)
+    geo, impreciso, fonte = _geocodificar_impl(endereco_ou_cep, canal=canal)
     if not geo:
         return {'ok': False, 'erro': 'nao_encontrado'}
 
     lat, lng, rotulo = geo
     km = distancia_km(lat, lng)
     valor = valor_para_distancia(km)
-    # `impreciso` = resolveu SÓ pelo centroide do CEP (frete é chute grosseiro).
-    # `fonte` = de onde veio a coordenada (google/gratis/cep_centroide) — pro
-    # sensor. O caller (checkout) alerta o dono nos casos de risco (dono 09/07).
+    # `impreciso` = resolveu SÓ pelo CEP (centroide no Nominatim ou coordenada
+    # da BrasilAPI — frete é chute grosseiro). `fonte` = de onde veio a
+    # coordenada (google/gratis/cep_centroide/brasilapi) — pro sensor. O
+    # caller (checkout) alerta o dono nos casos de risco (dono 09/07).
     if valor is None:
         return {'ok': True, 'fora_area': True, 'distancia_km': round(km, 1),
                 'endereco': rotulo, 'impreciso': impreciso, 'fonte': fonte,

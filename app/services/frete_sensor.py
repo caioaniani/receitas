@@ -1,8 +1,8 @@
 """Sensor de geocode do frete (09/07/2026).
 
 Registra cada evento que PODE barrar/errar uma venda no site — endereço não
-localizado (venda travou), frete impreciso (cotou pelo centroide do CEP) ou
-Google resgatou — pro dono ver o padrão e saber se está perdendo venda. Só
+localizado (venda travou), frete impreciso (cotou só pelo CEP: centroide no
+Nominatim ou coordenada da BrasilAPI — `fonte` distingue) ou Google resgatou — pro dono ver o padrão e saber se está perdendo venda. Só
 log: sessão ISOLADA (`Session(db.engine)` — nunca contamina a transação do
 checkout) e best-effort (qualquer erro é engolido, nunca quebra a venda).
 
@@ -84,8 +84,8 @@ def resumo(dias=7):
     com contagens por desfecho, chamadas/custo Google e os eventos recentes."""
     from datetime import timedelta
 
-    from app.models import AppConfig, FreteSensor
-    from app.utils import agora, hoje
+    from app.models import FreteSensor
+    from app.utils import agora
 
     dias = max(1, min(int(dias or 7), 90))
     desde = agora() - timedelta(days=dias)
@@ -97,10 +97,11 @@ def resumo(dias=7):
     for e in eventos:
         por_desfecho[e.desfecho] = por_desfecho.get(e.desfecho, 0) + 1
 
-    # Chamadas remotas ao Google HOJE (contador do frete) + custo estimado.
-    dia_iso = hoje().isoformat()
-    dia, _, n = (AppConfig.get('frete_google_dia') or '').partition('|')
-    google_hoje = int(n) if n.isdigit() and dia == dia_iso else 0
+    # Chamadas remotas ao Google HOJE (contador do frete, fonte única no
+    # frete.py — total e a parte do preview anônimo) + custo estimado.
+    from app.services import frete
+    uso = frete.uso_google_hoje()
+    google_hoje = uso['total']
 
     return {
         'dias': dias,
@@ -111,6 +112,9 @@ def resumo(dias=7):
         'resolvido_google': por_desfecho.get('resolvido_google', 0),
         'lalamove_falhou': por_desfecho.get('lalamove_falhou', 0),
         'google_chamadas_hoje': google_hoje,
+        'google_preview_hoje': uso['preview'],
+        'google_teto_dia': uso['teto'],
+        'google_teto_preview': uso['teto_preview'],
         'google_custo_hoje_usd': round(google_hoje * CUSTO_GOOGLE_USD, 2),
         'eventos': eventos[:100],
     }
