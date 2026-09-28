@@ -494,7 +494,7 @@ def test_compra_presa_no_gateway_ha_mais_de_24h_avisa_o_dono(compra, gateway, mo
     assert gateway.alerta.call_args.kwargs == {'critico': False, 'cooldown': 86400}
 
 
-def test_erro_numa_compra_nao_impede_a_expiracao_das_outras(compra, gateway, monkeypatch):
+def test_erro_numa_compra_fica_isolado_e_volta_no_ciclo_seguinte(compra, gateway, monkeypatch):
     _vencida(compra, pix_expira_em=None)
     original = loja_pagamento.situacao_no_gateway
     chamadas = []
