@@ -168,10 +168,13 @@ def _gravar_cache_preciso(chave, coords, fonte):
     resposta (é o relógio do prazo do cache negativo). Corrida com outro
     processo gravando a mesma chave (dois cliques em "Calcular frete") cai
     no unique: o savepoint desfaz só esta escrita e a sessão do chamador
-    segue utilizável — sem isso a transação do checkout ficava inutilizada."""
+    segue utilizável — sem isso a transação do checkout ficava inutilizada.
+    As pendências do chamador vão ao banco ANTES (`flush`), fora do
+    savepoint: erro delas é delas e sobe como antes, nunca vira "corrida"."""
     from sqlalchemy.exc import IntegrityError
 
     from app.utils import agora
+    db.session.flush()
     try:
         with db.session.begin_nested():
             cache = GeocodeCache.query.filter_by(chave=chave).first()
