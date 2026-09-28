@@ -497,7 +497,7 @@ vm.runInContext(fs.readFileSync(process.argv[2], 'utf8'), ctx);
   assert.equal(campos.fiscal_nome.value, RESPOSTA.dados.nome);
   assert.equal(campos.fiscal_endereco.value, 'Rua do cliente');
   assert.equal(campos.fiscal_token.value, RESPOSTA.token);
-  assert.match(status.textContent, /Abreviamos razão social, bairro para caber no limite da nota fiscal/);
+  assert.match(status.textContent, /Abreviamos razão social e bairro para caber no limite da nota fiscal/);
   assert.doesNotMatch(status.textContent, /rua ou avenida/);
   console.log('OK');
 })().catch(e => { console.error(e); process.exit(1); });
