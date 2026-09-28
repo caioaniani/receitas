@@ -67,10 +67,23 @@ def _geocode_remoto(endereco, key=None):
         return None
 
 
+# Rotas/entregas gravam com fonte PRÓPRIA: o `_geocode_remoto` não confere
+# `location_type` e aceita centroide aproximado. Gravar como 'google' fazia o
+# FRETE tratar esse ponto como preciso (revisão 28/09/2026).
+FONTE_ROTA = 'google_rota'
+
+
 def _eh_fonte_confiavel(fonte):
     """Considera so Google como fonte confiavel. Resultados antigos (Nominatim,
     BrasilAPI, AwesomeAPI) eram instaveis — re-geocoda com Google."""
     return (fonte or '').startswith('google')
+
+
+def _resposta_do_google(cache):
+    """Linha escrita a partir de uma resposta do Google (qualquer variante,
+    inclusive o ZERO_RESULTS do frete). Falha das rotas nunca a apaga: apagar
+    fazia o frete pagar de novo pelo mesmo texto."""
+    return bool(cache) and (cache.fonte or '').startswith('google')
 
 
 def geocode(endereco):
@@ -92,16 +105,16 @@ def geocode(endereco):
     coords = _geocode_remoto(endereco)
     if coords:
         if not cache:
-            cache = GeocodeCache(chave=chave, fonte='google')
+            cache = GeocodeCache(chave=chave, fonte=FONTE_ROTA)
             db.session.add(cache)
         cache.lat, cache.lng = coords
-        cache.fonte = 'google'
+        cache.fonte = FONTE_ROTA
         db.session.commit()
         return coords
 
-    # Falhou: deleta cache antigo (de qualquer fonte) pra forcar re-tentar
-    # na proxima execucao. Nao persiste falha — UX simples, sem botoes manuais.
-    if cache:
+    # Falhou: deleta cache antigo de OUTRA fonte (Nominatim etc.) pra forcar
+    # re-tentar na proxima execucao; resposta do Google fica.
+    if cache and not _resposta_do_google(cache):
         db.session.delete(cache)
         db.session.commit()
     return None
@@ -165,29 +178,41 @@ def cache_preciso(endereco, numero_entrega=None):
 
 def _gravar_cache_preciso(chave, coords, fonte):
     """Grava a resposta do Google no cache. `criado_em` = momento DESTA
-    resposta (é o relógio do prazo do cache negativo). Corrida com outro
-    processo gravando a mesma chave (dois cliques em "Calcular frete") cai
-    no unique: o savepoint desfaz só esta escrita e a sessão do chamador
-    segue utilizável — sem isso a transação do checkout ficava inutilizada.
-    As pendências do chamador vão ao banco ANTES (`flush`), fora do
-    savepoint: erro delas é delas e sobe como antes, nunca vira "corrida"."""
-    from sqlalchemy.exc import IntegrityError
+    resposta (é o relógio do prazo do cache negativo).
+
+    Conexão PRÓPRIA (`db.engine.begin()`): gravar o cache nunca commita nem
+    solta as travas da transação do CHAMADOR (checkout, compra de kit) — a
+    versão em savepoint fazia `commit` da sessão dele (revisão 28/09/2026).
+    Corrida com outro processo gravando a mesma chave cai no unique e é
+    ignorada; erro de banco só perde o cache (a resposta segue valendo)."""
+    from sqlalchemy import insert, select, update
+    from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
     from app.utils import agora
-    db.session.flush()
+    tabela = GeocodeCache.__table__
+    lat, lng = coords if coords else (None, None)
+    valores = dict(lat=lat, lng=lng, fonte=fonte, criado_em=agora())
     try:
-        with db.session.begin_nested():
-            cache = GeocodeCache.query.filter_by(chave=chave).first()
-            if not cache:
-                cache = GeocodeCache(chave=chave)
-                db.session.add(cache)
-            cache.lat, cache.lng = coords if coords else (None, None)
-            cache.fonte = fonte
-            cache.criado_em = agora()
-        db.session.commit()
+        with db.engine.begin() as conn:
+            existe = conn.execute(select(tabela.c.id)
+                                  .where(tabela.c.chave == chave)).first()
+            if existe:
+                conn.execute(update(tabela).where(tabela.c.id == existe[0])
+                             .values(**valores))
+            else:
+                conn.execute(insert(tabela).values(chave=chave, **valores))
     except IntegrityError:
         logger.info('geocode_preciso: outro processo gravou o cache de %r',
                     chave[:80])
+    except SQLAlchemyError as exc:
+        logger.warning('geocode_preciso: cache de %r não gravado (%s)',
+                       chave[:80], type(exc).__name__)
+        return
+    # A sessão do chamador pode ter a linha antiga carregada (cache_preciso):
+    # expira para a próxima leitura ver o que acabou de ser gravado.
+    for obj in list(db.session.identity_map.values()):
+        if isinstance(obj, GeocodeCache) and obj.chave == chave:
+            db.session.expire(obj)
 
 
 def geocode_preciso(endereco, numero_entrega=None):
@@ -252,6 +277,7 @@ def geocode_preciso(endereco, numero_entrega=None):
         preciso = geom.get('location_type') in (
             'ROOFTOP', 'RANGE_INTERPOLATED', 'GEOMETRIC_CENTER') \
             and not res0.get('partial_match')
+        preciso_frete = preciso
         if numero_entrega is not None:
             # Despacho exige rua/número, não centroide de CEP, rua ou cidade.
             # Cache antigo 'google' não carrega essa prova: revalida acima.
@@ -263,8 +289,15 @@ def geocode_preciso(endereco, numero_entrega=None):
                        and bool(set(res0.get('types', [])) & {'street_address', 'premise', 'subpremise'})
                        and str(numero_entrega) in numeros)
         coords = (float(loc['lat']), float(loc['lng']))
-        fonte = (('google_entrega' if numero_entrega is not None else 'google')
-                 if preciso else 'google_aprox')
+        if preciso:
+            fonte = 'google_entrega' if numero_entrega is not None else 'google'
+        elif numero_entrega is not None and preciso_frete:
+            # Não prova a porta (despacho recusa), mas vale para o FRETE: gravar
+            # 'google_aprox' aqui desligava o Google daquele texto no frete
+            # (revisão 28/09/2026).
+            fonte = 'google'
+        else:
+            fonte = 'google_aprox'
         _gravar_cache_preciso(chave, coords, fonte)
         return coords if preciso else None
     except (requests.RequestException, ValueError, KeyError, TypeError) as e:
@@ -322,11 +355,11 @@ def geocode_em_lote(enderecos, max_workers=8):
         cache = GeocodeCache.query.filter_by(chave=chave).first()
         if coords:
             if not cache:
-                cache = GeocodeCache(chave=chave, fonte='google')
+                cache = GeocodeCache(chave=chave, fonte=FONTE_ROTA)
                 db.session.add(cache)
             cache.lat, cache.lng = coords
-            cache.fonte = 'google'
-        elif cache:
+            cache.fonte = FONTE_ROTA
+        elif cache and not _resposta_do_google(cache):
             db.session.delete(cache)
         resultados[e] = coords
     db.session.commit()

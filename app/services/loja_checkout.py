@@ -669,6 +669,30 @@ def _montar_endereco(form, incluir_complemento=True):
     return ', '.join(p for p in partes if p)
 
 
+def cep_do_form(form):
+    """(cep 'NNNNN-NNN' | None, inválido?) — só 8 números valem, gravados no
+    formato da máscara (coluna String(9)). Fonte única do checkout e da
+    cotação antecipada dos kits."""
+    cep_bruto = (form.get('cep') or '').strip()
+    cep_digitos = ''.join(c for c in cep_bruto if '0' <= c <= '9')
+    invalido = bool(cep_bruto) and len(cep_digitos) != 8
+    cep = (f'{cep_digitos[:5]}-{cep_digitos[5:]}'
+           if cep_bruto and not invalido else None)
+    return cep, invalido
+
+
+def texto_de_geocode(form):
+    """(texto que o frete geocodifica, CEP inválido?): rua + número + bairro +
+    cidade, SEM complemento (ele derruba o geocoder) + CEP concatenado para
+    desambiguar bairros homônimos. Fonte única do checkout e dos kits."""
+    cep, invalido = cep_do_form(form)
+    geo_txt = _montar_endereco(form, incluir_complemento=False)
+    geo = geo_txt
+    if cep and cep not in geo:
+        geo = f'{geo_txt}, {cep}' if geo_txt else cep
+    return geo, invalido
+
+
 def _frete_para(modo, endereco, base=None, contato=None):
     """Calcula o frete no servidor (autoritativo). Devolve
     (valor:Decimal, distancia_km, endereco_norm, erro|None)."""
@@ -837,11 +861,7 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     # front) ANTES do frete e do flush: a coluna é String(9) e um POST com
     # '04077-000 (portaria B)' virava DataError/500 no Postgres (auditoria
     # 27/09/2026, mesma classe do incidente de 01/09/2026).
-    cep_bruto = (form.get('cep') or '').strip()
-    cep_digitos = ''.join(c for c in cep_bruto if '0' <= c <= '9')
-    cep_invalido = bool(cep_bruto) and len(cep_digitos) != 8
-    endereco_cep = (f'{cep_digitos[:5]}-{cep_digitos[5:]}'
-                    if cep_bruto and not cep_invalido else None)
+    endereco_cep, cep_invalido = cep_do_form(form)
     if cep_invalido:
         erros.append('Informe um CEP válido (8 números).')
     distancia_km = None
@@ -966,12 +986,7 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
         _validar_limite(erros, 'A cidade', end_cidade,
                         ENDERECO_LIMITES['cidade'])
         endereco_txt = _montar_endereco(form)            # snapshot (c/ complemento)
-        # geocoding usa rua+numero+bairro+cidade (SEM complemento — ele derruba
-        # o geocoder) + CEP concatenado pra desambiguar bairros homonimos.
-        geo_txt = _montar_endereco(form, incluir_complemento=False)
-        geo = geo_txt
-        if endereco_cep and endereco_cep not in geo:
-            geo = f'{geo_txt}, {endereco_cep}' if geo_txt else endereco_cep
+        geo, _ = texto_de_geocode(form)
         _contato = ' · '.join(p for p in (
             f'{nome_dado} {sobrenome_dado}'.strip(), telefone, email) if p)
         # CEP já recusado: não gasta cotação (nem Google) com ele.

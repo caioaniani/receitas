@@ -618,8 +618,10 @@ def test_gravar_cache_do_google_nao_commita_o_chamador(app):
     from app.services import google_maps
     app.config['GOOGLE_MAPS_API_KEY'] = 'chave-teste'
     db.session.add(AppConfig(key='pendente_do_chamador', value='x'))
-    with patch.object(google_maps.requests, 'get',
-                      return_value=_google_resp('ROOFTOP')):
+    # Pendência ainda não enviada ao banco (é o estado do checkout na hora da
+    # cotação). A versão antiga fazia flush + commit dela aqui dentro.
+    with db.session.no_autoflush, patch.object(
+            google_maps.requests, 'get', return_value=_google_resp('ROOFTOP')):
         assert google_maps.geocode_preciso('Rua Nova, 5') == (-23.6708, -46.6883)
     db.session.rollback()
     assert AppConfig.get('pendente_do_chamador') is None

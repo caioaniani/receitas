@@ -83,14 +83,15 @@ def checar_frete():
                     f'({km_min}-{km_max} km) — geocode suspeito: '
                     f'{(r.get("endereco") or "")[:60]}')
             elif r.get('impreciso'):
-                # Os canários de dentro são endereços com rua conhecida: se
-                # só o CEP resolveu (centroide ou coordenada da BrasilAPI), o
-                # geocode preciso (Google e Nominatim) caiu — e a faixa larga
+                # Os canários de dentro têm rua conhecida (no texto ou, no
+                # '01050-000', pela rua que a BrasilAPI dá ao CEP): se só o
+                # CEP resolveu (centroide ou coordenada da BrasilAPI) ou só a
+                # rua sem o número, o geocode preciso caiu — e a faixa larga
                 # não pega isso (o centro de SP cai "dentro" do Centro).
                 problemas.append(
-                    f'frete de "{rotulo}" só resolveu pelo CEP (fonte '
-                    f'{r.get("fonte") or "?"}, impreciso) — Google e '
-                    'Nominatim não localizaram o endereço')
+                    f'frete de "{rotulo}" resolveu sem precisão (fonte '
+                    f'{r.get("fonte") or "?"}) — Google e Nominatim não '
+                    'localizaram o endereço exato')
     return problemas
 
 

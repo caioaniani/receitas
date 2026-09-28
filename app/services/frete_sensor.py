@@ -1,8 +1,9 @@
 """Sensor de geocode do frete (09/07/2026).
 
 Registra cada evento que PODE barrar/errar uma venda no site — endereço não
-localizado (venda travou), frete impreciso (cotou só pelo CEP: centroide no
-Nominatim ou coordenada da BrasilAPI — `fonte` distingue) ou Google resgatou — pro dono ver o padrão e saber se está perdendo venda. Só
+localizado (venda travou), frete impreciso (cotou só pelo CEP — centroide no
+Nominatim ou coordenada da BrasilAPI — ou só pela rua quando o número não foi
+achado; `fonte` distingue) ou Google resgatou — pro dono ver o padrão e saber se está perdendo venda. Só
 log: sessão ISOLADA (`Session(db.engine)` — nunca contamina a transação do
 checkout) e best-effort (qualquer erro é engolido, nunca quebra a venda).
 

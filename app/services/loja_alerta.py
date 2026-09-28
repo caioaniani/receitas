@@ -254,10 +254,10 @@ _MSG_MOTIVO = {
         'O site não localizou esse endereço no cálculo de frete. Confira se dá '
         'pra atender e chame o cliente pra fechar.'),
     'impreciso': (
-        '📍 FRETE IMPRECISO no site — cotado pelo CENTROIDE do CEP '
+        '📍 FRETE IMPRECISO no site — cotado só pelo CEP ou pela rua '
         '(o endereço exato não foi localizado)',
-        'O cliente CONSEGUE comprar, mas o frete saiu por estimativa do CEP e '
-        'pode estar bem errado. Confira e ajuste com ele.'),
+        'O cliente CONSEGUE comprar, mas o frete saiu por estimativa e pode '
+        'estar bem errado. Confira e ajuste com ele.'),
     'fora_area': (
         '📍 ENDEREÇO FORA DA ÁREA (mas perto da borda) — venda barrada',
         'O endereço ficou além do raio de entrega, mas por pouco. Se der pra '

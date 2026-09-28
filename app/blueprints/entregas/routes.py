@@ -1874,13 +1874,18 @@ def api_debug_google():
     try:
         from app.models import GeocodeCache
         info['cache_total'] = GeocodeCache.query.count()
+        # Família 'google*': frete ('google', 'google_aprox', 'google_zero'),
+        # despacho ('google_entrega') e rotas ('google_rota').
         info['cache_google_ok'] = GeocodeCache.query.filter(
-            GeocodeCache.fonte == 'google',
+            GeocodeCache.fonte.like('google%'),
             GeocodeCache.lat.isnot(None),
         ).count()
-        info['cache_google_fail'] = GeocodeCache.query.filter_by(fonte='google_fail').count()
+        info['cache_google_fail'] = GeocodeCache.query.filter(
+            GeocodeCache.fonte.like('google%'),
+            GeocodeCache.lat.is_(None),
+        ).count()
         info['cache_outras_fontes'] = GeocodeCache.query.filter(
-            ~GeocodeCache.fonte.in_(['google', 'google_fail']),
+            ~GeocodeCache.fonte.like('google%'),
             GeocodeCache.fonte.isnot(None),
         ).count()
     except Exception as e:

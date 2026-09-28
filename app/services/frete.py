@@ -129,7 +129,8 @@ def _geocodificar_cep(cep):
         return None
 
 
-def _geocodificar_texto(texto, ref=None, cep_ref=None, postcode_estrito=False):
+def _geocodificar_texto(texto, ref=None, cep_ref=None, postcode_estrito=False,
+                        falhas=None):
     """Nominatim (OSM): endereço livre -> (lat, lng, rótulo) ou None.
 
     Sanidade contra homônimo (05/07/2026; revisto 09/07/2026), dois sinais
@@ -145,6 +146,11 @@ def _geocodificar_texto(texto, ref=None, cep_ref=None, postcode_estrito=False):
          distrito quando o OSM não dá cidade ("Rua Nova York" Brooklin×Grajaú,
          "Rua Martins Fontes" Centro×Arujá, 05/07/2026).
     Só rejeita em divergência POSITIVA (sem o dado, aceita). Até 3 candidatos.
+
+    `falhas` (lista): recebe 'rede' quando o Nominatim não respondeu (erro de
+    conexão, timeout, HTTP != 200) — diferente de "não achou". A cadeia usa
+    isso para parar: insistir num serviço fora custava 5 × 8 s por cotação
+    (revisão 28/09/2026).
     """
     consulta = texto.strip()
     if 'são paulo' not in consulta.lower() and 'sao paulo' not in consulta.lower():
@@ -157,6 +163,8 @@ def _geocodificar_texto(texto, ref=None, cep_ref=None, postcode_estrito=False):
                                  'addressdetails': 1, 'countrycodes': 'br'},
                          headers=_UA, timeout=_TIMEOUT)
         if r.status_code != 200:
+            if falhas is not None:
+                falhas.append('rede')
             return None
         candidatos = r.json()
         if not isinstance(candidatos, list):
@@ -197,11 +205,19 @@ def _geocodificar_texto(texto, ref=None, cep_ref=None, postcode_estrito=False):
                     logger.warning('geocode descartado (CEP diverge): pedimos '
                                    '%s, candidato %s (%r)', cep_pref, pc, nome)
                     continue
-            return (float(h['lat']), float(h['lon']),
-                    h.get('display_name', consulta))
+            try:
+                return (float(h['lat']), float(h['lon']),
+                        h.get('display_name', consulta))
+            except (KeyError, TypeError, ValueError):
+                continue          # candidato sem coordenada legível
         return None
-    except (requests.RequestException, ValueError, KeyError):
+    except requests.RequestException:
+        if falhas is not None:
+            falhas.append('rede')
         logger.warning('Nominatim falhou pra %r', texto)
+        return None
+    except ValueError:
+        logger.warning('Nominatim respondeu JSON ilegível pra %r', texto)
         return None
 
 
@@ -345,40 +361,43 @@ def uso_google_hoje():
             'teto_preview': teto_preview}
 
 
+# Aviso de teto esgotado: 1 linha por (dia, canal) por processo — antes saía
+# um WARNING a cada cotação depois de esgotar (ruído proporcional ao tráfego
+# anônimo).
+_TETO_AVISADO = set()
+
+
 def _reservar_vaga_google(canal):
     """Reserva 1 vaga do teto DIÁRIO de chamadas REMOTAS ao Google. True se
     coube. Preview precisa caber no sub-teto E no total; checkout/despacho,
     só no total.
 
     Atômico entre workers: compare-and-swap no valor do AppConfig (UPDATE ...
-    WHERE value = <lido>); perdeu a corrida, relê e tenta de novo. Antes era
-    ler→somar→gravar e dois workers podiam passar do teto juntos. Commita na
-    hora (como antes): segurar a linha até o fim do checkout serializaria
-    todas as cotações.
+    WHERE value = <lido>); perdeu a corrida, relê e tenta de novo.
 
-    Isolamento da transação do chamador: as pendências DELE vão ao banco
-    antes (`flush` — erro delas continua sendo dele e sobe como antes); o que
-    é NOSSO roda num savepoint por tentativa, então falha de banco nossa
-    desfaz só o savepoint — nunca descarta nem envenena o que o chamador já
-    gravou. Sem vaga ou com erro nosso = sem Google (a cadeia grátis segue)."""
-    from sqlalchemy import select, update
+    Conexão PRÓPRIA (`db.engine.begin()`, como a consulta de CNPJ): o contador
+    nunca commita, descarta nem solta as travas da transação do CHAMADOR —
+    a versão em savepoint fazia `commit` da sessão do checkout/kit no meio da
+    compra (revisão 28/09/2026). Erro de banco = sem Google (a cadeia grátis
+    segue)."""
+    from sqlalchemy import insert, select, update
     from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
     from app.extensions import db
     from app.models import AppConfig
     from app.utils import hoje
 
+    tabela = AppConfig.__table__
     teto, teto_preview = tetos_google()
     hoje_iso = hoje().isoformat()
-    db.session.flush()
     for _ in range(_TENTATIVAS_RESERVA):
         esgotado = None
         gravou = False
         try:
-            with db.session.begin_nested():
-                linha = db.session.execute(
-                    select(AppConfig.value)
-                    .where(AppConfig.key == _CHAVE_USO_GOOGLE)).first()
+            with db.engine.begin() as conn:
+                linha = conn.execute(
+                    select(tabela.c.value)
+                    .where(tabela.c.key == _CHAVE_USO_GOOGLE)).first()
                 bruto = linha[0] if linha else None
                 total, preview = _ler_uso(bruto, hoje_iso)
                 if total >= teto:
@@ -392,30 +411,32 @@ def _reservar_vaga_google(canal):
                     novo = (f'{hoje_iso}|{total + 1}|'
                             f'{preview + (1 if canal == CANAL_PREVIEW else 0)}')
                     if linha is None:
-                        # Unique da chave: se outro worker criou a linha
-                        # agora, o flush da saída do savepoint levanta.
-                        db.session.add(AppConfig(key=_CHAVE_USO_GOOGLE,
-                                                 value=novo))
+                        # Unique da chave: outro worker criou a linha agora →
+                        # IntegrityError → relê.
+                        conn.execute(insert(tabela).values(
+                            key=_CHAVE_USO_GOOGLE, value=novo))
                         gravou = True
                     else:
-                        atual = (AppConfig.value.is_(None) if bruto is None
-                                 else AppConfig.value == bruto)
-                        res = db.session.execute(
-                            update(AppConfig)
-                            .where(AppConfig.key == _CHAVE_USO_GOOGLE, atual)
-                            .values(value=novo)
-                            .execution_options(synchronize_session=False))
+                        atual = (tabela.c.value.is_(None) if bruto is None
+                                 else tabela.c.value == bruto)
+                        res = conn.execute(
+                            update(tabela)
+                            .where(tabela.c.key == _CHAVE_USO_GOOGLE, atual)
+                            .values(value=novo))
                         gravou = res.rowcount == 1
         except IntegrityError:
             continue                  # outro worker criou a linha: relê
-        except SQLAlchemyError:
-            logger.exception('frete: falha ao reservar vaga do teto do Google')
+        except SQLAlchemyError as exc:
+            logger.warning('frete: contador do teto do Google indisponível '
+                           '(%s) — sem Google nesta cotação', type(exc).__name__)
             return False
         if esgotado:
-            logger.warning('frete: %s', esgotado)
+            marca = (hoje_iso, canal, esgotado.split(' (')[0])
+            if marca not in _TETO_AVISADO:
+                _TETO_AVISADO.add(marca)
+                logger.warning('frete: %s', esgotado)
             return False
         if gravou:
-            db.session.commit()
             return True
         # CAS perdeu (outro worker gravou entre a leitura e o UPDATE): relê.
     logger.warning('frete: reserva no teto do Google perdeu %s corridas '
@@ -464,17 +485,22 @@ def _chave_geocode(texto):
 def _geocodificar_impl(endereco_ou_cep, canal=CANAL_CHECKOUT):
     """Núcleo do geocode. Devolve `(geo, impreciso, fonte)`:
     - `geo` = (lat, lng, rotulo) ou None;
-    - `impreciso` = True quando SÓ o CEP resolveu (centroide do distrito ou a
-      coordenada do CEP na BrasilAPI);
-    - `fonte` in {'latlng','google','gratis','cep_centroide','brasilapi'} —
-      pro sensor.
+    - `impreciso` = True quando o endereço não foi achado na porta: só o CEP
+      resolveu (centroide do distrito ou a coordenada da BrasilAPI) ou o
+      cliente deu número e só a RUA foi achada;
+    - `fonte` in {'latlng','google','gratis','rua_sem_numero',
+      'cep_centroide','brasilapi'} — pro sensor.
 
     Ordem: 0. "lat,lng" colado; 1. GOOGLE com o texto (preciso, se ativo);
     2. BrasilAPI pelo CEP — só METADADOS (logradouro/bairro/cidade oficiais):
-       2a. GOOGLE com o logradouro OFICIAL; 2b. Nominatim com o endereço
-       oficial (validado por cidade); depois 3. texto; 4. simplificado;
-    5. rua+cidade (postcode estrito); 6. só o CEP no Nominatim (centroide —
-    IMPRECISO); 7. ÚLTIMO recurso: a coordenada do CEP na BrasilAPI (IMPRECISO).
+       2a. GOOGLE com o logradouro OFICIAL; depois a cadeia do Nominatim:
+    COM número do cliente — 3. texto; 4. simplificado; 5. rótulo oficial sem
+    número (IMPRECISO); SEM número — o rótulo oficial vem primeiro (é o
+    melhor ponto possível) e depois texto/simplificado; 6. rua+cidade
+    (postcode estrito); 7. só o CEP (centroide — IMPRECISO); 8. ÚLTIMO
+    recurso: a coordenada do CEP na BrasilAPI (IMPRECISO). Nominatim fora
+    (rede/timeout/HTTP) encerra a cadeia na hora — com a coordenada da
+    BrasilAPI, ela sai imprecisa; sem ela, 'nao_encontrado'.
 
     A coordenada da BrasilAPI NÃO é confiável: devolveu o MESMO centro de São
     Paulo para CEPs diferentes (corridas 373/375/370, 03/09/2026). Até a
@@ -520,13 +546,48 @@ def _geocodificar_impl(endereco_ou_cep, canal=CANAL_CHECKOUT):
                     g2 = _google_geocode(canonico, canal=canal)
                     if g2:
                         return (g2[0], g2[1], canonico), False, 'google'
-            # Cadeia grátis: geocodifica o endereço resolvido (rua + bairro +
-            # cidade), mais preciso que o texto cru. Valida por CIDADE (barra
-            # Arujá) — o rótulo carrega o bairro, então o postcode frouxo do
-            # OSM não derruba (caso ABC).
-            geo = _geocodificar_texto(cep_geo[2], ref=ref, cep_ref=cep)
+    falhas = []
+
+    def _parar():
+        """Nominatim fora (rede/timeout/HTTP): as próximas etapas também usam
+        ele — insistir custava até 5 × 8 s por cotação, travando as threads
+        do app, e piorava o bloqueio por excesso de chamadas. Com a
+        coordenada da BrasilAPI em mãos, ela resgata a venda (imprecisa)."""
+        return bool(falhas)
+
+    def _saida_sem_nominatim():
+        if coord_brasilapi:
+            logger.warning('frete: Nominatim fora — coordenada do CEP na '
+                           'BrasilAPI para %r (imprecisa)', texto[:200])
+            return coord_brasilapi, True, 'brasilapi'
+        logger.warning('frete: Nominatim fora e sem outra fonte para %r',
+                       texto[:200])
+        return None, False, None
+
+    numero_cliente = _extrair_numero(texto)
+    rotulo_oficial = cep_geo[2] if (cep and cep_geo) else None
+
+    def _rotulo():
+        """Rótulo oficial dos Correios (rua + bairro + cidade, SEM número),
+        validado por CIDADE (barra Arujá; o postcode frouxo do OSM não
+        derruba — caso ABC)."""
+        return _geocodificar_texto(rotulo_oficial, ref=ref, cep_ref=cep,
+                                   falhas=falhas)
+
+    sem_numero = False
+    # Sem número do cliente, o rótulo oficial é o melhor ponto possível e vem
+    # primeiro, como antes. COM número, o texto do cliente vem antes: o rótulo
+    # sem número devolve um ponto qualquer da rua (a km do endereço numa
+    # avenida longa) e era aceito como preciso antes mesmo de tentar o número
+    # (revisão 28/09/2026).
+    if rotulo_oficial and not numero_cliente:
+        geo = _rotulo()
+        if _parar():
+            return _saida_sem_nominatim()
     if not geo or geo[0] is None:
-        geo = _geocodificar_texto(texto, ref=ref, cep_ref=cep)
+        geo = _geocodificar_texto(texto, ref=ref, cep_ref=cep, falhas=falhas)
+        if _parar():
+            return _saida_sem_nominatim()
     if not geo or geo[0] is None:
         simples = simplificar_endereco(texto)
         if simples and simples.lower() != texto.lower():
@@ -535,7 +596,16 @@ def _geocodificar_impl(endereco_ou_cep, canal=CANAL_CHECKOUT):
             # postcode — é o que barra a "Rua Nova York" do Grajaú vs Brooklin
             # (05/07/2026). Endereço de fora da capital que só resolve aqui é
             # limitação conhecida do último fallback.
-            geo = _geocodificar_texto(simples, cep_ref=cep)
+            geo = _geocodificar_texto(simples, cep_ref=cep, falhas=falhas)
+            if _parar():
+                return _saida_sem_nominatim()
+    if (not geo or geo[0] is None) and rotulo_oficial and numero_cliente:
+        # O número não foi localizado: o rótulo oficial acha a RUA, não a
+        # porta — cotação marcada imprecisa (o chamador alerta o dono).
+        geo = _rotulo()
+        if _parar():
+            return _saida_sem_nominatim()
+        sem_numero = bool(geo and geo[0] is not None)
     if (not geo or geo[0] is None) and cep:
         # RUA + cidade (sem número/bairro/UF): a string cheia às vezes derruba
         # o Nominatim e o simplificado-com-número cai no HOMÔNIMO (ex: "Rua
@@ -549,14 +619,20 @@ def _geocodificar_impl(endereco_ou_cep, canal=CANAL_CHECKOUT):
             # positivo de CEP) — senão é seguro cair no CEP-só abaixo, em vez
             # de arriscar o homônimo da mesma cidade.
             geo = _geocodificar_texto(f'{rua}, {cidade}', cep_ref=cep,
-                                      postcode_estrito=True)
+                                      postcode_estrito=True, falhas=falhas)
+            if _parar():
+                return _saida_sem_nominatim()
+            sem_numero = bool(numero_cliente and geo and geo[0] is not None)
     if (not geo or geo[0] is None) and cep:
         # ÚLTIMO RECURSO: geocodifica só o CEP (centroide do distrito). Menos
         # preciso — pode super OU subestimar o frete e, na borda de um CEP
         # grande, inverter o "fora da área" — mas RESGATA a venda quando a
         # BrasilAPI não tem coordenada e nenhuma variante do endereço resolve.
         # Marca IMPRECISO pro caller alertar o dono (decisão do dono 09/07).
-        geo = _geocodificar_texto(_formatar_cep(cep), cep_ref=cep)
+        geo = _geocodificar_texto(_formatar_cep(cep), cep_ref=cep,
+                                  falhas=falhas)
+        if _parar():
+            return _saida_sem_nominatim()
         if geo and geo[0] is not None:
             return geo, True, 'cep_centroide'
     if (not geo or geo[0] is None) and coord_brasilapi:
@@ -570,6 +646,10 @@ def _geocodificar_impl(endereco_ou_cep, canal=CANAL_CHECKOUT):
         logger.warning('geocodificacao falhou em todas as tentativas: %r',
                        texto[:200])
         return None, False, None
+    if sem_numero:
+        logger.warning('frete: número não localizado, cotado pela rua %r — '
+                       'cotação imprecisa', texto[:200])
+        return geo, True, 'rua_sem_numero'
     return geo, False, 'gratis'
 
 
