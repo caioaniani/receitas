@@ -1267,9 +1267,21 @@ def api_frete():
     """Cotação de frete pro checkout (anéis de distância do frete.py).
     Recebe JSON {endereco, cep}; devolve o dict do consultar_frete.
     Mesma fonte que o servidor usa no POST do checkout (autoritativo)."""
-    data = request.get_json(silent=True) or request.form
-    endereco = (data.get('endereco') or '').strip()
-    cep = (data.get('cep') or '').strip()
+    data = request.get_json(silent=True)
+    if data is None:
+        data = request.form
+    # JSON forjado (lista, número no campo) dava AttributeError → 500
+    # (revisão 28/09/2026): entrada malformada responde 400.
+    if not hasattr(data, 'get'):
+        return jsonify(ok=False, erro='Informe o endereço ou o CEP.'), 400
+    endereco, cep = data.get('endereco'), data.get('cep')
+    if (endereco is not None and not isinstance(endereco, str)) or \
+            (cep is not None and not isinstance(cep, str)):
+        return jsonify(ok=False, erro='Informe o endereço ou o CEP.'), 400
+    endereco = (endereco or '').strip()
+    cep = (cep or '').strip()
+    if len(endereco) > 400 or len(cep) > 20:
+        return jsonify(ok=False, erro='Endereço longo demais — confira.'), 400
     geo = endereco
     if cep and cep not in endereco:
         geo = f'{endereco}, {cep}' if endereco else cep

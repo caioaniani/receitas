@@ -5730,7 +5730,9 @@ def loja_online_divulgacao_janelas():
         if geo:
             try:
                 from app.services import frete
-                r = frete.consultar_frete(geo)
+                # Chamada enquanto se digita: cota do preview, nunca a do
+                # checkout (revisão 28/09/2026).
+                r = frete.consultar_frete(geo, canal=frete.CANAL_PREVIEW)
                 if r.get('ok'):
                     dist = r.get('distancia_km')
                     if r.get('fora_area'):

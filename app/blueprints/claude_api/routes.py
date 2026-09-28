@@ -688,7 +688,9 @@ def frete_debug():
     simplificado) e devolve lat/lng/distância de cada uma + o resultado do
     `consultar_frete` oficial. Criada em 05/07/2026 pra investigar frete
     errado no checkout (Rua Nova York a "19,3 km"; CEP 01050-000 bloqueado
-    como fora da área — casos reais do dia). Não grava nada.
+    como fora da área — casos reais do dia). Não altera pedido nem estoque;
+    a cotação oficial usa a cota do PREVIEW do Google (sub-teto do dia) e
+    pode gravar o cache de geocode, como qualquer cotação.
     """
     from app.services import frete as frete_svc
 
@@ -717,7 +719,8 @@ def frete_debug():
         etapas['nominatim_simplificado'] = _etapa(
             frete_svc._geocodificar_texto(simples))
     return jsonify(ok=True, consulta=q, etapas=etapas,
-                   oficial=frete_svc.consultar_frete(q))
+                   oficial=frete_svc.consultar_frete(
+                       q, canal=frete_svc.CANAL_PREVIEW))
 
 
 @claude_api_bp.route('/pedidos-dia')
