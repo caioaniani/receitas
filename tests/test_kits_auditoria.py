@@ -169,6 +169,38 @@ def test_duplo_clique_com_mesmo_conteudo_devolve_a_mesma_compra(kit_escolhas, fr
     frete.assert_called_once()
 
 
+def test_frete_e_cotado_antes_da_trava_do_kit(kit_escolhas, frete, checkout, monkeypatch):
+    """Revisão 28/09/2026: a cotação (rede, segundos) não pode rodar com o kit
+    travado — prendia as outras compras e a edição do dono."""
+    eventos = []
+    refresh_original = db.session.refresh
+
+    def refresh(obj, *args, **kwargs):
+        if kwargs.get('with_for_update'):
+            eventos.append('trava')
+        return refresh_original(obj, *args, **kwargs)
+
+    monkeypatch.setattr(db.session, 'refresh', refresh)
+    frete.side_effect = lambda *a, **k: (eventos.append('frete'), frete.return_value)[1]
+    compra, erros = _criar(kit_escolhas)
+    assert not erros and compra is not None
+    assert eventos == ['frete', 'trava']
+
+
+def test_preco_que_muda_durante_a_cotacao_recusa_a_compra(kit_escolhas, frete, checkout):
+    retorno = frete.return_value.copy()
+
+    def cotar(*args, **kwargs):
+        kit_escolhas.cookie.preco_site = Decimal('9.00')
+        db.session.flush()
+        return retorno
+
+    frete.side_effect = cotar
+    compra, erros = _criar(kit_escolhas)
+    assert compra is None and any('mudou durante a compra' in e for e in erros)
+    assert CompraKit.query.count() == 0 and PedidoOnline.query.count() == 0
+
+
 @pytest.mark.parametrize('situacao', ['expirada', 'paga', 'cancelada'])
 def test_mesmo_conteudo_com_compra_encerrada_exige_novo_envio(
         kit_escolhas, frete, checkout, situacao):
