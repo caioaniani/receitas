@@ -330,6 +330,11 @@ def webhook_pagarme():
     _gravar_pagarme_hit(hit)
     evento = request.get_json(silent=True) or {}
     res = loja_pagamento.processar_webhook(evento)
+    # Falha no MEIO do processamento (banco, baixa de estoque): 500 pra o
+    # Pagar.me reentregar — o claim do evento já foi devolvido. Antes vinha
+    # 200 e o pagamento recebido se perdia (auditoria 27/09/2026).
+    if res.get('reentregar'):
+        return jsonify(ok=False, erro='falha ao processar — reentregar'), 500
     # Devolve 200 mesmo em "sem_pedido"/"ignorado" pra Pagar.me NÃO ficar
     # reentregando indefinidamente um evento que não vai processar.
     return jsonify(res), 200

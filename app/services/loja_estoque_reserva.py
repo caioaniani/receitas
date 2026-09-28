@@ -309,7 +309,11 @@ def liberar_expirados(*, agora_=None, max_lote=200):
     """
     from app.models import EntregaKit
     from app.services.kits_estoque import expirar_compras
-    from app.services.loja_pagamento import _loja_baixa
+    from app.services.loja_pagamento import (
+        _loja_baixa,
+        _marcar_pago,
+        situacao_no_gateway,
+    )
     base = agora_ or agora()
     # Kits reservam disponibilidade por data, sem reserva física antecipada.
     # Seu prazo pertence à compra inteira e usa compra -> pedidos nas travas.
@@ -334,6 +338,27 @@ def liberar_expirados(*, agora_=None, max_lote=200):
         if (p.status != 'aguardando_pagamento' or p.pago_em
                 or p.reserva_expira_em is None or p.reserva_expira_em >= base):
             continue
+        # O gateway é a fonte da verdade: pagamento recebido cujo webhook
+        # falhou/atrasou não pode virar "Pix expirado" (auditoria 27/09/2026).
+        situacao, pag = situacao_no_gateway(p, base=base)
+        if situacao == 'pago':
+            try:
+                mudou = _marcar_pago(p, pag, enviar_confirmacao=False)
+                db.session.commit()
+            except Exception:  # noqa: BLE001
+                db.session.rollback()
+                logger.exception('liberar_expirados: %s pago no gateway, mas '
+                                 'marcar pago falhou', p.codigo)
+                continue
+            logger.warning('liberar_expirados: %s estava PAGO no gateway sem '
+                           'webhook — marcado pago em vez de cancelado',
+                           p.codigo)
+            if mudou:
+                from app.services.kits_pagamento import apos_confirmacao
+                apos_confirmacao(p)
+            continue
+        if situacao != 'livre':
+            continue
         loja = _loja_baixa(p)
         if not loja:
             logger.warning('liberar_expirados: pedido %s sem loja origem',
@@ -345,8 +370,10 @@ def liberar_expirados(*, agora_=None, max_lote=200):
         p.motivo_cancelamento = 'pix_expirado'
         p.cancelado_em = base
         codigos.append(p.codigo)
+    # Commita sempre: além dos cancelamentos, a consulta ao gateway pode ter
+    # marcado tentativas encerradas lá como 'falhou'.
+    db.session.commit()
     if codigos:
-        db.session.commit()
         logger.info('liberar_expirados: %d pedido(s) cancelado(s): %s',
                     len(codigos), ', '.join(codigos))
     return codigos

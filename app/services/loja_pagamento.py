@@ -35,7 +35,7 @@ from app.models import (
     PedidoOnline,
 )
 from app.services import pagarme
-from app.utils import agora
+from app.utils import agora, fmt_brl
 
 logger = logging.getLogger(__name__)
 
@@ -83,14 +83,145 @@ def _loja_baixa(pedido):
 
 # ── Iniciar pagamento ────────────────────────────────────────────────
 
-def _zerar_pagamento_anterior(pedido):
-    """Se o cliente já abriu um pagamento que ficou pendente e clicou de
-    novo (ex: tentou Pix e mudou pra cartão), marca o velho como falhou
-    pra ficar só UM pagamento ativo por pedido em cada momento."""
-    for pag in pedido.pagamentos:
-        if pag.status == 'pendente':
+_MSG_PAGAMENTO_JA_CONFIRMADO = (
+    'O pagamento deste pedido já foi confirmado. Atualize a página.')
+_MSG_CARTAO_EM_ANALISE = (
+    'Seu pagamento com cartão ainda está sendo confirmado pelo banco. Aguarde '
+    'alguns instantes nesta página antes de tentar de novo — assim você não '
+    'é cobrado duas vezes.')
+_MSG_PIX_ANTERIOR_ATIVO = (
+    'Não conseguimos cancelar o Pix gerado antes, e ele ainda pode ser pago. '
+    'Pague pelo QR que já está na tela ou tente de novo em instantes.')
+_MSG_GATEWAY_INDISPONIVEL = (
+    'Não conseguimos confirmar a situação do pagamento anterior agora. Tente '
+    'de novo em instantes.')
+
+
+def _consultar_tentativa(pag):
+    """Situação de UMA tentativa no gateway: 'pago', 'encerrado' (falhou/
+    cancelada/estornada — não cobra mais), 'pendente' ou None (consulta
+    falhou). Sem order_id = a tentativa nunca chegou ao Pagar.me."""
+    if not pag.pagarme_order_id:
+        return 'encerrado'
+    consulta = pagarme.consultar_order(pag.pagarme_order_id)
+    if not consulta.get('ok'):
+        return None
+    if consulta.get('pago'):
+        return 'pago'
+    encerrados = ('failed', 'canceled', 'cancelled', 'refunded', 'voided',
+                  'not_authorized', 'chargedback')
+    if (consulta.get('status') in encerrados
+            or consulta.get('charge_status') in encerrados):
+        return 'encerrado'
+    return 'pendente'
+
+
+def _confirmar_pelo_gateway(pedido, pag):
+    """O gateway diz que a tentativa está PAGA mas o webhook não chegou (ou
+    falhou): marca pago pela mesma lógica da conciliação/webhook. O caller
+    faz o commit; devolve True se o pedido mudou pra pago."""
+    return _marcar_pago(pedido, pag, enviar_confirmacao=False)
+
+
+def _resolver_tentativas_pendentes(pedido):
+    """Antes de abrir uma NOVA cobrança, encerra de verdade as anteriores.
+
+    Antes (auditoria 27/09/2026) a tentativa pendente era só marcada como
+    'falhou' localmente — mas ela continuava viva no Pagar.me: o cartão já
+    capturado (esperando o webhook) virava 'falhou' e o cliente pagava de
+    novo; o QR do Pix antigo seguia pagável ao lado do novo. Agora:
+    - tentativa PAGA no gateway → confirma o pedido e recusa a nova cobrança;
+    - Pix pendente → cancela a cobrança no gateway; se não der, recusa;
+    - cartão pendente (em análise) → recusa até o banco responder;
+    - gateway fora → recusa (dinheiro: na dúvida, não cobra de novo).
+
+    Devolve None (pode seguir) ou a mensagem pro cliente. Pode marcar o
+    pedido como pago — o caller commita e roda `apos_confirmacao`."""
+    for pag in sorted(pedido.pagamentos, key=lambda p: p.id or 0):
+        if pag.status != 'pendente':
+            continue
+        situacao = _consultar_tentativa(pag)
+        if situacao is None:
+            return _MSG_GATEWAY_INDISPONIVEL
+        if situacao == 'pago':
+            _confirmar_pelo_gateway(pedido, pag)
+            return _MSG_PAGAMENTO_JA_CONFIRMADO
+        if situacao == 'encerrado':
             pag.status = 'falhou'
-            pag.erro = 'substituído por nova tentativa'
+            pag.erro = pag.erro or 'encerrado no Pagar.me antes de nova tentativa'
+            continue
+        if pag.metodo == 'cartao':
+            return _MSG_CARTAO_EM_ANALISE
+        cancel = pagarme.cancelar_charge(pag.pagarme_charge_id)
+        if not cancel.get('ok'):
+            # O cancelamento pode ter falhado porque o Pix acabou de ser pago.
+            if _consultar_tentativa(pag) == 'pago':
+                _confirmar_pelo_gateway(pedido, pag)
+                return _MSG_PAGAMENTO_JA_CONFIRMADO
+            logger.warning('Pedido %s: não cancelou o Pix anterior %s: %s',
+                           pedido.codigo, pag.pagarme_charge_id,
+                           cancel.get('erro'))
+            return _MSG_PIX_ANTERIOR_ATIVO
+        pag.status = 'falhou'
+        pag.erro = 'substituído por nova tentativa (cancelado no Pagar.me)'
+    return None
+
+
+def situacao_no_gateway(pedido, *, base=None):
+    """Pro cron de expiração: o pedido aguardando pagamento pode ser
+    cancelado? Consulta no Pagar.me cada tentativa pendente ANTES de cancelar
+    — o webhook pode ter falhado ou atrasado com o dinheiro já recebido
+    (auditoria 27/09/2026: o cron cancelava pedido pago como pix_expirado).
+
+    Devolve (situacao, pagamento):
+    - ('pago', pag): o gateway confirma — o caller marca pago em vez de
+      cancelar;
+    - ('aguardar', None): QR do Pix ainda válido, cartão em análise ou
+      gateway fora — não cancela neste ciclo (volta em 5 min);
+    - ('livre', None): nada vivo no gateway — pode cancelar.
+    Pode marcar tentativas como 'falhou' (encerradas no gateway); o caller
+    commita."""
+    base = base or agora()
+    for pag in sorted(pedido.pagamentos, key=lambda p: p.id or 0):
+        if pag.status != 'pendente':
+            continue
+        if (pag.metodo == 'pix' and pag.pix_expira_em
+                and pag.pix_expira_em > base):
+            # QR ainda pagável: cancelar o pedido agora cobraria o cliente
+            # por um pedido morto se ele pagar nos minutos que restam.
+            return 'aguardar', None
+        situacao = _consultar_tentativa(pag)
+        if situacao is None:
+            logger.warning('expiração %s: gateway fora, adiando', pedido.codigo)
+            return 'aguardar', None
+        if situacao == 'pago':
+            return 'pago', pag
+        if situacao == 'encerrado':
+            pag.status = 'falhou'
+            pag.erro = pag.erro or 'encerrado no Pagar.me (expiração)'
+            continue
+        if pag.metodo != 'pix':
+            return 'aguardar', None
+        # Pix vencido que o gateway ainda mostra pendente: encerra lá antes
+        # de cancelar aqui (senão ele ainda poderia ser pago).
+        cancel = pagarme.cancelar_charge(pag.pagarme_charge_id)
+        if not cancel.get('ok'):
+            if _consultar_tentativa(pag) == 'pago':
+                return 'pago', pag
+            return 'aguardar', None
+        pag.status = 'falhou'
+        pag.erro = 'Pix expirado (cancelado no Pagar.me)'
+    return 'livre', None
+
+
+def _encerrar_resolucao(pedido, bloqueio):
+    """Persiste o que `_resolver_tentativas_pendentes` decidiu e, se o pedido
+    virou pago, dispara NF/e-mail depois do commit (mesma ordem do webhook)."""
+    ja_pago = bool(pedido.pago_em)
+    db.session.commit()
+    if ja_pago and bloqueio == _MSG_PAGAMENTO_JA_CONFIRMADO:
+        from app.services.kits_pagamento import apos_confirmacao
+        apos_confirmacao(pedido)
 
 
 def iniciar_pix(pedido, expira_em_min=30):
@@ -101,7 +232,10 @@ def iniciar_pix(pedido, expira_em_min=30):
     pedido, permitido = preparar_cobranca(pedido)
     if not permitido:
         return None, ['Este pedido não está mais aguardando pagamento. Atualize a página.']
-    _zerar_pagamento_anterior(pedido)
+    bloqueio = _resolver_tentativas_pendentes(pedido)
+    if bloqueio:
+        _encerrar_resolucao(pedido, bloqueio)
+        return None, [bloqueio]
     pag = PagamentoOnline(pedido_id=pedido.id, metodo='pix',
                           valor=valor_cobranca(pedido))
     db.session.add(pag)
@@ -138,7 +272,10 @@ def iniciar_cartao(pedido, card_token, parcelas=1, billing=None):
     pedido, permitido = preparar_cobranca(pedido)
     if not permitido:
         return None, ['Este pedido não está mais aguardando pagamento. Atualize a página.']
-    _zerar_pagamento_anterior(pedido)
+    bloqueio = _resolver_tentativas_pendentes(pedido)
+    if bloqueio:
+        _encerrar_resolucao(pedido, bloqueio)
+        return None, [bloqueio]
     pag = PagamentoOnline(pedido_id=pedido.id, metodo='cartao',
                           valor=valor_cobranca(pedido))
     db.session.add(pag)
@@ -250,10 +387,20 @@ def _reservar_no_plano_do_dia(pedido):
         _alertar_acima_do_plano(pedido, it.nome, qtd)
 
 
+def _alertar_pedido_pago(pedido, texto, chave):
+    """Aviso ao dono sobre pedido PAGO que precisa de conferência. Nunca
+    derruba o pagamento (best-effort)."""
+    try:
+        from app.services import loja_alerta
+        loja_alerta.alertar_pedido_pago(texto, chave)
+    except Exception:  # noqa: BLE001
+        logger.exception('Pedido %s: alerta ao dono falhou', pedido.codigo)
+
+
 def _alertar_acima_do_plano(pedido, nome_item, qtd):
-    from app.services import loja_alerta
     data_fmt = pedido.data_entrega.strftime('%d/%m/%Y')
-    loja_alerta.alertar_pedido_pago(
+    _alertar_pedido_pago(
+        pedido,
         f'⚠️ Pedido do site {pedido.codigo} PAGO acima do limite do Plano do '
         f'dia: {qtd}x {nome_item} para {data_fmt}. A reserva foi feita mesmo '
         'assim (o cliente já pagou) — confira a produção desse dia.',
@@ -560,15 +707,56 @@ def _marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None)
     if pedido.pago_em or pedido.status in ('pago', 'em_preparo', 'a_caminho', 'entregue'):
         # Um QR antigo pode ser pago DEPOIS da confirmação externa. Guarda o
         # recebimento do gateway sem regredir o pedido nem repetir baixa/NF.
+        segundo_recebimento = bool(
+            pagamento and pagamento.status not in ('pago', 'estornado')
+            and (_tem_pagamento_externo(pedido)
+                 or any(p.id != pagamento.id and p.status == 'pago'
+                        for p in pedido.pagamentos)))
         if pagamento and pagamento.status != 'estornado':
             pagamento.status = 'pago'
             pagamento.pago_em = pagamento.pago_em or agora()
-        if _tem_pagamento_externo(pedido):
-            logger.warning('Pedido %s: gateway reportou pagamento após recebimento '
-                           'externo; confira possível pagamento em duplicidade.', pedido.codigo)
+        if segundo_recebimento:
+            # Duas cobranças pagas no mesmo pedido: o cliente pagou em dobro.
+            # Antes só havia log (e só no caso do pagamento externo) — o
+            # dinheiro a mais ficava parado sem ninguém saber (auditoria
+            # 27/09/2026). O estorno é manual, pelo dono.
+            logger.warning('Pedido %s: segundo pagamento recebido (%s); '
+                           'cliente cobrado em duplicidade.', pedido.codigo,
+                           pagamento.pagarme_charge_id or pagamento.id)
+            _alertar_pedido_pago(
+                pedido,
+                f'⚠️ Pedido do site {pedido.codigo} foi PAGO DUAS VEZES '
+                f'(nova cobrança via {pagamento.metodo}, '
+                f'{fmt_brl(pagamento.valor)}). Estorne a cobrança a mais '
+                'no painel do Pagar.me.',
+                f'duplicado|{pedido.codigo}|{pagamento.id}')
         return False  # já processado
+    if pedido.status == 'cancelado' and pedido.motivo_cancelamento != 'pix_expirado':
+        # Cancelamento DELIBERADO (admin, reembolso) não é revertido por um
+        # pagamento que chega depois — mesma regra dos kits
+        # (kits_pagamento.marcar_pago). Antes o pedido voltava a "pago" sem
+        # ninguém decidir (auditoria 27/09/2026). O dinheiro fica registrado
+        # na tentativa e o dono é avisado para estornar ou reabrir.
+        if pagamento and pagamento.status != 'estornado':
+            pagamento.status = 'pago'
+            pagamento.pago_em = pagamento.pago_em or agora()
+        logger.error('Pedido %s cancelado (%s) recebeu pagamento; requer '
+                     'conferência do owner.', pedido.codigo,
+                     pedido.motivo_cancelamento)
+        _alertar_pedido_pago(
+            pedido,
+            f'⚠️ Pedido do site {pedido.codigo} estava CANCELADO e recebeu '
+            'pagamento. O pedido continua cancelado — estorne o valor no '
+            'painel do Pagar.me ou fale com o cliente.',
+            f'cancelado_pago|{pedido.codigo}')
+        return False
     pedido.status = 'pago'
     pedido.pago_em = agora()
+    # Pix expirado e pago depois: o pedido volta a valer — tira as marcas do
+    # cancelamento automático pra o admin não mostrar "Cancelado:" num pedido
+    # pago.
+    pedido.cancelado_em = None
+    pedido.motivo_cancelamento = None
     if pagamento:
         pagamento.status = 'pago'
         pagamento.pago_em = agora()
@@ -822,6 +1010,20 @@ def conciliar_pedido(codigo, aplicar=False):
     return out
 
 
+def _devolver_claim_evento(evt_id):
+    """Apaga o registro de idempotência de um evento que falhou no meio, pra
+    reentrega processar de novo. Best-effort: se o banco também estiver fora,
+    o próximo ciclo do cron de expiração consulta o gateway antes de
+    cancelar (`_situacao_no_gateway`)."""
+    try:
+        PagarmeEvento.query.filter_by(evento_id=str(evt_id)).delete(
+            synchronize_session=False)
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        logger.exception('webhook: não devolveu o claim do evento %s', evt_id)
+
+
 def processar_webhook(evento):
     """Recebe o JSON do webhook (já parsed). Idempotente por `id` do
     evento (PagarmeEvento). Retorna dict com o que foi feito (pra
@@ -885,6 +1087,12 @@ def processar_webhook(evento):
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
         logger.exception('webhook %s falhou: %s', tipo, exc)
-        return {'ok': False, 'erro': str(exc)}
+        # Devolve o claim de idempotência: o evento NÃO foi processado. Sem
+        # isso a reentrega do Pagar.me virava "duplicado" e um pagamento
+        # recebido nunca era registrado — o cron ainda cancelava o pedido
+        # como Pix expirado (auditoria 27/09/2026). A rota responde 500 com
+        # `reentregar` pra o Pagar.me tentar de novo.
+        _devolver_claim_evento(evt_id)
+        return {'ok': False, 'erro': str(exc), 'reentregar': True}
     # Tipo não tratado — registra (já está em PagarmeEvento) e retorna OK.
     return {'ok': True, 'ignorado': tipo}
