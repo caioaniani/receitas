@@ -107,6 +107,14 @@ compõem o kit; não são apresentadas como foto da embalagem completa. A tela
 de agendamento organiza escolha do suco, datas, endereço e dados do cliente.
 O resumo reúne as entregas escolhidas e o total com fretes. Datas repetidas,
 sem disponibilidade ou sem horário impedem avançar para pagamento.
+Cada formulário gera uma única compra. Um duplo clique com os mesmos dados
+devolve a compra já criada, enquanto ela aguarda pagamento no prazo. Se o
+cliente voltar pelo histórico ou usar outra aba e enviar o formulário com
+outra data, horário, suco, adicional, contato ou endereço (ou se a compra
+anterior já foi paga, cancelada ou expirou), a tela reapresenta os dados
+enviados com o aviso "Este formulário já gerou a compra X" e um formulário
+novo; um novo envio consciente cria a nova compra. A compra anterior não é
+alterada.
 O estilo público usa a identidade da loja (Fraunces, Funnel Sans e fundo
 quente), em `loja/kits.css`, separado do visual da gestão.
 
