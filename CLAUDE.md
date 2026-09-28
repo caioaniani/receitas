@@ -3537,6 +3537,29 @@ todos com teste em `tests/test_checkout_auditoria_graves.py`:
   (com nome/telefone) não é engolido pelo do preview anônimo.
 - Entradas malformadas (JSON não-lista/aninhado, '²', `?k=` não-ASCII)
   respondem 4xx; dígitos só ASCII nas rotas da loja e no `pagarme`.
+- **Revisão independente das ondas 2-3 (28/09/2026)** — aplicados: os
+  tetos do carrinho (`normalizar_itens_raw`) valem SÓ na rota
+  `loja.checkout` — `criar_pedido`/`montar_itens` servem também aos kits,
+  que têm adicional igual a item fixo e quantidades até 999 (somar/cortar
+  ali recusava o kit ou cobrava 99 em silêncio); **cartão incerto**: o
+  webhook com ids desconhecidos liga a order à ÚNICA tentativa incerta de
+  cartão (`_adotar_tentativa_incerta`), o reembolso RECUSA pedido pago sem
+  cobrança identificada (antes cancelava só aqui dizendo "estornado"),
+  gateway sem resposta NUNCA libera cobrar de novo (a janela de 10 min só
+  vale para "order não encontrada"), order de Pix não é adotada como
+  cartão, e a página de pagamento/status esclarece com o gateway no máximo
+  a cada 30 s (`esclarecer_cartao_incerto`, duas fases) — antes o cliente
+  ficava sem Pix nem cartão até o cron cancelar; lojas travadas em ordem
+  crescente na troca de loja da edição e no consumo por snapshot;
+  `remover_regra_semanal` só libera as linhas que a regra escreveu (limite
+  manual fica); divulgação fora do cancelar e do reenviar genéricos;
+  excluir conta também espera pedido aguardando pagamento (FOR UPDATE nos
+  pedidos da conta); preço do catálogo pelo parser pt-BR e corpo torto =
+  400 (nunca despublica); `parse_preco_br` recusa >= 1 milhão; endereço
+  salvo deduplica o CEP pelos dígitos. DESCARTADOS: `Idempotency-Key` sem
+  retentativa (inofensivo, documenta a intenção); reserva perdida na
+  consolidação de linhas duplicadas de `EstoqueLoja` (pré-existente, índice
+  único em produção).
 - **Frete — teto do Google POR CANAL** (`frete.CANAL_CHECKOUT/PREVIEW/
   DESPACHO`): a cotação anônima (`/loja/api/frete` e o bot) usa o canal
   preview e só consome até o sub-teto `FRETE_GOOGLE_MAX_DIA_PREVIEW`
