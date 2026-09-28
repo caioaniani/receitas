@@ -66,9 +66,6 @@ def mapa_lojas_nf(consultar_slack=True):
             mapa[cid] = slack_api.nome_canal(cid)
         else:
             mapa[cid] = cid
-    # Canal vinculado na tela mas fora do config tambem tem nome conhecido.
-    for cid, nome in vinc.items():
-        mapa.setdefault(cid, nome)
     return mapa
 
 
