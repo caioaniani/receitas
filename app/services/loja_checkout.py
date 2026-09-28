@@ -1138,9 +1138,9 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     # Auto-salva o endereço estruturado do cliente logado pra ele reusar no
     # próximo pedido. Só pra ENTREGA: o endereço da retirada é coletado só
     # pra NF (20/07/2026) e NÃO é destino de entrega — não sobrescreve o
-    # endereço principal de entrega do cliente.
-    if (cliente.tem_conta if hasattr(cliente, 'tem_conta') else False) \
-            and modo != 'retirada' and end_logradouro:
+    # endereço principal de entrega do cliente. Só com a conta LOGADA: o
+    # e-mail digitado não prova que o endereço é do dono da conta.
+    if dono_logado and modo != 'retirada' and end_logradouro:
         _salvar_ou_atualizar_endereco_principal(
             cliente, dict(cep=endereco_cep, logradouro=end_logradouro,
                           numero=end_numero, complemento=end_complemento,
