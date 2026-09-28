@@ -19,12 +19,12 @@ def _cadastrar(c, email='lgpd@x.com', nome='LGPD'):
     }, follow_redirects=False)
 
 
-def _pedido_pra(db, cli, codigo='LGPD01'):
+def _pedido_pra(db, cli, codigo='LGPD01', status='pago'):
     from app.models import PedidoOnline
     p = PedidoOnline(codigo=codigo, cliente_id=cli.id,
                      nome_cliente=cli.nome, email_cliente=cli.email,
                      telefone_cliente=cli.telefone or '',
-                     modo_entrega='retirada', status='pago',
+                     modo_entrega='retirada', status=status,
                      subtotal=Decimal('10'), frete_valor=Decimal('0'),
                      valor_total=Decimal('10'))
     db.session.add(p)
@@ -61,7 +61,10 @@ def test_excluir_conta_anonimiza_pedidos_e_loga_fora(app):
     _cadastrar(c, email='del@x.com', nome='Del')
     with app.app_context():
         cli = Cliente.query.filter_by(email='del@x.com').first()
-        _pedido_pra(db, cli, codigo='DEL001')
+        # Pedido JÁ ENTREGUE: pago e não entregue bloqueia a exclusão até a
+        # entrega (auditoria do checkout 27/09/2026 — contrato substituído;
+        # ver test_checkout_auditoria_medios).
+        _pedido_pra(db, cli, codigo='DEL001', status='entregue')
         # Endereço pra ver que apaga
         end = EnderecoCliente(cliente_id=cli.id, logradouro='R', numero='1',
                               cidade='SP', uf='SP')
