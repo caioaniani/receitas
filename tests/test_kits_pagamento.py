@@ -496,7 +496,7 @@ def test_expiracao_de_compras_sobrepostas_libera_planos_por_compra_com_commit(co
     db.session.flush()
     outra = CompraKit(kit_id=compra.kit_id, kit_nome=compra.kit_nome, pedido_principal_id=pedido.id,
                       subtotal=Decimal('20'), frete_total=Decimal('0'), valor_total=Decimal('20'),
-                      expira_em=agora() - timedelta(minutes=1), checkout_token='b' * 64)
+                      expira_em=agora() - timedelta(minutes=2), checkout_token='b' * 64)
     db.session.add(outra)
     db.session.flush()
     db.session.add(EntregaKit(compra_id=outra.id, pedido_id=pedido.id, ordem=1))
@@ -506,14 +506,22 @@ def test_expiracao_de_compras_sobrepostas_libera_planos_por_compra_com_commit(co
     db.session.commit()
     original = loja_plano_dia.devolver
     datas = []
+    cancelados_ja_gravados = []
 
     def registrar(kind, item_id, data, qtd, **kwargs):
         datas.append(data)
+        with db.engine.connect() as conexao:
+            cancelados_ja_gravados.append(conexao.execute(text(
+                "SELECT COUNT(*) FROM pedido_online WHERE status='cancelado'")).scalar())
         return original(kind, item_id, data, qtd, **kwargs)
 
     monkeypatch.setattr(loja_plano_dia, 'devolver', registrar)
     assert len(kits_estoque.expirar_compras()) == 3
+    # Prazo mais antigo primeiro; cada compra devolve suas datas em ordem.
     assert datas == sorted(datas) and datas[0] == dia_anterior
+    # A primeira compra já estava gravada (travas soltas) quando a segunda
+    # começou a devolver capacidade.
+    assert cancelados_ja_gravados == [0, 1, 1]
 
 
 def test_pago_rele_marcador_que_expiracao_alterou_enquanto_aguardava_lock(compra):
