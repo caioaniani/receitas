@@ -198,11 +198,12 @@ def test_reserva_nao_perde_incremento_de_outro_worker(app):
     def ler_com_concorrente(bruto, hoje_iso):
         resultado = original(bruto, hoje_iso)
         if not estado['interferiu']:
-            estado['interferiu'] = True       # o "outro worker" grava agora
+            # O "outro worker" grava entre a leitura e o UPDATE desta reserva.
+            estado['interferiu'] = True
             db.session.execute(update(AppConfig)
                                .where(AppConfig.key == 'frete_google_dia')
-                               .values(value=f'{dia}|3|1'))
-            db.session.commit()
+                               .values(value=f'{dia}|3|1')
+                               .execution_options(synchronize_session=False))
         return resultado
 
     with patch('app.services.frete._ler_uso', side_effect=ler_com_concorrente):
