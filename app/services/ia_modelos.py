@@ -220,3 +220,157 @@ def exigir_resposta(resp):
     if categoria:
         raise RespostaRecusada(categoria)
     return resp
+
+
+# Erros que tentar de novo não resolve: parâmetro recusado (400), chave
+# inválida (401), sem permissão (403), modelo inexistente (404). 413 fica de
+# fora: depende da entrada (uma imagem grande), não do sistema.
+_STATUS_PERMANENTE = frozenset({400, 401, 403, 404})
+
+
+def falha_permanente(exc):
+    """True quando a API recusou a chamada por um motivo que se repete em
+    TODA execução (a classe do incidente de 05-17/08/2026)."""
+    return getattr(exc, 'status_code', None) in _STATUS_PERMANENTE
+
+
+def registrar_falha(log, contexto, exc):
+    """Log de uma chamada de IA que falhou, no nível certo: erro permanente
+    vira ERROR (vai ao Sentry — uma função morta por parâmetro recusado não
+    pode passar semanas em WARNING, como em 05-17/08/2026); falha transitória
+    (rede, timeout, 429, 5xx, sobrecarga) segue WARNING, pela política de
+    ruído do Sentry (o próximo uso tenta de novo)."""
+    if falha_permanente(exc):
+        log.error('%s: a API recusou a chamada (HTTP %s — parâmetro, chave '
+                  'ou modelo): %s', contexto,
+                  getattr(exc, 'status_code', '?'), exc, exc_info=exc)
+    else:
+        log.warning('%s: falha na chamada: %s', contexto, exc)
+
+
+# ── Visibilidade e verificação ─────────────────────────────────────────
+
+
+def modelos_por_funcao():
+    """Modelo EFETIVO de cada função no processo que está rodando (envs do
+    Railway incluídas). Read-only e sem chamada à API: é o que diz, de fora,
+    se alguma função ficou fora do padrão por uma env antiga."""
+    from flask import current_app, has_app_context
+
+    from app.services import (
+        cadastro_ia,
+        chatbot,
+        chatbot_auditor,
+        chatbot_vigia,
+        conta_pagar_ia,
+        copilot,
+        planejamento_ia,
+        seo_descricoes,
+        treino_ia_perguntas,
+        zapi_bot,
+    )
+    whatsapp = ''
+    if has_app_context():
+        whatsapp = (current_app.config.get('ZAPI_BOT_MODELO') or '').strip()
+    modelos = {
+        'bot_atendimento': chatbot.MODELO,
+        'followup': chatbot.FOLLOWUP_MODELO,
+        'vigia': chatbot_vigia.MODELO,
+        'auditor': chatbot_auditor.MODELO,
+        'copilot_slack': copilot.MODELO_DEFAULT,
+        'copilot_whatsapp': whatsapp or zapi_bot.MODELO_WHATSAPP_DEFAULT,
+        'ocr_cupom': MODELO_PADRAO,
+        'ocr_nf': conta_pagar_ia.MODELO,
+        'cadastro_ia': cadastro_ia.MODELO,
+        'planejamento': planejamento_ia.MODELO,
+        'treino_ia_perguntas': treino_ia_perguntas.MODELO,
+        'seo': seo_descricoes.MODELO,
+        'avaliacao_google': modelo_do_ambiente('GOOGLE_REVIEWS_IA_MODELO'),
+    }
+    return {
+        'padrao': MODELO_PADRAO,
+        'por_funcao': modelos,
+        'fora_do_padrao': sorted(f for f, m in modelos.items()
+                                 if m != MODELO_PADRAO),
+    }
+
+
+def _mesmo_modelo(servido, pedido):
+    """O modelo que respondeu é o pedido? Pela família (prefixo mais longo) —
+    `claude-sonnet-5-5` começa com `claude-sonnet-5`, então comparar por
+    `startswith` daria falso positivo."""
+    if familia(pedido):
+        return familia(servido) == familia(pedido)
+    return (servido or '').startswith(pedido or '')
+
+
+def verificar_ao_vivo(modelo=None):
+    """Duas chamadas MÍNIMAS e reais à API com os mesmos parâmetros que o
+    sistema usa — a suíte de testes simula a Anthropic e não prova que a API
+    aceita um parâmetro (lição do incidente de 05-17/08/2026). Uma sem
+    ferramentas (`opcoes_sem_raciocinio`) e uma com ferramenta
+    (`opcoes_com_ferramentas`). Custo de centavos, registrado em UsoIA como
+    'verificacao_ia'. Nunca levanta."""
+    modelo = modelo or MODELO_PADRAO
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if not api_key:
+        return {'ok': False, 'modelo': modelo,
+                'erro': 'ANTHROPIC_API_KEY nao configurada'}
+    try:
+        import anthropic
+
+        from app.services import uso_ia
+    except ImportError as exc:
+        return {'ok': False, 'modelo': modelo, 'erro': str(exc)}
+    client = anthropic.Anthropic(api_key=api_key, timeout=60, max_retries=1)
+
+    def _rodar(nome, opcoes, **kwargs):
+        resultado = {'nome': nome, 'parametros': {
+            k: v for k, v in opcoes.items() if k != 'extra_headers'}}
+        if 'extra_headers' in opcoes:
+            resultado['parametros']['beta'] = opcoes['extra_headers'].get(
+                'anthropic-beta')
+        try:
+            resp = client.messages.create(model=modelo, **opcoes, **kwargs)
+        except Exception as exc:  # noqa: BLE001 — o motivo vai na tela
+            logger.exception('verificar_ao_vivo: %s falhou', nome)
+            resultado.update(ok=False,
+                             erro=f'{type(exc).__name__}: {exc}'[:600])
+            return resultado
+        uso_ia.registrar('verificacao_ia', modelo,
+                         getattr(resp, 'usage', None))
+        servido = getattr(resp, 'model', '') or ''
+        categoria = recusa(resp)
+        blocos = [getattr(b, 'type', '?') for b in resp.content or []]
+        resultado.update(
+            modelo_servido=servido,
+            stop_reason=getattr(resp, 'stop_reason', None),
+            recusa=categoria,
+            blocos=blocos,
+            textos=textos_visiveis(resp, progresso=mostra_progresso(opcoes)),
+            ok=(not categoria and _mesmo_modelo(servido, modelo)),
+        )
+        return resultado
+
+    testes = [
+        _rodar('sem_ferramentas', opcoes_sem_raciocinio(modelo),
+               max_tokens=64,
+               messages=[{'role': 'user',
+                          'content': 'Teste de integração. Responda apenas: ok'}]),
+        _rodar('com_ferramentas', opcoes_com_ferramentas(modelo),
+               max_tokens=2000,
+               tools=[{
+                   'name': 'anotar',
+                   'description': 'Anota um texto curto de teste.',
+                   'input_schema': {
+                       'type': 'object',
+                       'properties': {'texto': {'type': 'string'}},
+                       'required': ['texto'],
+                   },
+               }],
+               messages=[{'role': 'user', 'content': (
+                   'Teste de integração: diga numa frase o que vai fazer e '
+                   'chame a ferramenta anotar com o texto "ok".')}]),
+    ]
+    return {'ok': all(t['ok'] for t in testes), 'modelo': modelo,
+            'testes': testes}
