@@ -6064,6 +6064,20 @@ def _loja_online_pedido_editar(codigo):
         return _detalhe_redirect(codigo)
 
     agenda_anterior = (p.modo_entrega, p.data_entrega, p.janela_entrega)
+    # Reservas que dependem da data/loja (auditoria 27/09/2026): a do Plano
+    # do dia (feita no pagamento) fica presa na DATA; a física de pedido
+    # aguardando pagamento fica na LOJA de origem. Editar sem movê-las deixava
+    # a data antiga ocupada, a nova sem contar as unidades e o cancelamento
+    # devolvendo na data errada.
+    from app.services import loja_estoque_reserva, loja_pagamento
+    from app.services.saida_producao_site import ja_saiu
+    plano_vivo = bool(p.pago_em and p.status in ('pago', 'em_preparo', 'a_caminho')
+                      and not ja_saiu(p.id))
+    loja_antiga = loja_pagamento._loja_baixa(p)
+    if plano_vivo and data_entrega != p.data_entrega:
+        loja_pagamento._devolver_ao_plano_do_dia(p, commit=False)
+    reserva_fisica_viva = (p.status == 'aguardando_pagamento'
+                           and p.reserva_expira_em is not None)
     p.nome_cliente = nome
     p.email_cliente = email
     p.telefone_cliente = _s('telefone_cliente') or None
@@ -6093,6 +6107,30 @@ def _loja_online_pedido_editar(codigo):
                   p.endereco_cidade, p.endereco_uf]
         p.endereco_entrega = ', '.join(x for x in partes if x) or None
 
+    acima_do_plano = []
+    if plano_vivo and p.data_entrega != agenda_anterior[1] and p.data_entrega:
+        from app.services import loja_plano_dia
+        for it in p.itens:
+            kind, item_id = ((('receita', it.receita_id) if it.receita_id
+                              else ('produto', it.produto_id)))
+            qtd = int(round(float(it.quantidade or 0)))
+            if not item_id or qtd <= 0:
+                continue
+            if not loja_plano_dia.reservar(kind, item_id, p.data_entrega, qtd,
+                                           commit=False):
+                # Pedido pago: a demanda é real — reserva acima do limite e
+                # avisa quem editou.
+                loja_plano_dia.reservar(kind, item_id, p.data_entrega, qtd,
+                                        commit=False, forcar=True)
+                acima_do_plano.append(it.nome)
+    loja_nova = loja_pagamento._loja_baixa(p)
+    trocou_loja = (loja_antiga and loja_nova and loja_antiga.id != loja_nova.id)
+    if trocou_loja and reserva_fisica_viva:
+        expira = p.reserva_expira_em   # a troca de loja não renova o prazo
+        loja_estoque_reserva.liberar(p, loja_id=loja_antiga.id)
+        loja_estoque_reserva.reservar(p, loja_id=loja_nova.id)
+        p.reserva_expira_em = expira
+
     if agenda_anterior != (p.modo_entrega, p.data_entrega, p.janela_entrega):
         from app.services.loja_fiscal import reagendar
         reagendar(p)
@@ -6100,6 +6138,14 @@ def _loja_online_pedido_editar(codigo):
     current_app.logger.info('pedido online %s editado por uid=%s',
                             codigo, getattr(current_user, 'id', None))
     flash(f'Pedido {p.codigo} atualizado.', 'success')
+    if acima_do_plano:
+        flash('A nova data passou do limite do Plano do dia para: '
+              + ', '.join(acima_do_plano) + '. A reserva foi feita mesmo '
+              'assim (pedido pago) — confira a produção desse dia.', 'warning')
+    if trocou_loja and p.pago_em:
+        flash(f'O estoque deste pedido já foi baixado da {loja_antiga.nome}; '
+              'a troca de loja não move essa baixa — ajuste o estoque das '
+              'lojas se a mercadoria sair da outra.', 'warning')
     return _detalhe_redirect(codigo)
 
 
