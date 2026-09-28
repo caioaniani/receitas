@@ -1293,6 +1293,26 @@ def processar_webhook(evento):
             logger.warning('webhook %s (%s): estorno automático DESATIVADO — '
                            'requer ação manual no admin', tipo, evt_id)
             return {'ok': True, 'estorno_ignorado': tipo}
+        if 'chargedback' in tipo or 'chargeback' in tipo:
+            # Contestação no cartão (auditoria 27/09/2026): antes caía em
+            # "tipo não tratado" sem nem log — o pedido seguia pago pra NF e
+            # entrega com o dinheiro já retirado pela bandeira. Sem mexer em
+            # status/estoque (estorno é sempre manual — decisão de
+            # 18/06/2026): marca a tentativa e avisa o dono pra segurar a
+            # entrega. O PagarmeEvento gravado antes impede aviso repetido.
+            logger.warning('webhook %s (%s): contestação no pedido %s',
+                           tipo, evt_id, pedido.codigo)
+            if pagamento:
+                pagamento.erro = (f'contestação (chargeback) recebida em '
+                                  f'{agora():%d/%m/%Y %H:%M}')
+            db.session.commit()
+            _alertar_pedido_pago(
+                pedido,
+                f'🚨 Contestação (chargeback) no pedido do site '
+                f'{pedido.codigo}: o valor foi retirado pela bandeira do '
+                'cartão. Confira no Pagar.me e avalie segurar a entrega.',
+                f'chargeback|{evt_id}')
+            return {'ok': True, 'chargeback': True}
         if tipo in ('order.payment_failed', 'charge.payment_failed'):
             from app.services.kits_pagamento import travar
             travar(pedido)
@@ -1316,4 +1336,6 @@ def processar_webhook(evento):
         _devolver_claim_evento(evt_id)
         return {'ok': False, 'erro': str(exc), 'reentregar': True}
     # Tipo não tratado — registra (já está em PagarmeEvento) e retorna OK.
+    logger.info('webhook %s (%s): tipo não tratado — só registrado',
+                tipo, evt_id)
     return {'ok': True, 'ignorado': tipo}
