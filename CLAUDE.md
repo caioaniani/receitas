@@ -1,5 +1,16 @@
 # Convenções de trabalho (Claude)
 
+## Publicação após testes (autorização do dono, 28/09/2026)
+
+Para alterações do sistema explicitamente solicitadas ou aprovadas pelo dono,
+publicar em produção depois dos testes e da revisão, sem pedir novamente a
+mesma autorização de publicação. Conferir CI, deploy e as telas afetadas antes
+de afirmar que está disponível. Mudanças de schema continuam em duas etapas,
+com confirmação das colunas reais antes de publicar os models.
+Esta autorização não amplia o escopo do pedido nem autoriza emitir documentos,
+enviar/reenviar cobranças reais, mudar destinatários ou alterar permissões por
+conta própria; essas ações continuam exigindo solicitação específica.
+
 ## Fermentação da Ribeiro (decisão do dono, 25/09/2026)
 
 Na lista diária de fermentação (`app/services/fermentacao.py`), Ribeiro do
@@ -297,6 +308,20 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   da Meta). COBERTURA: não enxerga sessão web nem o navegador da TV — o
   caso real era o aviso de pendências do próprio painel + uma pendência
   fantasma (seção "Painel: aviso de pendências..." abaixo), não o servidor.
+- `GET /api/claude/contas-pagar-itens?item=<a|b>&fornecedor=&dias=365&ignorados=1`
+  (28/09/2026, dono: custo de sacos de pão/maletas "tem que ler nas NFs de
+  recebimento"): lê o `itens_json` das `ContaPagar` (NFs postadas nos canais
+  de recebimento e lidas pela IA). `item` aceita alternativas com `|`, cada
+  uma casando todas as palavras sem acento/caixa; devolve `resumo` por item
+  normalizado (`normalizar_item_nome`: ocorrências, último/mín/máx unitário,
+  quantidade e gasto) + as linhas (loja, fornecedor, nota, `revisada`,
+  `preco_por_unidade_base` quando a IA leu o fator, vínculo com MP). Sem
+  `item` nem `fornecedor` = modo descoberta (fornecedores com notas, total
+  e exemplos de itens). Recebimento com vários documentos (NF + boleto,
+  foto repetida — `relacionado_id`) conta os itens UMA vez. COBERTURA: só
+  notas lidas com itens; boleto sem itens, leitura falha e compra sem nota
+  postada ficam fora. Loja pelo `conta_pagar.mapa_lojas_nf(consultar_slack=
+  False)` — fonte única, movida da tela de Contas a Pagar, sem rede.
 - Testes: `tests/test_claude_api.py`.
 
 ## Cockpit do dono — briefing diario + home + manual (16/07/2026)
@@ -949,13 +974,17 @@ dinheiro/estoque ainda exigem confirmacao. Ver
 **Alembic adotado em 21/05/2026** (Flask-Migrate). Coexiste com os helpers legados
 `_migrate_postgres()` e `_migrate_sqlite()` em `app/__init__.py` por compatibilidade.
 
-### Procedimento para mudança de schema (REAL — Alembic NAO roda em prod)
+### Procedimento para mudança de schema (expansão antes do modelo)
 
 **ATENCAO**: o `Procfile` e `railway.json` rodam apenas `gunicorn run:app ...` —
-NAO ha `release: flask db upgrade`. Migrations Alembic em prod estao dormentes.
-Mudancas de schema em prod hoje sao aplicadas pelos helpers legados
+NAO ha `release: flask db upgrade`, mas o startup atual chama
+`_alembic_stamp_se_necessario()` e executa `upgrade()` depois dos helpers
+legados (conferido em 28/09/2026, `app/__init__.py`). A ausência de release
+command não significa que Alembic esteja dormente. Os helpers legados
 `_migrate_postgres()`/`_migrate_sqlite()` em `app/migrations_legacy.py`, que
-rodam no startup de cada worker gunicorn (idempotentes).
+rodam no startup de cada worker gunicorn (idempotentes). Manter o procedimento
+de expansão em dois commits e confirmar as colunas reais: falhas de Alembic
+são registradas e não garantem que a migração tenha sido aplicada.
 
 **Procedimento canonico (2 commits)**:
 

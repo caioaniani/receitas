@@ -1472,6 +1472,36 @@ def _migrate_estoque_trava(app):
             lock_conn.close()
 
 
+COBRANCAS_EMAIL_COLUNAS = (('cliente_b2b', 'emails_cobranca'), ('envio_cobranca', 'copias'))
+
+
+def _migrate_cobrancas_emails(conn):
+    """Expansão aditiva anterior ao modelo; preserva os destinatários antigos.
+
+    NULL significa que ainda não existia cadastro/auditoria de cópias visíveis.
+    Não preenche endereços nem dispara automações.
+    """
+    from sqlalchemy import inspect, text
+
+    insp = inspect(conn)
+    tabelas = set(insp.get_table_names())
+    for tabela, coluna in COBRANCAS_EMAIL_COLUNAS:
+        if tabela not in tabelas:
+            continue  # Instalação nova: create_all cria o schema do modelo.
+        colunas = {c['name'] for c in insp.get_columns(tabela)}
+        if coluna not in colunas:
+            condicao = 'IF NOT EXISTS ' if conn.dialect.name == 'postgresql' else ''
+            conn.execute(text(f'ALTER TABLE {tabela} ADD COLUMN {condicao}{coluna} JSON'))
+
+
+def _migrate_cobrancas_emails_sqlite(conn):
+    """Usa exatamente o arquivo recebido pelo migrador SQLite legado."""
+    for tabela, coluna in COBRANCAS_EMAIL_COLUNAS:
+        colunas = {r[1] for r in conn.execute(f'PRAGMA table_info({tabela})')}
+        if colunas and coluna not in colunas:
+            conn.execute(f'ALTER TABLE {tabela} ADD COLUMN {coluna} JSON')
+
+
 def _migrate_postgres(app):
     """Adiciona colunas novas no PostgreSQL. Cada ALTER em commit isolado
     para que falhas pontuais não abortem migrations seguintes."""
@@ -1479,6 +1509,9 @@ def _migrate_postgres(app):
 
     from sqlalchemy import text
     log = logging.getLogger(__name__)
+
+    with db.engine.begin() as conn:
+        _migrate_cobrancas_emails(conn)
 
     def _try(stmt):
         """Executa um DDL em sub-conexão isolada com commit imediato."""
@@ -3376,6 +3409,7 @@ def _migrate_sqlite(app):
     import sqlite3
     uri = app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
     conn = sqlite3.connect(uri)
+    _migrate_cobrancas_emails_sqlite(conn)
     _migrate_mp_custo_opcional_sqlite(conn)
     cursor = conn.cursor()
     cursor.execute("PRAGMA table_info(receita)")

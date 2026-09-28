@@ -2,11 +2,31 @@
 (() => {
     const form = document.getElementById('cob-send-form');
     if (!form) return;
+    const cc = document.getElementById('cob-cc');
+    const copias = cc ? JSON.parse(cc.dataset.copias || '[]') : [];
+    const bcc = document.getElementById('cob-bcc');
+    const ocultas = bcc ? JSON.parse(bcc.dataset.copias || '[]') : [];
+    const copiasEfetivas = () => copias.filter(endereco =>
+        endereco.toLowerCase() !== form.elements.email.value.trim().toLowerCase());
+    const atualizarCopias = () => {
+        const lista = document.getElementById('cob-cc-lista');
+        if (lista) lista.textContent = copiasEfetivas().join(', ') || 'Nenhum e-mail adicional.';
+        const listaOcultas = document.getElementById('cob-bcc-lista');
+        const visiveis = [form.elements.email.value.trim(), ...copiasEfetivas()]
+            .map(endereco => endereco.toLowerCase());
+        if (listaOcultas) listaOcultas.textContent = ocultas.filter(endereco =>
+            !visiveis.includes(endereco.toLowerCase())).join(', ')
+            || 'Nenhuma — os endereços internos já estão entre os destinatários.';
+    };
+    form.elements.email.addEventListener('input', atualizarCopias);
+    atualizarCopias();
     let enviando = false;
     form.addEventListener('submit', event => {
         if (enviando) { event.preventDefault(); return; }
         const email = form.elements.email.value.trim();
-        if (!window.confirm(`Enviar a NF e o boleto, juntos em um único e-mail, para ${email}?`)) {
+        const adicionais = copiasEfetivas();
+        const copiaTexto = adicionais.length ? `\nEm cópia (CC): ${adicionais.join(', ')}.` : '';
+        if (!window.confirm(`Enviar a NF e o boleto, juntos em um único e-mail, para ${email}?${copiaTexto}`)) {
             event.preventDefault(); return;
         }
         enviando = true;

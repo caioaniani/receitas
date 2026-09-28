@@ -1081,3 +1081,139 @@ def test_atendimento_painel_exige_token(app):
     r = app.test_client().get('/api/claude/atendimento-painel',
                               headers={'Authorization': 'Bearer errado'})
     assert r.status_code == 401
+
+
+# --- /contas-pagar-itens (28/09/2026): itens das NFs de recebimento ---------
+
+def _seed_notas_embalagem():
+    """NFs de recebimento com sacos/maletas + ruído que a sonda deve ignorar."""
+    import json
+    from datetime import datetime, time
+
+    from app.models import ContaPagar, SlackCanalLojaMap
+
+    loja = Loja(nome='Loja Anesio', ativa=True)
+    db.session.add(loja)
+    db.session.flush()
+    db.session.add(SlackCanalLojaMap(canal_id='CNF1', loja_id=loja.id))
+
+    def _nf(dias_atras, itens, **kw):
+        c = ContaPagar(tipo_documento=kw.pop('tipo', 'nota_fiscal'),
+                       fornecedor_nome=kw.pop('fornecedor', 'Embalagens Brooklin'),
+                       valor_total=kw.pop('valor', 100),
+                       origem_canal='CNF1',
+                       itens_json=(itens if isinstance(itens, str)
+                                   else json.dumps(itens, ensure_ascii=False)),
+                       criado_em=datetime.combine(hoje() - timedelta(days=dias_atras),
+                                                  time(10, 0)),
+                       **kw)
+        db.session.add(c)
+        db.session.flush()
+        return c
+
+    recente = _nf(3, [
+        {'nome': 'SACO DE PAO 4 KRAFT VAL 12/2026', 'quantidade': 2, 'unidade': 'mil',
+         'valor_unitario': 90.0, 'valor_total': 180.0, 'fator_embalagem': 1000},
+        {'nome': 'Maleta G', 'quantidade': 50, 'unidade': 'un', 'valor_total': 175.0},
+        {'nome': 'Farinha T65', 'quantidade': 1, 'valor_unitario': 10.0},
+    ], nf_numero='555', valor=365)
+    # Foto repetida do MESMO recebimento, agrupada: não pode contar 2 vezes.
+    _nf(3, [{'nome': 'SACO DE PAO 4 KRAFT', 'quantidade': 2, 'valor_unitario': 90.0}],
+        relacionado_id=recente.id, nf_numero='555')
+    _nf(40, [{'nome': 'Saco de pão 4 kraft', 'quantidade': 1, 'unidade': 'mil',
+              'valor_unitario': 80.0}], nf_numero='401')
+    _nf(5, [{'nome': 'Sacola com alça', 'quantidade': 100, 'valor_unitario': 0.5}],
+        status='ignorado')
+    _nf(500, [{'nome': 'Saco de pão 10', 'quantidade': 1, 'valor_unitario': 70.0}])
+    _nf(2, 'isto nao e json', fornecedor='Atacadao')
+    _nf(1, [{'nome': 'Leite integral', 'quantidade': 12, 'valor_unitario': 5.0}],
+        fornecedor='Atacadao', valor=60)
+    db.session.commit()
+    return recente
+
+
+def test_contas_pagar_itens_exige_token(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    r = app.test_client().get('/api/claude/contas-pagar-itens?item=saco')
+    assert r.status_code == 401
+
+
+def test_contas_pagar_itens_busca_por_item_com_resumo(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    # Como em produção: só canais listados aqui têm as NFs capturadas.
+    app.config['SLACK_CANAIS_NF'] = 'CNF1'
+    recente = _seed_notas_embalagem()
+    r = app.test_client().get('/api/claude/contas-pagar-itens?item=saco|maleta',
+                              headers={'Authorization': f'Bearer {TOKEN}'})
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d['modo'] == 'itens'
+    nomes = {ln['item'] for ln in d['itens']}
+    assert 'Farinha T65' not in nomes and 'Leite integral' not in nomes
+    # validade tirada do nome; ignorado e fora da janela (500 dias) ficam fora
+    assert not any('VAL' in n for n in nomes)
+    assert not any('Sacola' in n or 'pão 10' in n for n in nomes)
+
+    saco = next(s for s in d['resumo'] if s['item'].lower().startswith('saco de pao 4'))
+    # 2 compras (a foto repetida do recebimento 555 não conta de novo)
+    assert saco['ocorrencias'] == 2
+    assert saco['ultimo_valor_unitario'] == 90.0
+    assert saco['min_valor_unitario'] == 80.0 and saco['max_valor_unitario'] == 90.0
+    assert saco['gasto_total'] == 260.0 and saco['quantidade_total'] == 3.0
+
+    linha = next(ln for ln in d['itens']
+                 if ln['conta_id'] == recente.id and ln['item'].startswith('SACO'))
+    assert linha['loja'] == 'Loja Anesio'
+    assert linha['preco_por_unidade_base'] == 0.09  # R$ 90 o milheiro
+    assert linha['vinculo'] is None
+    # valor unitário deduzido do total quando a IA só leu o total
+    maleta = next(ln for ln in d['itens'] if ln['item'] == 'Maleta G')
+    assert maleta['valor_unitario'] == 3.5
+
+
+def test_contas_pagar_itens_inclui_ignorados_sob_pedido(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    _seed_notas_embalagem()
+    r = app.test_client().get('/api/claude/contas-pagar-itens?item=sacola&ignorados=1',
+                              headers={'Authorization': f'Bearer {TOKEN}'})
+    d = r.get_json()
+    assert [ln['status'] for ln in d['itens']] == ['ignorado']
+
+
+def test_contas_pagar_itens_modo_descoberta_por_fornecedor(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    _seed_notas_embalagem()
+    r = app.test_client().get('/api/claude/contas-pagar-itens',
+                              headers={'Authorization': f'Bearer {TOKEN}'})
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d['modo'] == 'descoberta'
+    emb = next(f for f in d['fornecedores'] if f['fornecedor'] == 'Embalagens Brooklin')
+    # recebimento 555 (365) + nota 401 (100); a foto repetida e o ignorado ficam fora
+    assert emb['notas'] == 2 and emb['total'] == 465.0
+    assert 'Maleta G' in emb['exemplos_itens']
+    atac = next(f for f in d['fornecedores'] if f['fornecedor'] == 'Atacadao')
+    assert atac['notas'] == 1  # a nota com itens ilegíveis não quebra nem conta
+
+
+def test_contas_pagar_itens_filtra_fornecedor_e_valida_trecho(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    _seed_notas_embalagem()
+    c = app.test_client()
+    h = {'Authorization': f'Bearer {TOKEN}'}
+    d = c.get('/api/claude/contas-pagar-itens?fornecedor=atacadao', headers=h).get_json()
+    assert [ln['item'] for ln in d['itens']] == ['Leite integral']
+    assert c.get('/api/claude/contas-pagar-itens?item=a', headers=h).status_code == 400
+
+
+def test_mapa_lojas_nf_sem_slack_nao_chama_a_api(app, monkeypatch):
+    """A sonda não pode depender de rede: canal sem vínculo nem nome no
+    config fica com o próprio ID em vez de perguntar ao Slack."""
+    from app.services import slack as slack_api
+    from app.services.conta_pagar import mapa_lojas_nf
+
+    app.config['SLACK_CANAIS_NF'] = 'CSEMNOME'
+    app.config['SLACK_CANAIS_NF_NOMES'] = ''
+    monkeypatch.setattr(slack_api, 'nome_canal',
+                        lambda cid: (_ for _ in ()).throw(AssertionError('rede')))
+    assert mapa_lojas_nf(consultar_slack=False) == {'CSEMNOME': 'CSEMNOME'}
