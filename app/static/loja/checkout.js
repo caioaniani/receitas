@@ -286,7 +286,8 @@
     function aplicarEnderecoFiscal() {
       var modo = modoSelecionado();
       var doc = form.querySelector('[name="cpf"]');
-      var pj = doc && (doc.value || '').replace(/\D/g, '').length === 14;
+      // CNPJ alfanumérico: letras contam (mesma regra do fiscal-cnpj.js).
+      var pj = doc && (doc.value || '').replace(/[^0-9A-Za-z]/g, '').length === 14;
       var retiradaPJ = modo === 'retirada' && pj;
       var bloco = document.getElementById('bloco-entrega');
       bloco.style.display = retiradaPJ ? 'none' : 'block';
@@ -582,23 +583,14 @@
     }
 
     // Máscara de CPF (XXX.XXX.XXX-XX) ou CNPJ (XX.XXX.XXX/XXXX-XX) — o
-    // campo aceita os dois; com 12+ dígitos a máscara vira CNPJ.
+    // campo aceita os dois. Fonte única: window.DocumentoFiscal (fiscal-
+    // cnpj.js), que preserva as LETRAS do CNPJ alfanumérico (IN RFB
+    // 2.229/2024); a máscara antiga (\D) apagava cada letra digitada.
     var cpfEl = document.getElementById('cpf');
-    if (cpfEl) {
+    if (cpfEl && window.DocumentoFiscal) {
       cpfEl.addEventListener('input', function () {
-        var d = (cpfEl.value || '').replace(/\D/g, '').slice(0, 14);
-        var out = d;
-        if (d.length > 11) {
-          out = d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8, 12);
-          if (d.length > 12) out += '-' + d.slice(12);
-        } else if (d.length > 9) {
-          out = d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
-        } else if (d.length > 6) {
-          out = d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6);
-        } else if (d.length > 3) {
-          out = d.slice(0, 3) + '.' + d.slice(3);
-        }
-        cpfEl.value = out;
+        var out = window.DocumentoFiscal.mascarar(cpfEl.value);
+        if (cpfEl.value !== out) cpfEl.value = out;
       });
     }
 

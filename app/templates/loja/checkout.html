@@ -73,7 +73,7 @@
           não o de quem vai receber, pra não estragar a surpresa.</small>
       </label>
       <label>CPF ou CNPJ
-        <input type="text" name="cpf" id="cpf" inputmode="numeric"
+        <input type="text" name="cpf" id="cpf" autocapitalize="characters" spellcheck="false"
                placeholder="000.000.000-00" maxlength="18"
                required value="{{ form.get('cpf', '') }}">
         <small class="text-muted">Necessário para o pagamento Pix e a nota fiscal. Empresa? Informe o CNPJ.</small>
