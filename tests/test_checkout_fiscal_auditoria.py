@@ -525,3 +525,89 @@ def test_fiscal_cnpj_js_documento_alfanumerico_e_aviso_de_abreviados(tmp_path):
                           text=True, timeout=60)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert 'OK' in proc.stdout
+
+
+# ── 3. Consulta que falha (auditoria, item 48) ──────────────────────────────
+
+@pytest.mark.loja_host
+@pytest.mark.parametrize('falha, codigo, trecho', [
+    ('nao_encontrado', 404, 'não encontrado'),
+    ('indisponivel', 503, 'indisponível'),
+])
+def test_api_cnpj_sem_dados_responde_erro_e_nao_assina(app, monkeypatch, falha, codigo, trecho):
+    """Antes: 200 sem 'erro' — a tela seguia o caminho de sucesso, marcava a
+    IE como 'Não sei informar' e nunca orientava o preenchimento manual."""
+    from app.services import consulta_empresa
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    monkeypatch.setattr(consulta_empresa, 'consultar', lambda doc: {
+        'dados': {}, 'origem': '', 'atualizado_em': None, 'aviso': 'x', 'falha': falha})
+    r = app.test_client().post('/loja/api/cnpj', json={'cnpj': '11.222.333/0001-81'})
+    assert r.status_code == codigo
+    assert trecho in r.get_json()['erro']
+    assert 'token' not in r.get_json()
+    assert r.headers['Cache-Control'] == 'no-store'
+
+
+@pytest.mark.loja_host
+def test_api_cnpj_consulta_o_alfanumerico_com_as_letras(app, monkeypatch):
+    from app.services import consulta_empresa
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    vistos = []
+
+    def _consultar(doc):
+        vistos.append(doc)
+        return _consulta_longa()
+
+    monkeypatch.setattr(consulta_empresa, 'consultar', _consultar)
+    r = app.test_client().post('/loja/api/cnpj', json={'cnpj': CNPJ_ALFA_MASCARA})
+    assert r.status_code == 200
+    assert vistos == [CNPJ_ALFA]
+
+
+def test_falha_da_consulta_nao_fica_em_cache(app, monkeypatch):
+    """O clique seguinte em 'Consultar' tentava os provedores? Não: a falha
+    ficava 1 min no cache e era repetida sem nova tentativa."""
+    from app.services import cnpj, consulta_empresa
+    monkeypatch.setattr(consulta_empresa, '_reservar_consulta', lambda: False)
+    respostas = [
+        {'erro': 'Consulta de CNPJ indisponível no momento — preencha manualmente.'},
+        {'cnpj': CNPJ_NUM, 'razao_social': 'Empresa Ltda', 'logradouro': 'Rua A',
+         'numero': '1', 'complemento': '', 'bairro': 'Centro', 'cidade': 'São Paulo',
+         'uf': 'SP', 'cep': '01001000'},
+    ]
+    chamadas = []
+
+    def _consultar(doc, timeout=None):
+        chamadas.append(doc)
+        return respostas[len(chamadas) - 1]
+
+    monkeypatch.setattr(cnpj, 'consultar', _consultar)
+    primeira = consulta_empresa.consultar(CNPJ_NUM)
+    assert primeira['dados'] == {} and primeira['falha'] == 'indisponivel'
+    segunda = consulta_empresa.consultar(CNPJ_NUM)
+    assert len(chamadas) == 2
+    assert segunda['dados']['nome'] == 'Empresa Ltda'
+
+
+def test_cnpj_inexistente_e_distinguido_de_provedor_fora(app, monkeypatch):
+    from app.services import cnpj, consulta_empresa
+    monkeypatch.setattr(consulta_empresa, '_reservar_consulta', lambda: False)
+    monkeypatch.setattr(cnpj, 'consultar', lambda doc, timeout=None: {
+        'erro': 'CNPJ não encontrado na base da Receita.'})
+    assert consulta_empresa.consultar(CNPJ_NUM)['falha'] == 'nao_encontrado'
+
+
+def test_base_publica_consulta_o_cnpj_alfanumerico_inteiro(monkeypatch):
+    """cnpj.consultar (fallback do checkout, reconsulta do dono e B2B)
+    reduzia a dígitos: o alfanumérico virava 'deve ter 14 dígitos'."""
+    from app.services import cnpj
+    urls = []
+
+    def _get(url, **kw):
+        urls.append(url)
+        return SimpleNamespace(status_code=404, json=lambda: {})
+
+    monkeypatch.setattr(cnpj.requests, 'get', _get)
+    r = cnpj.consultar(CNPJ_ALFA_MASCARA)
+    assert r['erro'] == 'CNPJ não encontrado na base da Receita.'
+    assert urls and all(u.endswith('/' + CNPJ_ALFA) for u in urls)

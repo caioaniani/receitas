@@ -82,7 +82,10 @@ def _consultar_url(url, *, timeout=_TIMEOUT):
 def consultar(cnpj, *, timeout=_TIMEOUT):
     """Consulta o CNPJ nos provedores em cascata. Devolve o dict
     normalizado (com 'cnpj' incluso) ou {'erro': mensagem}."""
-    digitos = _so_digitos(cnpj)
+    # CNPJ alfanumérico (IN RFB 2.229/2024): as letras fazem parte do
+    # número — reduzir a dígitos consultaria outro documento (ou nenhum).
+    from app.utils import normalizar_documento
+    digitos = normalizar_documento(cnpj)
     if len(digitos) != 14:
         return {'erro': 'CNPJ deve ter 14 dígitos.'}
     urls = (f'https://brasilapi.com.br/api/cnpj/v1/{digitos}',

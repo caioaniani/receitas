@@ -1166,10 +1166,24 @@ def api_cnpj():
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         return jsonify(erro='Informe um CNPJ válido.'), 400
-    doc = loja_checkout._so_digitos(str(body.get('cnpj') or ''))
+    from app.utils import normalizar_documento
+    # Letras fazem parte do CNPJ alfanumérico — nunca reduzir a dígitos.
+    doc = normalizar_documento(str(body.get('cnpj') or ''))
     if not loja_checkout._cnpj_valido(doc):
         return jsonify(erro='Informe um CNPJ válido.'), 400
     consulta = consulta_empresa.consultar(doc)
+    if not consulta.get('dados'):
+        # Sem dados não há o que assinar: a tela cai no ramo de erro,
+        # preserva os campos e orienta o preenchimento manual.
+        if consulta.get('falha') == consulta_empresa.FALHA_NAO_ENCONTRADO:
+            resposta = jsonify(erro='CNPJ não encontrado na base pública. Confira o '
+                                    'número ou preencha os dados manualmente.')
+            codigo = 404
+        else:
+            resposta = jsonify(erro='A consulta de CNPJ está indisponível no momento.')
+            codigo = 503
+        resposta.headers['Cache-Control'] = 'no-store'
+        return resposta, codigo
     resposta = jsonify(checkout_fiscal.resposta_consulta(doc, consulta))
     resposta.headers['Cache-Control'] = 'no-store'
     return resposta

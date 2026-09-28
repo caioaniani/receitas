@@ -16,7 +16,6 @@ import os
 from datetime import timedelta
 from unittest.mock import patch
 
-import pytest
 from flask import Flask
 
 from app.extensions import db

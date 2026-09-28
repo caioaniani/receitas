@@ -48,9 +48,17 @@ def _documento_exato(valor, documento):
             and normalizar_documento(valor) == documento)
 
 
-def _resultado(dados=None, *, origem='', atualizado_em=None, aviso=''):
-    return {'dados': dados or {}, 'origem': origem,
-            'atualizado_em': atualizado_em, 'aviso': aviso}
+# Motivo de uma consulta SEM dados — a rota responde 404 × 503 por ele.
+FALHA_NAO_ENCONTRADO = 'nao_encontrado'
+FALHA_INDISPONIVEL = 'indisponivel'
+
+
+def _resultado(dados=None, *, origem='', atualizado_em=None, aviso='', falha=None):
+    out = {'dados': dados or {}, 'origem': origem,
+           'atualizado_em': atualizado_em, 'aviso': aviso}
+    if falha:
+        out['falha'] = falha
+    return out
 
 
 def _inserir(tabela, conexao):
@@ -226,9 +234,13 @@ def _consultar_endereco(documento):
     from app.services import cnpj
 
     publico = cnpj.consultar(documento, timeout=_TIMEOUT)
+    if isinstance(publico, dict) and 'não encontrado' in _texto(publico.get('erro')).lower():
+        return _resultado(aviso='CNPJ não encontrado na base pública.',
+                          falha=FALHA_NAO_ENCONTRADO)
     if (not isinstance(publico, dict) or publico.get('erro')
             or not _documento_exato(publico.get('cnpj'), documento) or not _texto(publico.get('razao_social'))):
-        return _resultado(aviso='Consulta cadastral indisponível. Tente novamente em instantes.')
+        return _resultado(aviso='Consulta cadastral indisponível. Tente novamente em instantes.',
+                          falha=FALHA_INDISPONIVEL)
     dados = {campo: _texto(publico.get('logradouro' if campo == 'endereco' else campo))
              for campo in ('endereco', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep')}
     dados.update(nome=_texto(publico.get('razao_social')), ie='', situacao_ie=None)
@@ -246,4 +258,9 @@ def consultar(doc):
     resultado = _consultar_cnpj_ws(documento) if _reservar_consulta() else None
     if resultado is None:
         resultado = _consultar_endereco(documento)
+    if not resultado['dados']:
+        # Falha NÃO entra no cache: o "Consultar" seguinte tenta os provedores
+        # de verdade (o orçamento do CNPJ.ws segue protegido pela reserva de
+        # 21 s e pelo limite da rota).
+        return resultado
     return _salvar_cache(documento, resultado)
