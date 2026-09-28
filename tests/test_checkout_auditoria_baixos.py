@@ -272,3 +272,32 @@ def test_pix_do_kit_estende_o_prazo_da_compra(app, owner_user, loja):
     assert pag and not erros
     db.session.refresh(compra)
     assert compra.expira_em == fim_qr + timedelta(minutes=5)
+
+
+# ── 50. Sob encomenda: produto abre na primeira data com saldo ──────────
+
+def test_sob_encomenda_abre_na_primeira_data_com_saldo(app, monkeypatch):
+    from app.extensions import db
+    from app.services import loja_plano_dia
+    from app.services.loja_catalogo import _slugify
+    from app.utils import hoje
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    p = _produto(db, nome='Caixa de Mini', sob_encomenda=True)
+    d2, d3 = hoje() + timedelta(days=2), hoje() + timedelta(days=3)
+    loja_plano_dia.definir('produto', p.id, d2, 0)
+    html = app.test_client().get(f'/loja/{_slugify(p.nome)}-p{p.id}').get_data(as_text=True)
+    assert f'value="{d3.isoformat()}"' in html
+    assert f'min="{d2.isoformat()}"' in html
+    assert 'Primeira data disponível' in html
+
+
+def test_sob_encomenda_com_d2_livre_segue_no_d2(app, monkeypatch):
+    from app.extensions import db
+    from app.services.loja_catalogo import _slugify
+    from app.utils import hoje
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    p = _produto(db, nome='Caixa de Mini', sob_encomenda=True)
+    d2 = hoje() + timedelta(days=2)
+    html = app.test_client().get(f'/loja/{_slugify(p.nome)}-p{p.id}').get_data(as_text=True)
+    assert f'value="{d2.isoformat()}"' in html
+    assert 'Primeira data disponível' not in html

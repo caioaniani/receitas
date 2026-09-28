@@ -378,18 +378,23 @@ def anotar_esgotado(itens):
 
             from app.services.loja_checkout import ENCOMENDA_LEAD_DIAS
             minimo = dia_hoje + timedelta(days=ENCOMENDA_LEAD_DIAS)
-            tem_dia = False
+            primeiro = None
             for d in datas:
                 if d < minimo:
                     continue
                 s = _saldo_para_dia(
                     kind, item_id, d, saldos_dia_cache=saldos_cache)
                 if s is None or s > 0:
-                    tem_dia = True
+                    primeiro = d
                     break
             it['esgotado_hoje'] = False
-            it['tem_em_outros_dias'] = tem_dia
-            it['esgotado'] = not tem_dia
+            it['tem_em_outros_dias'] = primeiro is not None
+            it['esgotado'] = primeiro is None
+            # Só a data (sem rótulos): a página do produto abre nela em vez
+            # do D+2 zerado (auditoria 27/09/2026). A vitrine não muda — os
+            # rótulos ficam dentro de `esgotado_hoje`, que segue False.
+            if primeiro is not None and primeiro > minimo:
+                it['proxima_data'] = primeiro.isoformat()
             continue
         saldo_hoje = _saldo_para_dia(
             kind, item_id, dia_hoje, saldos_dia_cache=saldos_cache)

@@ -1387,8 +1387,11 @@ def produto(slug_completo):
     # que a vitrine anuncia). Antes esta rota recalculava com um loop proprio
     # — duas contas do mesmo fato, que podiam divergir e mostrar uma data no
     # card e outra no seletor.
-    if lead == 0 and item.get('proxima_data'):
-        data_padrao = date.fromisoformat(item['proxima_data'])
+    # Sob encomenda também: com o D+2 zerado no plano, o seletor abre no
+    # primeiro dia com saldo (antes abria no D+2 com "esgotado" e o botão
+    # desabilitado — auditoria 27/09/2026).
+    if item.get('proxima_data'):
+        data_padrao = max(data_min, date.fromisoformat(item['proxima_data']))
     return render_template(
         'loja/produto.html', item=item, em_teste=_em_teste(),
         personalizada=personalizada, monte=monte,
@@ -1396,6 +1399,7 @@ def produto(slug_completo):
         data_max_iso=data_max.isoformat(),
         data_padrao_iso=data_padrao.isoformat(),
         lead_dias=lead,
+        encomenda_adiada=(lead > 0 and data_padrao > data_min),
     )
 
 
