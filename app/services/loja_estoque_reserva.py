@@ -9,6 +9,9 @@ como disponivel, e o webhook 'pago' apenas CONSOME a reserva.
 
 Modelo:
 - `EstoqueLoja.quantidade_reservada` — total reservado AGORA (Integer >= 0).
+- `ReservaEstoqueSite` — o que CADA pedido reservou, por linha (congelado no
+  `reservar`; `liberar`/`consumir` devolvem a partir dele, nunca do cadastro
+  atual da cesta — auditoria 27/09/2026).
 - `PedidoOnline.reserva_expira_em` — quando a reserva deve cair se o cliente
   abandonou o checkout. Pix expira em 30min; reserva fica 35min (margem
   pro webhook chegar e o cron processar).
@@ -176,6 +179,55 @@ def _agrega_por_linha(pedido, loja_id, *, lock):
     return [(el, por_linha[el][0], por_linha[el][1]) for el in ordem], pulados
 
 
+_COLUNAS_ESTOQUE = ('receita_id', 'produto_id', 'materia_prima_id')
+
+
+def _gravar_snapshot(pedido, el, qtd):
+    """Congela o que `reservar` incrementou nesta linha (`ReservaEstoqueSite`).
+    Mesma linha reservada 2x no pedido soma no mesmo registro."""
+    from app.models import ReservaEstoqueSite
+    coluna = next((c for c in _COLUNAS_ESTOQUE if getattr(el, c, None)), None)
+    if coluna is None:           # linha pendente (sem alvo) — não reservável
+        return
+    alvo = getattr(el, coluna)
+    reg = ReservaEstoqueSite.query.filter_by(
+        pedido_id=pedido.id, loja_id=el.loja_id, coluna=coluna,
+        alvo_id=alvo).first()
+    if reg is None:
+        db.session.add(ReservaEstoqueSite(
+            pedido_id=pedido.id, loja_id=el.loja_id, coluna=coluna,
+            alvo_id=alvo, quantidade=int(qtd)))
+    else:
+        reg.quantidade = int(reg.quantidade or 0) + int(qtd)
+
+
+def _linhas_do_snapshot(pedido):
+    """(registros, [(el, qtd)]) da reserva congelada, com as linhas travadas
+    (lock da loja + FOR UPDATE); None se o pedido não tem snapshot (pedido
+    anterior à tabela — o chamador usa a reexpansão pelo cadastro)."""
+    from app.models import ReservaEstoqueSite
+    if pedido.id is None:
+        return None
+    regs = (ReservaEstoqueSite.query.filter_by(pedido_id=pedido.id)
+            .order_by(ReservaEstoqueSite.id).all())
+    if not regs:
+        return None
+    estoque_helpers.serializar_lojas([r.loja_id for r in regs])
+    linhas = []
+    for r in regs:
+        if r.coluna not in _COLUNAS_ESTOQUE:
+            continue
+        el = estoque_helpers.obter_linha_loja(r.loja_id, **{r.coluna: r.alvo_id})
+        db.session.refresh(el, with_for_update=True)
+        linhas.append((el, int(r.quantidade or 0)))
+    return regs, linhas
+
+
+def _descartar_snapshot(regs):
+    for r in regs:
+        db.session.delete(r)
+
+
 def reservar(pedido, *, loja_id, ttl_min=TTL_RESERVA_MIN):
     """Registra a reserva FISICA de estoque dos itens do pedido (razao contabil
     + arma o timer de expiracao do Pix). NAO bloqueia a venda: a
@@ -197,8 +249,11 @@ def reservar(pedido, *, loja_id, ttl_min=TTL_RESERVA_MIN):
     # (FOR UPDATE). Itens repetidos / componentes que caem na mesma linha
     # somam. NAO valida saldo: o fisico nao barra a venda, so registra.
     linhas, _ = _agrega_por_linha(pedido, loja_id, lock=True)
+    if pedido.id is None:
+        db.session.flush()
     for el, qtd, _nome in linhas:
         el.quantidade_reservada = (el.quantidade_reservada or 0) + qtd
+        _gravar_snapshot(pedido, el, qtd)
 
     pedido.reserva_expira_em = agora() + timedelta(minutes=ttl_min)
     db.session.flush()
@@ -232,17 +287,36 @@ def consumir(pedido, *, loja_id, usuario_id=None):
     if ja_consumido:
         logger.info('consumir: pedido %s ja consumido (no-op)', pedido.codigo)
         pedido.reserva_expira_em = None
+        from app.models import ReservaEstoqueSite
+        if pedido.id is not None:
+            ReservaEstoqueSite.query.filter_by(pedido_id=pedido.id).delete(
+                synchronize_session='fetch')
         return {'baixado': 0, 'faltou': 0, 'pulado': 0,
                 'ja_consumido': True}
 
-    # 1. Libera a reserva (mesma agregacao inteira de `reservar`, pra o ledger
-    #    de `quantidade_reservada` fechar). Nao depende da baixa real abaixo.
-    linhas, pulados = _agrega_por_linha(pedido, loja_id, lock=True)
-    # Se o QR expirou, o cron já liberou esta reserva. O saldo reservado que
-    # sobrou pertence a OUTROS pedidos e não pode ser consumido novamente.
-    if pedido.reserva_expira_em is not None:
-        for el, qtd, _nome in linhas:
-            el.quantidade_reservada = max(0, (el.quantidade_reservada or 0) - qtd)
+    # 1. Libera a reserva — pelo SNAPSHOT gravado no `reservar` (a cesta pode
+    #    ter sido editada depois do checkout); pedido antigo, sem snapshot,
+    #    reexpande pelo cadastro como antes. Nao depende da baixa real abaixo.
+    snap = _linhas_do_snapshot(pedido)
+    if snap is not None:
+        regs, linhas_snap = snap
+        estoque_helpers.serializar_loja(loja_id)     # a baixa real abaixo
+        # Se o QR expirou, o cron já liberou (e apagou o snapshot); o que
+        # sobrar aqui só é devolvido com a reserva viva.
+        if pedido.reserva_expira_em is not None:
+            for el, qtd in linhas_snap:
+                el.quantidade_reservada = max(
+                    0, (el.quantidade_reservada or 0) - qtd)
+        _descartar_snapshot(regs)
+        pulados = sum(1 for it in pedido.itens if not _expandir_estoque(it))
+    else:
+        linhas, pulados = _agrega_por_linha(pedido, loja_id, lock=True)
+        # Se o QR expirou, o cron já liberou esta reserva. O saldo reservado
+        # que sobrou pertence a OUTROS pedidos e não pode ser consumido.
+        if pedido.reserva_expira_em is not None:
+            for el, qtd, _nome in linhas:
+                el.quantidade_reservada = max(
+                    0, (el.quantidade_reservada or 0) - qtd)
 
     # 2. Baixa real pelo MOTOR UNICO (mesma logica de Seru/lote): explode cesta,
     #    acumula fracao por item, decrementa a linha canonica, gera o movimento.
@@ -286,11 +360,19 @@ def liberar(pedido, *, loja_id):
     if pedido.reserva_expira_em is None:
         return {'liberadas': 0}
 
-    # Mesma expansao da reserva (cesta -> componentes) — devolve exatamente o
-    # que foi reservado, linha a linha.
-    linhas, _ = _agrega_por_linha(pedido, loja_id, lock=True)
-    for el, qtd, _nome in linhas:
-        el.quantidade_reservada = max(0, (el.quantidade_reservada or 0) - qtd)
+    # Devolve exatamente o que foi reservado, linha a linha: pelo snapshot
+    # (vale mesmo com a cesta editada depois do checkout); pedido antigo,
+    # sem snapshot, pela mesma expansao da reserva.
+    snap = _linhas_do_snapshot(pedido)
+    if snap is not None:
+        regs, linhas = snap
+        for el, qtd in linhas:
+            el.quantidade_reservada = max(0, (el.quantidade_reservada or 0) - qtd)
+        _descartar_snapshot(regs)
+    else:
+        linhas, _ = _agrega_por_linha(pedido, loja_id, lock=True)
+        for el, qtd, _nome in linhas:
+            el.quantidade_reservada = max(0, (el.quantidade_reservada or 0) - qtd)
     pedido.reserva_expira_em = None
     db.session.flush()
     logger.info('liberar: pedido %s liberou %d linha(s)',

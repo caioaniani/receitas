@@ -322,3 +322,101 @@ def test_nf_cnpj_com_entrega_incompleta_nao_vai_a_sefaz(app):
     incluir.assert_not_called()
     assert res['ok'] is False
     assert 'Endereço de entrega incompleto (bairro, UF)' in res['msg']
+
+
+# ── 41. Reserva física congelada por pedido ─────────────────────────────
+
+def _cesta_reservada(db):
+    """Cesta Café = 2 Croissants, reservada por um pedido; Pain au Chocolat
+    com 3 reservados por OUTRO pedido."""
+    from app.models import (
+        AppConfig,
+        EstoqueLoja,
+        Loja,
+        Produto,
+        ProdutoItem,
+        Receita,
+    )
+    from app.services import loja_estoque_reserva
+    from app.utils import agora
+    loja = Loja(nome='Brooklin', endereco='Rua Y, 1', ativa=True)
+    a = Receita(nome='Croissant', categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=90)
+    b = Receita(nome='Pain au Chocolat', categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=90)
+    cesta = Produto(nome='Cesta Cafe', categoria='Cestas', preco_site=80.0,
+                    ativo=True, imagem_dropbox_url='https://x/c.jpg')
+    db.session.add_all([loja, a, b, cesta])
+    db.session.flush()
+    db.session.add(ProdutoItem(produto_id=cesta.id, tipo='receita',
+                               receita_id=a.id, item_nome=a.nome, quantidade=2))
+    ela = EstoqueLoja(loja_id=loja.id, receita_id=a.id, quantidade=50)
+    elb = EstoqueLoja(loja_id=loja.id, receita_id=b.id, quantidade=50,
+                      quantidade_reservada=3)
+    db.session.add_all([ela, elb])
+    db.session.commit()
+    AppConfig.set('loja_site_estoque_id', loja.id)
+    ped = _pedido(db, cesta, loja_retirada_id=loja.id)
+    loja_estoque_reserva.reservar(ped, loja_id=loja.id)
+    db.session.commit()
+    assert ela.quantidade_reservada == 2
+    # O dono troca o croissant por pain au chocolat (a tela recria os itens).
+    ProdutoItem.query.filter_by(produto_id=cesta.id).delete()
+    db.session.add(ProdutoItem(produto_id=cesta.id, tipo='receita',
+                               receita_id=b.id, item_nome=b.nome, quantidade=2))
+    ped.reserva_expira_em = agora() - timedelta(minutes=1)
+    db.session.commit()
+    db.session.expire_all()
+    return loja, ped, ela.id, elb.id
+
+
+def test_expiracao_devolve_a_reserva_original_mesmo_com_cesta_editada(app):
+    from app.extensions import db
+    from app.models import EstoqueLoja, ReservaEstoqueSite
+    from app.services import loja_estoque_reserva
+    from app.utils import agora
+    _loja, ped, ida, idb = _cesta_reservada(db)
+    # Sem tentativa de pagamento: nada vivo no gateway, o cron cancela.
+    loja_estoque_reserva.liberar_expirados(agora_=agora())
+    db.session.expire_all()
+    assert db.session.get(EstoqueLoja, ida).quantidade_reservada == 0
+    assert db.session.get(EstoqueLoja, idb).quantidade_reservada == 3
+    assert ReservaEstoqueSite.query.filter_by(pedido_id=ped.id).count() == 0
+
+
+def test_pagamento_consome_a_reserva_original_mesmo_com_cesta_editada(app):
+    from app.extensions import db
+    from app.models import EstoqueLoja, ReservaEstoqueSite
+    from app.services import loja_estoque_reserva
+    from app.utils import agora
+    loja, ped, ida, idb = _cesta_reservada(db)
+    ped.reserva_expira_em = agora() + timedelta(minutes=10)   # ainda viva
+    db.session.commit()
+    loja_estoque_reserva.consumir(ped, loja_id=loja.id)
+    db.session.commit()
+    db.session.expire_all()
+    assert db.session.get(EstoqueLoja, ida).quantidade_reservada == 0
+    assert db.session.get(EstoqueLoja, idb).quantidade_reservada == 3
+    assert ReservaEstoqueSite.query.filter_by(pedido_id=ped.id).count() == 0
+
+
+def test_pedido_anterior_ao_snapshot_libera_pela_reexpansao(app):
+    """Pedido reservado antes do deploy (sem `ReservaEstoqueSite`): a
+    liberação segue o caminho antigo, pelo cadastro."""
+    from app.extensions import db
+    from app.models import EstoqueLoja, Loja
+    from app.services import loja_estoque_reserva
+    from app.utils import agora
+    loja = Loja(nome='Brooklin', endereco='Rua Y, 1', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    prod = _produto(db)
+    el = EstoqueLoja(loja_id=loja.id, produto_id=prod.id, quantidade=10,
+                     quantidade_reservada=5)
+    db.session.add(el)
+    ped = _pedido(db, prod, qtd=2, loja_retirada_id=loja.id)
+    ped.reserva_expira_em = agora() + timedelta(minutes=5)
+    db.session.commit()
+    loja_estoque_reserva.liberar(ped, loja_id=loja.id)
+    db.session.commit()
+    assert el.quantidade_reservada == 3

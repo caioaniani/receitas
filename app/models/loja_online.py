@@ -473,6 +473,42 @@ class PagarmeEvento(db.Model):
         return f'<PagarmeEvento {self.tipo} {self.evento_id}>'
 
 
+class ReservaEstoqueSite(db.Model):
+    """Reserva FÍSICA de um pedido do site, congelada por linha de estoque
+    (auditoria 27/09/2026).
+
+    A reserva era refeita a partir do cadastro ATUAL da cesta na liberação e
+    no consumo: se o dono editasse a cesta (a tela recria os `ProdutoItem`)
+    ou trocasse a flag `sob_encomenda` com Pix pendente, a liberação
+    devolvia em OUTRAS linhas — a reserva original ficava presa e a de
+    outros pedidos era consumida. Agora `reservar` grava aqui exatamente o
+    que incrementou, e `liberar`/`consumir` devolvem A PARTIR DESTE
+    registro. Pedido sem linha aqui (anterior ao deploy) segue o caminho
+    antigo de reexpansão.
+
+    A linha de estoque é identificada por (loja, coluna, alvo), não pelo id:
+    `obter_linha_loja` consolida duplicatas na canônica (menor id) e apaga as
+    outras — o id poderia sumir, o alvo não. Tabela NOVA (create_all), sem
+    coluna nova em tabela antiga. As linhas são apagadas ao liberar/consumir.
+    """
+    __tablename__ = 'reserva_estoque_site'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_id = db.Column(
+        db.Integer, db.ForeignKey('pedido_online.id', ondelete='CASCADE'),
+        nullable=False, index=True)
+    loja_id = db.Column(db.Integer, nullable=False)
+    # 'receita_id' | 'produto_id' | 'materia_prima_id' (coluna do EstoqueLoja)
+    coluna = db.Column(db.String(20), nullable=False)
+    alvo_id = db.Column(db.Integer, nullable=False)
+    quantidade = db.Column(db.Integer, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora)
+
+    def __repr__(self):
+        return (f'<ReservaEstoqueSite ped={self.pedido_id} {self.coluna}='
+                f'{self.alvo_id} x{self.quantidade}>')
+
+
 class ClienteResetSenha(db.Model):
     """Token de recuperação de senha do cliente (Fase 6 — PR 3).
 
