@@ -354,9 +354,13 @@ def _reservar_vaga_google(canal):
     WHERE value = <lido>); perdeu a corrida, relê e tenta de novo. Antes era
     ler→somar→gravar e dois workers podiam passar do teto juntos. Commita na
     hora (como antes): segurar a linha até o fim do checkout serializaria
-    todas as cotações. Erro de banco = sem Google (a cadeia grátis segue) e a
-    sessão volta utilizável (rollback) — transação abortada mataria o
-    checkout inteiro no Postgres."""
+    todas as cotações.
+
+    Isolamento da transação do chamador: as pendências DELE vão ao banco
+    antes (`flush` — erro delas continua sendo dele e sobe como antes); o que
+    é NOSSO roda num savepoint por tentativa, então falha de banco nossa
+    desfaz só o savepoint — nunca descarta nem envenena o que o chamador já
+    gravou. Sem vaga ou com erro nosso = sem Google (a cadeia grátis segue)."""
     from sqlalchemy import select, update
     from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -366,51 +370,57 @@ def _reservar_vaga_google(canal):
 
     teto, teto_preview = tetos_google()
     hoje_iso = hoje().isoformat()
-    try:
-        for _ in range(_TENTATIVAS_RESERVA):
-            linha = db.session.execute(
-                select(AppConfig.value)
-                .where(AppConfig.key == _CHAVE_USO_GOOGLE)).first()
-            bruto = linha[0] if linha else None
-            total, preview = _ler_uso(bruto, hoje_iso)
-            if total >= teto:
-                logger.warning('frete: teto diário do Google esgotado '
-                               '(%s/%s, canal %s)', total, teto, canal)
-                return False
-            if canal == CANAL_PREVIEW and preview >= teto_preview:
-                logger.warning('frete: sub-teto do preview do Google esgotado '
-                               '(%s/%s) — checkout/despacho seguem com o '
-                               'restante', preview, teto_preview)
-                return False
-            novo = (f'{hoje_iso}|{total + 1}|'
-                    f'{preview + (1 if canal == CANAL_PREVIEW else 0)}')
-            if linha is None:
-                try:
-                    with db.session.begin_nested():
+    db.session.flush()
+    for _ in range(_TENTATIVAS_RESERVA):
+        esgotado = None
+        gravou = False
+        try:
+            with db.session.begin_nested():
+                linha = db.session.execute(
+                    select(AppConfig.value)
+                    .where(AppConfig.key == _CHAVE_USO_GOOGLE)).first()
+                bruto = linha[0] if linha else None
+                total, preview = _ler_uso(bruto, hoje_iso)
+                if total >= teto:
+                    esgotado = (f'teto diário do Google esgotado '
+                                f'({total}/{teto}, canal {canal})')
+                elif canal == CANAL_PREVIEW and preview >= teto_preview:
+                    esgotado = (f'sub-teto do preview do Google esgotado '
+                                f'({preview}/{teto_preview}) — checkout/'
+                                'despacho seguem com o restante')
+                else:
+                    novo = (f'{hoje_iso}|{total + 1}|'
+                            f'{preview + (1 if canal == CANAL_PREVIEW else 0)}')
+                    if linha is None:
+                        # Unique da chave: se outro worker criou a linha
+                        # agora, o flush da saída do savepoint levanta.
                         db.session.add(AppConfig(key=_CHAVE_USO_GOOGLE,
                                                  value=novo))
-                except IntegrityError:
-                    continue          # outro worker criou a linha: relê
-                db.session.commit()
-                return True
-            atual = (AppConfig.value.is_(None) if bruto is None
-                     else AppConfig.value == bruto)
-            res = db.session.execute(
-                update(AppConfig)
-                .where(AppConfig.key == _CHAVE_USO_GOOGLE, atual)
-                .values(value=novo)
-                .execution_options(synchronize_session=False))
-            if res.rowcount == 1:
-                db.session.commit()
-                return True
-        logger.warning('frete: reserva no teto do Google perdeu %s corridas '
-                       'seguidas — sem Google nesta cotação',
-                       _TENTATIVAS_RESERVA)
-        return False
-    except SQLAlchemyError:
-        db.session.rollback()
-        logger.exception('frete: falha ao reservar vaga do teto do Google')
-        return False
+                        gravou = True
+                    else:
+                        atual = (AppConfig.value.is_(None) if bruto is None
+                                 else AppConfig.value == bruto)
+                        res = db.session.execute(
+                            update(AppConfig)
+                            .where(AppConfig.key == _CHAVE_USO_GOOGLE, atual)
+                            .values(value=novo)
+                            .execution_options(synchronize_session=False))
+                        gravou = res.rowcount == 1
+        except IntegrityError:
+            continue                  # outro worker criou a linha: relê
+        except SQLAlchemyError:
+            logger.exception('frete: falha ao reservar vaga do teto do Google')
+            return False
+        if esgotado:
+            logger.warning('frete: %s', esgotado)
+            return False
+        if gravou:
+            db.session.commit()
+            return True
+        # CAS perdeu (outro worker gravou entre a leitura e o UPDATE): relê.
+    logger.warning('frete: reserva no teto do Google perdeu %s corridas '
+                   'seguidas — sem Google nesta cotação', _TENTATIVAS_RESERVA)
+    return False
 
 
 def _google_geocode(texto, numero_entrega=None, canal=CANAL_CHECKOUT):
