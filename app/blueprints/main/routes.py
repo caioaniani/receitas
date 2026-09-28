@@ -1928,6 +1928,8 @@ def debug_schema():
             col_info('produto_item', 'materia_prima_id'),
             col_info('produto_item', 'item_nome'),
             col_info('venda_b2b', 'valor_total'),
+            col_info('cliente_b2b', 'emails_cobranca'),
+            col_info('envio_cobranca', 'copias'),
             col_info('venda_b2b_item', 'preco_unitario'),
             col_info('orcamento_item', 'desconto_percentual'),
             col_info('venda_b2b_parcela', 'valor'),

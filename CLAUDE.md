@@ -963,13 +963,17 @@ dinheiro/estoque ainda exigem confirmacao. Ver
 **Alembic adotado em 21/05/2026** (Flask-Migrate). Coexiste com os helpers legados
 `_migrate_postgres()` e `_migrate_sqlite()` em `app/__init__.py` por compatibilidade.
 
-### Procedimento para mudança de schema (REAL — Alembic NAO roda em prod)
+### Procedimento para mudança de schema (expansão antes do modelo)
 
 **ATENCAO**: o `Procfile` e `railway.json` rodam apenas `gunicorn run:app ...` —
-NAO ha `release: flask db upgrade`. Migrations Alembic em prod estao dormentes.
-Mudancas de schema em prod hoje sao aplicadas pelos helpers legados
+NAO ha `release: flask db upgrade`, mas o startup atual chama
+`_alembic_stamp_se_necessario()` e executa `upgrade()` depois dos helpers
+legados (conferido em 28/09/2026, `app/__init__.py`). A ausência de release
+command não significa que Alembic esteja dormente. Os helpers legados
 `_migrate_postgres()`/`_migrate_sqlite()` em `app/migrations_legacy.py`, que
-rodam no startup de cada worker gunicorn (idempotentes).
+rodam no startup de cada worker gunicorn (idempotentes). Manter o procedimento
+de expansão em dois commits e confirmar as colunas reais: falhas de Alembic
+são registradas e não garantem que a migração tenha sido aplicada.
 
 **Procedimento canonico (2 commits)**:
 
