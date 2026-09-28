@@ -335,6 +335,46 @@ def _encerrar_resolucao(pedido, bloqueio):
         apos_confirmacao(pedido)
 
 
+def cancelar_aguardando_pelo_admin(pedido):
+    """Cancelamento pelo admin de pedido que ainda aguarda pagamento.
+
+    Antes (auditoria 27/09/2026) só mudava o status: a cobrança seguia viva
+    no Pagar.me (o cliente pagava o QR e o dinheiro entrava num pedido
+    cancelado) e a reserva física de EstoqueLoja ficava presa pra sempre,
+    distorcendo a sugestão de pedidos. Agora encerra a cobrança no gateway
+    (mesma regra da nova tentativa), libera a reserva e cancela. Devolve
+    (ok, mensagem pro admin); o caller já travou o pedido."""
+    bloqueio = _resolver_tentativas_pendentes(pedido)
+    if bloqueio == _MSG_PAGAMENTO_JA_CONFIRMADO:
+        _encerrar_resolucao(pedido, bloqueio)
+        return False, (f'O Pagar.me confirma que o pedido {pedido.codigo} FOI '
+                       'PAGO — ele foi marcado como pago. Para cancelar, use '
+                       '"Reembolsar e cancelar".')
+    if bloqueio:
+        db.session.commit()   # guarda o que a consulta encerrou
+        motivos = {
+            _MSG_CARTAO_EM_ANALISE: 'o pagamento com cartão ainda está em '
+                                    'análise no banco',
+            _MSG_PIX_ANTERIOR_ATIVO: 'não foi possível cancelar o Pix no '
+                                     'Pagar.me (ele ainda pode ser pago)',
+            _MSG_GATEWAY_INDISPONIVEL: 'o Pagar.me não respondeu',
+            _MSG_PIX_ANTERIOR_ESTORNADO: 'o Pix foi pago e estornado no '
+                                         'mesmo instante — confira no Pagar.me',
+        }
+        return False, (f'Pedido {pedido.codigo} NÃO cancelado: '
+                       f'{motivos.get(bloqueio, bloqueio)}. Tente de novo em '
+                       'alguns minutos.')
+    from app.services import loja_estoque_reserva
+    loja = _loja_baixa(pedido)
+    if loja:
+        loja_estoque_reserva.liberar(pedido, loja_id=loja.id)
+    pedido.status = 'cancelado'
+    pedido.motivo_cancelamento = 'cancelado_admin'
+    pedido.cancelado_em = agora()
+    db.session.commit()
+    return True, f'Pedido {pedido.codigo} cancelado (reserva de estoque liberada).'
+
+
 def iniciar_pix(pedido, expira_em_min=30):
     """Cria PagamentoOnline(metodo=pix) e dispara Order Pix no Pagar.me.
     Devolve o PagamentoOnline (com QR populado) ou None + erros."""

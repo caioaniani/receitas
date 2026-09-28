@@ -6292,13 +6292,14 @@ def loja_online_pedido_cancelar(codigo):
       (decisão do dono 17/07/2026, opção "a"). O estoque só volta
       automaticamente se o status ainda era 'pago' (regra existente do
       _marcar_estornado — mercadoria que já saiu não re-entra sozinha).
-    - Aguardando pagamento: só marca cancelado (nada foi cobrado/baixado).
+    - Aguardando pagamento: encerra a cobrança no Pagar.me, libera a reserva
+      física e cancela (`loja_pagamento.cancelar_aguardando_pelo_admin`) —
+      recusa se o gateway mostrar o pedido pago ou em análise.
     - Entregue/cancelado: bloqueia."""
     from flask import flash
 
     from app.models import PedidoOnline
     from app.services import loja_pagamento
-    from app.utils import agora
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
     # Compra antes dos pedidos: mesma ordem de locks do pagamento e expiração.
     from app.services import compra_kits, kits_pagamento
@@ -6333,11 +6334,8 @@ def loja_online_pedido_cancelar(codigo):
         ok, msg = compra_kits.cancelar_pendentes(p)
         flash(msg, 'success' if ok else 'danger')
     else:
-        p.status = 'cancelado'
-        p.motivo_cancelamento = 'cancelado_admin'
-        p.cancelado_em = agora()
-        db.session.commit()
-        flash(f'Pedido {p.codigo} cancelado.', 'success')
+        ok, msg = loja_pagamento.cancelar_aguardando_pelo_admin(p)
+        flash(msg, 'success' if ok else 'warning')
     return _detalhe_redirect(codigo)
 
 
