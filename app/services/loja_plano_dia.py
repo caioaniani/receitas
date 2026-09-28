@@ -130,11 +130,33 @@ def salvar_regra_semanal(kind, item_id, dias, qtd_limite=None):
 
 
 def remover_regra_semanal(kind, item_id):
+    """Remove a regra semanal ("liberar para todos os dias").
+
+    Com a regra ativa, cada venda grava o limite dela no plano diário do dia
+    vendido (`reservar`). Sem neutralizar essas linhas, depois de remover a
+    regra `_planejado_efetivo` caía no plano diário e as datas que já tinham
+    venda continuavam com o limite antigo — só as outras ficavam livres
+    (auditoria 27/09/2026). Mesmo tratamento de `remover_excecao`: das
+    datas de hoje em diante sem exceção própria, o limite vira "sem limite"
+    e a reserva/venda é preservada."""
+    from app.utils import hoje
     row = (db.session.query(EstoqueSiteRegraSemanal)
            .filter_by(kind=kind, item_id=item_id).first())
-    if row is not None:
-        db.session.delete(row)
-        db.session.commit()
+    if row is None:
+        return
+    db.session.delete(row)
+    datas_com_excecao = {
+        d for (d,) in db.session.query(EstoqueSiteExcecao.data)
+        .filter_by(kind=kind, item_id=item_id).all()}
+    planos = (db.session.query(EstoqueSitePlano)
+              .filter(EstoqueSitePlano.kind == kind,
+                      EstoqueSitePlano.item_id == item_id,
+                      EstoqueSitePlano.data >= hoje()).all())
+    for plano in planos:
+        if plano.data in datas_com_excecao:
+            continue
+        plano.qtd_planejada = DEFAULT_QTD_PLANEJADA + (plano.qtd_reservada or 0)
+    db.session.commit()
 
 
 def salvar_excecao(kind, item_id, data, qtd_limite=None):
