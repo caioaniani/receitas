@@ -3592,7 +3592,13 @@ todos com teste em `tests/test_checkout_auditoria_graves.py`:
   trava e age por compra, com commit próprio (QR válido adia; pago
   confirma). Testes: `tests/test_kits_auditoria.py`.
 - **2ª revisão independente (28/09/2026, blocos frete/fiscal/kits)** —
-  aplicados (25 achados; o 7 ficou como pendência):
+  25 achados: 24 aplicados, o 7 pendente (abaixo). Item 20 (testes que só
+  rodavam em SQLite): testes reforçados + sonda num Postgres 16 real —
+  teto do Google com 8 conexões concorrentes (40 pedidos, teto 20 → 20
+  exatas), reserva e cache em conexão própria com o chamador tendo escrita
+  pendente (rollback dele descarta só a dele) e FOR UPDATE do chamador
+  intacto após a reserva: 4/4. A suíte inteira NÃO roda em Postgres (o
+  `drop_all` do conftest esbarra nas tabelas `vnda_*` legadas):
   - **Frete**: com NÚMERO do cliente, o texto dele vem antes do rótulo
     oficial sem número; o rótulo só resolve depois, como `rua_sem_numero`
     (IMPRECISO). Nominatim fora (rede/timeout/HTTP) ENCERRA a cadeia na 1ª
