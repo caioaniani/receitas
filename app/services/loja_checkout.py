@@ -613,7 +613,9 @@ def _so_digitos(s):
     """Só dígitos — para telefone e CEP. NUNCA para CPF/CNPJ: o CNPJ
     alfanumérico perderia as letras; documento usa
     `app.utils.normalizar_documento`."""
-    return ''.join(c for c in (s or '') if c.isdigit())
+    # ASCII: isdigit() aceita '²' e dígitos de outros alfabetos, que
+    # passariam pelo filtro e quebrariam o telefone gravado.
+    return ''.join(c for c in (s or '') if '0' <= c <= '9')
 
 
 def _cpf_valido(cpf):

@@ -590,3 +590,9 @@ def test_edicao_admin_recusa_campo_maior_que_a_coluna(app, owner_user):
     assert 'CEP inválido (8 números).' in h
     db.session.expire_all()
     assert db.session.get(type(ped), ped.id).endereco_bairro is None
+
+
+def test_so_digitos_do_checkout_e_ascii():
+    from app.services import loja_checkout
+    assert loja_checkout._so_digitos('(11) 9²8765-4321') == '1198765' + '4321'
+    assert loja_checkout._so_digitos('١١٩') == ''
