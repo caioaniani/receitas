@@ -2820,12 +2820,14 @@ def contas_pagar_itens():
             r['primeira'] = ln['data']
         u = ln['valor_unitario']
         if u is not None:
-            # linhas vêm da mais recente para a mais antiga: a 1ª com preço é a última compra
+            # Linhas vêm da mais recente para a mais antiga: a 1ª com preço é o
+            # preço da última compra precificada.
             if r['ultimo_valor_unitario'] is None:
                 r['ultimo_valor_unitario'] = u
-                r['ultima'] = ln['data']
-            r['min_valor_unitario'] = u if r['min_valor_unitario'] is None else min(r['min_valor_unitario'], u)
-            r['max_valor_unitario'] = u if r['max_valor_unitario'] is None else max(r['max_valor_unitario'], u)
+                r['ultimo_valor_unitario_em'] = ln['data']
+            mn, mx = r['min_valor_unitario'], r['max_valor_unitario']
+            r['min_valor_unitario'] = u if mn is None else min(mn, u)
+            r['max_valor_unitario'] = u if mx is None else max(mx, u)
     lista_resumo = []
     for r in resumo.values():
         r['unidades'] = sorted(r['unidades'])
