@@ -88,18 +88,23 @@ def marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None):
            for p in pedidos):
         logger.error('Pagamento recebido para kit %s com entrega incompatível; '
                      'requer conferência do owner.', compra.id)
-        if pagamento or loja_pagamento._tem_pagamento_externo(principal):
+        # Dinheiro do gateway numa compra que não aguardava pagamento: o dono
+        # precisa estornar ou falar com o cliente. Só no PRIMEIRO registro da
+        # tentativa (order.paid e charge.paid chegam os dois; a tentativa já
+        # 'pago' quer dizer que este aviso já saiu). Sem tentativa identificada
+        # não há o que estornar por aqui — o log acima registra.
+        if pagamento and status_anterior not in ('pago', 'estornado'):
             cancelada = any(p.status == 'cancelado' and p.motivo_cancelamento != 'pix_expirado'
                             for p in pedidos)
             situacao = ('estava CANCELADA e recebeu pagamento. Ela continua cancelada'
                         if cancelada else
                         'recebeu pagamento, mas as entregas não aguardavam pagamento. '
                         'Nada foi alterado')
-            valor = f' ({fmt_brl(pagamento.valor)} via {pagamento.metodo})' if pagamento else ''
             _alertar_dono(
-                f'⚠️ Compra de kit {principal.codigo} ({compra.kit_nome}) {situacao}'
-                f'{valor} — estorne o valor no painel do Pagar.me ou fale com o cliente.',
-                f'kit_cancelado_pago|{compra.id}|{pagamento.id if pagamento else "-"}')
+                f'⚠️ Compra de kit {principal.codigo} ({compra.kit_nome}) {situacao} '
+                f'({fmt_brl(pagamento.valor)} via {pagamento.metodo}) — estorne o valor '
+                'no painel do Pagar.me ou fale com o cliente.',
+                f'kit_cancelado_pago|{compra.id}|{pagamento.id}')
         return False
     from app.services.kits_capacidade import reservar_compra
     reservar_compra(compra, pagamento_recebido=True)
