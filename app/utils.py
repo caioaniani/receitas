@@ -58,6 +58,10 @@ def parse_preco_br(value, default=None):
         raise ValueError(f'preço inválido: {value}') from exc
     if not exato.is_finite():
         raise ValueError(f'preço inválido: {value}')
+    # Nenhum preço real passa de 1 milhão; '1e30' levantava InvalidOperation
+    # no quantize (não é ValueError) e a tela respondia 500.
+    if abs(exato) >= Decimal('1000000'):
+        raise ValueError(f'preço fora do intervalo: {value}')
     if exato != exato.quantize(Decimal('0.01')):
         raise ValueError(f'preço com mais de 2 casas decimais: {value}')
     return v

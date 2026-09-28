@@ -603,6 +603,11 @@
     // Decisao do dono 23/06/2026: cliente precisa SABER no momento da
     // escolha qual item nao tem saldo pra aquela data (em vez de descobrir
     // so ao submeter), com opcoes pra trocar data ou remover do carrinho.
+    // Rodada da conferência: resposta atrasada de uma data/modo anterior não
+    // pode travar (nem destravar) o botão da escolha atual. Declarada ANTES
+    // da primeira chamada — com o `var` abaixo dela a rodada inicial virava
+    // NaN e a resposta da primeira conferência era sempre descartada.
+    var rodadaDisp = 0;
     var dataEl = document.getElementById('data_entrega');
     if (dataEl) {
       dataEl.addEventListener('change', function () {
@@ -612,9 +617,6 @@
       checarDisponibilidadeData();  // estado inicial
     }
 
-    // Rodada da conferência: resposta atrasada de uma data/modo anterior não
-    // pode travar (nem destravar) o botão da escolha atual.
-    var rodadaDisp = 0;
     function checarDisponibilidadeData() {
       var aviso = document.getElementById('checkout-disponibilidade');
       if (!aviso) return;
@@ -873,12 +875,21 @@
     // Envio pedido enquanto o frete ainda não foi cotado: cota primeiro pra
     // o cliente ver o total real; se a cotação falhar, o próximo clique
     // envia mesmo assim (o servidor recota e é a autoridade).
+    // Reenvio programático (depois do frete/da sincronia do carrinho): o
+    // requestSubmit ignora o botão desabilitado, então respeita a trava da
+    // conferência de disponibilidade aqui — item esgotado detectado nesse
+    // meio tempo segura o envio e o cliente vê o aviso.
+    function reenviarSeLiberado() {
+      var btn = form.querySelector('button[type="submit"]');
+      if (btn && btn.disabled) return;
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.submit();
+    }
     function retomarEnvio() {
       if (!enviarAposFrete) return;
       enviarAposFrete = false;
       if (freteAtual === null) return;   // falhou: o cliente vê o motivo
-      if (typeof form.requestSubmit === 'function') form.requestSubmit();
-      else form.submit();
+      reenviarSeLiberado();
     }
     form.addEventListener('submit', function (e) {
       if (enviando) { e.preventDefault(); return; }
@@ -892,10 +903,7 @@
       // anterior. Espera a sessão gravar e reenvia.
       if (Carrinho.emSincronia && Carrinho.emSincronia()) {
         e.preventDefault();
-        Carrinho.sincronizado().then(function () {
-          if (typeof form.requestSubmit === 'function') form.requestSubmit();
-          else form.submit();
-        });
+        Carrinho.sincronizado().then(reenviarSeLiberado);
         return;
       }
       var modoEnvio = modoSelecionado();

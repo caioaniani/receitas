@@ -4955,13 +4955,25 @@ def loja_online_catalogo_preco(tipo, id):
         obj = Produto.query.get_or_404(id)
     else:
         return jsonify(ok=False, erro='tipo inválido'), 400
-    dados = request.get_json(silent=True) or {}
+    dados = request.get_json(silent=True)
+    if not isinstance(dados, dict):
+        # Corpo torto nunca vira "sem preço" (despublicaria o item).
+        return jsonify(ok=False, erro='payload inválido'), 400
     raw = dados.get('preco')
     if raw is None or raw == '' or raw == 0:
         obj.preco_site = None
     else:
         try:
-            val = Decimal(str(raw).replace(',', '.'))
+            # Texto passa pelo parser canônico pt-BR ('1.234,56'); número do
+            # JSON vai direto. As faixas e as 2 casas são conferidas abaixo.
+            if isinstance(raw, str):
+                from app.utils import parse_float_br
+                convertido = parse_float_br(raw)
+                if convertido is None:
+                    raise ValueError(raw)
+                val = Decimal(str(convertido))
+            else:
+                val = Decimal(str(raw))
         except (InvalidOperation, ValueError, TypeError):
             return jsonify(ok=False, erro='preço inválido'), 400
         if not val.is_finite() or val < 0 or val > 9999:
@@ -6215,6 +6227,12 @@ def loja_online_pedido_reenviar_emails(codigo):
               'de reenviar.', 'danger')
         return _detalhe_redirect(codigo)
 
+    if p.divulgacao:
+        # Cortesia: nada de "pagamento confirmado" para quem recebe o presente
+        # (a divulgação passa por a_caminho/entregue como qualquer entrega).
+        flash('Divulgação não tem e-mail de pedido para reenviar.', 'info')
+        return _detalhe_redirect(codigo)
+
     # Monta a lista de e-mails a reenviar conforme o status atual.
     envios = []
     if p.status == 'aguardando_pagamento':
@@ -6394,7 +6412,13 @@ def loja_online_pedido_cancelar(codigo):
     # Compra antes dos pedidos: mesma ordem de locks do pagamento e expiração.
     from app.services import compra_kits, kits_pagamento
     compra, _pedidos = kits_pagamento.travar(p, todos=True)
-    if p.status == 'cancelado':
+    if p.divulgacao:
+        # Sem cobrança: este caminho diria "reembolsado"/"reserva liberada"
+        # sem devolver o estoque que a divulgação baixou na criação. O
+        # cancelamento dela tem rota própria (revisão 28/09/2026).
+        flash(f'{p.codigo} é uma divulgação: use "Cancelar (devolve '
+              f'estoque)" no topo do pedido.', 'warning')
+    elif p.status == 'cancelado':
         flash(f'Pedido {p.codigo} já está cancelado.', 'warning')
     elif p.status == 'entregue':
         # Estorno de pedido ENTREGUE (dono 12/08/2026, caso 131B16EA):

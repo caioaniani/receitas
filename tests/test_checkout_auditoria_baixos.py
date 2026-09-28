@@ -596,3 +596,107 @@ def test_so_digitos_do_checkout_e_ascii():
     from app.services import loja_checkout
     assert loja_checkout._so_digitos('(11) 9²8765-4321') == '1198765' + '4321'
     assert loja_checkout._so_digitos('١١٩') == ''
+
+
+# ── Revisão 28/09/2026 (ondas 2-3) ──────────────────────────────────────
+
+def _staff(app, user):
+    app.config['LOJA_HOSTS'] = 'opao.online'
+    app.config['WTF_CSRF_ENABLED'] = False
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(user.id)
+        s['_fresh'] = True
+    return c
+
+
+def test_cancelar_generico_recusa_divulgacao(app, owner_user):
+    """O botão genérico cancelava a cortesia dizendo "reserva liberada" sem
+    devolver o estoque que a divulgação baixou."""
+    from app.extensions import db
+    prod = _produto(db)
+    ped = _pedido(db, prod, status='divulgacao', divulgacao=True)
+    r = _staff(app, owner_user).post(
+        f'/admin/loja-online/pedidos/{ped.codigo}/cancelar', follow_redirects=True)
+    assert 'é uma divulgação' in r.get_data(as_text=True)
+    db.session.refresh(ped)
+    assert ped.status == 'divulgacao'
+
+
+def test_reenviar_emails_nao_manda_nada_para_divulgacao(app, owner_user):
+    from app.extensions import db
+    prod = _produto(db)
+    ped = _pedido(db, prod, status='entregue', divulgacao=True)
+    with patch('app.services.email.enviar_confirmacao_pedido') as conf, \
+            patch('app.services.email.disponivel', return_value=True):
+        r = _staff(app, owner_user).post(
+            f'/admin/loja-online/pedidos/{ped.codigo}/reenviar-emails',
+            follow_redirects=True)
+    conf.assert_not_called()
+    assert 'Divulgação não tem e-mail' in r.get_data(as_text=True)
+
+
+def test_excluir_conta_com_pix_aguardando_e_recusado(app):
+    """Pix pago logo depois da exclusão viraria pedido pago sem contato."""
+    from app.extensions import db
+    from app.models import Cliente
+    app.config['WTF_CSRF_ENABLED'] = False
+    prod = _produto(db)
+    cli = Cliente(nome='Ana', email='ana2@x.com', telefone='11911112222')
+    cli.set_senha('senha-forte-1')
+    db.session.add(cli)
+    db.session.commit()
+    ped = _pedido(db, prod, cliente_id=cli.id)   # aguardando_pagamento
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['cliente_id'] = cli.id
+    r = c.post('/loja/conta/excluir', data={'confirmar': 'EXCLUIR'},
+               follow_redirects=True)
+    assert 'pedido em andamento' in r.get_data(as_text=True)
+    db.session.refresh(ped)
+    assert ped.email_cliente == 'm@x.com'
+
+
+def test_disponibilidade_com_numero_gigante_nao_da_500(app, monkeypatch):
+    from app.utils import hoje
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    corpo = ('{"data": "%s", "itens": [{"kind": "produto", "id": 1e400, "qtd": 1},'
+             ' {"kind": "produto", "id": 1, "qtd": Infinity}]}' % hoje().isoformat())
+    r = app.test_client().post('/loja/api/disponibilidade-checkout', data=corpo,
+                               content_type='application/json')
+    assert r.status_code in (200, 400)
+
+
+def test_parse_preco_br_com_expoente_gigante_e_valueerror():
+    from app.utils import parse_preco_br
+    with pytest.raises(ValueError):
+        parse_preco_br('1e30')
+
+
+def test_preco_do_catalogo_aceita_formato_brasileiro(app, owner_user):
+    from app.extensions import db
+    from app.models import Produto
+    prod = _produto(db)
+    c = _staff(app, owner_user)
+    url = f'/admin/loja-online/catalogo/preco/produto/{prod.id}'
+    r = c.post(url, json={'preco': '1.234,56'})
+    assert r.status_code == 200 and r.get_json()['preco_site'] == 1234.56
+    assert c.post(url, json=[1, 2]).status_code == 400   # nunca limpa o preço
+    assert db.session.get(Produto, prod.id).preco_site == 1234.56
+
+
+def test_endereco_salvo_so_com_digitos_nao_duplica(app):
+    from app.extensions import db
+    from app.models import Cliente, EnderecoCliente
+    from app.services import loja_checkout
+    cli = Cliente(nome='Bia', email='bia@x.com')
+    db.session.add(cli)
+    db.session.commit()
+    db.session.add(EnderecoCliente(cliente_id=cli.id, logradouro='Rua A',
+                                   numero='10', cep='04077000', cidade='SP',
+                                   uf='SP'))
+    db.session.commit()
+    loja_checkout._salvar_ou_atualizar_endereco_principal(cli, {
+        'logradouro': 'Rua A', 'numero': '10', 'cep': '04077-000',
+        'cidade': 'São Paulo', 'uf': 'SP'})
+    assert EnderecoCliente.query.filter_by(cliente_id=cli.id).count() == 1

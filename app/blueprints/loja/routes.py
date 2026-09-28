@@ -782,9 +782,14 @@ def excluir_conta():
     # a NF sem documento (auditoria 27/09/2026). A LGPD permite reter os
     # dados para executar o contrato (art. 16, II): a exclusão fica para
     # depois da entrega.
+    # Aguardando pagamento também segura: um Pix ainda válido pago logo
+    # depois da exclusão viraria pedido pago sem contato nem CPF. FOR UPDATE
+    # em todos os pedidos da conta serializa com o webhook que marca pago
+    # (revisão 28/09/2026).
     em_andamento = [p.codigo for p in PedidoOnline.query.filter(
-        PedidoOnline.cliente_id == cli.id,
-        PedidoOnline.status.in_(('pago', 'em_preparo', 'a_caminho'))).all()]
+        PedidoOnline.cliente_id == cli.id).with_for_update().all()
+        if p.status in ('aguardando_pagamento', 'pago', 'em_preparo',
+                        'a_caminho')]
     if em_andamento:
         from flask import flash
         flash('Você tem pedido em andamento (' + ', '.join(em_andamento)
@@ -1484,11 +1489,11 @@ def api_disponibilidade_checkout():
             continue
         try:
             item_id = int(raw.get('id'))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):   # 1e400 / Infinity
             continue
         try:
             qtd = int(raw.get('qtd') or 1)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             qtd = 1
         qtd = max(1, min(qtd, _CARRINHO_MAX_QTD))
         pedidos[(kind, item_id)] = pedidos.get((kind, item_id), 0) + qtd

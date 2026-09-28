@@ -411,7 +411,7 @@
     {# Estorno de pedido ENTREGUE (dono 12/08/2026, caso 131B16EA):
        reembolso total com dupla confirmação; o estoque NÃO volta (a
        mercadoria saiu) e o cliente recebe o e-mail do estorno. #}
-    {% if current_user.is_owner and not pagamento_externo and p.status == 'entregue' %}
+    {% if current_user.is_owner and not pagamento_externo and not p.divulgacao and p.status == 'entregue' %}
     <form method="POST" action="{{ url_for('main.loja_online_pedido_cancelar', codigo=p.codigo) }}"
           onsubmit="return confirm('Estornar o pedido ENTREGUE {{ p.codigo }}?\n\n' +
                     'O valor volta pro cliente pelo Pagar.me e o pedido vira ' +
@@ -428,7 +428,9 @@
     {% endif %}
 
     {# Reembolso/cancelamento mexe em dinheiro — só o dono (decisão 22/06/2026). #}
-    {% if current_user.is_owner and not pagamento_externo and p.status not in ('entregue', 'cancelado') %}
+    {# Divulgação não passa por aqui: não há cobrança, e o cancelamento dela
+       (botão no topo) devolve o estoque que a criação baixou. #}
+    {% if current_user.is_owner and not pagamento_externo and not p.divulgacao and p.status not in ('entregue', 'cancelado') %}
     {% set eh_pago = p.status in ('pago', 'em_preparo', 'a_caminho') %}
     {# Expedição já com o pedido (em preparo/em rota/Lalamove/cozinha): o
        servidor EXIGE confirmar_expedicao=1 — o confirm() abaixo preenche o

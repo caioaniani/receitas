@@ -1279,12 +1279,18 @@ def _salvar_ou_atualizar_endereco_principal(cliente, dados):
     """Salva o endereço como `principal` do cliente. Deduplica por
     logradouro+numero+cep — se já existe, atualiza."""
     from app.models import EnderecoCliente
-    existente = EnderecoCliente.query.filter_by(
+
+    def _cep_digitos(valor):
+        return ''.join(c for c in (valor or '') if '0' <= c <= '9')
+
+    # CEP comparado pelos DÍGITOS: desde 28/09/2026 o pedido grava
+    # 'NNNNN-NNN', e um endereço salvo antes só com números viraria outro.
+    cep_novo = _cep_digitos(dados.get('cep'))
+    existente = next((e for e in EnderecoCliente.query.filter_by(
         cliente_id=cliente.id,
         logradouro=dados['logradouro'],
         numero=dados['numero'],
-        cep=dados['cep'],
-    ).first()
+    ).order_by(EnderecoCliente.id).all() if _cep_digitos(e.cep) == cep_novo), None)
     if existente:
         end = existente
     else:
