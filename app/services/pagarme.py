@@ -280,8 +280,9 @@ def _resumo_log(status, body, charge=None):
 def _extrair_charge(order_json):
     """Pega a primeira charge do order. Pagar.me retorna `charges: [...]`
     com a transação dentro."""
-    charges = (order_json or {}).get('charges') or []
-    return charges[0] if charges else {}
+    charges = (order_json or {}).get('charges') if isinstance(order_json, dict) else None
+    charge = charges[0] if isinstance(charges, list) and charges else {}
+    return charge if isinstance(charge, dict) else {}
 
 
 def _erro_da_charge(charge):
@@ -574,9 +575,11 @@ def buscar_orders_por_codigo(codigo):
         body = r.json() or {}
     except ValueError:
         return {'ok': False, 'erro': 'resposta sem JSON'}
+    if not isinstance(body, dict) or not isinstance(body.get('data') or [], list):
+        return {'ok': False, 'erro': 'resposta fora do formato'}
     out = []
     for o in body.get('data') or []:
-        if (o.get('code') or '') != codigo:
+        if not isinstance(o, dict) or (o.get('code') or '') != codigo:
             continue   # filtro do gateway ignorado: não confia no retorno
         charge = _extrair_charge(o)
         status = (o.get('status') or '').lower()
@@ -584,7 +587,8 @@ def buscar_orders_por_codigo(codigo):
         out.append({'id': o.get('id'), 'status': status,
                     'pago': status == 'paid' or charge_status == 'paid',
                     'charge_id': charge.get('id'),
-                    'charge_status': charge_status})
+                    'charge_status': charge_status,
+                    'metodo': charge.get('payment_method')})
     return {'ok': True, 'orders': out}
 
 

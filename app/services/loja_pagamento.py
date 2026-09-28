@@ -159,21 +159,26 @@ def _consultar_tentativa(pag):
 def _consultar_tentativa_incerta(pag):
     """Tentativa sem id de order porque a criação terminou sem resposta:
     procura as orders do pedido no gateway pelo código. Paga → adota o id e
-    devolve 'pago'; viva → 'pendente'; nenhuma viva → 'encerrado'. Sem
-    resposta do gateway: dentro da janela devolve None (na dúvida não cobra
-    de novo); passada a janela sem webhook, conta como não criada."""
+    devolve 'pago'; viva → adota e devolve 'pendente'; recusada → adota e
+    devolve 'encerrado'. Nenhuma order: dentro de `_JANELA_INCERTA_MIN` a
+    criação ainda pode estar a caminho no gateway ('pendente'); depois dela,
+    a cobrança nunca existiu ('encerrado', sem mensagem de recusa ao
+    cliente). Sem resposta do gateway: None SEMPRE — na dúvida não cobra de
+    novo (revisão 28/09/2026: antes, passados 10 min sem conseguir listar,
+    contava como não criada e liberava cobrar em dobro)."""
     from datetime import timedelta
     pedido = pag.pedido
     busca = pagarme.buscar_orders_por_codigo(pedido.codigo)
     if not busca.get('ok'):
-        if pag.criado_em and agora() - pag.criado_em > timedelta(
-                minutes=_JANELA_INCERTA_MIN):
-            return 'encerrado'
         return None
     conhecidas = {p.pagarme_order_id for p in pedido.pagamentos
                   if p.pagarme_order_id and p.id != pag.id}
+    # Só order de CARTÃO pode ser desta tentativa (uma order de Pix perdida
+    # adotada como "cartão em análise" travaria o pedido).
     novas = [o for o in busca.get('orders') or []
-             if o.get('id') and o['id'] not in conhecidas]
+             if isinstance(o, dict) and o.get('id')
+             and o['id'] not in conhecidas
+             and (o.get('metodo') or 'credit_card') == 'credit_card']
     for o in novas:
         if o.get('pago'):
             pag.pagarme_order_id = o['id']
@@ -187,7 +192,80 @@ def _consultar_tentativa_incerta(pag):
             pag.pagarme_order_id = o['id']
             pag.pagarme_charge_id = o.get('charge_id')
             return 'pendente'
+    if novas:
+        o = novas[0]
+        pag.pagarme_order_id = o['id']
+        pag.pagarme_charge_id = o.get('charge_id')
+        pag.erro = ('cartão recusado (esclarecido no Pagar.me depois de '
+                    'resposta incerta)')
+        return 'encerrado'
+    if pag.criado_em and agora() - pag.criado_em <= timedelta(
+            minutes=_JANELA_INCERTA_MIN):
+        return 'pendente'
+    # Sem 'recusado' no texto: a tela não diz ao cliente que o banco recusou
+    # uma cobrança que nem chegou a existir (filtro 'encerrado').
+    pag.erro = ('cobrança não criada no Pagar.me depois de resposta '
+                'incerta (encerrado)')
     return 'encerrado'
+
+
+# Esclarecimento do cartão incerto pela página de pagamento/status: no
+# máximo 1 consulta a cada 30 s por tentativa e processo (o polling da
+# página chama a cada poucos segundos).
+_ESCLARECIDO_EM = {}
+_ESCLARECER_INTERVALO_S = 30
+
+
+def esclarecer_cartao_incerto(pedido):
+    """Cartão com resposta incerta prende o cliente (a tela esconde Pix e
+    cartão enquanto ele "confirma"). Se a order nunca foi criada, nenhum
+    webhook chega — antes o cliente ficava sem como pagar até o cron cancelar
+    o pedido (revisão 28/09/2026). Aqui a página pergunta ao gateway, em DUAS
+    fases como a expiração: rede sem trava; depois trava o pedido, reconfere
+    e age (pago → confirma; encerrado → libera nova tentativa; vivo/gateway
+    fora → segue esperando). Nunca levanta; devolve True se mudou algo."""
+    from app.services.compra_kits import principal_do_pedido
+    try:
+        pedido = principal_do_pedido(pedido)
+        if pedido.status != 'aguardando_pagamento':
+            return False
+        pag = next((p for p in sorted(pedido.pagamentos, key=lambda x: x.id or 0)
+                    if p.status == 'pendente' and p.metodo == 'cartao'
+                    and not p.pagarme_order_id
+                    and (p.erro or '').startswith(PREFIXO_INCERTO)), None)
+        if pag is None:
+            return False
+        instante = agora()
+        ultima = _ESCLARECIDO_EM.get(pag.id)
+        if ultima and (instante - ultima).total_seconds() < _ESCLARECER_INTERVALO_S:
+            return False
+        _ESCLARECIDO_EM[pag.id] = instante
+        pag_id, pedido_id = pag.id, pedido.id
+        situacao = _consultar_tentativa_incerta(pag)
+        db.session.commit()   # ids/erro adotados; nenhuma trava segurada
+        if situacao not in ('pago', 'encerrado'):
+            return False
+        pedido = (PedidoOnline.query.filter_by(id=pedido_id)
+                  .with_for_update().populate_existing().one())
+        pag = db.session.get(PagamentoOnline, pag_id, populate_existing=True)
+        if pedido.status != 'aguardando_pagamento' or pag.status != 'pendente':
+            db.session.commit()
+            return False
+        if situacao == 'pago':
+            mudou = _confirmar_pelo_gateway(pedido, pag)
+            db.session.commit()
+            if mudou:
+                from app.services.kits_pagamento import apos_confirmacao
+                apos_confirmacao(pedido)
+            return bool(mudou)
+        pag.status = 'falhou'
+        db.session.commit()
+        return True
+    except Exception:  # noqa: BLE001 — página nunca cai por esta consulta
+        db.session.rollback()
+        logger.exception('esclarecer_cartao_incerto %s falhou',
+                         getattr(pedido, 'codigo', '?'))
+        return False
 
 
 def _confirmar_pelo_gateway(pedido, pag):
@@ -525,10 +603,43 @@ def _encontrar_pedido(payload_data):
             # ID desconhecido não pode ser atribuído a outra tentativa. Sem
             # IDs, só há associação inequívoca quando existe uma única pendente.
             pendentes = [p for p in ped.pagamentos if p.status == 'pendente']
-            pag = (pendentes[0] if not (identificador or order_id)
-                   and len(pendentes) == 1 else None)
-            return ped, pag
+            if not (identificador or order_id):
+                return ped, (pendentes[0] if len(pendentes) == 1 else None)
+            return ped, _adotar_tentativa_incerta(
+                ped, payload_data, identificador, order_id)
     return None, None
+
+
+def _adotar_tentativa_incerta(pedido, payload_data, identificador, order_id):
+    """Webhook com ids que nenhuma tentativa conhece: é o caso exato do
+    cartão com resposta incerta (a order foi criada no Pagar.me e a resposta
+    se perdeu). Liga os ids à ÚNICA tentativa incerta de cartão — sem isso o
+    pedido virava pago sem cobrança associada e o "Reembolsar" cancelava só
+    aqui, sem devolver o dinheiro (revisão 28/09/2026). Mais de uma incerta,
+    ou evento que não é de cartão: não adota (None, como antes)."""
+    incertas = [p for p in pedido.pagamentos
+                if p.status == 'pendente' and p.metodo == 'cartao'
+                and not p.pagarme_order_id
+                and (p.erro or '').startswith(PREFIXO_INCERTO)]
+    if len(incertas) != 1:
+        return None
+    charges = payload_data.get('charges')
+    primeira = (charges[0] if isinstance(charges, list) and charges
+                and isinstance(charges[0], dict) else {})
+    metodo = payload_data.get('payment_method') or primeira.get('payment_method')
+    if metodo and metodo != 'credit_card':
+        return None
+    pag = incertas[0]
+    if order_id:            # evento de charge: id = charge, order.id = order
+        pag.pagarme_order_id = order_id
+        pag.pagarme_charge_id = identificador
+    else:                   # evento de order: id = order
+        pag.pagarme_order_id = identificador
+        pag.pagarme_charge_id = primeira.get('id')
+    logger.warning('Pedido %s: webhook ligou a order %s à tentativa de cartão '
+                   'com resposta incerta #%s', pedido.codigo,
+                   pag.pagarme_order_id, pag.id)
+    return pag
 
 
 def _reservar_no_plano_do_dia(pedido):
@@ -1151,6 +1262,13 @@ def _reembolsar_pedido(pedido):
     charge_id = (pago.pagarme_charge_id if pago else None) or next(
         (p.pagarme_charge_id for p in pedido.pagamentos
          if p.pagarme_charge_id), None)
+    if pedido.pago_em and not charge_id:
+        # Pedido pago sem cobrança identificada: cancelar só aqui diria ao
+        # cliente "estornado" sem devolver nada (revisão 28/09/2026).
+        return False, ('Este pedido está pago, mas o sistema não identificou a '
+                       'cobrança no Pagar.me. Estorne pelo painel do Pagar.me '
+                       '(busque pelo código do pedido) e depois cancele aqui — '
+                       'nada foi alterado.')
     ja_estornado = False
     if charge_id:
         res = pagarme.cancelar_charge(charge_id)

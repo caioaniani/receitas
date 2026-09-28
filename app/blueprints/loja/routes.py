@@ -201,6 +201,9 @@ def _ctx_pagamento(pedido, erros=None):
 def pedido_pagamento(codigo):
     """Tela de pagamento — escolhe método e mostra o resultado."""
     pedido = _pedido_aguardando(codigo)
+    # Cartão com resposta incerta: pergunta ao gateway antes de esconder o
+    # formulário (sem isso o cliente ficava sem como pagar até o cron).
+    loja_pagamento.esclarecer_cartao_incerto(pedido)
     return render_template('loja/pagamento.html', **_ctx_pagamento(pedido))
 
 
@@ -298,6 +301,8 @@ def pedido_status(codigo):
     p = PedidoOnline.query.filter_by(codigo=codigo).first()
     if not p:
         return jsonify(status='nao_encontrado'), 404
+    if p.status == 'aguardando_pagamento':
+        loja_pagamento.esclarecer_cartao_incerto(p)
     out = {'status': p.status, 'codigo': p.codigo,
            'cartao_confirmando': (p.status == 'aguardando_pagamento'
                                   and _cartao_confirmando(p))}

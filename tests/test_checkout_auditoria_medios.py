@@ -242,7 +242,11 @@ def test_cartao_incerto_nao_vira_recusa_e_bloqueia_nova_cobranca(app):
     assert ped.status == 'pago' and pag.pagarme_order_id == 'or_x'
 
 
-def test_cartao_incerto_sem_resposta_do_gateway_libera_depois_da_janela(app):
+def test_cartao_incerto_sem_resposta_do_gateway_nunca_libera(app):
+    """Contrato substituído na revisão de 28/09/2026: sem conseguir listar
+    as orders, a tentativa NUNCA conta como não criada (antes, passados 10
+    min, liberava cobrar em dobro). Order ausente só encerra depois da
+    janela; dentro dela a criação ainda pode estar a caminho."""
     from app.extensions import db
     from app.services import loja_pagamento
     from app.utils import agora
@@ -254,7 +258,142 @@ def test_cartao_incerto_sem_resposta_do_gateway_libera_depois_da_janela(app):
                return_value={'ok': False, 'erro': 'HTTP 400'}):
         assert loja_pagamento._consultar_tentativa(pag) is None
         pag.criado_em = agora() - timedelta(minutes=30)
+        assert loja_pagamento._consultar_tentativa(pag) is None
+    vazio = {'ok': True, 'orders': []}
+    pag.criado_em = agora()
+    with patch('app.services.pagarme.buscar_orders_por_codigo', return_value=vazio):
+        assert loja_pagamento._consultar_tentativa(pag) == 'pendente'
+        pag.criado_em = agora() - timedelta(minutes=30)
         assert loja_pagamento._consultar_tentativa(pag) == 'encerrado'
+    assert 'encerrado' in pag.erro and 'recusado' not in pag.erro
+
+
+def test_order_de_pix_nao_e_adotada_como_cartao_incerto(app):
+    from app.extensions import db
+    from app.services import loja_pagamento
+    prod = _produto(db)
+    ped = _pedido(db, prod)
+    pag = _pag(db, ped, metodo='cartao',
+               erro=f'{loja_pagamento.PREFIXO_INCERTO}: timeout')
+    pix_vivo = {'ok': True, 'orders': [{'id': 'or_pix', 'status': 'pending',
+                                        'pago': False, 'charge_id': 'ch_pix',
+                                        'charge_status': 'pending',
+                                        'metodo': 'pix'}]}
+    with patch('app.services.pagarme.buscar_orders_por_codigo', return_value=pix_vivo):
+        assert loja_pagamento._consultar_tentativa(pag) == 'pendente'
+    assert pag.pagarme_order_id is None
+
+
+def _evento(tipo, data):
+    return {'id': 'hook_' + tipo + data['id'], 'type': tipo, 'data': data}
+
+
+@pytest.mark.parametrize('evento', ['order', 'charge'])
+def test_webhook_liga_a_order_a_tentativa_incerta_e_o_reembolso_estorna(app, evento):
+    """Revisão 28/09/2026: o webhook de uma order que a resposta perdida não
+    registrou deixava o pedido pago SEM cobrança associada, e o Reembolsar
+    cancelava só aqui dizendo "estornado" ao cliente."""
+    from app.extensions import db
+    from app.services import loja_pagamento
+    loja = _loja(db)
+    prod = _produto(db)
+    ped = _pedido(db, prod, loja=loja)
+    pag = _pag(db, ped, metodo='cartao',
+               erro=f'{loja_pagamento.PREFIXO_INCERTO}: timeout')
+    if evento == 'order':
+        ev = _evento('order.paid', {
+            'id': 'or_nova', 'code': ped.codigo, 'status': 'paid',
+            'charges': [{'id': 'ch_nova', 'payment_method': 'credit_card',
+                         'status': 'paid'}]})
+    else:
+        ev = _evento('charge.paid', {
+            'id': 'ch_nova', 'status': 'paid', 'payment_method': 'credit_card',
+            'order': {'id': 'or_nova', 'code': ped.codigo}})
+    with patch('app.services.loja_pagamento._baixar_estoque', return_value={}), \
+            patch('app.services.kits_pagamento.apos_confirmacao'):
+        loja_pagamento.processar_webhook(ev)
+    db.session.refresh(ped)
+    db.session.refresh(pag)
+    assert ped.status == 'pago'
+    assert (pag.status, pag.pagarme_order_id, pag.pagarme_charge_id) == (
+        'pago', 'or_nova', 'ch_nova')
+    with patch('app.services.pagarme.cancelar_charge',
+               return_value={'ok': True}) as cancelar, \
+            patch('app.services.email.disponivel', return_value=False), \
+            patch('app.services.loja_pagamento._estornar_estoque', return_value=0), \
+            patch('app.services.loja_pagamento._devolver_ao_plano_do_dia'):
+        ok, _msg = loja_pagamento._reembolsar_pedido(ped)
+    assert ok and cancelar.call_args.args[0] == 'ch_nova'
+
+
+def test_reembolso_recusa_pedido_pago_sem_cobranca_identificada(app):
+    from app.extensions import db
+    from app.services import loja_pagamento
+    from app.utils import agora
+    prod = _produto(db)
+    ped = _pedido(db, prod, status='pago', pago_em=agora())
+    with patch('app.services.pagarme.cancelar_charge') as cancelar:
+        ok, msg = loja_pagamento._reembolsar_pedido(ped)
+    assert not ok and 'painel do Pagar.me' in msg
+    cancelar.assert_not_called()
+    db.session.refresh(ped)
+    assert ped.status == 'pago'
+
+
+def test_pagina_esclarece_cartao_incerto_que_nunca_foi_criado(app, monkeypatch):
+    """Antes a tela escondia Pix e cartão até o cron cancelar o pedido; agora
+    a página pergunta ao gateway (no máximo a cada 30 s) e libera."""
+    from app.extensions import db
+    from app.models import PagamentoOnline
+    from app.services import loja_pagamento
+    from app.utils import agora
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    monkeypatch.setattr(loja_pagamento, '_ESCLARECIDO_EM', {})
+    prod = _produto(db)
+    ped = _pedido(db, prod)
+    pag = _pag(db, ped, metodo='cartao',
+               erro=f'{loja_pagamento.PREFIXO_INCERTO}: timeout')
+    pag.criado_em = agora() - timedelta(minutes=30)
+    db.session.commit()
+    pag_id = pag.id
+    with patch('app.services.pagarme.buscar_orders_por_codigo',
+               return_value={'ok': True, 'orders': []}) as busca:
+        c = app.test_client()
+        r1 = c.get(f'/loja/pedido/{ped.codigo}/status')
+        r2 = c.get(f'/loja/pedido/{ped.codigo}/status')
+    assert busca.call_count == 1
+    assert r1.get_json()['cartao_confirmando'] is False
+    assert r2.get_json()['cartao_confirmando'] is False
+    assert db.session.get(PagamentoOnline, pag_id).status == 'falhou'
+
+
+def test_pagina_confirma_cartao_incerto_pago_no_gateway(app, monkeypatch):
+    from app.extensions import db
+    from app.services import loja_pagamento
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    monkeypatch.setattr(loja_pagamento, '_ESCLARECIDO_EM', {})
+    prod = _produto(db)
+    ped = _pedido(db, prod)
+    _pag(db, ped, metodo='cartao',
+         erro=f'{loja_pagamento.PREFIXO_INCERTO}: timeout')
+    pago = {'ok': True, 'orders': [{'id': 'or_ok', 'status': 'paid', 'pago': True,
+                                    'charge_id': 'ch_ok', 'charge_status': 'paid',
+                                    'metodo': 'credit_card'}]}
+    with patch('app.services.pagarme.buscar_orders_por_codigo', return_value=pago), \
+            patch('app.services.loja_pagamento._baixar_estoque', return_value={}), \
+            patch('app.services.kits_pagamento.apos_confirmacao') as apos:
+        r = app.test_client().get(f'/loja/pedido/{ped.codigo}/status')
+    assert r.get_json()['status'] == 'pago'
+    apos.assert_called_once()
+
+
+def test_busca_de_orders_com_resposta_fora_do_formato(app):
+    from app.services import pagarme
+    app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+    for corpo in ([1, 2], {'data': 'x'}, {'data': [None, 3]}):
+        with patch('app.services.pagarme.requests.get', return_value=_resp(200, corpo)):
+            r = pagarme.buscar_orders_por_codigo('ABC')
+        assert r.get('ok') is False or r.get('orders') == []
 
 
 def test_redireciona_para_o_pedido_quando_cartao_fica_incerto(app):
