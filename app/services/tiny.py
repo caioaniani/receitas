@@ -336,7 +336,7 @@ def buscar_contato_por_documento(documento):
         return {'contato': None}
     retorno = _get('contato.obter.php', params={'id': next(iter(encontrados))})
     contato = (retorno or {}).get('contato')
-    if not isinstance(contato, dict) or _so_digitos(contato.get('cpf_cnpj')) != doc:
+    if not isinstance(contato, dict) or normalizar_documento(contato.get('cpf_cnpj')) != doc:
         return {'erro': 'Não foi possível conferir o documento do cadastro Tiny.'}
     return {'contato': contato}
 
