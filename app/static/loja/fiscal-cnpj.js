@@ -63,7 +63,10 @@
           return item && aplicados.indexOf(item.campo) !== -1 && item.rotulo;
         }).map(function (item) { return String(item.rotulo); });
         if (!rotulos.length) return '';
-        return ' Abreviamos ' + rotulos.join(', ')
+        var lista = rotulos.length > 1
+          ? rotulos.slice(0, -1).join(', ') + ' e ' + rotulos[rotulos.length - 1]
+          : rotulos[0];
+        return ' Abreviamos ' + lista
           + ' para caber no limite da nota fiscal; confira antes de continuar.';
       }
       function origemConsulta(resultado) {
