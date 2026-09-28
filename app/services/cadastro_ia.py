@@ -25,6 +25,7 @@ import re
 
 from app.extensions import db
 from app.models import MateriaPrima, Produto, ProdutoItem, Receita
+from app.utils import parse_preco_br
 
 logger = logging.getLogger(__name__)
 
@@ -313,8 +314,13 @@ def salvar_lote(itens, campo_preco, user=None):
                                   or None),
                        ativo=True)
         try:
-            preco = float(it.get('preco') or 0)
-        except (TypeError, ValueError):
+            preco = parse_preco_br(str(it.get('preco') or '').strip() or None,
+                                   default=0.0)
+        except ValueError:
+            # Mais de 2 casas ou texto torto: o produto nasce SEM preço (o
+            # dono completa) em vez de gravar 10.005 (auditoria 27/09/2026).
+            avisos.append(f'{nome}: preço "{it.get("preco")}" inválido '
+                          '(no máximo 2 casas decimais) — cadastrado sem preço.')
             preco = 0.0
         if preco > 0:
             setattr(prod, campo_preco, preco)

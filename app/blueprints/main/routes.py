@@ -4964,8 +4964,11 @@ def loja_online_catalogo_preco(tipo, id):
             val = Decimal(str(raw).replace(',', '.'))
         except (InvalidOperation, ValueError, TypeError):
             return jsonify(ok=False, erro='preço inválido'), 400
-        if val < 0 or val > 9999:
+        if not val.is_finite() or val < 0 or val > 9999:
             return jsonify(ok=False, erro='preço fora da faixa (0 a 9999)'), 400
+        if val != val.quantize(Decimal('0.01')):
+            return jsonify(ok=False,
+                           erro='preço com mais de 2 casas decimais'), 400
         obj.preco_site = float(val)
     _db.session.commit()
     from app.services.loja_catalogo import por_id_publicado

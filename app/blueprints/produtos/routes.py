@@ -7,7 +7,7 @@ from app.extensions import db
 from app.models import MateriaPrima, Produto, ProdutoItem, Receita
 from app.services.custo_opcional import parse_custo_opcional, somar_custos
 from app.services.custos import calcular_custo_produto, calcular_custos_receitas
-from app.utils import fmt_brl, parse_float_br
+from app.utils import fmt_brl, parse_float_br, parse_preco_br
 
 
 @produtos_bp.route('/')
@@ -277,10 +277,11 @@ def _preco_menu_do_form(bruto, nome_item):
     if not texto:
         return None
     try:
-        valor = parse_float_br(texto)
+        valor = parse_preco_br(texto)
     except ValueError:
-        flash(f'Preço no menu inválido em "{nome_item}" ({texto}) — deixei '
-              'em branco. Corrija e salve de novo.', 'warning')
+        flash(f'Preço no menu inválido em "{nome_item}" ({texto}; no máximo '
+              '2 casas decimais) — deixei em branco. Corrija e salve de '
+              'novo.', 'warning')
         return None
     if valor is None:
         return None
@@ -308,6 +309,18 @@ def _int_ou_none(bruto):
 def salvar_composicao(id):
     produto = Produto.query.get_or_404(id)
 
+    # Preços validados antes de mexer no cadastro: mais de 2 casas decimais
+    # recusa o salvamento (auditoria 27/09/2026 — o pedido do site não
+    # fechava em centavos).
+    try:
+        precos_form = {c: parse_preco_br(request.form.get(c, ''))
+                       for c in ('preco_atacado', 'preco_loja', 'preco_site',
+                                 'preco_interno')}
+    except ValueError as exc:
+        flash(f'Produto NÃO salvo — {exc}. Use no máximo 2 casas decimais.',
+              'danger')
+        return redirect(url_for('produtos.detalhe', id=produto.id))
+
     nome_antigo = produto.nome
     produto.nome = request.form.get('nome', '').strip() or produto.nome
     if produto.nome != nome_antigo:
@@ -323,11 +336,10 @@ def salvar_composicao(id):
     produto.descricao = request.form.get('descricao', '').strip() or None
     produto.imagem_url = request.form.get('imagem_url', '').strip() or None
 
-    produto.preco_atacado = parse_float_br(request.form.get('preco_atacado', ''))
-    produto.preco_loja = parse_float_br(request.form.get('preco_loja', ''))
-    produto.preco_site = parse_float_br(request.form.get('preco_site', ''))
-    produto.preco_interno = parse_float_br(
-        request.form.get('preco_interno', ''))
+    produto.preco_atacado = precos_form['preco_atacado']
+    produto.preco_loja = precos_form['preco_loja']
+    produto.preco_site = precos_form['preco_site']
+    produto.preco_interno = precos_form['preco_interno']
     produto.custo_direto = parse_float_br(request.form.get('custo_direto', ''))
     produto.custo_embalagem = parse_float_br(request.form.get('custo_embalagem', ''), default=0)
     produto.modo_preparo = request.form.get('modo_preparo', '').strip() or None

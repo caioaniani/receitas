@@ -37,6 +37,7 @@ from app.utils import (
     agora,
     dividir_etapas_preparo,
     parse_float_br,
+    parse_preco_br,
 )
 
 
@@ -565,29 +566,37 @@ def precos():
     """
     if request.method == 'POST':
         atualizados = 0
-        for r in Receita.query.all():
-            if f'preco_loja_{r.id}' not in request.form:
-                continue
-            antes = (r.preco_loja, r.preco_site, r.preco_venda, r.preco_interno)
-            r.preco_loja = parse_float_br(request.form.get(f'preco_loja_{r.id}', ''))
-            r.preco_site = parse_float_br(request.form.get(f'preco_site_{r.id}', ''))
-            r.preco_venda = parse_float_br(request.form.get(f'preco_venda_{r.id}', ''))
-            r.preco_interno = parse_float_br(
-                request.form.get(f'preco_interno_{r.id}', ''))
-            if antes != (r.preco_loja, r.preco_site, r.preco_venda, r.preco_interno):
-                atualizados += 1
-        for p in Produto.query.filter_by(ativo=True).all():
-            if f'preco_loja_p{p.id}' not in request.form:
-                continue
-            antes = (p.preco_loja, p.preco_site, p.preco_atacado, p.preco_interno)
-            p.preco_loja = parse_float_br(request.form.get(f'preco_loja_p{p.id}', ''))
-            p.preco_site = parse_float_br(request.form.get(f'preco_site_p{p.id}', ''))
-            p.preco_atacado = parse_float_br(
-                request.form.get(f'preco_atacado_p{p.id}', ''))
-            p.preco_interno = parse_float_br(
-                request.form.get(f'preco_interno_p{p.id}', ''))
-            if antes != (p.preco_loja, p.preco_site, p.preco_atacado, p.preco_interno):
-                atualizados += 1
+        try:
+            for r in Receita.query.all():
+                if f'preco_loja_{r.id}' not in request.form:
+                    continue
+                antes = (r.preco_loja, r.preco_site, r.preco_venda, r.preco_interno)
+                r.preco_loja = parse_preco_br(request.form.get(f'preco_loja_{r.id}', ''))
+                r.preco_site = parse_preco_br(request.form.get(f'preco_site_{r.id}', ''))
+                r.preco_venda = parse_preco_br(request.form.get(f'preco_venda_{r.id}', ''))
+                r.preco_interno = parse_preco_br(
+                    request.form.get(f'preco_interno_{r.id}', ''))
+                if antes != (r.preco_loja, r.preco_site, r.preco_venda, r.preco_interno):
+                    atualizados += 1
+            for p in Produto.query.filter_by(ativo=True).all():
+                if f'preco_loja_p{p.id}' not in request.form:
+                    continue
+                antes = (p.preco_loja, p.preco_site, p.preco_atacado, p.preco_interno)
+                p.preco_loja = parse_preco_br(request.form.get(f'preco_loja_p{p.id}', ''))
+                p.preco_site = parse_preco_br(request.form.get(f'preco_site_p{p.id}', ''))
+                p.preco_atacado = parse_preco_br(
+                    request.form.get(f'preco_atacado_p{p.id}', ''))
+                p.preco_interno = parse_preco_br(
+                    request.form.get(f'preco_interno_p{p.id}', ''))
+                if antes != (p.preco_loja, p.preco_site, p.preco_atacado, p.preco_interno):
+                    atualizados += 1
+        except ValueError as exc:
+            # Nada é gravado: um preço torto (texto, mais de 2 casas) recusa
+            # o lote inteiro, com o motivo (antes: 500 ou 10.005 gravado).
+            db.session.rollback()
+            flash(f'Preços NÃO salvos — {exc}. Use no máximo 2 casas '
+                  'decimais.', 'danger')
+            return redirect(url_for('receitas.precos'))
         if atualizados:
             db.session.commit()
             flash(f'{atualizados} item(ns) com preço atualizado.', 'success')
@@ -664,7 +673,10 @@ def precos_salvar_campo():
         setattr(obj, campo, None)
         valor_fmt = None
     else:
-        val = parse_float_br(str(raw))
+        try:
+            val = parse_preco_br(str(raw))
+        except ValueError as exc:
+            return jsonify(ok=False, erro=str(exc)), 400
         if val is None:
             return jsonify(ok=False, erro='valor inválido'), 400
         if val < 0 or val > 9999:
@@ -873,6 +885,19 @@ def salvar(id):
         if not atribuida:
             abort(403)
 
+    # Preços validados ANTES de mexer em qualquer coisa: mais de 2 casas
+    # decimais (ou texto inválido) recusa o salvamento inteiro com aviso —
+    # antes gravava 10.005 e o pedido do site não fechava em centavos
+    # (auditoria 27/09/2026).
+    try:
+        precos_form = {c: parse_preco_br(request.form.get(c, ''))
+                       for c in ('preco_venda', 'preco_loja', 'preco_site',
+                                 'preco_interno')}
+    except ValueError as exc:
+        flash(f'Ficha NÃO salva — {exc}. Use no máximo 2 casas decimais.',
+              'danger')
+        return redirect(url_for('receitas.ficha', id=receita.id))
+
     nome_antigo = receita.nome
     receita.nome = request.form.get('nome', receita.nome).strip() or nome_antigo
     if receita.nome != nome_antigo:
@@ -891,11 +916,10 @@ def salvar(id):
         receita.familia = fam
     elif fam is None or fam == '':
         receita.familia = None
-    receita.preco_venda = parse_float_br(request.form.get('preco_venda', ''))
-    receita.preco_loja = parse_float_br(request.form.get('preco_loja', ''))
-    receita.preco_site = parse_float_br(request.form.get('preco_site', ''))
-    receita.preco_interno = parse_float_br(
-        request.form.get('preco_interno', ''))
+    receita.preco_venda = precos_form['preco_venda']
+    receita.preco_loja = precos_form['preco_loja']
+    receita.preco_site = precos_form['preco_site']
+    receita.preco_interno = precos_form['preco_interno']
     # Rendimento = unidades que UMA fornada rende (divisor de custo unitario e
     # base da producao via qtd_alvo/rendimento). Caso especial: receita MONTADA
     # (so MP g/un, sem % de padeiro) lancada por "Quantidade de Produtos" — ali

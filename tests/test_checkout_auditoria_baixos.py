@@ -441,3 +441,64 @@ def test_payloads_malformados_nao_dao_500(app, monkeypatch):
     ]
     assert [r.status_code for r in casos if r.status_code >= 500] == []
     assert casos[-1].status_code == 401
+
+
+# ── 33. Preço com mais de 2 casas ───────────────────────────────────────
+
+def test_preco_legado_com_3_casas_fecha_em_centavos(app):
+    from datetime import datetime
+
+    from app.extensions import db
+    from app.models import AppConfig, Loja, PedidoOnline
+    from app.services import loja_checkout, pagarme
+    from app.services.compra_kits import valor_cobranca
+    a = _produto(db, nome='A', preco=10.005)
+    b = _produto(db, nome='B', preco=10.005)
+    loja = Loja(nome='Brooklin', endereco='R', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    AppConfig.set('loja_site_estoque_id', loja.id)
+    base = datetime.now().replace(hour=9, minute=0)
+    form = {'nome': 'Maria', 'sobrenome': 'Silva', 'email': 'm@example.com',
+            'cpf': '52998224725', 'aceite_lgpd': '1',
+            'modo_entrega': 'retirada', 'loja_id': str(loja.id),
+            'data_entrega': (base + timedelta(days=2)).date().isoformat(),
+            'janela_entrega': '10:00–11:00', 'cep': '04077-000',
+            'logradouro': 'Rua Y', 'numero': '20', 'bairro': 'Moema',
+            'cidade': 'São Paulo', 'uf': 'SP'}
+    ped, erros = loja_checkout.criar_pedido(form, [
+        {'kind': 'produto', 'id': a.id, 'qtd': 3},
+        {'kind': 'produto', 'id': b.id, 'qtd': 1}], base=base)
+    assert not erros, erros
+    db.session.expire_all()
+    ped = db.session.get(PedidoOnline, ped.id)
+    soma_linhas = sum(i.subtotal for i in ped.itens)
+    soma_unit = sum(i.preco_unitario * i.quantidade for i in ped.itens)
+    assert soma_linhas == soma_unit == ped.subtotal == Decimal('40.04')
+    soma_pg = sum(i['amount'] * i['quantity'] for i in pagarme._payload_items(ped))
+    assert soma_pg == pagarme._centavos(valor_cobranca(ped))
+
+
+def test_telas_recusam_preco_com_3_casas(app, owner_user):
+    from app.extensions import db
+    app.config['WTF_CSRF_ENABLED'] = False
+    app.config['LOJA_HOSTS'] = 'opao.online'   # telas do admin fora da loja
+    p = _produto(db, preco=20.0)
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(owner_user.id)
+        s['_fresh'] = True
+    r = c.post('/receitas/precos/salvar-campo',
+               json={'tipo': 'produto', 'id': p.id, 'campo': 'preco_site',
+                     'valor': '10,005'})
+    assert r.status_code == 400 and 'casas decimais' in r.get_json()['erro']
+    r = c.post(f'/admin/loja-online/catalogo/preco/produto/{p.id}',
+               json={'preco': '10.005'})
+    assert r.status_code == 400
+    r = c.post('/receitas/precos', data={
+        f'preco_loja_p{p.id}': '', f'preco_site_p{p.id}': '10,005',
+        f'preco_atacado_p{p.id}': '', f'preco_interno_p{p.id}': ''},
+        follow_redirects=True)
+    assert 'casas decimais' in r.get_data(as_text=True)
+    db.session.expire_all()
+    assert db.session.get(type(p), p.id).preco_site == 20.0

@@ -31,6 +31,38 @@ def parse_float_br(value, default=None):
     return float(cleaned)
 
 
+def parse_preco_br(value, default=None):
+    """`parse_float_br` para PREÇO: recusa mais de 2 casas decimais.
+
+    As colunas de preço são Float, e '10,005' gravava 10.005 — o pedido do
+    site saía com linhas que não somavam o total e itens do Pagar.me que não
+    batiam com o valor cobrado (auditoria 27/09/2026). Recusar na gravação
+    (ValueError com mensagem legível) faz o valor guardado ser o mesmo que a
+    tela mostra. Vazio -> `default`; inválido -> ValueError, como no
+    `parse_float_br`.
+
+    >>> parse_preco_br('10,50')
+    10.5
+    >>> parse_preco_br('10,005')
+    Traceback (most recent call last):
+    ...
+    ValueError: preço com mais de 2 casas decimais: 10,005
+    """
+    from decimal import Decimal, InvalidOperation
+    v = parse_float_br(value, default=None)
+    if v is None:
+        return default
+    try:
+        exato = Decimal(str(v))
+    except InvalidOperation as exc:
+        raise ValueError(f'preço inválido: {value}') from exc
+    if not exato.is_finite():
+        raise ValueError(f'preço inválido: {value}')
+    if exato != exato.quantize(Decimal('0.01')):
+        raise ValueError(f'preço com mais de 2 casas decimais: {value}')
+    return v
+
+
 def parse_fator_composicao(raw, default=1.0):
     """Fator de composição do PDV: quantas unidades do alvo 1 venda consome.
 

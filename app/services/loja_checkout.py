@@ -22,7 +22,7 @@ import logging
 import os
 import re
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.extensions import db
 from app.models import Cliente, Loja, PedidoOnline, PedidoOnlineItem
@@ -471,6 +471,11 @@ def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
                               'não pode ser vendido agora — tire-o do carrinho.')
                 continue
             preco = preco_menu
+        # Centavos: preço legado com mais de 2 casas (as telas agora recusam)
+        # deixava unit×qtd, subtotais, total do pedido e os itens do Pagar.me
+        # divergindo em centavos (auditoria 27/09/2026). Com o preço já
+        # arredondado aqui, tudo fecha por construção.
+        preco = preco.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         # "Fatiado?" sanitizado no SERVIDOR: só vale quando o cliente pediu E
         # o item de fato oferece a opção (sourdough, `cat['fatiavel']`) — não
         # confia no navegador (um POST forjado com fatiado=true num item que
