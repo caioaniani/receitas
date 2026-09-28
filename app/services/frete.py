@@ -257,7 +257,7 @@ CANAL_DESPACHO = 'despacho'   # ponto de entrega da Lalamove/painel
 CANAIS = (CANAL_CHECKOUT, CANAL_PREVIEW, CANAL_DESPACHO)
 
 _TETO_PADRAO = 500
-_PREVIEW_PADRAO_PCT = 60      # % do teto total reservado ao preview anônimo
+_PREVIEW_PADRAO_PCT = 60      # limite do preview anônimo, em % do teto total
 # Contador do dia em AppConfig: 'AAAA-MM-DD|total|preview'. O formato antigo
 # ('AAAA-MM-DD|total') é lido como preview=0 — o total do dia sobrevive ao
 # deploy que trouxe o sub-teto.
