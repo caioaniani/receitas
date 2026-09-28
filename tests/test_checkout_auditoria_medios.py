@@ -64,6 +64,9 @@ def _pag(db, ped, **kw):
 
 
 def _cliente_staff(app, user):
+    # Rotas do admin só respondem fora dos hosts da loja (o marcador do
+    # arquivo põe localhost como host da loja).
+    app.config['LOJA_HOSTS'] = 'opao.online'
     c = app.test_client()
     with c.session_transaction() as s:
         s['_user_id'] = str(user.id)
@@ -88,10 +91,11 @@ def test_normalizar_itens_raw_aplica_tetos_e_soma_linhas():
     assert len(out) == 60
 
 
-def test_checkout_recusa_menu_invalido_em_vez_de_sumir_com_ele(app):
+def test_checkout_recusa_menu_invalido_em_vez_de_sumir_com_ele(app, monkeypatch):
     """Item descartado pelo servidor recusa o pedido (antes o pedido nascia
     sem ele e o cliente só via o total)."""
     from app.extensions import db
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
     from app.models import PedidoOnline
     app.config['WTF_CSRF_ENABLED'] = False
     prod = _produto(db)
