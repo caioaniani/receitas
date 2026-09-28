@@ -166,8 +166,19 @@
       var lista = (temEspecial ? especiais[dataVal]
                                : (dados.janelas || [])).slice();
       if (dataVal && dataVal === dados.hojeIso) {
+        // Mesma regra do servidor (loja_checkout._sem_janelas_passadas): a
+        // janela ainda serve se o FIM está além de agora + lead. Filtrar
+        // pelo INÍCIO escondia a faixa larga de data especial (06:00–10:00
+        // às 07:30) que o servidor aceita — a venda barrada de 09/08 de novo
+        // (auditoria 27/09/2026). Pra janela de 1h dá o mesmo corte de sempre.
         lista = lista.filter(function (j) {
-          return parseInt(j.slice(0, 2), 10) >= (dados.minHoraHoje || 0);
+          var inicio = parseInt(j.slice(0, 2), 10);
+          if (isNaN(inicio)) return true;   // ilegível: o servidor decide
+          var partes = j.split('–');
+          var fim = partes.length > 1
+            ? parseInt(partes[1].trim().slice(0, 2), 10) : NaN;
+          if (isNaN(fim)) fim = inicio + 1;
+          return fim > (dados.minHoraHoje || 0);
         });
       }
       // Corte por distância (>= corteKm tira a 1ª janela da manhã). NÃO se
