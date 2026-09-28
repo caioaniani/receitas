@@ -318,7 +318,7 @@ def buscar_contato_por_documento(documento):
             return {'erro': 'Resposta inválida do cadastro Tiny.'}
         for linha in linhas:
             contato = linha.get('contato') if isinstance(linha, dict) else None
-            if isinstance(contato, dict) and _so_digitos(contato.get('cpf_cnpj')) == doc:
+            if isinstance(contato, dict) and normalizar_documento(contato.get('cpf_cnpj')) == doc:
                 if contato.get('id'):
                     encontrados[str(contato['id'])] = contato
         try:
