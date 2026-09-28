@@ -326,7 +326,15 @@ def _guest_tem_telefone_divergente(cliente, chave):
     if cliente.telefone:
         conhecidos.add(telefone_chave(cliente.telefone))
     try:
-        for p in cliente.pedidos.limit(20).all():
+        # Só pedido PAGO conta como histórico do dono: qualquer visitante cria
+        # um pedido aguardando pagamento com o e-mail alheio e o telefone
+        # dele, e esse telefone passaria a "bater" aqui (auditoria 27/09/2026).
+        from app.models import PedidoOnline
+        pagos = (cliente.pedidos
+                 .filter(PedidoOnline.pago_em.isnot(None))
+                 .order_by(PedidoOnline.id.desc())
+                 .limit(20).all())
+        for p in pagos:
             if p.telefone_cliente:
                 conhecidos.add(telefone_chave(p.telefone_cliente))
     except Exception:  # noqa: BLE001
