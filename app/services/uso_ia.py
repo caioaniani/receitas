@@ -13,8 +13,9 @@ Dois cuidados deliberados no `registrar`:
 - **Best-effort**: qualquer erro e logado e engolido. Medir custo jamais pode
   derrubar o vigia, o bot ou o OCR.
 
-Precos em USD por 1M tokens (skill claude-api, jun/2026). Cache read = 0.1x do
-input; cache write (5min) = 1.25x do input — formula oficial da Anthropic.
+Precos em USD por 1M tokens (skill claude-api; Sonnet 5.5 / Opus 5.5 / Fable
+pela tabela de 25/09/2026). Cache read = 0.1x do input; cache write (5min) =
+1.25x do input — formula oficial da Anthropic.
 """
 import logging
 from datetime import timedelta
@@ -25,16 +26,26 @@ from sqlalchemy.orm import Session
 
 from app.extensions import db
 from app.models import UsoIA
+from app.services import ia_modelos
 from app.utils import agora
 
 logger = logging.getLogger(__name__)
 
-# (input, output) em USD por 1M tokens. Casa por PREFIXO do model id pra
-# tolerar sufixos (ex: 'claude-haiku-4-5-20251001').
+# (input, output) em USD por 1M tokens. Casa pelo PREFIXO MAIS LONGO com
+# fronteira (ia_modelos.casar_prefixo) pra tolerar sufixos
+# ('claude-haiku-4-5-20251001') sem que 'claude-sonnet-5-5' caia na linha do
+# 'claude-sonnet-5' (o casamento antigo pelo primeiro prefixo cobrava o 5.5 a
+# $3/$15 em silencio).
 _PRECOS = {
-    # Sonnet 5 tem preco promocional $2/$10 ate 2026-08-31; registramos a
-    # TABELA CHEIA ($3/$15) de proposito — superestimar um pouco ate la e
-    # mais seguro pro vigia de custo do que subestimar depois.
+    # Modelo padrao desde 28/09/2026: mesmo preco do Sonnet 5 na tabela
+    # atual da Anthropic.
+    'claude-sonnet-5-5': (Decimal('2'), Decimal('10')),
+    'claude-opus-5-5': (Decimal('4'), Decimal('20')),
+    'claude-fable-5': (Decimal('10'), Decimal('50')),
+    # Sonnet 5 (padrao de 05/08 a 28/09/2026): linha mantida como estava
+    # ($3/$15, a "tabela cheia" da nota de 05/08, superestimando de
+    # proposito). A tabela da skill de 25/09/2026 lista o Sonnet 5 a $2/$10;
+    # ajustar e decisao do dono. So afeta env que volte ao Sonnet 5.
     'claude-sonnet-5': (Decimal('3'), Decimal('15')),
     'claude-opus-5': (Decimal('5'), Decimal('25')),
     'claude-opus-4-8': (Decimal('5'), Decimal('25')),
@@ -48,11 +59,9 @@ _MILHAO = Decimal('1000000')
 
 
 def _precos(modelo):
-    m = (modelo or '').strip()
-    for prefixo, precos in _PRECOS.items():
-        if m.startswith(prefixo):
-            return precos
-    return None  # modelo desconhecido — nao da pra precificar com confianca
+    chave = ia_modelos.casar_prefixo(modelo, _PRECOS)
+    # modelo desconhecido — nao da pra precificar com confianca
+    return _PRECOS[chave] if chave else None
 
 
 def calcular_custo(modelo, input_t, output_t, cache_read=0, cache_create=0):
