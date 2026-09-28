@@ -1,16 +1,40 @@
 """Cadastro fiscal por pedido. Consulta externa nunca inventa inscrição/isencão."""
 from app.extensions import db
 from app.models import FiscalPedidoOnline
-from app.utils import agora
+from app.utils import agora, normalizar_documento
 
 ENDERECO = ('endereco', 'numero', 'complemento', 'bairro', 'cep', 'cidade', 'uf')
 SITUACOES_IE = ('contribuinte', 'isento', 'nao_contribuinte')
 LIMITES_TINY = {'nome': 50, 'endereco': 50, 'numero': 10, 'complemento': 50,
                 'bairro': 30, 'cidade': 30, 'uf': 2, 'cep': 10, 'ie': 18}
+# Rótulos das mensagens de pendência (conferência do dono/NF) — a chave
+# interna ('endereco') nunca aparece para quem lê. O checkout passa os
+# rótulos da tela dele (`checkout_fiscal.ROTULOS_CHECKOUT`).
+ROTULOS = {'nome': 'razão social', 'endereco': 'logradouro', 'numero': 'número',
+           'complemento': 'complemento', 'bairro': 'bairro', 'cidade': 'cidade',
+           'uf': 'UF', 'cep': 'CEP', 'ie': 'inscrição estadual'}
 
 
 def digitos(valor):
+    """Só dígitos — CEP e inscrição estadual. Documento (CPF/CNPJ) usa
+    `normalizar_documento`: o CNPJ alfanumérico perderia as letras."""
     return ''.join(c for c in str(valor or '') if c.isdigit())
+
+
+def cortar_aos_limites(dados):
+    """Corta cada campo ao limite do Tiny (sem espaço sobrando no fim).
+
+    Devolve ``(dados_cortados, campos_abreviados)``. Quem mostra os dados ao
+    cliente precisa avisar quais campos foram abreviados.
+    """
+    cortados = dict(dados)
+    abreviados = []
+    for campo, limite in LIMITES_TINY.items():
+        valor = cortados.get(campo)
+        if isinstance(valor, str) and len(valor) > limite:
+            cortados[campo] = valor[:limite].rstrip()
+            abreviados.append(campo)
+    return cortados, abreviados
 
 
 def registro(pedido):
@@ -25,7 +49,7 @@ def documento(pedido):
     row = registro(pedido)
     if row is not None:
         return row.documento
-    return digitos(getattr(getattr(pedido, 'cliente', None), 'cpf', ''))
+    return normalizar_documento(getattr(getattr(pedido, 'cliente', None), 'cpf', ''))
 
 
 def congelar_documento(pedido, doc):
@@ -36,7 +60,7 @@ def congelar_documento(pedido, doc):
         from sqlalchemy.dialects.sqlite import insert as sqlite_insert
         inserir = pg_insert if db.engine.dialect.name == 'postgresql' else sqlite_insert
         db.session.execute(inserir(FiscalPedidoOnline).values(
-            pedido_id=pedido.id, documento=digitos(doc), dados={}, criado_em=agora(),
+            pedido_id=pedido.id, documento=normalizar_documento(doc), dados={}, criado_em=agora(),
         ).on_conflict_do_nothing(index_elements=['pedido_id']))
         row = db.session.get(FiscalPedidoOnline, pedido.id)
     return row
@@ -47,14 +71,15 @@ def _endereco_publico(dados):
             for campo in ENDERECO}
 
 
-def pendencias(row):
+def pendencias(row, rotulos=None):
+    """O que falta para a NF, com os rótulos de quem lê (``rotulos``
+    sobrepõe ``ROTULOS``; a chave interna nunca vai para a mensagem)."""
+    rotulos = {**ROTULOS, **(rotulos or {})}
     dados = row.dados or {}
     erros = []
-    for campo, rotulo in (('nome', 'razão social'), ('endereco', 'logradouro'),
-                          ('numero', 'número'), ('bairro', 'bairro'),
-                          ('cidade', 'cidade'), ('uf', 'UF'), ('cep', 'CEP')):
+    for campo in ('nome', 'endereco', 'numero', 'bairro', 'cidade', 'uf', 'cep'):
         if not str(dados.get(campo) or '').strip():
-            erros.append(rotulo)
+            erros.append(rotulos[campo])
     if dados.get('cep') and len(digitos(dados['cep'])) != 8:
         erros.append('CEP válido')
     if dados.get('uf') and len(dados['uf']) != 2:
@@ -62,10 +87,10 @@ def pendencias(row):
     if row.situacao_ie not in SITUACOES_IE:
         erros.append('inscrição estadual ou condição de contribuinte confirmada')
     elif row.situacao_ie == 'contribuinte' and not digitos(dados.get('ie')):
-        erros.append('inscrição estadual')
+        erros.append(rotulos['ie'])
     for campo, limite in LIMITES_TINY.items():
         if len(str(dados.get(campo) or '')) > limite:
-            erros.append(f'{campo} com até {limite} caracteres (limite do Tiny)')
+            erros.append(f'{rotulos[campo]} com até {limite} caracteres (limite da nota fiscal)')
     return erros
 
 
@@ -206,7 +231,9 @@ def conferir_rascunho(pedido):
         return 'Não foi possível conferir os dados fiscais do rascunho no Tiny. A autorização não foi solicitada.'
 
     def normalizar(campo, valor):
-        if campo in ('cpf_cnpj', 'cep') or (campo == 'ie' and digitos(valor)):
+        if campo == 'cpf_cnpj':
+            return normalizar_documento(valor)
+        if campo == 'cep' or (campo == 'ie' and digitos(valor)):
             return digitos(valor)
         texto = unicodedata.normalize('NFKD', str(valor or '').upper())
         return ' '.join(''.join(c for c in texto if not unicodedata.combining(c)).split())

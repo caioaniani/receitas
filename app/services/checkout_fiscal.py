@@ -4,19 +4,39 @@ from types import SimpleNamespace
 from flask import current_app
 from itsdangerous import BadData, URLSafeTimedSerializer
 
-from app.services.fiscal_online import ENDERECO, LIMITES_TINY, digitos, pendencias
-from app.utils import agora
+from app.services.fiscal_online import (
+    ENDERECO,
+    LIMITES_TINY,
+    cortar_aos_limites,
+    digitos,
+    pendencias,
+)
+from app.utils import agora, normalizar_documento
 
 CAMPOS = ('nome', *ENDERECO, 'ie')
 UFS = set('AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split())
+# Rótulos da TELA do checkout (app/templates/loja/_fiscal_cnpj.html), em
+# minúsculas para caber na frase. Mudou o rótulo lá, muda aqui: há teste que
+# confere os dois (tests/test_checkout_fiscal_auditoria.py).
+ROTULOS_CHECKOUT = {'nome': 'razão social', 'endereco': 'rua ou avenida',
+                    'numero': 'número', 'complemento': 'complemento',
+                    'bairro': 'bairro', 'cidade': 'cidade', 'uf': 'estado (UF)',
+                    'cep': 'CEP fiscal', 'ie': 'inscrição estadual (IE)'}
 
 
 def _assinador():
     return URLSafeTimedSerializer(current_app.config['SECRET_KEY'], salt='checkout-fiscal-v1')
 
 
+def _texto(valor):
+    # Espaços internos colapsados dos dois lados (consulta e POST): o
+    # <input type=text> descarta quebras de linha do valor, então um
+    # complemento "SALA 1\nANDAR 2" da base pública nunca voltaria igual.
+    return ' '.join(str(valor or '').split())
+
+
 def _normalizar(dados):
-    res = {campo: str(dados.get(campo) or '').strip() for campo in CAMPOS}
+    res = {campo: _texto(dados.get(campo)) for campo in CAMPOS}
     res['cep'] = digitos(res['cep'])
     res['uf'] = res['uf'].upper()
     res['ie'] = digitos(res['ie'])
@@ -24,8 +44,17 @@ def _normalizar(dados):
 
 
 def resposta_consulta(doc, consulta):
-    """Lista explícita de campos públicos: nunca devolve cadastro interno do ERP."""
-    dados = _normalizar(consulta.get('dados') or {})
+    """Lista explícita de campos públicos: nunca devolve cadastro interno do ERP.
+
+    Cada campo sai já cortado ao limite do Tiny (auditoria 27/09/2026): a
+    tela preenche por atribuição (o ``maxlength`` não corta), e um valor
+    longo era recusado no POST — o cliente encurtava à mão, o dado deixava de
+    bater com o assinado e a compra virava declaração. Assinado, preenchido e
+    comparado são o MESMO valor; ``abreviados`` diz o que foi cortado para a
+    tela pedir conferência.
+    """
+    doc = normalizar_documento(doc)
+    dados, abreviados = cortar_aos_limites(_normalizar(consulta.get('dados') or {}))
     situacao = (consulta.get('dados') or {}).get('situacao_ie')
     # A consulta pública só atesta uma IE ativa; ausência não atesta isenção.
     situacao = 'contribuinte' if situacao == 'contribuinte' and dados['ie'] else 'desconhecida'
@@ -35,11 +64,14 @@ def resposta_consulta(doc, consulta):
                                    origem=origem, atualizado_em=atualizado))
     return dict(dados={**dados, 'situacao_ie': situacao}, token=token,
                 origem=origem, atualizado_em=atualizado,
-                aviso=str(consulta.get('aviso') or 'Confira os dados da empresa antes de continuar.'))
+                aviso=str(consulta.get('aviso') or 'Confira os dados da empresa antes de continuar.'),
+                abreviados=[{'campo': campo, 'rotulo': ROTULOS_CHECKOUT[campo]}
+                            for campo in abreviados])
 
 
 def validar(form, doc):
     """Sem rede ou commit: kits validam cada entrega na mesma transação."""
+    doc = normalizar_documento(doc)
     if len(doc) != 14 or form.get('fiscal_checkout') != '1':
         return None, []  # Chamadores legados continuam sujeitos à conferência na emissão.
     dados = _normalizar({k: form.get('fiscal_' + k) for k in CAMPOS})
@@ -51,7 +83,7 @@ def validar(form, doc):
     # Desconhecida não impede a compra, mas bloqueia autorização da NF até conferência.
     candidato = SimpleNamespace(dados=dados, situacao_ie=(
         'nao_contribuinte' if situacao == 'desconhecida' else situacao))
-    faltando = pendencias(candidato)
+    faltando = pendencias(candidato, ROTULOS_CHECKOUT)
     if dados['uf'] not in UFS:
         faltando.append('UF válida')
     if faltando:
@@ -75,14 +107,16 @@ def validar(form, doc):
             pass  # Token ausente/expirado/adulterado vira declaração, nunca comprovação.
     verificado = (prova.get('dados') == dados and
                   prova.get('situacao_ie') == situacao == 'contribuinte')
-    return dict(dados=dados, situacao_ie=situacao, verificado=verificado,
+    return dict(documento=doc, dados=dados, situacao_ie=situacao, verificado=verificado,
                 origem=prova.get('origem', ''), atualizado_em=prova.get('atualizado_em', '')), erros
 
 
 def salvar(pedido, snapshot):
     from app.services.fiscal_online import congelar_documento
 
-    row = congelar_documento(pedido, pedido.cliente.cpf)
+    # O documento DESTA compra, não o do cadastro: e-mail não prova
+    # identidade, e o Cliente pode ser de outra pessoa (checkout anônimo).
+    row = congelar_documento(pedido, snapshot.get('documento') or pedido.cliente.cpf)
     row.dados = {**snapshot['dados'], '_checkout': {
         'conferido_em': agora().isoformat(), 'origem_consulta': snapshot['origem'],
         'base_atualizada_em': snapshot['atualizado_em'],
