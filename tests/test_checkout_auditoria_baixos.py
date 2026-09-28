@@ -301,3 +301,24 @@ def test_sob_encomenda_com_d2_livre_segue_no_d2(app, monkeypatch):
     html = app.test_client().get(f'/loja/{_slugify(p.nome)}-p{p.id}').get_data(as_text=True)
     assert f'value="{d2.isoformat()}"' in html
     assert 'Primeira data disponível' not in html
+
+
+# ── 49. NF: entrega com CNPJ também passa pela trava de endereço ────────
+
+def test_nf_cnpj_com_entrega_incompleta_nao_vai_a_sefaz(app):
+    from app.extensions import db
+    from app.services import tiny_nf
+    from app.utils import agora
+    ped = _pedido(db, _produto(db), status='pago', pago_em=agora(),
+                  modo='agendada', endereco_entrega='Rua A, 10',
+                  endereco_logradouro='Rua A', endereco_numero='10',
+                  endereco_cidade='São Paulo', endereco_cep='04571-010')
+    cliente = {'nome': 'Empresa X', 'tipo_pessoa': 'J',
+               'cpf_cnpj': '11222333000181'}
+    with patch('app.services.fiscal_online.payload_cliente',
+               return_value=(cliente, None)), \
+            patch('app.services.tiny.incluir_nota_fiscal') as incluir:
+        res = tiny_nf._emitir_nf_pedido(ped)
+    incluir.assert_not_called()
+    assert res['ok'] is False
+    assert 'Endereço de entrega incompleto (bairro, UF)' in res['msg']

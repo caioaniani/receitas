@@ -416,6 +416,10 @@ def _nota_payload(pedido, itens, cliente=None):
             **{campo: getattr(pedido, 'endereco_' + ('logradouro' if campo == 'endereco' else campo)) or ''
                for campo in ('endereco', 'numero', 'complemento', 'bairro', 'cep', 'cidade', 'uf')},
         }
+        # Mesmas normalizações do destinatário: número em branco é rejeitado
+        # pela SEFAZ ('SN' = sem número) e a UF vai em maiúsculas.
+        payload['endereco_entrega']['numero'] = pedido.endereco_numero or 'SN'
+        payload['endereco_entrega']['uf'] = (pedido.endereco_uf or '').upper()
     return payload
 
 
@@ -745,6 +749,16 @@ def _emitir_nf_pedido(pedido, user_id=None, recriar=False):
                           + ', '.join(end_faltando)
                           + ') — a NF não foi enviada à SEFAZ. Complete o '
                           'endereço do cliente e emita de novo.')
+        # CNPJ: o destinatário vem do cadastro fiscal, mas a ENTREGA leva o
+        # grupo `endereco_entrega` montado do pedido — que a entrega agendada
+        # não exige completo (fail-open do CEP). Mesma trava do CPF, para a
+        # SEFAZ não receber bairro/UF em branco (auditoria 27/09/2026).
+        if (end_faltando and cliente is not None
+                and pedido.modo_entrega != 'retirada'):
+            return None, ('Endereço de entrega incompleto ('
+                          + ', '.join(end_faltando)
+                          + ') — a NF não foi enviada à SEFAZ. Complete o '
+                          'endereço do pedido e emita de novo.')
         itens, faltando = _payload_itens(pedido)
         if faltando:
             return None, ('Itens sem SKU mapeado no Tiny: '
