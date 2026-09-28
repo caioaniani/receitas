@@ -145,8 +145,15 @@ antecipadamente os produtos de todas as semanas.
 
 O owner pode reembolsar e cancelar uma entrega paga pelo gateway, devolvendo
 o valor dos itens e do frete daquela entrega; as outras datas permanecem.
-Se a resposta do gateway for incerta, o painel mostra a tentativa e bloqueia
-nova solicitação e coleta até a conferência no Pagar.me. Pagamentos externos
+Se a resposta do gateway for incerta (tempo esgotado, aceite pendente), o
+painel mostra a tentativa e bloqueia nova solicitação e coleta. Repetir
+**Reembolsar e cancelar esta entrega** não envia outro estorno: o sistema lê
+a cobrança no Pagar.me e confirma só quando o valor devolvido nela cobre todos
+os estornos confirmados e pendentes da compra (um estorno parcial mantém a
+cobrança como paga); com recusa explícita do gateway, libera uma nova
+solicitação; sem prova, mantém o bloqueio e registra a leitura. Uma entrega
+bloqueada não impede o motorista de iniciar a rota: as demais paradas saem
+normalmente e a bloqueada fica sem coleta, registrada no log. Pagamentos externos
 continuam sem estorno automático pelo gateway. A edição de logística permite
 corrigir contato/endereço, mas não trocar a agenda já reservada de um kit;
 para isso, é preciso cancelar a entrega e fazer uma nova compra.
