@@ -20,6 +20,58 @@ from app.extensions import db
 from app.models import ContaPagar
 
 
+def mapa_lojas_nf(consultar_slack=True):
+    """OrderedDict {canal_id: nome_loja} dos canais de NF. Prioriza o vinculo
+    confirmado na tela Canais -> Loja (SlackCanalLojaMap); senao o nome do
+    config SLACK_CANAIS_NF_NOMES; senao o nome do canal no Slack (e por fim o ID).
+
+    `consultar_slack=False` nunca chama a API do Slack (canal sem vinculo nem
+    nome no config fica com o proprio ID) — para leituras que nao podem
+    depender de rede, como a sonda /api/claude/contas-pagar-itens."""
+    from collections import OrderedDict
+
+    from flask import current_app
+
+    from app.models import SlackCanalLojaMap
+
+    cfg = {}
+    raw = (current_app.config.get('SLACK_CANAIS_NF_NOMES') or '').strip()
+    for par in raw.split(';'):
+        par = par.strip()
+        if '=' in par:
+            cid, nome = par.split('=', 1)
+            if cid.strip():
+                cfg[cid.strip()] = nome.strip()
+
+    vinc = {}
+    for m in SlackCanalLojaMap.query.all():
+        if m.eh_industria:
+            vinc[m.canal_id] = 'Indústria'
+        elif m.loja_id and m.loja:
+            vinc[m.canal_id] = m.loja.nome
+
+    mapa = OrderedDict()
+    ids = (current_app.config.get('SLACK_CANAIS_NF') or '').strip()
+    canais = [c.strip() for c in ids.split(',') if c.strip()]
+    for cid in cfg:                  # canais que so estao no config tambem entram
+        if cid not in canais:
+            canais.append(cid)
+    for cid in canais:
+        if cid in vinc:
+            mapa[cid] = vinc[cid]
+        elif cid in cfg:
+            mapa[cid] = cfg[cid]
+        elif consultar_slack:
+            from app.services import slack as slack_api
+            mapa[cid] = slack_api.nome_canal(cid)
+        else:
+            mapa[cid] = cid
+    # Canal vinculado na tela mas fora do config tambem tem nome conhecido.
+    for cid, nome in vinc.items():
+        mapa.setdefault(cid, nome)
+    return mapa
+
+
 def _norm_doc(numero):
     """So digitos, sem zeros a esquerda — pra casar nf_numero entre NF e boleto.
     '000053498' -> '53498'; 'NF 3926' -> '3926'."""
