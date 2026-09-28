@@ -151,6 +151,10 @@ def test_email_a_caminho_renderiza(app):
         _, assunto, html = args[:3]
         assert 'caminho' in assunto.lower()
         assert 'XYZ456' in html
+        # Link público (o convidado não tem senha para a área logada —
+        # auditoria 27/09/2026).
+        assert '/loja/pedido/XYZ456' in html
+        assert '/loja/conta/pedidos' not in html
 
 
 # ── Reply-To: e-mail "responda este" precisa ter destino real (24/06/2026) ──

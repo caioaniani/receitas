@@ -474,7 +474,7 @@ def _texto_pedido_recebido(pedido, base):
 
 def _template_a_caminho(pedido, base, rastreio_url=None):
     onde, quando = _entrega_linha_html(pedido)
-    link = f'{base}/loja/conta/pedidos/{pedido.codigo}' if base else ''
+    link = f'{base}/loja/pedido/{pedido.codigo}' if base else ''
     link_html = (f'<a href="{link}" style="color:#8b5a2b;">Ver detalhes</a>'
                  if link else '')
     rastreio_html = (
@@ -501,7 +501,7 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
 
 def _texto_a_caminho(pedido, base, rastreio_url=None):
     onde, quando = _entrega_linha(pedido)
-    link = f'{base}/loja/conta/pedidos/{pedido.codigo}' if base else ''
+    link = f'{base}/loja/pedido/{pedido.codigo}' if base else ''
     rastreio = f'Acompanhe a entrega: {rastreio_url}\n\n' if rastreio_url else ''
     return (
         f'Seu pedido {pedido.codigo} saiu pra entrega!\n\n'
