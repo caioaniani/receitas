@@ -476,7 +476,11 @@ def test_data_sem_capacidade_reverte_reservas_anteriores_e_linha_nova(compra):
     assert all(not e.reserva_plano for e in compra.entregas)
 
 
-def test_expiracao_de_compras_sobrepostas_trava_planos_em_ordem_global(compra, monkeypatch):
+def test_expiracao_de_compras_sobrepostas_libera_planos_por_compra_com_commit(compra, monkeypatch):
+    # Desde 28/09/2026 cada compra expira numa transação própria (consulta ao
+    # gateway fora das travas, depois trava e commit). Nenhuma trava de plano
+    # de uma compra fica presa enquanto a próxima é processada; dentro de cada
+    # compra as datas continuam devolvidas em ordem.
     from app.services import kits_estoque
     from app.services.kits_capacidade import reservar_compra
     assert reservar_compra(compra)[0]
