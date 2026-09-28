@@ -211,6 +211,27 @@ def test_reserva_nao_perde_incremento_de_outro_worker(app):
     assert AppConfig.get('frete_google_dia') == f'{dia}|4|1'
 
 
+def test_falha_de_banco_na_reserva_nao_descarta_o_estado_do_chamador(app,
+                                                                     caplog):
+    """Erro nosso ao reservar a vaga desfaz só o savepoint: sem Google nesta
+    cotação, mas o que o chamador já tinha na sessão continua lá (um rollback
+    geral apagaria em silêncio o que o checkout acumulou)."""
+    from sqlalchemy.exc import OperationalError
+    _ligar_google(app, teto=10)
+    db.session.add(AppConfig(key='estado_do_chamador', value='preservar'))
+
+    def banco_caiu(bruto, hoje_iso):
+        raise OperationalError('SELECT', {}, Exception('conexão perdida'))
+
+    with patch('app.services.frete._ler_uso', side_effect=banco_caiu), \
+         caplog.at_level(logging.ERROR, logger='app.services.frete'):
+        assert frete._reservar_vaga_google(frete.CANAL_CHECKOUT) is False
+    db.session.commit()
+    assert AppConfig.get('estado_do_chamador') == 'preservar'
+    assert AppConfig.get('frete_google_dia') is None
+    assert any('reservar vaga' in rec.message for rec in caplog.records)
+
+
 def test_zero_results_fica_em_cache_e_nao_paga_de_novo(app):
     """O mesmo texto que o Google não conhece, repetido (cliente clicando
     "Calcular frete" de novo), não gasta outra vaga nem outra chamada."""
