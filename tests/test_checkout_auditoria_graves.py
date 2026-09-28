@@ -170,7 +170,9 @@ def test_checkout_soma_linhas_do_mesmo_item_contra_o_plano(app):
     from app.models import Receita
     from app.services import loja_checkout
     r = Receita(nome='Sourdough Tradicional', categoria='Paes',
-                preco_site=30.0, site_ativo=True, familia='pao_sourdough')
+                preco_site=30.0, site_ativo=True, familia='pao_sourdough',
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=1000.0,
+                imagem_dropbox_url='https://x/s.jpg')
     db.session.add(r)
     db.session.commit()
     form = _form(email='novo@x.com')
@@ -444,7 +446,16 @@ def test_webhook_que_falha_devolve_claim_e_responde_500(app):
 
 
 def _expirado(db, ped, pag, *, qr_valido=False):
+    """Pedido vencido, com loja de origem (sem loja o cron só limpa o prazo
+    e nunca cancelaria — o teste não distinguiria nada)."""
+    from app.models import Loja
     from app.utils import agora
+    loja = Loja.query.filter_by(nome='Loja Anesio Pinto Rosa').first()
+    if loja is None:
+        loja = Loja(nome='Loja Anesio Pinto Rosa', ativa=True)
+        db.session.add(loja)
+        db.session.flush()
+    ped.loja_retirada_id = loja.id
     ped.reserva_expira_em = agora() - timedelta(minutes=1)
     pag.pix_expira_em = (agora() + timedelta(minutes=5) if qr_valido
                          else agora() - timedelta(minutes=5))
@@ -458,9 +469,7 @@ def test_expiracao_marca_pago_quando_o_gateway_confirma(app):
     ped, pag = _pedido_pag(db, prod, metodo='pix')
     _expirado(db, ped, pag)
     pago = {'ok': True, 'status': 'paid', 'pago': True, 'charge_status': 'paid'}
-    with patch('app.services.pagarme.consultar_order', return_value=pago), \
-            patch('app.services.loja_pagamento._loja_baixa') as loja:
-        loja.return_value = None
+    with patch('app.services.pagarme.consultar_order', return_value=pago):
         assert loja_estoque_reserva.liberar_expirados() == []
     db.session.refresh(ped)
     assert ped.status == 'pago'
@@ -494,14 +503,9 @@ def test_expiracao_com_gateway_fora_adia(app):
 
 def test_expiracao_cancela_pix_vencido_pendente_no_gateway(app):
     from app.extensions import db
-    from app.models import Loja
     from app.services import loja_estoque_reserva
-    loja = Loja(nome='Loja Anesio Pinto Rosa', ativa=True)
-    db.session.add(loja)
-    db.session.commit()
     prod = _produto(db)
     ped, pag = _pedido_pag(db, prod, metodo='pix')
-    ped.loja_retirada_id = loja.id
     _expirado(db, ped, pag)
     pendente = {'ok': True, 'status': 'pending', 'pago': False,
                 'charge_status': 'pending'}

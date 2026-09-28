@@ -1017,7 +1017,7 @@ def _devolver_claim_evento(evt_id):
     cancelar (`_situacao_no_gateway`)."""
     try:
         PagarmeEvento.query.filter_by(evento_id=str(evt_id)).delete(
-            synchronize_session=False)
+            synchronize_session='fetch')
         db.session.commit()
     except Exception:  # noqa: BLE001
         db.session.rollback()
