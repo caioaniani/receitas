@@ -1204,3 +1204,16 @@ def test_contas_pagar_itens_filtra_fornecedor_e_valida_trecho(app):
     d = c.get('/api/claude/contas-pagar-itens?fornecedor=atacadao', headers=h).get_json()
     assert [ln['item'] for ln in d['itens']] == ['Leite integral']
     assert c.get('/api/claude/contas-pagar-itens?item=a', headers=h).status_code == 400
+
+
+def test_mapa_lojas_nf_sem_slack_nao_chama_a_api(app, monkeypatch):
+    """A sonda não pode depender de rede: canal sem vínculo nem nome no
+    config fica com o próprio ID em vez de perguntar ao Slack."""
+    from app.services import slack as slack_api
+    from app.services.conta_pagar import mapa_lojas_nf
+
+    app.config['SLACK_CANAIS_NF'] = 'CSEMNOME'
+    app.config['SLACK_CANAIS_NF_NOMES'] = ''
+    monkeypatch.setattr(slack_api, 'nome_canal',
+                        lambda cid: (_ for _ in ()).throw(AssertionError('rede')))
+    assert mapa_lojas_nf(consultar_slack=False) == {'CSEMNOME': 'CSEMNOME'}
