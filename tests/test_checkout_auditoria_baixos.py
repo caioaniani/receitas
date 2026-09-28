@@ -420,3 +420,24 @@ def test_pedido_anterior_ao_snapshot_libera_pela_reexpansao(app):
     loja_estoque_reserva.liberar(ped, loja_id=loja.id)
     db.session.commit()
     assert el.quantidade_reservada == 3
+
+
+# ── 34. Entradas malformadas não dão 500 ────────────────────────────────
+
+def test_payloads_malformados_nao_dao_500(app, monkeypatch):
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    app.config['WTF_CSRF_ENABLED'] = False
+    app.config['PAGARME_WEBHOOK_SECRET'] = 'segredo'
+    c = app.test_client()
+    casos = [
+        c.post('/loja/checkout', data={'itens_json': '{"a":1}', 'nome': 'X'}),
+        c.post('/loja/checkout', data={'itens_json': '[1, null, "x"]'}),
+        c.post('/loja/checkout', data={'itens_json': '[' * 5000 + ']' * 5000}),
+        c.post('/loja/api/carrinho', json=[{'kind': 'produto', 'id': 1}]),
+        c.post('/loja/api/carrinho', json={'itens': 'abc'}),
+        c.post('/loja/api/carrinho', json={'itens': [None, 3, {'kind': 'produto', 'id': 10**30}]}),
+        c.get('/loja/carrinho?add=p1:%C2%B2'),
+        c.post('/loja/webhook/pagarme?k=%C3%A7', json={'type': 'order.paid'}),
+    ]
+    assert [r.status_code for r in casos if r.status_code >= 500] == []
+    assert casos[-1].status_code == 401

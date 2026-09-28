@@ -122,7 +122,7 @@ def _centavos(valor):
 # ── Payloads (PedidoOnline -> Pagar.me v5) ────────────────────────────
 
 def _so_digitos(s):
-    return ''.join(c for c in (s or '') if c.isdigit())
+    return ''.join(c for c in (s or '') if '0' <= c <= '9')
 
 
 def _telefone_br(raw):
@@ -380,7 +380,7 @@ def _billing_address(billing):
     return {
         'line_1': (billing.get('line_1') or 'S/N')[:255],
         'zip_code': ''.join(c for c in (billing.get('zip_code') or '')
-                            if c.isdigit()),
+                            if '0' <= c <= '9'),
         'city': billing.get('city') or 'São Paulo',
         'state': (billing.get('state') or 'SP')[:2].upper(),
         'country': (billing.get('country') or 'BR')[:2].upper(),

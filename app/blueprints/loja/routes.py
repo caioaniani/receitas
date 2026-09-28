@@ -234,7 +234,7 @@ def pedido_cartao(codigo):
     billing = {
         'line_1': (request.form.get('bill_line') or '').strip(),
         'zip_code': ''.join(c for c in (request.form.get('bill_cep') or '')
-                            if c.isdigit()),
+                            if '0' <= c <= '9'),
         'city': (request.form.get('bill_city') or '').strip() or 'São Paulo',
         'state': (request.form.get('bill_state') or '').strip() or 'SP',
         'country': 'BR',
@@ -362,8 +362,11 @@ def webhook_pagarme():
     hit = {'tipo': tipo_peek,
            'esperado': _mascarar(segredo_esperado),
            'fornecido': _mascarar(fornecido),
+           # Em bytes: `compare_digest` com str não-ASCII (um ?k=ç) levanta
+           # TypeError — virava 500 em vez de 401 (auditoria 27/09/2026).
            'bate': bool(segredo_esperado
-                        and hmac.compare_digest(segredo_esperado, fornecido))}
+                        and hmac.compare_digest(segredo_esperado.encode(),
+                                                fornecido.encode()))}
     if not segredo_esperado:
         hit['status'] = 503
         _gravar_pagarme_hit(hit)
@@ -894,7 +897,10 @@ def _resolver_prefill_carrinho(add):
             iid = int(token[1:])
         except ValueError:
             continue
-        qtd = int(q) if q.strip().isdigit() else 1
+        # Só dígitos ASCII: '²'.isdigit() é True e int('²') estourava 500
+        # (auditoria 27/09/2026).
+        q = q.strip()
+        qtd = int(q) if q and all('0' <= c <= '9' for c in q) else 1
         qtd = max(1, min(qtd, 99))
         chave = (kind, iid)
         if chave in vistos:
@@ -960,8 +966,11 @@ def _carrinho_sessao():
     26/07/2026) são preservados — sem isso a escolha do cliente some antes
     do checkout (a sessão é a fonte de verdade)."""
     out = []
-    for it in session.get('carrinho') or []:
-        kind = str((it or {}).get('kind') or '').strip().lower()
+    carrinho = session.get('carrinho')
+    for it in (carrinho if isinstance(carrinho, list) else []):
+        if not isinstance(it, dict):
+            continue
+        kind = str(it.get('kind') or '').strip().lower()
         if kind not in ('receita', 'produto'):
             continue
         try:
@@ -984,14 +993,16 @@ def _set_carrinho_sessao(itens):
     errada)."""
     norm, idx = [], {}
     pares_comp = 0
-    for it in itens or []:
-        kind = str((it or {}).get('kind') or '').strip().lower()
+    for it in (itens if isinstance(itens, list) else []):
+        if not isinstance(it, dict):
+            continue
+        kind = str(it.get('kind') or '').strip().lower()
         if kind not in ('receita', 'produto'):
             continue
         try:
             iid = int(it.get('id'))
             qtd = max(1, min(int(it.get('qtd') or 1), 99))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             continue
         fatiado = bool(it.get('fatiado'))
         comp = _comp_normalizada(it.get('comp'))
@@ -1092,8 +1103,10 @@ def _inject_carrinho_sessao():
 def api_carrinho_salvar():
     """Grava o carrinho na sessão (fonte de verdade) — o carrinho.js chama a
     cada mudança. Recebe {itens:[{kind,id,qtd}]}, substitui, devolve a contagem."""
-    data = request.get_json(silent=True) or {}
-    norm = _set_carrinho_sessao(data.get('itens') or [])
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    itens = data.get('itens')
+    norm = _set_carrinho_sessao(itens if isinstance(itens, list) else [])
     return jsonify(ok=True, count=sum(i['qtd'] for i in norm), itens=norm)
 
 
@@ -1112,7 +1125,9 @@ def checkout():
         if not itens_raw:
             try:
                 itens_raw = json.loads(request.form.get('itens_json') or '[]')
-            except ValueError:
+            except (ValueError, RecursionError):
+                itens_raw = []
+            if not isinstance(itens_raw, list):   # '{"a":1}', '3', 'null'
                 itens_raw = []
         # itens_estritos: item que o servidor descarta (menu com escolha
         # invalidada, item pausado, esgotado) RECUSA o pedido com a mensagem
@@ -1173,7 +1188,7 @@ def api_cep(cep):
     número; campos seguem travados) × 502 = INFRA fora (front destrava os
     campos pra digitação manual — fail-open, venda nunca fica presa)."""
     import requests
-    cep_d = ''.join(c for c in (cep or '') if c.isdigit())
+    cep_d = ''.join(c for c in (cep or '') if '0' <= c <= '9')
     if len(cep_d) != 8:
         return jsonify(ok=False, erro='CEP precisa ter 8 dígitos.'), 400
     brasilapi_404 = False
