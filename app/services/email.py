@@ -624,7 +624,8 @@ def enviar_reset_senha(cliente, token):
 
 
 def _template_reset(nome, link):
-    primeiro = nome.split()[0] if nome else ''
+    from html import escape
+    primeiro = escape(nome.split()[0]) if nome else ''
     return f"""\
 <!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
 font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
@@ -676,7 +677,8 @@ def enviar_verificacao_cadastro(cliente, token):
 
 
 def _template_verificacao(nome, link):
-    primeiro = nome.split()[0] if nome else ''
+    from html import escape
+    primeiro = escape(nome.split()[0]) if nome else ''
     return f"""\
 <!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
 font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
