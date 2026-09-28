@@ -951,7 +951,9 @@ CHAMADA — o resultado de cada `criar` passa por `recusa()`/
   `ia_modelos.recusa()`/`exigir_resposta()` em TODA chamada; cada funcao
   usa o caminho de falha que ja tinha (bot = handoff para a equipe, nunca
   turno vazio; copilot = `tipo 'erro'`; OCR/cadastro/planejamento/treino/
-  reviews = mensagem "a IA recusou..."; SEO = None). O AUDITOR trata a
+  reviews/SEO = mensagem "a IA recusou..." — nunca "tente de novo", a recusa
+  se repete para o mesmo pedido; o SEO levanta `RespostaRecusada` para a
+  rota; o botao /admin/auditor/run tem flash proprio). O AUDITOR trata a
   recusa como janela CONSUMIDA (o ponteiro avanca e o dono recebe um aviso)
   — ela se repete para a mesma entrada, e parar o ponteiro calava o auditor
   para sempre.

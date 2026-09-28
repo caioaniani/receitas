@@ -281,8 +281,27 @@ def test_google_reviews_recusa_nao_vira_rascunho(app, api):
 def test_seo_recusa_nao_vira_sugestao(app, api):
     from app.services import seo_descricoes
     api(_recusa(parcial='Pão de fermentação'))
+    with app.app_context(), pytest.raises(ia_modelos.RespostaRecusada):
+        seo_descricoes._chamar_claude('prompt')
+
+
+def test_seo_tela_diz_que_a_ia_recusou(app, owner_user, api):
+    """A tela nao manda 'tente de novo' numa recusa (repetiria)."""
+    from app.extensions import db
+    from app.models import Receita
+    api(_recusa())
     with app.app_context():
-        assert seo_descricoes._chamar_claude('prompt') is None
+        r = Receita(nome='Pao SEO', categoria='Paes', rendimento_qtd=1,
+                    rendimento_unidade='un', peso_base=100.0)
+        db.session.add(r)
+        db.session.commit()
+        rid = r.id
+    client = app.test_client()
+    _login(client, owner_user)
+    d = client.post('/admin/seo/descricoes/sugerir',
+                    data={'kind': 'receita', 'id': rid}).get_json()
+    assert d['ok'] is False
+    assert 'recusou' in d['erro'] and 'tente de novo' not in d['erro']
 
 
 # ── Nível de log do erro da API ─────────────────────────────
@@ -739,13 +758,16 @@ def test_auditor_erro_de_rede_nao_avanca(app, monkeypatch):
 def test_debug_ia_testar_cobre_os_modelos_das_envs(app, owner_user, api,
                                                    monkeypatch):
     monkeypatch.setenv('GOOGLE_REVIEWS_IA_MODELO', 'claude-opus-4-8')
-    fake = api(_texto('ok'), _resp_tool(), _texto('ok', model='claude-opus-4-8'),
-               _resp_tool('claude-opus-4-8'))
+    # ordem alfabetica: o Opus 4.8 e verificado primeiro
+    fake = api(_texto('ok', model='claude-opus-4-8'),
+               _resp_tool('claude-opus-4-8'), _texto('ok'), _resp_tool())
     client = app.test_client()
     _login(client, owner_user)
     d = client.get('/admin/debug-ia?testar=1').get_json()
     assert d['verificacao']['modelos'] == ['claude-opus-4-8',
                                            'claude-sonnet-5-5']
+    assert d['verificacao']['ok'] is True
+    assert all(r['ok'] for r in d['verificacao']['por_modelo'].values())
     assert set(d['verificacao']['por_modelo']) == {'claude-opus-4-8',
                                                    'claude-sonnet-5-5'}
     usados = [c['model'] for c in fake.chamadas]
@@ -770,3 +792,31 @@ def test_cache_read_pelo_preco_de_cada_modelo(modelo, esperado):
     from app.services.uso_ia import calcular_custo
     assert calcular_custo(modelo, 0, 0, cache_read=1_000_000) == \
         Decimal(esperado)
+
+
+def test_debug_ia_um_modelo_falhando_derruba_o_ok(app, owner_user, api,
+                                                  monkeypatch):
+    """A API respondeu com outro modelo para a env: ok geral False."""
+    monkeypatch.setenv('GOOGLE_REVIEWS_IA_MODELO', 'claude-opus-4-8')
+    api(_texto('ok', model='claude-sonnet-5'),
+        _resp_tool('claude-sonnet-5'), _texto('ok'), _resp_tool())
+    client = app.test_client()
+    _login(client, owner_user)
+    v = client.get('/admin/debug-ia?testar=1').get_json()['verificacao']
+    assert v['ok'] is False
+    assert v['por_modelo']['claude-opus-4-8']['ok'] is False
+    assert v['por_modelo']['claude-sonnet-5-5']['ok'] is True
+
+
+def test_botao_do_auditor_explica_a_recusa(app, owner_user, monkeypatch):
+    from app.services import chatbot_auditor
+    monkeypatch.setattr(chatbot_auditor, 'auditar_hoje',
+                        lambda enviar=True: {'ok': False,
+                                             'recusa': 'general_harms',
+                                             'enviado': True})
+    client = app.test_client()
+    _login(client, owner_user)
+    resp = client.post('/admin/auditor/run', follow_redirects=True)
+    html = resp.get_data(as_text=True)
+    assert 'A IA recusou analisar o período' in html
+    assert 'enviou o relatorio' not in html

@@ -646,9 +646,10 @@ def _recusa_do_periodo(exc, inicio, fim, *, titulo, enviar):
     periodo = (f'{inicio.strftime("%d/%m %H:%M")} a '
                f'{fim.strftime("%d/%m %H:%M")}')
     mensagem = (f'*{titulo}* — {periodo}\n\nA IA recusou analisar este '
-                f'periodo pelas regras de seguranca da Anthropic (categoria: '
-                f'{exc.categoria}). O periodo ficou sem relatorio; a proxima '
-                'execucao segue normal. As conversas continuam no Chatwoot.')
+                f'período pelas regras de segurança da Anthropic (categoria: '
+                f'{exc.categoria}). O período ficou sem relatório e não será '
+                'refeito; as próximas execuções seguem normalmente. As '
+                'conversas continuam no Chatwoot.')
     resultado = {'ok': False, 'recusa': exc.categoria, 'mensagem': mensagem,
                  'enviado': False}
     numero = _numero_destino() if enviar else None

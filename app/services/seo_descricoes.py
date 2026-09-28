@@ -42,7 +42,10 @@ _INSTRUCOES_BASE = (
 
 def _chamar_claude(prompt):
     """Faz a chamada e devolve string limpa, ou None se falhar.
-    Best-effort — caller mostra erro pro admin mas nunca quebra a tela."""
+    Best-effort — caller mostra erro pro admin mas nunca quebra a tela.
+    Recusa da IA levanta `ia_modelos.RespostaRecusada`: a tela precisa dizer
+    que foi recusa (repetir o pedido recusaria de novo), nao "tente de
+    novo"."""
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
         return None
@@ -57,10 +60,8 @@ def _chamar_claude(prompt):
             max_tokens=400,
             messages=[{'role': 'user', 'content': prompt}],
         )
-        # Recusa: texto parcial nao vira sugestao (ia_modelos loga a
-        # categoria; a tela mostra que a IA nao gerou).
-        if ia_modelos.recusa(resp):
-            return None
+        # Recusa: texto parcial nao vira sugestao — sobe para a tela.
+        ia_modelos.exigir_resposta(resp)
         # resp.content e' lista de blocks; pega o texto.
         partes = [b.text for b in resp.content
                   if getattr(b, 'type', '') == 'text']
@@ -70,6 +71,8 @@ def _chamar_claude(prompt):
             texto = texto[1:-1].strip()
         # Trunca em 280 (margem sobre o limite de 220 pra erros).
         return texto[:280] if texto else None
+    except ia_modelos.RespostaRecusada:
+        raise
     except Exception:  # noqa: BLE001
         logger.exception('seo_descricoes._chamar_claude falhou')
         return None
@@ -78,7 +81,8 @@ def _chamar_claude(prompt):
 def sugerir_para_receita(receita):
     """Gera sugestao de descricao SEO pra uma receita. Usa nome, categoria
     e os 5 ingredientes principais (>= 1% da receita). Devolve string ou
-    None se a API falhar/nao estiver configurada."""
+    None se a API falhar/nao estiver configurada; recusa da IA levanta
+    `ia_modelos.RespostaRecusada`."""
     ings = []
     for ing in (receita.ingredientes or []):
         try:
@@ -105,7 +109,8 @@ def sugerir_para_receita(receita):
 def sugerir_para_produto(produto):
     """Gera sugestao de descricao SEO pra um produto (cesta, kit). Usa
     nome, categoria e os itens da cesta (se houver). Devolve string ou
-    None se a API falhar/nao estiver configurada."""
+    None se a API falhar/nao estiver configurada; recusa da IA levanta
+    `ia_modelos.RespostaRecusada`."""
     itens_str = ''
     if produto.itens:
         nomes = []

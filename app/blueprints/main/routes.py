@@ -4716,7 +4716,12 @@ def auditor_run():
 
     from app.services import chatbot_auditor
     r = chatbot_auditor.auditar_hoje(enviar=True)
-    if r.get('enviado'):
+    if r.get('recusa'):
+        aviso = ('aviso enviado pro seu WhatsApp' if r.get('enviado')
+                 else 'o aviso não saiu (sem destino ou WhatsApp fora)')
+        flash(f'A IA recusou analisar o período (categoria {r["recusa"]}) '
+              f'pelas regras de segurança da Anthropic; {aviso}.', 'warning')
+    elif r.get('enviado'):
         flash('Auditor rodou e enviou o relatorio pro seu WhatsApp.', 'success')
     elif r.get('pulou'):
         flash(f'Auditor pulou: {r["pulou"]}', 'warning')
@@ -7269,18 +7274,23 @@ def seo_descricoes_sugerir():
         id_ = int(request.form.get('id') or 0)
     except ValueError:
         return jsonify(ok=False, erro='id invalido')
-    if kind == 'receita':
-        obj = Receita.query.get(id_)
-        if not obj:
-            return jsonify(ok=False, erro='receita nao encontrada')
-        texto = svc.sugerir_para_receita(obj)
-    elif kind == 'produto':
-        obj = Produto.query.get(id_)
-        if not obj:
-            return jsonify(ok=False, erro='produto nao encontrado')
-        texto = svc.sugerir_para_produto(obj)
-    else:
-        return jsonify(ok=False, erro='kind invalido')
+    from app.services import ia_modelos
+    try:
+        if kind == 'receita':
+            obj = Receita.query.get(id_)
+            if not obj:
+                return jsonify(ok=False, erro='receita nao encontrada')
+            texto = svc.sugerir_para_receita(obj)
+        elif kind == 'produto':
+            obj = Produto.query.get(id_)
+            if not obj:
+                return jsonify(ok=False, erro='produto nao encontrado')
+            texto = svc.sugerir_para_produto(obj)
+        else:
+            return jsonify(ok=False, erro='kind invalido')
+    except ia_modelos.RespostaRecusada as exc:
+        # Recusa se repete para o mesmo pedido: a tela diz o que houve.
+        return jsonify(ok=False, erro=str(exc))
     if not texto:
         return jsonify(ok=False,
                        erro='a IA não gerou a sugestão — tente de novo '
