@@ -291,9 +291,15 @@ def _so_digitos(s):
 
 
 def buscar_contato_por_documento(documento):
-    """Pesquisa cadastro INTERNO por documento exato; duplicatas não são escolhidas."""
-    doc = _so_digitos(documento)
-    if len(doc) not in (11, 14):
+    """Pesquisa cadastro INTERNO por documento exato; duplicatas não são escolhidas.
+
+    Documento na forma canônica (`app.utils.normalizar_documento`): o CNPJ
+    alfanumérico reduzido a dígitos iria TRUNCADO ao Tiny — e, com três
+    letras, a sobra de 11 dígitos seria pesquisada como se fosse um CPF.
+    """
+    from app.utils import documento_valido, normalizar_documento
+    doc = normalizar_documento(documento)
+    if not documento_valido(doc):
         return {'erro': 'Documento inválido.'}
     encontrados = {}
     pagina = 1
