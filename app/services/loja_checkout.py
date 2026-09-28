@@ -417,7 +417,16 @@ def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
     """
     from app.models import Produto
     from app.services import loja_menu
-    itens_raw = normalizar_itens_raw(itens_raw)
+    # Os tetos do carrinho (60 linhas, 99 un., linhas iguais somadas) valem
+    # SÓ para o checkout do site — a rota `loja.checkout` aplica
+    # `normalizar_itens_raw` antes de `criar_pedido`. Os kits reusam
+    # `criar_pedido`/`montar_itens` com itens fixos +
+    # adicionais que podem repetir um produto e passar de 99 (até 999):
+    # somar/limitar aqui recusava o kit ou cobrava 99 em silêncio (revisão
+    # 28/09/2026). Aqui só a defesa de tipo.
+    if not isinstance(itens_raw, list):
+        itens_raw = []
+    itens_raw = [r for r in itens_raw if isinstance(r, dict)]
     itens = []
     avisos = []
     datas_estoque = None
@@ -430,7 +439,7 @@ def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
         try:
             item_id = int(raw.get('id'))
             qtd = int(raw.get('qtd') or 0)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             continue
         if qtd < 1:
             continue

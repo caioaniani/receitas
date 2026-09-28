@@ -463,3 +463,23 @@ def test_carrinho_uma_gravacao_por_vez_com_o_ultimo_estado(tmp_path):
     assert r['sincronizado'] is True
     # removerItem tira TODAS as linhas do item (inteiro e fatiado).
     assert r['depoisRemover'] == ['produto1']
+
+
+def test_rota_do_checkout_aplica_os_tetos_do_carrinho(app, monkeypatch):
+    """Os tetos (99 un., linhas iguais somadas) valem na ROTA do site — nos
+    dois caminhos (sessão e itens_json). Não ficam no `criar_pedido`, que os
+    kits usam com adicionais legítimos acima de 99 (revisão 28/09/2026)."""
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    app.config['WTF_CSRF_ENABLED'] = False
+    vistos = []
+
+    def _criar(form, itens_raw, **kw):
+        vistos.append(itens_raw)
+        return None, ['parou aqui']
+
+    monkeypatch.setattr('app.services.loja_checkout.criar_pedido', _criar)
+    c = app.test_client()
+    c.post('/loja/checkout', data={'itens_json': json.dumps([
+        {'kind': 'produto', 'id': 7, 'qtd': 1000000},
+        {'kind': 'produto', 'id': 7, 'qtd': 5}])})
+    assert vistos and vistos[-1] == [{'kind': 'produto', 'id': 7, 'qtd': 99}]

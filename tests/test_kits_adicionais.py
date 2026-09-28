@@ -370,3 +370,27 @@ def test_menu_da_categoria_cestas_tambem_e_recusado_com_composicao_valida(kit, m
     menu.categoria = 'Cestas'
     db.session.commit()
     _recusado(kit, [_raw(menu, comp={str(pi): 5 for pi in _pis(menu)})], frete)
+
+
+# ── Revisão 28/09/2026: o teto do carrinho do SITE não vale para os kits ─────
+
+def test_adicional_igual_a_item_fixo_nao_e_recusado(kit, frete):
+    """`montar_itens` somava linhas iguais (regra do carrinho do site) e o
+    kit com adicional igual a um item fixo virava 'Revise os produtos
+    adicionais do kit.'"""
+    fixo = kit.itens[0]
+    kind = 'produto' if fixo.produto_id else 'receita'
+    compra, erros = _comprar(kit, [{'kind': kind, 'id': fixo.produto_id or fixo.receita_id,
+                                    'qtd': 1}])
+    assert compra is not None, erros
+
+
+def test_adicional_acima_de_99_nao_e_cortado_em_silencio(kit, extra, frete):
+    """O kit aceita até 999 unidades; o teto de 99 do carrinho do site
+    cortava para 99 e cobrava menos sem aviso."""
+    compra, erros = _comprar(kit, [_raw(extra, 150)])
+    assert compra is not None, erros
+    for entrega in compra.entregas:
+        item = next(i for i in entrega.pedido.itens if i.produto_id == extra.id)
+        assert item.quantidade == 150
+        assert item.subtotal == Decimal('7.35') * 150

@@ -1129,6 +1129,11 @@ def checkout():
                 itens_raw = []
             if not isinstance(itens_raw, list):   # '{"a":1}', '3', 'null'
                 itens_raw = []
+        # Tetos do carrinho do site (60 linhas, 99 un., linhas iguais
+        # somadas) — valem para os dois caminhos (sessão e itens_json). Fica
+        # AQUI e não no `criar_pedido`: os kits usam o mesmo motor com itens
+        # fixos + adicionais legítimos acima de 99 (revisão 28/09/2026).
+        itens_raw = loja_checkout.normalizar_itens_raw(itens_raw)
         # itens_estritos: item que o servidor descarta (menu com escolha
         # invalidada, item pausado, esgotado) RECUSA o pedido com a mensagem
         # específica — antes o pedido nascia sem ele e o cliente só via o
