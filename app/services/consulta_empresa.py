@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
 from app.models.consulta_empresa import ConsultaEmpresaCache, ConsultaEmpresaLimite
-from app.utils import agora
+from app.utils import agora, cnpj_valido, normalizar_documento
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +42,10 @@ def _digitos(valor):
 
 
 def _documento_exato(valor, documento):
-    return (isinstance(valor, str) and re.fullmatch(r'[0-9./ -]+', valor) is not None
-            and _digitos(valor) == documento)
+    # CNPJ alfanumérico (IN RFB 2.229/2024): letras fazem parte do número.
+    # Comparar só os dígitos aceitaria outro CNPJ com a mesma projeção.
+    return (isinstance(valor, str) and re.fullmatch(r'[0-9A-Za-z./ -]+', valor) is not None
+            and normalizar_documento(valor) == documento)
 
 
 def _resultado(dados=None, *, origem='', atualizado_em=None, aviso=''):
@@ -235,10 +237,8 @@ def _consultar_endereco(documento):
 
 def consultar(doc):
     """Retorna apenas campos fiscais públicos; falha nunca é tratada como isenção."""
-    from app.services.loja_checkout import _cnpj_valido
-
-    documento = _digitos(doc)
-    if not _cnpj_valido(documento):
+    documento = normalizar_documento(doc)
+    if not cnpj_valido(documento):
         return _resultado(aviso='Informe um CNPJ válido.')
     cache = _ler_cache(documento)
     if cache is not None:
