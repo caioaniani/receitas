@@ -1269,6 +1269,25 @@ def test_consultar_pedido_online_por_cpf(app):
     assert r['numero'] == 'ON124'
 
 
+def test_bot_autoriza_e_acha_nf_com_cnpj_alfanumerico(app):
+    """Revisão 28/09/2026: o bot reduzia o documento a dígitos e o CNPJ
+    alfanumérico nunca autorizava nem achava a NF."""
+    from app.extensions import db
+    from app.services import bot_tools
+    with app.app_context():
+        _pedido_online_nf(db, codigo='ON126', telefone='11988887777',
+                          cpf='12ABC34501DE35')
+        r = bot_tools.consultar_pedido('ON126', cpf_cliente='12.abc.345/01de-35')
+        assert r['numero'] == 'ON126' and r.get('autorizado_como') == 'cpf'
+        # Letra trocada não autoriza.
+        outro = bot_tools.consultar_pedido('ON126', cpf_cliente='12.ABD.345/01DE-35')
+        assert outro['erro'] == 'autorizacao_necessaria'
+        with patch('app.services.bot_tools._avisar_dono_nf'):
+            nf = bot_tools.buscar_nota_fiscal('12.abc.345/01de-35', 'ON126')
+        assert nf.get('erro') != 'dados_incompletos'
+        assert nf.get('erro') != 'nao_encontrado'
+
+
 def test_consultar_pedido_online_nao_autorizado(app):
     """Telefone e CPF errados → autorizacao_necessaria (não vaza o pedido)."""
     from app.extensions import db
