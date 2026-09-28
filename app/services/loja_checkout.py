@@ -979,14 +979,38 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     # pra cliente saber o que tirar/o que mudar.
     if data_entrega and itens:
         esgotados = []
+        # A QUANTIDADE conta, somada por item: o mesmo pão pode vir em duas
+        # linhas (inteiro e fatiado; dois menus montados diferente) e as
+        # duas consomem o mesmo limite. Antes só se olhava "saldo > 0" e um
+        # pedido de 30 passava num limite de 10 — a reserva no pagamento
+        # falhava em silêncio (auditoria 27/09/2026).
+        pedido_por_item = {}
         for it in itens:
+            chave = (it['kind'], it['id'])
+            anterior = pedido_por_item.get(chave, (0, it['nome']))
+            pedido_por_item[chave] = (anterior[0] + int(it['qtd']), it['nome'])
+        insuficientes = []
+        for (kind_it, id_it), (qtd_it, nome_it) in pedido_por_item.items():
             # Sob encomenda TAMBÉM valida contra o plano-do-dia desde
             # 07/08/2026 (decisão do dono — SUBSTITUI o pulo de 21/07):
             # o dono zera o item no plano do dia curado e a encomenda é
             # barrada igual aos demais. O D+2 segue validado acima.
-            if not loja_catalogo.tem_estoque_para_dia(
-                    it['kind'], it['id'], data_entrega):
-                esgotados.append(it['nome'])
+            saldo = loja_catalogo.saldo_do_plano(kind_it, id_it, data_entrega)
+            if saldo is None:
+                continue
+            if saldo <= 0:
+                esgotados.append(nome_it)
+            elif qtd_it > saldo:
+                insuficientes.append((nome_it, saldo))
+        if insuficientes:
+            data_fmt = data_entrega.strftime('%d/%m/%Y')
+            partes = '; '.join(
+                f'"{n}": só {s} unidade{"s" if s != 1 else ""}'
+                for n, s in insuficientes)
+            erros.append(
+                f'Não temos a quantidade pedida pra entrega em {data_fmt} — '
+                f'{partes}. Diminua a quantidade no carrinho ou escolha '
+                'outra data.')
         if esgotados:
             data_fmt = data_entrega.strftime('%d/%m/%Y')
             if len(esgotados) == 1:
