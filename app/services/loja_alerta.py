@@ -304,13 +304,18 @@ def alertar_endereco_falho(endereco, cep=None, contato=None,
     `_MSG_MOTIVO`: `nao_encontrado` (venda travou), `impreciso` (venda passou,
     mas o frete saiu por centroide do CEP), `fora_area` (além do raio, mas
     perto da borda) e `lalamove` (o mapa da corrida não achou o endereço).
-    Best-effort; dedup por (endereço+CEP+motivo) canônico + teto/hora
-    anti-flood."""
+    Best-effort; dedup por (endereço+CEP+motivo+tem contato) canônico +
+    teto/hora anti-flood.
+
+    O "tem contato" separa o preview do frete (anônimo) do POST do checkout
+    (nome/telefone/e-mail): no fluxo normal o preview vem antes e, com a
+    chave única, suprimia justamente o alerta que diz QUEM chamar (auditoria
+    27/09/2026). No máximo dois avisos por venda — o segundo com o contato."""
     try:
         if not _ativo():
             return
         cep_fmt, chave = _cep_e_chave(endereco, cep)
-        chave = f'{chave}|{motivo}'
+        chave = f'{chave}|{motivo}|{"c" if (contato or "").strip() else "s"}'
         if not _deve_enviar(chave):          # mesmo alerta recente
             return
         # Teto/hora protege contra flood do endpoint PÚBLICO /loja/api/frete.

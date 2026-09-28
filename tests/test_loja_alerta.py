@@ -332,3 +332,24 @@ def test_dedupe_cruza_os_dois_workers(app):
         assert loja_alerta._deve_enviar('endereco|x|nao_encontrado') is False
         # chave diferente segue passando
         assert loja_alerta._deve_enviar('endereco|y|nao_encontrado') is True
+
+
+def test_alerta_do_checkout_com_contato_nao_e_engolido_pelo_do_preview(app):
+    """Auditoria 27/09/2026: o preview do frete (sem contato) marcava a chave
+    e o alerta do checkout — o único com nome/telefone — era suprimido. Agora
+    saem os dois; repetir cada um continua deduplicado."""
+    from app.services import loja_alerta
+    loja_alerta._ultimo_envio.clear()
+    loja_alerta._endfalho_ts.clear()
+    with app.app_context():
+        app.config['LOJA_ALERTA_TRAVA'] = '1'
+        with patch.object(loja_alerta._POOL, 'submit') as submit:
+            end = 'Rua Inexistente, 10, Moema, São Paulo, SP'
+            loja_alerta.alertar_endereco_falho(end, '04077-000')
+            loja_alerta.alertar_endereco_falho(
+                f'{end}, 04077-000', None, contato='Maria · 11999998888')
+            loja_alerta.alertar_endereco_falho(
+                f'{end}, 04077-000', None, contato='Maria · 11999998888')
+    assert submit.call_count == 2
+    textos = [c.args[2] for c in submit.call_args_list]
+    assert any('11999998888' in t for t in textos)
