@@ -1591,3 +1591,14 @@ document.addEventListener('submit', function (e) {
   if (!form) return;
   if (!window.confirm('Remover esta foto da galeria?')) e.preventDefault();
 });
+
+// Confirmação genérica com texto que pode conter dado de origem externa
+// (e-mail digitado no checkout público, etc.): `data-confirmar="..."` no
+// <form>. O texto é lido de dataset (texto puro, nunca avaliado) — o mesmo
+// dado dentro de onsubmit="confirm('...')" executava JS na sessão da equipe
+// (auditoria do checkout, 27/09/2026).
+document.addEventListener('submit', function (e) {
+  var form = e.target.closest('form[data-confirmar]');
+  if (!form) return;
+  if (!window.confirm(form.dataset.confirmar)) e.preventDefault();
+});
