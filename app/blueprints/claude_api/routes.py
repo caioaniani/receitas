@@ -2806,8 +2806,9 @@ def contas_pagar_itens():
             'item': ln['item'], 'ocorrencias': 0, 'quantidade_total': 0.0,
             'gasto_total': 0.0, 'unidades': set(), 'fornecedores': set(),
             'primeira': ln['data'], 'ultima': ln['data'],
-            'ultimo_valor_unitario': None, 'min_valor_unitario': None,
-            'max_valor_unitario': None, 'vinculo': ln['vinculo']})
+            'ultimo_valor_unitario': None, 'ultimo_valor_unitario_em': None,
+            'min_valor_unitario': None, 'max_valor_unitario': None,
+            'vinculo': ln['vinculo']})
         r['ocorrencias'] += 1
         r['quantidade_total'] += ln['quantidade'] or 0.0
         r['gasto_total'] += ln['valor_total'] or 0.0
