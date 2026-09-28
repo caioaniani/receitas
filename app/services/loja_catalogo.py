@@ -459,6 +459,19 @@ def tem_estoque_para_dia(kind, item_id, data):
     return s > 0
 
 
+def saldo_do_plano(kind, item_id, data):
+    """Quantas unidades ainda cabem no Plano do dia pra essa data.
+
+    None = sem plano cadastrado (sem limite, fail-open — mesma regra de
+    `tem_estoque_para_dia`); inteiro >= 0 = planejado − reservado. O checkout
+    confere a QUANTIDADE pedida contra este número: só olhar "saldo > 0"
+    deixava passar 30 unidades num limite de 10 (auditoria 27/09/2026)."""
+    s = _saldo_para_dia(kind, item_id, data)
+    if s is None:
+        return None
+    return max(0, int(s))
+
+
 def item_e_sob_encomenda(kind, item_id):
     """True se a receita/produto esta marcada `sob_encomenda` (produzido pro
     pedido: nao abate EstoqueLoja fisico, so vende D+2; desde 07/08/2026
