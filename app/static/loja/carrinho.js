@@ -464,6 +464,12 @@
   Carrinho.salvar = function (itens) {
     _salvarOriginal(itens);
     if (drawerEl() && !drawerEl().hidden) renderDrawer();
+    // Avisa quem mais depende do carrinho na página (o checkout repinta
+    // resumo, total e disponibilidade quando a gaveta muda algo —
+    // auditoria 27/09/2026).
+    try {
+      document.dispatchEvent(new CustomEvent('carrinho:mudou'));
+    } catch (e) { /* navegador sem CustomEvent: segue sem o aviso */ }
   };
 
   // ── Wire dos botões "adicionar ao carrinho" (página de produto) ──────

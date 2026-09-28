@@ -85,11 +85,15 @@
     }
 
     // ── Resumo do pedido ───────────────────────────────────────────────
-    // Fatiado é grátis e o toggle preserva a qtd total (merge de linhas),
-    // então o subtotal NÃO muda ao marcar/desmarcar — calculado uma vez.
-    var subtotal = itens.reduce(function (s, it) {
-      return s + (Number(it.preco) || 0) * (parseInt(it.qtd, 10) || 0);
-    }, 0);
+    // Recalculado quando o carrinho muda pela gaveta (evento
+    // 'carrinho:mudou', no fim deste arquivo) — antes era fixo e a tela
+    // mostrava 1× R$ 20 enquanto o pedido saía com 3× (auditoria 27/09/2026).
+    function calcSubtotal() {
+      return Carrinho.ler().reduce(function (s, it) {
+        return s + (Number(it.preco) || 0) * (parseInt(it.qtd, 10) || 0);
+      }, 0);
+    }
+    var subtotal = calcSubtotal();
 
     function pintarResumo() {
       var lista = Carrinho.ler();
@@ -138,11 +142,31 @@
     // Cartinha só aparece se houver uma CESTA no carrinho. Regra: categoria
     // contém "cesta" (pega 'Cestas' e 'Cestas Personalizadas'). Pães/itens
     // avulsos não levam cartinha de presente.
-    var temCesta = itens.some(function (it) {
-      return (it.categoria || '').toLowerCase().indexOf('cesta') >= 0;
+    function aplicarCartinha() {
+      var temCesta = Carrinho.ler().some(function (it) {
+        return (it.categoria || '').toLowerCase().indexOf('cesta') >= 0;
+      });
+      var blocoCart = document.getElementById('bloco-cartinha');
+      if (blocoCart) blocoCart.style.display = temCesta ? 'block' : 'none';
+    }
+    aplicarCartinha();
+
+    // Carrinho mudou pela gaveta (ícone do topo) ou por outro caminho:
+    // refaz tudo o que depende dos itens. Carrinho vazio volta ao estado do
+    // carregamento (form escondido).
+    document.addEventListener('carrinho:mudou', function () {
+      if (!Carrinho.ler().length) {
+        form.style.display = 'none';
+        var vz = document.getElementById('checkout-vazio');
+        if (vz) vz.style.display = 'block';
+        return;
+      }
+      subtotal = calcSubtotal();
+      pintarResumo();
+      aplicarCartinha();
+      atualizarTotais();
+      checarDisponibilidadeData();
     });
-    var blocoCart = document.getElementById('bloco-cartinha');
-    if (blocoCart) blocoCart.style.display = temCesta ? 'block' : 'none';
 
     var freteAtual = null;  // null = ainda não cotado (entrega/express)
     // Última cotação que deu certo, amarrada ao endereço (evita recotar ao
