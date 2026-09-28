@@ -150,10 +150,19 @@ painel mostra a tentativa e bloqueia nova solicitação e coleta. Repetir
 **Reembolsar e cancelar esta entrega** não envia outro estorno: o sistema lê
 a cobrança no Pagar.me e confirma só quando o valor devolvido nela cobre todos
 os estornos confirmados e pendentes da compra (um estorno parcial mantém a
-cobrança como paga); com recusa explícita do gateway, libera uma nova
-solicitação; sem prova, mantém o bloqueio e registra a leitura. Uma entrega
+cobrança como paga). A recusa só libera uma nova solicitação quando prova
+ser DESTA entrega: ela é a única pendente na cobrança e a transação falha é
+posterior ao pedido de estorno; sem prova, mantém o bloqueio e registra a
+leitura. Quando o gateway não esclarece (duas entregas pendentes e só uma
+devolvida), o owner confere no painel do Pagar.me e registra no pedido
+("valor devolvido" cancela a entrega; "nada devolvido" libera novo estorno),
+com o texto do que conferiu — nada é enviado ao gateway. Uma entrega
 bloqueada não impede o motorista de iniciar a rota: as demais paradas saem
-normalmente e a bloqueada fica sem coleta, registrada no log. Pagamentos externos
+normalmente; a bloqueada fica sem coleta, fora do e-mail "saiu para entrega",
+marcada na tela do motorista como "não entregar — conferir com a equipe", e
+marcar entregue nela responde 409 com o motivo (motorista, painel e ação do
+admin). O webhook da Lalamove registra a coleta física mesmo assim e deixa a
+saída bloqueada no log. Pagamentos externos
 continuam sem estorno automático pelo gateway. A edição de logística permite
 corrigir contato/endereço, mas não trocar a agenda já reservada de um kit;
 para isso, é preciso cancelar a entrega e fazer uma nova compra.
