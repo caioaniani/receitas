@@ -249,6 +249,34 @@ def _post_order(payload, idempotency_key=None):
         return 0, {'_erro': str(exc)}
 
 
+def _resumo_log(status, body, charge=None):
+    """Resumo SEM dados pessoais da resposta do Pagar.me pro log.
+
+    O corpo da order traz customer (nome, e-mail, CPF/CNPJ, telefone) e, no
+    cartão, titular/dígitos/endereço de cobrança — nunca vai inteiro pro log
+    do Railway nem pros breadcrumbs do Sentry (auditoria 27/09/2026). Fica só
+    o que ajuda a diagnosticar: HTTP, mensagem genérica, NOMES dos campos
+    com erro e ids/status da order e da charge."""
+    body = body if isinstance(body, dict) else {}
+    partes = [f'http={status}']
+    msg = body.get('message') or body.get('_erro')
+    if msg:
+        partes.append(f'msg={str(msg)[:160]}')
+    errs = body.get('errors')
+    if isinstance(errs, dict) and errs:
+        partes.append('campos=' + ','.join(sorted(str(k) for k in errs)[:10]))
+    if body.get('id'):
+        partes.append(f'order={body.get("id")}')
+    charge = charge if isinstance(charge, dict) else _extrair_charge(body)
+    if charge:
+        last = charge.get('last_transaction') or {}
+        partes.append(f'charge={charge.get("id")} status={charge.get("status")}'
+                      f' tx={last.get("status")}')
+        if last.get('acquirer_return_code'):
+            partes.append(f'retorno={last.get("acquirer_return_code")}')
+    return ' '.join(partes)
+
+
 def _extrair_charge(order_json):
     """Pega a primeira charge do order. Pagar.me retorna `charges: [...]`
     com a transação dentro."""
@@ -316,7 +344,8 @@ def criar_pedido_pix(pedido, expira_em_min=30):
     status, body = _post_order(payload)
     if status not in (200, 201):
         erro = body.get('message') or body.get('_erro') or f'HTTP {status}'
-        logger.warning('pagarme criar_pedido_pix HTTP %s: %s', status, body)
+        logger.warning('pagarme criar_pedido_pix falhou: %s',
+                       _resumo_log(status, body))
         return {'ok': False, 'erro': erro, 'http': status}
     charge = _extrair_charge(body)
     last_tx = charge.get('last_transaction') or {}
@@ -327,7 +356,8 @@ def criar_pedido_pix(pedido, expira_em_min=30):
             or last_tx.get('status') in ('failed', 'canceled')
             or not qr):
         motivo = _erro_da_charge(charge)
-        logger.warning('pagarme pix charge falhou: %s | body=%s', motivo, body)
+        logger.warning('pagarme pix charge falhou: %s | %s', motivo,
+                       _resumo_log(status, body, charge))
         return {'ok': False, 'erro': motivo, 'http': status,
                 'order_id': body.get('id'),
                 'charge_id': charge.get('id')}
@@ -386,8 +416,8 @@ def criar_pedido_cartao(pedido, card_token, parcelas=1, billing=None,
     status, body = _post_order(payload, idempotency_key=idempotency_key)
     if status not in (200, 201):
         erro = body.get('message') or body.get('_erro') or f'HTTP {status}'
-        logger.warning('pagarme criar_pedido_cartao HTTP %s: %s', status,
-                       erro)
+        logger.warning('pagarme criar_pedido_cartao falhou: %s',
+                       _resumo_log(status, body))
         # Rede/timeout, 5xx, 408, 409 e 429: o desfecho é INCERTO — a order
         # pode ter sido criada e o cartão capturado. Não é recusa do banco
         # (auditoria 27/09/2026: aparecia "cartão recusado" e o cliente
@@ -403,7 +433,8 @@ def criar_pedido_cartao(pedido, card_token, parcelas=1, billing=None,
     if st in ('failed', 'canceled') or last_st in ('failed', 'not_authorized',
                                                    'refused'):
         motivo = _erro_da_charge(charge)
-        logger.warning('pagarme cartao recusado: %s | body=%s', motivo, body)
+        logger.warning('pagarme cartao recusado: %s | %s', motivo,
+                       _resumo_log(status, body, charge))
         return {'ok': False, 'erro': motivo, 'http': status,
                 'status': st, 'order_id': body.get('id'),
                 'charge_id': charge.get('id')}
