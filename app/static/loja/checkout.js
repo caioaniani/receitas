@@ -107,7 +107,12 @@
         // Menu configurável: mostra O QUE o cliente montou — é a última
         // tela antes de pagar, tem que dar pra conferir (26/07/2026).
         var montado = '';
-        if (it.comp_resumo && it.comp_resumo.length) {
+        if (it.remontar) {
+          // Escolha invalidada (o menu mudou depois que o cliente montou): o
+          // servidor recusa o pedido com esse item — avisa já no resumo.
+          montado = '<small class="linha-comp linha-remontar">⚠ este menu ' +
+            'mudou — volte ao produto e monte de novo</small>';
+        } else if (it.comp_resumo && it.comp_resumo.length) {
           montado = '<small class="linha-comp">' + it.comp_resumo.map(
             function (c) { return escapeHtml(c.qtd + 'x ' + c.nome); }
           ).join(' · ') + '</small>';
@@ -140,6 +145,12 @@
     if (blocoCart) blocoCart.style.display = temCesta ? 'block' : 'none';
 
     var freteAtual = null;  // null = ainda não cotado (entrega/express)
+    // Última cotação que deu certo, amarrada ao endereço (evita recotar ao
+    // trocar de modo) e ao endereço cuja cotação FALHOU (o submit não fica
+    // em loop tentando cotar o mesmo endereço — o servidor decide).
+    var cotacao = null;           // {chave, valor}
+    var freteFalhouChave = null;
+    var enviarAposFrete = false;
 
     function modoSelecionado() {
       var r = form.querySelector('input[name="modo_entrega"]:checked');
@@ -201,7 +212,10 @@
           return janelasCortadas.indexOf(j) === -1;
         });
       }
-      var preferida = sel.getAttribute('data-sel') || sel.value || '';
+      // A janela do POST que falhou (data-sel) só vale na PRIMEIRA pintura;
+      // depois manda a escolha atual do cliente — antes cada repopulação
+      // (frete, data, modo) voltava à janela antiga (auditoria 27/09/2026).
+      var preferida = sel.value || sel.getAttribute('data-sel') || '';
       sel.innerHTML = '';
       if (!lista.length) {
         var vazio = document.createElement('option');
@@ -232,13 +246,17 @@
         total = subtotal;
       } else if (freteAtual === null) {
         freteTxt = 'calcule pelo endereço';
-        total = subtotal;
+        total = null;
       } else {
         freteTxt = fmtBRL(freteAtual);
         total = subtotal + freteAtual;
       }
       $('#t-frete').textContent = freteTxt;
-      $('#t-total').textContent = fmtBRL(total);
+      // Sem cotação o total NÃO é o subtotal: o servidor cobra o frete. Antes
+      // a tela dizia "Total R$ 94" e o pagamento cobrava R$ 109 (auditoria
+      // 27/09/2026).
+      $('#t-total').textContent = total === null
+        ? fmtBRL(subtotal) + ' + frete' : fmtBRL(total);
     }
 
     function aplicarEnderecoFiscal() {
@@ -300,13 +318,18 @@
         (modo === 'express') ? 'none' : 'block';
       document.getElementById('bloco-express').style.display =
         (modo === 'express') ? 'block' : 'none';
-      // Retirada não tem frete; express começa sem cotação.
+      // Retirada não tem frete. Entrega reaproveita a cotação do MESMO
+      // endereço (trocar express↔agendada não muda o frete) e, sem ela, cota
+      // sozinho quando o endereço está completo.
       if (ehRetirada) freteAtual = 0;
+      else if (cotacao && cotacao.chave === chaveEndereco()) freteAtual = cotacao.valor;
       else freteAtual = null;
       popularJanelas(modo);
       atualizarTotais();
       conferirEndereco();
       aplicarEnderecoFiscal();
+      if (typeof checarDisponibilidadeData === 'function') checarDisponibilidadeData();
+      if (ehEntrega && freteAtual === null) cotarFreteSeCompleto();
     }
 
     // ── Conferência do endereço (dono 09/08/2026, pós-Dia dos Pais:
@@ -341,9 +364,21 @@
       var so = this.value.replace(/\D/g, '');
       if (so !== this.value) this.value = so;   // só reatribui se mudou (cursor)
     });
+    // Endereço mudou depois da cotação: o frete mostrado deixa de valer
+    // (o total volta a "+ frete") e é recotado ao sair do campo.
+    function enderecoMudou() {
+      conferirEndereco();
+      if (freteAtual !== null && modoSelecionado() !== 'retirada'
+          && (!cotacao || cotacao.chave !== chaveEndereco())) {
+        freteAtual = null;
+        atualizarTotais();
+      }
+    }
     ['logradouro', 'numero', 'bairro', 'cidade'].forEach(function (id) {
       var el = document.getElementById(id);
-      if (el) el.addEventListener('input', conferirEndereco);
+      if (!el) return;
+      el.addEventListener('input', enderecoMudou);
+      el.addEventListener('change', cotarFreteSeCompleto);
     });
     var compEl = form.querySelector('[name="complemento"]');
     if (compEl) compEl.addEventListener('input', conferirEndereco);
@@ -460,6 +495,7 @@
               statusCep('Esse CEP não tem rua cadastrada — digite a rua e o bairro.', '');
               mostrarCorrigir(false);
             }
+            cotarFreteSeCompleto();
             var num = document.getElementById('numero');
             // Só rouba o foco se o cliente ainda estiver no campo CEP —
             // no meio de outra digitação seria sequestro de cursor.
@@ -560,11 +596,19 @@
       checarDisponibilidadeData();  // estado inicial
     }
 
+    // Rodada da conferência: resposta atrasada de uma data/modo anterior não
+    // pode travar (nem destravar) o botão da escolha atual.
+    var rodadaDisp = 0;
     function checarDisponibilidadeData() {
       var aviso = document.getElementById('checkout-disponibilidade');
       if (!aviso) return;
-      var data = dataEl.value;
-      if (!data) { aviso.style.display = 'none'; return; }
+      // Express é sempre pra HOJE (o servidor ignora a data do campo): a
+      // conferência olha hoje. Antes olhava a data escondida do agendamento
+      // e o botão ficava travado sem explicação (auditoria 27/09/2026).
+      var data = modoSelecionado() === 'express'
+        ? dados.hojeIso : (dataEl ? dataEl.value : '');
+      var rodada = ++rodadaDisp;
+      if (!data) { aviso.style.display = 'none'; travarSubmit(false); return; }
       // qtd vai junto: o servidor soma as linhas do mesmo item (inteiro +
       // fatiado, menus diferentes) e confere contra o Plano do dia.
       var itensCart = Carrinho.ler().map(function (it) {
@@ -588,6 +632,7 @@
           return r.json();
         })
         .then(function (j) {
+          if (rodada !== rodadaDisp) return;   // resposta velha
           if (!j.ok) {
             aviso.className = 'dispon-checkout ko';
             aviso.textContent = 'Não consegui verificar — tente outra data.';
@@ -633,6 +678,7 @@
           travarSubmit(true);
         })
         .catch(function () {
+          if (rodada !== rodadaDisp) return;
           // Falha passageira da conferência (rede, limite de requisições) não
           // trava a compra: o servidor confere a disponibilidade de novo ao
           // concluir o pedido (auditoria 27/09/2026 — antes o botão ficava
@@ -658,13 +704,24 @@
       if (btnRm) {
         var k = btnRm.getAttribute('data-remover-kind');
         var id = btnRm.getAttribute('data-remover-id');
-        Carrinho.remover(k, id);
-        // Re-renderiza o resumo e re-checa a data.
-        window.location.reload();
+        // A falta é do ITEM, não da linha: tira TODAS as linhas dele
+        // (inteiro + fatiado, menus montados diferente). `remover(k, id)`
+        // só casava a linha sem fatiado/composição e nada saía — a página
+        // recarregava com o mesmo aviso, em loop (auditoria 27/09/2026).
+        Carrinho.removerItem(k, id);
+        btnRm.disabled = true;
+        // Recarrega só depois de a sessão gravar (senão o reload pode abortar
+        // o POST e o item volta).
+        Carrinho.sincronizado().then(function () { window.location.reload(); });
         return;
       }
       var btnTr = e.target.closest && e.target.closest('[data-data]');
       if (btnTr && dataEl) {
+        // No express a data do campo não vale: trocar a data é agendar.
+        if (modoSelecionado() === 'express') {
+          var ag = form.querySelector('input[name="modo_entrega"][value="agendada"]');
+          if (ag) { ag.checked = true; aplicarModo(); }
+        }
         dataEl.value = btnTr.getAttribute('data-data');
         dataEl.dispatchEvent(new Event('change'));
       }
@@ -682,6 +739,30 @@
         return el ? (el.value || '').trim() : '';
       }).filter(Boolean);
       return partes.join(', ');
+    }
+
+    function chaveEndereco() {
+      var c = document.getElementById('cep');
+      return ((c && c.value) || '').replace(/\D/g, '') + '|' + enderecoMontado();
+    }
+    function enderecoCompleto() {
+      var c = document.getElementById('cep');
+      var n = document.getElementById('numero');
+      var l = document.getElementById('logradouro');
+      return ((c && c.value) || '').replace(/\D/g, '').length === 8
+        && !!(n && n.value.trim()) && !!(l && l.value.trim());
+    }
+    // Cota o frete sozinho quando o endereço fica completo (CEP resolvido +
+    // número). Antes só o botão cotava e quem não clicava via o total SEM o
+    // frete que o servidor cobra (auditoria 27/09/2026).
+    function cotarFreteSeCompleto() {
+      var modo = modoSelecionado();
+      if (modo !== 'agendada' && modo !== 'express') return;
+      if (!enderecoCompleto() || cepEmVoo) return;
+      var chave = chaveEndereco();
+      if ((cotacao && cotacao.chave === chave) || freteFalhouChave === chave) return;
+      var b = document.getElementById('btn-frete');
+      if (b && !b.disabled) b.click();
     }
 
     // ── Cotação de frete ───────────────────────────────────────────────
@@ -718,16 +799,21 @@
           body: JSON.stringify({ endereco: endereco, cep: cep }),
         }).then(function (r) { return r.json(); }).then(function (data) {
           btnFrete.disabled = false;
+          var chaveCotada = chaveEndereco();
           if (!data.ok) {
             freteAtual = null;
+            freteFalhouChave = chaveCotada;
             out.textContent = data.erro || 'Não consegui calcular o frete.';
             out.className = 'frete-resultado erro';
           } else if (data.fora_area) {
             freteAtual = null;
+            freteFalhouChave = chaveCotada;
             out.textContent = 'Endereço fora da nossa área de entrega.';
             out.className = 'frete-resultado erro';
           } else {
             freteAtual = Number(data.valor) || 0;
+            cotacao = { chave: chaveCotada, valor: freteAtual };
+            freteFalhouChave = null;
             var dist = data.distancia_km
               ? ' (' + Number(data.distancia_km).toFixed(1).replace('.', ',') + ' km)'
               : '';
@@ -741,12 +827,15 @@
             atualizarExpressTempo();
           }
           atualizarTotais();
+          retomarEnvio();
         }).catch(function () {
           btnFrete.disabled = false;
           freteAtual = null;
+          freteFalhouChave = chaveEndereco();
           out.textContent = 'Erro de conexão ao calcular o frete.';
           out.className = 'frete-resultado erro';
           atualizarTotais();
+          retomarEnvio();
         });
       });
     }
@@ -757,11 +846,41 @@
     // PEDIDOS DUPLICADOS. Em sucesso o servidor redireciona (página nova,
     // botão volta a habilitar); em erro ele re-renderiza o form (idem).
     var enviando = false;
+    // Envio pedido enquanto o frete ainda não foi cotado: cota primeiro pra
+    // o cliente ver o total real; se a cotação falhar, o próximo clique
+    // envia mesmo assim (o servidor recota e é a autoridade).
+    function retomarEnvio() {
+      if (!enviarAposFrete) return;
+      enviarAposFrete = false;
+      if (freteAtual === null) return;   // falhou: o cliente vê o motivo
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.submit();
+    }
     form.addEventListener('submit', function (e) {
       if (enviando) { e.preventDefault(); return; }
       var atual = Carrinho.ler();
       if (!atual.length) {
         e.preventDefault();
+        return;
+      }
+      // O servidor lê o carrinho da SESSÃO: com uma gravação em voo (ex.:
+      // marcou "fatiado" no resumo e clicou Concluir) ele receberia o estado
+      // anterior. Espera a sessão gravar e reenvia.
+      if (Carrinho.emSincronia && Carrinho.emSincronia()) {
+        e.preventDefault();
+        Carrinho.sincronizado().then(function () {
+          if (typeof form.requestSubmit === 'function') form.requestSubmit();
+          else form.submit();
+        });
+        return;
+      }
+      var modoEnvio = modoSelecionado();
+      if ((modoEnvio === 'agendada' || modoEnvio === 'express')
+          && freteAtual === null && enderecoCompleto()
+          && freteFalhouChave !== chaveEndereco() && btnFrete) {
+        e.preventDefault();
+        enviarAposFrete = true;
+        btnFrete.click();
         return;
       }
       document.getElementById('itens_json').value = JSON.stringify(

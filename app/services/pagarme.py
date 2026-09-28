@@ -226,12 +226,18 @@ def _payload_items_individual(pedido):
     return out
 
 
-def _post_order(payload):
-    """POST /core/v5/orders. Retorna (status_code, json_dict)."""
+def _post_order(payload, idempotency_key=None):
+    """POST /core/v5/orders. Retorna (status_code, json_dict). Status 0 =
+    exceção de rede (a order PODE ter sido criada — ex.: ReadTimeout).
+    `idempotency_key`: mesma chave = mesma tentativa (reenvio não cria
+    outra order no gateway)."""
     if not disponivel():
         return 0, {'_erro': 'PAGARME_API_KEY não configurada'}
+    headers = _headers()
+    if idempotency_key:
+        headers['Idempotency-Key'] = str(idempotency_key)
     try:
-        r = requests.post(f'{_BASE}/orders', headers=_headers(),
+        r = requests.post(f'{_BASE}/orders', headers=headers,
                           json=payload, timeout=_TIMEOUT)
         try:
             body = r.json() or {}
@@ -351,7 +357,8 @@ def _billing_address(billing):
     }
 
 
-def criar_pedido_cartao(pedido, card_token, parcelas=1, billing=None):
+def criar_pedido_cartao(pedido, card_token, parcelas=1, billing=None,
+                        idempotency_key=None):
     """Cria Order com payment_method=credit_card usando token tokenizado
     no FRONT (pk_, JS do Pagar.me). O servidor NUNCA vê o número do cartão.
     `billing` = endereço de cobrança (antifraude exige no charge — vai em
@@ -376,11 +383,18 @@ def criar_pedido_cartao(pedido, card_token, parcelas=1, billing=None):
         }],
         'code': pedido.codigo,
     }
-    status, body = _post_order(payload)
+    status, body = _post_order(payload, idempotency_key=idempotency_key)
     if status not in (200, 201):
         erro = body.get('message') or body.get('_erro') or f'HTTP {status}'
-        logger.warning('pagarme criar_pedido_cartao HTTP %s: %s', status, body)
-        return {'ok': False, 'erro': erro, 'http': status}
+        logger.warning('pagarme criar_pedido_cartao HTTP %s: %s', status,
+                       erro)
+        # Rede/timeout, 5xx, 408, 409 e 429: o desfecho é INCERTO — a order
+        # pode ter sido criada e o cartão capturado. Não é recusa do banco
+        # (auditoria 27/09/2026: aparecia "cartão recusado" e o cliente
+        # pagava de novo).
+        incerto = (status == 0 and not body.get('_erro', '').startswith(
+            'PAGARME_API_KEY')) or status >= 500 or status in (408, 409, 429)
+        return {'ok': False, 'erro': erro, 'http': status, 'incerto': incerto}
     charge = _extrair_charge(body)
     st = charge.get('status')
     last_st = (charge.get('last_transaction') or {}).get('status')
@@ -506,6 +520,41 @@ def cancelar_cobranca_pendente(charge_id):
         return {'ok': True, 'status': status}
     return {'ok': False, 'incerto': True, 'status': status,
             'erro': f'status inesperado no cancelamento: {status or "?"}'}
+
+
+def buscar_orders_por_codigo(codigo):
+    """Orders do gateway com esse `code` (o código do pedido). Usado quando a
+    criação de uma cobrança terminou sem resposta (timeout) e não temos o id
+    da order. Devolve {ok, orders: [{id, status, pago, charge_id,
+    charge_status}]} ou {ok: False, erro}."""
+    if not disponivel():
+        return {'ok': False, 'erro': 'PAGARME_API_KEY não configurada'}
+    if not codigo:
+        return {'ok': False, 'erro': 'código ausente'}
+    try:
+        r = requests.get(f'{_BASE}/orders', headers=_headers(),
+                         params={'code': codigo, 'size': 20}, timeout=_TIMEOUT)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('pagarme buscar_orders_por_codigo falhou: %s', exc)
+        return {'ok': False, 'erro': str(exc)}
+    if r.status_code != 200:
+        return {'ok': False, 'erro': f'HTTP {r.status_code}: {(r.text or "")[:200]}'}
+    try:
+        body = r.json() or {}
+    except ValueError:
+        return {'ok': False, 'erro': 'resposta sem JSON'}
+    out = []
+    for o in body.get('data') or []:
+        if (o.get('code') or '') != codigo:
+            continue   # filtro do gateway ignorado: não confia no retorno
+        charge = _extrair_charge(o)
+        status = (o.get('status') or '').lower()
+        charge_status = (charge.get('status') or '').lower()
+        out.append({'id': o.get('id'), 'status': status,
+                    'pago': status == 'paid' or charge_status == 'paid',
+                    'charge_id': charge.get('id'),
+                    'charge_status': charge_status})
+    return {'ok': True, 'orders': out}
 
 
 def consultar_order(order_id):

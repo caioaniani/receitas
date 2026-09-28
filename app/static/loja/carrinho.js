@@ -122,6 +122,26 @@
       this.mudarQtd(kind, id, 0, fatiado, comp);
     },
 
+    // Tira TODAS as linhas de um item (inteiro, fatiado, menus montados
+    // diferente) — usado quando a falta é do item inteiro (aviso de esgotado
+    // do checkout).
+    removerItem: function (kind, id) {
+      this.salvar(this.ler().filter(function (it) {
+        return !(it.kind === kind && String(it.id) === String(id));
+      }));
+    },
+
+    // Promise que resolve quando não há gravação da sessão em voo nem
+    // pendente. Navegar pro checkout antes disso mostrava (e cobrava) um
+    // carrinho intermediário (auditoria 27/09/2026).
+    sincronizado: function () {
+      return _esperarSync();
+    },
+
+    emSincronia: function () {
+      return _syncEmVoo || !!_syncPendente;
+    },
+
     // Liga/desliga "fatiado" de uma LINHA já no carrinho (checkbox da linha
     // no drawer/carrinho/checkout). Fatiado muda a identidade da linha:
     // - sem linha do outro estado → flip NO LUGAR (a linha não muda de
@@ -592,10 +612,42 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // Grava o carrinho na SESSÃO do servidor (fonte de verdade). Fire-and-forget:
-  // a UI já atualizou pelo espelho; se a rede falhar, a próxima ação re-sincroniza
+  // Grava o carrinho na SESSÃO do servidor (fonte de verdade). A UI já
+  // atualizou pelo espelho; se a rede falhar, a próxima ação re-sincroniza
   // (e o localStorage segura o cache até lá).
-  function _sincronizarServidor(itens) {
+  //
+  // UMA gravação em voo por vez, sempre com o ÚLTIMO estado (auditoria
+  // 27/09/2026): a sessão vive num cookie assinado e cada resposta reescreve
+  // o cookie inteiro — com vários POSTs simultâneos (toques rápidos no +) a
+  // resposta mais lenta vencia e o carrinho voltava a um estado antigo,
+  // que era o que o checkout mostrava e cobrava.
+  var _syncEmVoo = false;
+  var _syncPendente = null;
+  var _syncEsperas = [];
+
+  function _payloadSync(itens) {
+    return JSON.stringify({
+      itens: (itens || []).map(function (it) {
+        return { kind: it.kind, id: it.id, qtd: it.qtd,
+                 fatiado: !!it.fatiado,
+                 // Menu configurável: sem `comp` aqui a escolha morre
+                 // antes do checkout (a SESSÃO é a fonte de verdade).
+                 comp: (it.comp && it.comp.length) ? it.comp : null };
+      }),
+    });
+  }
+
+  function _fimSync() {
+    _syncEmVoo = false;
+    if (_syncPendente) { _enviarSync(); return; }
+    var esperas = _syncEsperas; _syncEsperas = [];
+    esperas.forEach(function (fn) { try { fn(); } catch (e) { /* ok */ } });
+  }
+
+  function _enviarSync() {
+    var itens = _syncPendente;
+    _syncPendente = null;
+    _syncEmVoo = true;
     try {
       var meta = document.querySelector('meta[name="csrf-token"]');
       fetch('/loja/api/carrinho', {
@@ -605,18 +657,35 @@
           'X-CSRFToken': meta ? meta.getAttribute('content') : '',
         },
         credentials: 'same-origin',
-        body: JSON.stringify({
-          itens: (itens || []).map(function (it) {
-            return { kind: it.kind, id: it.id, qtd: it.qtd,
-                     fatiado: !!it.fatiado,
-                     // Menu configurável: sem `comp` aqui a escolha morre
-                     // antes do checkout (a SESSÃO é a fonte de verdade).
-                     comp: (it.comp && it.comp.length) ? it.comp : null };
-          }),
-        }),
-      }).catch(function () {});
-    } catch (e) { /* sem fetch/rede — sincroniza depois */ }
+        // keepalive: a gravação sobrevive a uma navegação logo em seguida.
+        keepalive: true,
+        body: _payloadSync(itens),
+      }).catch(function () {}).then(_fimSync);
+    } catch (e) { _fimSync(); }  // sem fetch/rede — sincroniza depois
   }
+
+  function _sincronizarServidor(itens) {
+    _syncPendente = (itens || []).slice();
+    if (!_syncEmVoo) _enviarSync();
+  }
+
+  function _esperarSync() {
+    return new Promise(function (resolve) {
+      if (!_syncEmVoo && !_syncPendente) { resolve(); return; }
+      _syncEsperas.push(resolve);
+    });
+  }
+
+  // Links que levam à página que lê a SESSÃO (checkout/carrinho) esperam a
+  // última gravação terminar — senão o checkout pinta o carrinho de antes.
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href]');
+    if (!a || (!_syncEmVoo && !_syncPendente)) return;
+    var href = a.getAttribute('href') || '';
+    if (!/\/loja\/(checkout|carrinho)(\?|$)/.test(href)) return;
+    e.preventDefault();
+    _esperarSync().then(function () { window.location.href = href; });
+  });
 
   // Inicializa o espelho a partir do carrinho da SESSÃO (injetado pelo servidor).
   // Migração: se a sessão está vazia mas há um carrinho antigo no localStorage,

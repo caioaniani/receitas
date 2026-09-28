@@ -248,10 +248,6 @@
         <select name="janela_entrega" id="janela_entrega"
                 data-sel="{{ form.get('janela_entrega', '') }}"></select>
       </label>
-      {# Disponibilidade pra a data escolhida — preenchido pelo JS via
-         /loja/api/disponibilidade-checkout. Mostra itens esgotados + opcoes
-         de remover ou trocar pra proxima data com saldo (23/06/2026). #}
-      <div id="checkout-disponibilidade" class="dispon-checkout" style="display:none;"></div>
     </div>
 
     <div class="checkout-bloco" id="bloco-express" style="display:none">
@@ -263,6 +259,14 @@
         Seu endereço está mais distante — o express leva até 2 horas.
       </p>
     </div>
+
+    {# Disponibilidade pra a data escolhida — preenchido pelo JS via
+       /loja/api/disponibilidade-checkout. Mostra itens esgotados + opcoes
+       de remover ou trocar pra proxima data com saldo (23/06/2026). Fica
+       FORA dos blocos de data/express: vale pros dois modos (no express a
+       data conferida é hoje) — dentro do bloco de data o aviso sumia no
+       express e o botão ficava travado sem explicação (auditoria 27/09). #}
+    <div id="checkout-disponibilidade" class="dispon-checkout" style="display:none;"></div>
 
     <!-- ─── 6) Cartinha (só se cesta) ────────────────────────── -->
     <div class="checkout-bloco" id="bloco-cartinha" style="display:none">

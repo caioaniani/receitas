@@ -144,11 +144,21 @@ def _pedido_aguardando(codigo):
     return principal_do_pedido(pedido)
 
 
+# Mensagens da tela de pagamento pra tentativa que falhou. O motivo TÉCNICO
+# (emissor, "gateway 500", ids) fica em `PagamentoOnline.erro` pro admin —
+# o cliente vê texto claro (decisão de 08/07/2026; o GET mostrava o técnico
+# até a auditoria de 27/09/2026).
+_MSG_PIX_FALHOU = ('Não foi possível gerar o Pix. Tente de novo ou pague '
+                   'com cartão.')
+
+
 def _ctx_pagamento(pedido, erros=None):
     """Contexto da tela de pagamento. Usado no GET e nos POSTs (Pix/cartão)
     quando falham — assim a re-renderização de erro NÃO perde o pubkey nem
     o display do Pix (bug: aparecia 'PUBLIC_KEY não configurada' no erro)."""
     from flask import current_app
+
+    from app.utils import agora
     pubkey = (current_app.config.get('PAGARME_PUBLIC_KEY') or '')
     pix_pendente = next((p for p in pedido.pagamentos
                          if p.metodo == 'pix' and p.status == 'pendente'),
@@ -161,19 +171,30 @@ def _ctx_pagamento(pedido, erros=None):
         link = next((v for v in (qu, qc) if v and v.startswith('http')), '')
         pix = {'emv': emv, 'link': link,
                'img': loja_pagamento.pagarme.qr_data_uri(emv) if emv else None,
-               'expira_em': pix_pendente.pix_expira_em}
-    # Sem erro explícito, mostra o motivo da última tentativa falhada.
-    if erros is None:
+               'expira_em': pix_pendente.pix_expira_em,
+               'expirado': bool(pix_pendente.pix_expira_em
+                                and pix_pendente.pix_expira_em <= agora())}
+    # Sem erro explícito, avisa da última tentativa recusada — só quando o
+    # cliente ainda precisa pagar, sem Pix vivo na tela, e nunca por troca de
+    # forma de pagamento (tentativa substituída não é falha).
+    if erros is None and pedido.status == 'aguardando_pagamento' and not pix:
         ult = next((p for p in sorted(pedido.pagamentos,
                                       key=lambda x: x.criado_em or 0,
-                                      reverse=True) if p.status == 'falhou'),
+                                      reverse=True)
+                    if p.status in ('falhou', 'pendente', 'pago', 'estornado')),
                    None)
-        if ult and ult.erro:
-            erros = [f'Última tentativa falhou: {ult.erro}']
+        if (ult and ult.status == 'falhou'
+                and 'substituído' not in (ult.erro or '')
+                and 'encerrado' not in (ult.erro or '')
+                and 'expirado' not in (ult.erro or '')):
+            erros = [loja_pagamento._MSG_CARTAO_RECUSADO
+                     if ult.metodo == 'cartao' else _MSG_PIX_FALHOU]
     from app.services.compra_kits import grupo_do_pedido
     return dict(pedido=pedido, compra_kit=grupo_do_pedido(pedido),
                 pubkey=pubkey, pix_pendente=pix_pendente,
-                pix=pix, erros=erros or None, em_teste=_em_teste())
+                pix=pix, erros=erros or None, em_teste=_em_teste(),
+                cartao_confirmando=(pedido.status == 'aguardando_pagamento'
+                                    and _cartao_confirmando(pedido)))
 
 
 @loja_bp.route('/pedido/<codigo>/pagamento', methods=['GET'])
@@ -235,7 +256,8 @@ def _cartao_confirmando(pedido):
     pagar de novo)."""
     from app.services.compra_kits import principal_do_pedido
     return any(pg.metodo == 'cartao' and pg.status == 'pendente'
-               and pg.pagarme_order_id
+               and (pg.pagarme_order_id or (pg.erro or '').startswith(
+                   loja_pagamento.PREFIXO_INCERTO))
                for pg in principal_do_pedido(pedido).pagamentos)
 
 
@@ -248,7 +270,8 @@ def _apos_tentativa_recusada(pedido, codigo, erros):
     from app.extensions import db
     db.session.refresh(pedido)
     if (pedido.status != 'aguardando_pagamento'
-            or erros == [loja_pagamento._MSG_CARTAO_EM_ANALISE]):
+            or erros in ([loja_pagamento._MSG_CARTAO_EM_ANALISE],
+                         [loja_pagamento._MSG_CARTAO_INCERTO])):
         return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
     return render_template(
         'loja/pagamento.html', **_ctx_pagamento(pedido, erros=erros)), 400

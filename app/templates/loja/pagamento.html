@@ -2,11 +2,73 @@
 
 {% block title %}Pagamento {{ pedido.codigo }} — O Pão{% endblock %}
 
+{% macro form_cartao() %}
+    <form method="POST" action="{{ url_for('loja.pedido_cartao', codigo=pedido.codigo) }}"
+          class="checkout-bloco" id="form-cartao">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="card_token" id="card_token">
+      <h2>Cartão de crédito</h2>
+      {% if not pubkey %}
+        <p class="text-muted small">
+          (Em testes — PAGARME_PUBLIC_KEY ainda não configurada. Use Pix por enquanto.)
+        </p>
+      {% else %}
+      <label>Número do cartão
+        <input type="text" id="cc-num" inputmode="numeric" autocomplete="cc-number">
+      </label>
+      <label>Nome no cartão
+        <input type="text" id="cc-nome" autocomplete="cc-name">
+      </label>
+      <div style="display:flex; gap:10px;">
+        <label style="flex:1">Validade (MM/AA)
+          <input type="text" id="cc-val" inputmode="numeric" placeholder="MM/AA" autocomplete="cc-exp">
+        </label>
+        <label style="flex:1">CVV
+          <input type="text" id="cc-cvv" inputmode="numeric" autocomplete="cc-csc">
+        </label>
+      </div>
+      <div class="billing-bloco">
+        <p class="small text-muted" style="margin:6px 0 2px;">
+          Endereço de cobrança do cartão (exigido pelo banco/antifraude):</p>
+        {# Endereço ESTRUTURADO do cliente (entrega, ou o da NF na retirada).
+           `endereco_entrega` numa retirada é "Retirada: <loja>" — ia o
+           endereço da LOJA como cobrança do cartão (auditoria 27/09/2026). #}
+        {% set bill_line = ((pedido.endereco_logradouro or '') ~ (', ' ~ pedido.endereco_numero if pedido.endereco_numero else '')) if pedido.endereco_logradouro else ('' if pedido.modo_entrega == 'retirada' else (pedido.endereco_entrega or '')) %}
+        <label>CEP de cobrança
+          <input type="text" id="bill-cep" name="bill_cep" inputmode="numeric"
+                 placeholder="00000-000"
+                 value="{{ pedido.endereco_cep or '' }}">
+        </label>
+        <label>Endereço de cobrança (rua e número)
+          <input type="text" id="bill-line" name="bill_line"
+                 placeholder="Rua, número"
+                 value="{{ bill_line }}">
+        </label>
+        <input type="hidden" id="bill-city" name="bill_city" value="{{ pedido.endereco_cidade or 'São Paulo' }}">
+        <input type="hidden" id="bill-state" name="bill_state" value="{{ pedido.endereco_uf or 'SP' }}">
+      </div>
+      <p id="cc-erro" class="frete-resultado erro"></p>
+      <button type="submit" class="btn-loja" id="btn-pagar-cartao">Pagar com cartão</button>
+      <p class="text-muted small mt-2">
+        O número do cartão NÃO passa pelo nosso servidor — vai direto para o Pagar.me.
+      </p>
+      {% endif %}
+    </form>
+{% endmacro %}
+
 {% block content %}
+{# O pedido acabou de ser criado: o carrinho fica pra trás. Sem o marcador o
+   carrinho.js "migrava" o cache do navegador de volta pra sessão e o
+   carrinho reaparecia depois da compra (auditoria 27/09/2026). #}
+<div id="limpar-carrinho" hidden></div>
 <section class="checkout-pagina">
   <h1>Pagamento</h1>
   <p class="text-muted small">
     Pedido <code>{{ pedido.codigo }}</code> —
+    {% if not compra_kit and pedido.frete_valor %}
+    Itens R$ {{ '%.2f'|format(pedido.subtotal or 0)|replace('.', ',') }}
+    + frete R$ {{ '%.2f'|format(pedido.frete_valor)|replace('.', ',') }} =
+    {% endif %}
     Total <strong>R$ {{ '%.2f'|format(compra_kit.valor_total if compra_kit else pedido.valor_total)|replace('.', ',') }}</strong>
   </p>
   {% if compra_kit %}{% include 'loja/_agenda_kit.html' %}{% endif %}
@@ -21,6 +83,11 @@
   {% if pedido.status != 'aguardando_pagamento' %}
   <div class="checkout-bloco"><p>Este pedido já foi pago ou encerrado.
     <a href="{{ url_for('loja.pedido_confirmado', codigo=pedido.codigo) }}">Acompanhe suas entregas</a>.</p></div>
+  {% elif cartao_confirmando %}
+  <div class="checkout-bloco"><p><strong>O banco está confirmando o seu
+    pagamento com cartão.</strong> Não é preciso pagar de novo — você recebe um
+    e-mail quando ele for confirmado.
+    <a href="{{ url_for('loja.pedido_confirmado', codigo=pedido.codigo) }}">Acompanhar o pedido</a>.</p></div>
   {% elif pix %}
     <!-- Pix já gerado: QR (gerado no servidor) + copia-e-cola -->
     <div class="checkout-bloco pix-bloco">
@@ -37,12 +104,31 @@
       <button type="button" id="copiar-pix" class="btn-loja-secundario">Copiar código</button>
       {% endif %}
       <p class="aviso-comprar mt-2">
+        {% if pix.expirado %}
+        Este código Pix <strong>venceu</strong>. Gere um novo abaixo ou pague com
+        cartão.
+        {% else %}
         Assim que o pagamento for compensado, atualizamos o pedido.
         {% if pix.expira_em %}
         O código expira em {{ pix.expira_em.strftime('%H:%M') }}.
         {% endif %}
+        {% endif %}
       </p>
+      {% if pix.expirado %}
+      <form method="POST" action="{{ url_for('loja.pedido_pix', codigo=pedido.codigo) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn-loja">Gerar novo código Pix</button>
+      </form>
+      {% endif %}
     </div>
+    {# Trocar de forma de pagamento depois de gerar o Pix (auditoria
+       27/09/2026 — antes a tela prendia o cliente ao QR). O servidor cancela
+       o Pix no Pagar.me antes de cobrar o cartão, e recusa se ele já tiver
+       sido pago. #}
+    <details class="checkout-bloco">
+      <summary>Prefere pagar com cartão?</summary>
+      {{ form_cartao() }}
+    </details>
     <script>
       var btnCopiar = document.getElementById('copiar-pix');
       if (btnCopiar) {
@@ -75,53 +161,7 @@
       <button type="submit" class="btn-loja">Gerar Pix</button>
     </form>
 
-    <form method="POST" action="{{ url_for('loja.pedido_cartao', codigo=pedido.codigo) }}"
-          class="checkout-bloco" id="form-cartao">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="card_token" id="card_token">
-      <h2>Cartão de crédito</h2>
-      {% if not pubkey %}
-        <p class="text-muted small">
-          (Em testes — PAGARME_PUBLIC_KEY ainda não configurada. Use Pix por enquanto.)
-        </p>
-      {% else %}
-      <label>Número do cartão
-        <input type="text" id="cc-num" inputmode="numeric" autocomplete="cc-number">
-      </label>
-      <label>Nome no cartão
-        <input type="text" id="cc-nome" autocomplete="cc-name">
-      </label>
-      <div style="display:flex; gap:10px;">
-        <label style="flex:1">Validade (MM/AA)
-          <input type="text" id="cc-val" inputmode="numeric" placeholder="MM/AA" autocomplete="cc-exp">
-        </label>
-        <label style="flex:1">CVV
-          <input type="text" id="cc-cvv" inputmode="numeric" autocomplete="cc-csc">
-        </label>
-      </div>
-      <div class="billing-bloco">
-        <p class="small text-muted" style="margin:6px 0 2px;">
-          Endereço de cobrança do cartão (exigido pelo banco/antifraude):</p>
-        <label>CEP de cobrança
-          <input type="text" id="bill-cep" name="bill_cep" inputmode="numeric"
-                 placeholder="00000-000"
-                 value="{{ pedido.endereco_cep or '' }}">
-        </label>
-        <label>Endereço de cobrança (rua e número)
-          <input type="text" id="bill-line" name="bill_line"
-                 placeholder="Rua, número"
-                 value="{{ pedido.endereco_entrega or '' }}">
-        </label>
-        <input type="hidden" id="bill-city" name="bill_city" value="São Paulo">
-        <input type="hidden" id="bill-state" name="bill_state" value="SP">
-      </div>
-      <p id="cc-erro" class="frete-resultado erro"></p>
-      <button type="submit" class="btn-loja" id="btn-pagar-cartao">Pagar com cartão</button>
-      <p class="text-muted small mt-2">
-        O número do cartão NÃO passa pelo nosso servidor — vai direto para o Pagar.me.
-      </p>
-      {% endif %}
-    </form>
+    {{ form_cartao() }}
     {% endif %}
 
   <a href="{{ url_for('loja.pedido_confirmado', codigo=pedido.codigo) }}"

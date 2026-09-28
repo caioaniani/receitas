@@ -103,6 +103,17 @@ _MSG_GATEWAY_INDISPONIVEL = (
     'de novo em instantes.')
 
 
+# Cobrança de cartão cuja criação terminou sem resposta (timeout/5xx): a
+# order pode existir e o cartão pode ter sido cobrado. A tentativa fica
+# 'pendente' com este prefixo em `erro` até o gateway esclarecer — ou até
+# `_JANELA_INCERTA` sem webhook, quando conta como não criada.
+PREFIXO_INCERTO = 'resposta incerta do Pagar.me'
+_JANELA_INCERTA_MIN = 10
+_MSG_CARTAO_INCERTO = (
+    'Não conseguimos confirmar com o banco se o pagamento com cartão passou. '
+    'Não tente de novo agora: aguarde alguns minutos — se ele foi aprovado, '
+    'a página do pedido mostra a confirmação e você recebe um e-mail.')
+
 _MSG_PIX_ANTERIOR_ESTORNADO = (
     'O Pix gerado antes foi pago no mesmo instante em que você trocou a forma '
     'de pagamento, e o banco já está devolvendo esse valor. Confira seu '
@@ -117,6 +128,8 @@ def _consultar_tentativa(pag):
     order (ex.: troca de ambiente) — conta como encerrada, com aviso ao
     dono, pra não prender o pedido pra sempre."""
     if not pag.pagarme_order_id:
+        if (pag.erro or '').startswith(PREFIXO_INCERTO):
+            return _consultar_tentativa_incerta(pag)
         return 'encerrado'
     consulta = pagarme.consultar_order(pag.pagarme_order_id)
     if not consulta.get('ok'):
@@ -141,6 +154,40 @@ def _consultar_tentativa(pag):
             or consulta.get('charge_status') in encerrados):
         return 'encerrado'
     return 'pendente'
+
+
+def _consultar_tentativa_incerta(pag):
+    """Tentativa sem id de order porque a criação terminou sem resposta:
+    procura as orders do pedido no gateway pelo código. Paga → adota o id e
+    devolve 'pago'; viva → 'pendente'; nenhuma viva → 'encerrado'. Sem
+    resposta do gateway: dentro da janela devolve None (na dúvida não cobra
+    de novo); passada a janela sem webhook, conta como não criada."""
+    from datetime import timedelta
+    pedido = pag.pedido
+    busca = pagarme.buscar_orders_por_codigo(pedido.codigo)
+    if not busca.get('ok'):
+        if pag.criado_em and agora() - pag.criado_em > timedelta(
+                minutes=_JANELA_INCERTA_MIN):
+            return 'encerrado'
+        return None
+    conhecidas = {p.pagarme_order_id for p in pedido.pagamentos
+                  if p.pagarme_order_id and p.id != pag.id}
+    novas = [o for o in busca.get('orders') or []
+             if o.get('id') and o['id'] not in conhecidas]
+    for o in novas:
+        if o.get('pago'):
+            pag.pagarme_order_id = o['id']
+            pag.pagarme_charge_id = o.get('charge_id')
+            return 'pago'
+    encerrados = ('failed', 'canceled', 'cancelled', 'refunded', 'voided',
+                  'not_authorized', 'chargedback')
+    for o in novas:
+        if (o.get('status') not in encerrados
+                and o.get('charge_status') not in encerrados):
+            pag.pagarme_order_id = o['id']
+            pag.pagarme_charge_id = o.get('charge_id')
+            return 'pendente'
+    return 'encerrado'
 
 
 def _confirmar_pelo_gateway(pedido, pag):
@@ -313,7 +360,10 @@ def iniciar_pix(pedido, expira_em_min=30):
         pag.pagarme_order_id = res.get('order_id')
         pag.pagarme_charge_id = res.get('charge_id')
         db.session.commit()
-        return None, [res.get('erro') or 'Erro ao gerar Pix']
+        # O motivo técnico fica em `pag.erro` (admin); o cliente vê texto
+        # claro (auditoria 27/09/2026).
+        return None, ['Não foi possível gerar o Pix agora. Tente de novo em '
+                      'instantes ou pague com cartão.']
 
     pag.pagarme_order_id = res.get('order_id')
     pag.pagarme_charge_id = res.get('charge_id')
@@ -345,8 +395,18 @@ def iniciar_cartao(pedido, card_token, parcelas=1, billing=None):
     db.session.add(pag)
     db.session.flush()
 
-    res = pagarme.criar_pedido_cartao(pedido, card_token, parcelas=parcelas,
-                                      billing=billing)
+    res = pagarme.criar_pedido_cartao(
+        pedido, card_token, parcelas=parcelas, billing=billing,
+        idempotency_key=f'{pedido.codigo}-{pag.id}')
+    if not res.get('ok') and res.get('incerto'):
+        # Sem resposta do gateway: a cobrança pode ter passado. NÃO é recusa
+        # — a tentativa fica pendente e nova cobrança é barrada até o
+        # gateway esclarecer (`_consultar_tentativa_incerta`).
+        pag.erro = f'{PREFIXO_INCERTO}: {res.get("erro")}'[:500]
+        db.session.commit()
+        logger.warning('Pedido %s: cartão sem resposta do Pagar.me (%s)',
+                       pedido.codigo, res.get('erro'))
+        return None, [_MSG_CARTAO_INCERTO]
     if not res.get('ok'):
         # DUAS audiências: o ADMIN vê o motivo técnico real (do Pagar.me /
         # emissor, ex: "Transação não autorizada... (código 1000)"); o CLIENTE
