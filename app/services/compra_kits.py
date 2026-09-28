@@ -66,6 +66,145 @@ def _snapshot_composicao(itens):
     return _assinatura_itens(modelos)
 
 
+class FormularioJaUsado(Exception):
+    """O nonce do formulário já gerou uma compra que não pode ser devolvida.
+
+    Acontece quando o cliente volta pelo histórico ou usa duas abas e envia
+    o formulário ALTERADO (outra data, suco, adicional, endereço, e-mail), ou
+    quando a compra do nonce já foi paga, cancelada ou expirou. Devolver a
+    compra antiga em silêncio cobraria algo diferente do que o cliente acabou
+    de escolher. A rota troca o nonce da sessão e reapresenta o formulário
+    com os dados enviados e esta mensagem.
+    """
+
+    def __init__(self, codigo):
+        self.codigo = codigo
+        super().__init__(
+            f'Este formulário já gerou a compra {codigo}. Confira os dados e '
+            'envie de novo para criar uma nova compra.')
+
+
+def _valores_do_campo(form, campo):
+    return (form.getlist(campo) if hasattr(form, 'getlist') else
+            [form[campo]] if campo in form else [])
+
+
+def _ler_escolhas(kit, form):
+    """Suco e opções de cada grupo enviados pelo cliente: (suco_id, escolhas, erros)."""
+    suco_id = None
+    valores_suco = _valores_do_campo(form, 'suco_id')
+    if kit.sucos:
+        if (len(valores_suco) != 1 or not isinstance(valores_suco[0], str)
+                or not re.fullmatch(r'[1-9][0-9]{0,9}', valores_suco[0])):
+            return None, None, ['Escolha um dos sucos disponíveis neste kit.']
+        suco_id = int(valores_suco[0])
+    elif valores_suco:
+        return None, None, ['Este kit não oferece escolha de suco.']
+    grupos = {opcao.grupo for opcao in kit.opcoes}
+    campos_escolha = {f'escolha_{grupo}' for grupo in grupos}
+    if any(campo.startswith('escolha_') and campo not in campos_escolha for campo in form):
+        return None, None, ['Este kit não oferece uma das escolhas recebidas. Reabra o kit.']
+    escolhas = {}
+    for grupo in grupos:
+        valores = _valores_do_campo(form, f'escolha_{grupo}')
+        if (len(valores) != 1 or not isinstance(valores[0], str)
+                or not re.fullmatch(r'(receita|produto):[1-9][0-9]{0,9}', valores[0])):
+            return None, None, ['Escolha uma opção de cada grupo disponível neste kit.']
+        escolhas[grupo] = valores[0]
+    return suco_id, escolhas, []
+
+
+def _texto(valor):
+    return ' '.join(str(valor or '').split()).casefold()
+
+
+def _itens_agregados(itens):
+    """(kind, id, qtd, comp) → multiconjunto somado, independente da ordem das linhas."""
+    agregados = {}
+    for kind, item_id, qtd, comp in itens:
+        chave = (kind, int(item_id or 0),
+                 tuple(sorted((int(k), int(v)) for k, v in (comp or {}).items())))
+        agregados[chave] = agregados.get(chave, 0) + int(qtd or 0)
+    return sorted(agregados.items())
+
+
+def _contato_normalizado(nome, email, telefone, documento, cep, logradouro, numero,
+                         complemento, bairro, cidade, uf):
+    from app.services.fiscal_online import digitos
+    return (_texto(nome), _texto(email), digitos(telefone), digitos(documento),
+            digitos(cep), _texto(logradouro), _texto(numero), _texto(complemento),
+            _texto(bairro), _texto(cidade), _texto(str(uf or '').strip().upper()[:2]))
+
+
+def _envio_normalizado(kit, form, agenda):
+    """O que o cliente escolheu neste envio, sem cotação de frete nem rede.
+
+    None quando o envio nem chega a ser uma escolha válida: para comparar com
+    uma compra existente isso conta como "diferente" (nunca como igual).
+    """
+    from app.services import kits_adicionais, kits_cafe
+    suco_id, escolhas, erros = _ler_escolhas(kit, form)
+    if erros:
+        return None
+    try:
+        raw = kits_cafe.itens_do_kit(kit, suco_id, escolhas)
+    except ValueError:
+        return None
+    adicionais, erros = kits_adicionais.ler(form, conferir_catalogo=False)
+    if erros:
+        return None
+    itens = _itens_agregados((it['kind'], it['id'], it['qtd'], it.get('comp'))
+                             for it in [*raw, *adicionais])
+    nome = f"{(form.get('nome') or '').strip()} {(form.get('sobrenome') or '').strip()}"
+    contato = _contato_normalizado(
+        nome, form.get('email'), form.get('telefone'), form.get('cpf'), form.get('cep'),
+        form.get('logradouro'), form.get('numero'), form.get('complemento'),
+        form.get('bairro'), form.get('cidade'), form.get('uf'))
+    datas = tuple((item['data'], item['janela'].strip()) for item in agenda)
+    return datas, itens, contato
+
+
+def _compra_normalizada(compra):
+    """A mesma forma de `_envio_normalizado`, lida do que foi gravado na compra."""
+    from app.services.fiscal_online import documento
+    pedidos = [entrega.pedido for entrega in reler_entregas(compra)]
+    if not pedidos:
+        return None
+    itens_por_entrega = [
+        _itens_agregados((it.kind, it.receita_id if it.kind == 'receita' else it.produto_id,
+                          it.quantidade,
+                          {c.produto_item_id: c.quantidade for c in it.componentes} or None)
+                         for it in pedido.itens)
+        for pedido in pedidos]
+    if any(itens != itens_por_entrega[0] for itens in itens_por_entrega):
+        return None
+    principal = compra.pedido_principal
+    contato = _contato_normalizado(
+        principal.nome_cliente, principal.email_cliente, principal.telefone_cliente,
+        documento(principal), principal.endereco_cep, principal.endereco_logradouro,
+        principal.endereco_numero, principal.endereco_complemento,
+        principal.endereco_bairro, principal.endereco_cidade, principal.endereco_uf)
+    datas = tuple(sorted((p.data_entrega.isoformat() if p.data_entrega else '',
+                          (p.janela_entrega or '').strip()) for p in pedidos))
+    return datas, itens_por_entrega[0], contato
+
+
+def _pode_devolver_existente(compra, kit, form, agenda, base):
+    """Só o duplo clique legítimo recebe de volta a compra do mesmo nonce.
+
+    Exige o MESMO conteúdo e uma compra que ainda aguarda pagamento dentro do
+    prazo. Formulário alterado (histórico, duas abas) ou compra encerrada
+    precisa de um nonce novo para virar uma compra nova.
+    """
+    if compra.pago_em is not None or compra.expira_em <= base:
+        return False
+    pedidos = [entrega.pedido for entrega in compra.entregas]
+    if not pedidos or any(p.pago_em or p.status != 'aguardando_pagamento' for p in pedidos):
+        return False
+    envio = _envio_normalizado(kit, form, agenda)
+    return envio is not None and envio == _compra_normalizada(compra)
+
+
 def validar_agenda(agenda):
     if not isinstance(agenda, list) or not 1 <= len(agenda) <= DIAS_AGENDA_KITS:
         return [], ['Escolha entre 1 e 31 datas de entrega. Cada data corresponde a um kit.']
