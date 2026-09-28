@@ -502,3 +502,91 @@ def test_telas_recusam_preco_com_3_casas(app, owner_user):
     assert 'casas decimais' in r.get_data(as_text=True)
     db.session.expire_all()
     assert db.session.get(type(p), p.id).preco_site == 20.0
+
+
+# ── 37/42. CEP validado; esgotado conferido nas datas do calendário ─────
+
+_FORM_RETIRADA = {'nome': 'Maria', 'sobrenome': 'Silva', 'email': 'm@x.com',
+                  'cpf': '52998224725', 'aceite_lgpd': '1',
+                  'modo_entrega': 'retirada', 'janela_entrega': '08:00–09:00',
+                  'cep': '04077-000', 'logradouro': 'Rua X', 'numero': '10',
+                  'bairro': 'Moema', 'cidade': 'São Paulo', 'uf': 'SP'}
+
+
+def _loja_site(db):
+    from app.models import AppConfig, Loja
+    loja = Loja(nome='Brooklin', endereco='Rua Y, 1', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    AppConfig.set('loja_site_estoque_id', loja.id)
+    return loja
+
+
+def test_item_planejado_so_no_ultimo_dia_da_agenda_e_aceito(app):
+    from app.extensions import db
+    from app.services import loja_checkout, loja_plano_dia
+    from app.utils import agora, hoje
+    loja = _loja_site(db)
+    p = _produto(db, nome='Panettone', preco=90.0)
+    datas = loja_checkout.datas_disponiveis('retirada', base=agora())
+    ultimo = datas[-1]
+    for i in range(0, 14):
+        loja_plano_dia.definir('produto', p.id, hoje() + timedelta(days=i), 0)
+    loja_plano_dia.definir('produto', p.id, ultimo, 20)
+    ped, erros = loja_checkout.criar_pedido(
+        {**_FORM_RETIRADA, 'loja_id': str(loja.id),
+         'data_entrega': ultimo.isoformat()},
+        [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=agora())
+    assert erros == [] and ped is not None
+
+
+def test_cep_longo_e_recusado_com_mensagem(app):
+    from app.extensions import db
+    from app.models import PedidoOnline
+    from app.services import loja_checkout
+    from app.utils import agora
+    loja = _loja_site(db)
+    p = _produto(db)
+    dia = loja_checkout.datas_disponiveis('retirada', base=agora())[2]
+    ped, erros = loja_checkout.criar_pedido(
+        {**_FORM_RETIRADA, 'loja_id': str(loja.id), 'cep': '04077-000 / 04078-100',
+         'data_entrega': dia.isoformat()},
+        [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=agora())
+    assert ped is None
+    assert 'Informe um CEP válido (8 números).' in erros
+    assert PedidoOnline.query.count() == 0
+
+
+def test_cep_sem_hifen_e_gravado_no_formato_da_mascara(app):
+    from app.extensions import db
+    from app.services import loja_checkout
+    from app.utils import agora
+    loja = _loja_site(db)
+    p = _produto(db)
+    dia = loja_checkout.datas_disponiveis('retirada', base=agora())[2]
+    ped, erros = loja_checkout.criar_pedido(
+        {**_FORM_RETIRADA, 'loja_id': str(loja.id), 'cep': '04077000',
+         'data_entrega': dia.isoformat()},
+        [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=agora())
+    assert erros == []
+    assert ped.endereco_cep == '04077-000'
+
+
+def test_edicao_admin_recusa_campo_maior_que_a_coluna(app, owner_user):
+    from app.extensions import db
+    app.config['WTF_CSRF_ENABLED'] = False
+    app.config['LOJA_HOSTS'] = 'opao.online'
+    ped = _pedido(db, _produto(db), modo='agendada', endereco_entrega='Rua A, 10')
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(owner_user.id)
+        s['_fresh'] = True
+    r = c.post(f'/admin/loja-online/pedidos/{ped.codigo}/editar', data={
+        'nome_cliente': 'Maria', 'email_cliente': 'm@x.com',
+        'modo_entrega': 'agendada', 'endereco_bairro': 'B' * 150,
+        'endereco_cep': '0407'}, follow_redirects=True)
+    h = r.get_data(as_text=True)
+    assert 'Bairro: no máximo 100 caracteres.' in h
+    assert 'CEP inválido (8 números).' in h
+    db.session.expire_all()
+    assert db.session.get(type(ped), ped.id).endereco_bairro is None

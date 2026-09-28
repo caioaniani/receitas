@@ -6057,6 +6057,31 @@ def _loja_online_pedido_editar(codigo):
             data_entrega = _date.fromisoformat(data_str)
         except ValueError:
             erros.append('Data de entrega inválida (use o seletor).')
+    # Tamanhos das colunas: texto maior que a coluna virava DataError/500 no
+    # Postgres ao salvar (auditoria 27/09/2026) — recusa com o campo.
+    limites = {'nome_cliente': ('Nome do cliente', 150),
+               'email_cliente': ('E-mail do cliente', 200),
+               'telefone_cliente': ('Telefone do cliente', 30),
+               'nome_destinatario': ('Nome de quem recebe', 150),
+               'telefone_destinatario': ('Telefone de quem recebe', 30),
+               'janela_entrega': ('Janela de entrega', 40)}
+    if modo != 'retirada':
+        limites.update({
+            'endereco_logradouro': ('Logradouro', 200),
+            'endereco_numero': ('Número', 20),
+            'endereco_complemento': ('Complemento', 100),
+            'endereco_bairro': ('Bairro', 100),
+            'endereco_cidade': ('Cidade', 100)})
+    for campo, (rotulo, maximo) in limites.items():
+        if len(_s(campo)) > maximo:
+            erros.append(f'{rotulo}: no máximo {maximo} caracteres.')
+    cep_edit = None
+    if modo != 'retirada' and _s('endereco_cep'):
+        cep_dig = ''.join(c for c in _s('endereco_cep') if '0' <= c <= '9')
+        if len(cep_dig) != 8:
+            erros.append('CEP inválido (8 números).')
+        else:
+            cep_edit = f'{cep_dig[:5]}-{cep_dig[5:]}'
     if compra and (modo != p.modo_entrega or data_entrega != p.data_entrega
                    or (_s('janela_entrega') or None) != p.janela_entrega):
         erros.append('A agenda de um kit está vinculada à capacidade de produção. '
@@ -6098,7 +6123,7 @@ def _loja_online_pedido_editar(codigo):
             p.loja_retirada_id = None
     else:
         p.loja_retirada_id = None
-        p.endereco_cep = _s('endereco_cep') or None
+        p.endereco_cep = cep_edit
         p.endereco_logradouro = _s('endereco_logradouro') or None
         p.endereco_numero = _s('endereco_numero') or None
         p.endereco_complemento = _s('endereco_complemento') or None

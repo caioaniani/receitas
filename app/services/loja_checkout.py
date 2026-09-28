@@ -808,11 +808,16 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
         erros.append('Informe o telefone de quem vai receber: o entregador '
                      'precisa falar com essa pessoa na hora da entrega.')
 
-    if dias_disponibilidade is None:
-        itens, avisos = montar_itens(itens_raw)
-    else:
-        itens, avisos = montar_itens(itens_raw, dias_disponibilidade=dias_disponibilidade,
-                                    base=base)
+    # O "esgotado duro" é conferido nas MESMAS datas que o calendário do
+    # checkout oferece (DIAS_AGENDA a partir da 1ª data, com o D+2 da
+    # encomenda) — antes eram os 14 dias fixos da vitrine e um item planejado
+    # só para o último dia da agenda era aceito pela tela e removido pelo
+    # servidor (auditoria 27/09/2026). A data escolhida é conferida depois.
+    itens, avisos = montar_itens(
+        itens_raw,
+        dias_disponibilidade=(DIAS_AGENDA if dias_disponibilidade is None
+                              else dias_disponibilidade),
+        base=base)
     if itens_estritos:
         erros.extend(avisos)
     if not itens:
@@ -832,7 +837,17 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     # ── Por modo: endereço/loja + frete (servidor manda) ───────────────
     loja_retirada_id = None
     endereco_entrega = None
-    endereco_cep = (form.get('cep') or '').strip() or None
+    # CEP normalizado (8 números -> 'NNNNN-NNN', o formato da máscara do
+    # front) ANTES do frete e do flush: a coluna é String(9) e um POST com
+    # '04077-000 (portaria B)' virava DataError/500 no Postgres (auditoria
+    # 27/09/2026, mesma classe do incidente de 01/09/2026).
+    cep_bruto = (form.get('cep') or '').strip()
+    cep_digitos = ''.join(c for c in cep_bruto if '0' <= c <= '9')
+    cep_invalido = bool(cep_bruto) and len(cep_digitos) != 8
+    endereco_cep = (f'{cep_digitos[:5]}-{cep_digitos[5:]}'
+                    if cep_bruto and not cep_invalido else None)
+    if cep_invalido:
+        erros.append('Informe um CEP válido (8 números).')
     distancia_km = None
     frete_valor = Decimal('0.00')
     # Endereco ESTRUTURADO (snapshot pra NF-e). So a entrega preenche; a
@@ -880,7 +895,7 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
         # fail-open (CEP fora do ar / CEP sem rua) — sem isso o pedido pago
         # ficava com a NF travada pra sempre (guard da emissão) e a retirada
         # não tem editor de endereço no admin (achado de revisão 20/07/2026).
-        if not endereco_cep:
+        if not endereco_cep and not cep_invalido:
             erros.append('Informe o CEP para a nota fiscal.')
         if not logradouro:
             erros.append('Informe o logradouro (rua/avenida) para a nota fiscal.')
@@ -922,7 +937,7 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
         logradouro = (form.get('logradouro') or '').strip()
         numero = (form.get('numero') or '').strip()
         cidade = (form.get('cidade') or '').strip()
-        if not endereco_cep:
+        if not endereco_cep and not cep_invalido:
             erros.append('Informe o CEP de entrega.')
         if not logradouro:
             erros.append('Informe o logradouro (rua/avenida).')
@@ -963,14 +978,17 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
             geo = f'{geo_txt}, {endereco_cep}' if geo_txt else endereco_cep
         _contato = ' · '.join(p for p in (
             f'{nome_dado} {sobrenome_dado}'.strip(), telefone, email) if p)
-        valor, dist, end_norm, erro_frete = (frete_validado if frete_validado is not None
-                                            else _frete_para(modo, geo, base=base, contato=_contato))
-        if erro_frete:
-            erros.append(erro_frete)
-        else:
-            frete_valor = valor
-            distancia_km = dist
-            endereco_entrega = endereco_txt or end_norm
+        # CEP já recusado: não gasta cotação (nem Google) com ele.
+        if not cep_invalido:
+            valor, dist, end_norm, erro_frete = (
+                frete_validado if frete_validado is not None
+                else _frete_para(modo, geo, base=base, contato=_contato))
+            if erro_frete:
+                erros.append(erro_frete)
+            else:
+                frete_valor = valor
+                distancia_km = dist
+                endereco_entrega = endereco_txt or end_norm
 
     # ── Data + janela ──────────────────────────────────────────────────
     data_str = (form.get('data_entrega') or '').strip()

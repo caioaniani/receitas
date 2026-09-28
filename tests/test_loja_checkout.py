@@ -241,7 +241,8 @@ def test_criar_pedido_agendada_grava_endereco_estruturado(app):
         assert pedido.endereco_bairro == 'Centro'
         assert pedido.endereco_cidade == 'Santos'
         assert pedido.endereco_uf == 'SP'   # normalizado pra maiúsculo
-        assert pedido.endereco_cep == '11010000'
+        # Normalizado no formato da máscara do checkout (auditoria 27/09/2026).
+        assert pedido.endereco_cep == '11010-000'
 
 
 def test_criar_pedido_retirada_coleta_endereco_pra_nf(app):
