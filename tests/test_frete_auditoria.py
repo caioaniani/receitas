@@ -507,10 +507,52 @@ def test_config_mapeia_as_envs_do_frete(monkeypatch):
     assert cfg['FRETE_SENSOR'] == '0'
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'FRETE_GOOGLE_MAX_DIA_PREVIEW ainda não está declarada no config.py '
-    '(arquivo fora do escopo deste bloco). Ao declará-la, REMOVER este '
-    'xfail — o strict faz o teste falhar como XPASS para ninguém esquecer.'))
 def test_config_mapeia_o_sub_teto_do_preview(monkeypatch):
     monkeypatch.setenv('FRETE_GOOGLE_MAX_DIA_PREVIEW', '40%')
     assert _config_recarregado().get('FRETE_GOOGLE_MAX_DIA_PREVIEW') == '40%'
+
+
+# ── Integração: quem cota anonimamente usa o canal preview ─────────────────
+
+def test_api_frete_do_checkout_cota_no_canal_preview(app, monkeypatch):
+    """A cotação anônima do navegador (/loja/api/frete) é o canal que o
+    sub-teto existe pra conter — sem passar o canal, ela comia a vaga do
+    POST do checkout."""
+    app.config['LOJA_HOSTS'] = 'localhost'
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    vistos = []
+
+    def _consultar(geo, *, canal=frete.CANAL_CHECKOUT):
+        vistos.append(canal)
+        return {'ok': True, 'fora_area': False, 'distancia_km': 2.0,
+                'valor': 10.0, 'fonte': 'google', 'endereco': geo}
+
+    with patch('app.blueprints.loja.routes.frete_svc.consultar_frete',
+               side_effect=_consultar):
+        resp = app.test_client().post(
+            '/loja/api/frete', json={'endereco': 'Rua A, 10', 'cep': '04077-000'})
+    assert resp.status_code == 200
+    assert vistos == [frete.CANAL_PREVIEW]
+
+
+def test_bot_cota_frete_no_canal_preview(app):
+    """O bot responde cliente anônimo a cada mensagem — mesma cota do
+    preview, nunca a do checkout."""
+    from app.services import chatbot
+    vistos = []
+
+    def _consultar(geo, *, canal=frete.CANAL_CHECKOUT):
+        vistos.append(canal)
+        return {'ok': True, 'fora_area': False, 'distancia_km': 2.0}
+
+    with patch('app.services.frete.consultar_frete', side_effect=_consultar):
+        chatbot._executar_tool('consultar_frete', {'endereco_ou_cep': 'Moema'})
+    assert vistos == [frete.CANAL_PREVIEW]
+
+
+def test_sub_teto_em_percentual_absurdo_nao_derruba_a_cotacao(app):
+    """'inf%' no painel do Railway estourava OverflowError fora do except e
+    a cotação inteira caía; config torta vira o padrão com WARNING."""
+    app.config['FRETE_GOOGLE_MAX_DIA'] = '100'
+    app.config['FRETE_GOOGLE_MAX_DIA_PREVIEW'] = 'inf%'
+    assert frete.tetos_google() == (100, 60)

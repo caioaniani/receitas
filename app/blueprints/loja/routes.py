@@ -1246,7 +1246,7 @@ def api_frete():
         geo = f'{endereco}, {cep}' if endereco else cep
     if not geo:
         return jsonify(ok=False, erro='Informe o endereço ou o CEP.'), 400
-    res = frete_svc.consultar_frete(geo)
+    res = frete_svc.consultar_frete(geo, canal=frete_svc.CANAL_PREVIEW)
     from app.services import frete_sensor, loja_alerta
     if not res.get('ok'):
         codigo = res.get('erro')

@@ -180,6 +180,9 @@ class Config:
     # Spotify; achado da auditoria do checkout de 27/09/2026.
     FRETE_GOOGLE = os.environ.get('FRETE_GOOGLE', '1')
     FRETE_GOOGLE_MAX_DIA = os.environ.get('FRETE_GOOGLE_MAX_DIA', '500')
+    # Sub-teto da cotação anônima (/loja/api/frete e bot): número ('200') ou
+    # percentual do teto total ('60%'). Vazio = 60% (frete.tetos_google).
+    FRETE_GOOGLE_MAX_DIA_PREVIEW = os.environ.get('FRETE_GOOGLE_MAX_DIA_PREVIEW', '')
     FRETE_SENSOR = os.environ.get('FRETE_SENSOR', '1')
     # Coordenadas da loja matriz — origem das rotas de entrega
     ROTA_ORIGEM_LAT = os.environ.get('ROTA_ORIGEM_LAT', '')

@@ -316,7 +316,7 @@ def tetos_google():
                 preview = int(teto * pct / 100)
             else:
                 preview = int(bruto)
-        except ValueError:
+        except (ValueError, OverflowError):
             logger.warning('frete: FRETE_GOOGLE_MAX_DIA_PREVIEW=%r ilegível — '
                            'usando %s%% do teto', bruto, _PREVIEW_PADRAO_PCT)
             preview = padrao

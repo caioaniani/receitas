@@ -2020,9 +2020,11 @@ def _executar_tool(nome, inp, *, telefone_contato=None,
             return bot_tools.gerar_link_carrinho(inp.get('itens') or [])
         if nome == 'consultar_frete':
             from app.services import frete
+            # Cotação do bot = anônima: conta no sub-teto do preview do
+            # Google, nunca come a vaga do checkout.
             return frete.consultar_frete(
                 inp.get('endereco_ou_cep') or inp.get('cep')
-                or inp.get('endereco') or '')
+                or inp.get('endereco') or '', canal=frete.CANAL_PREVIEW)
         if nome == 'consultar_notas':
             from app.services import notas as notas_svc
             achadas = notas_svc.buscar(
