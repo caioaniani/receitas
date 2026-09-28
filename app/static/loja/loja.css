@@ -1392,3 +1392,15 @@ body.modal-instalar-aberto { overflow: hidden; }
   .cookie-banner-acoes { grid-template-columns: auto auto; }
 }
 .cookie-banner-acoes .btn-loja { padding: 8px 16px; font-size: 14px; }
+
+/* Avisos do servidor (flash) — loja/_base.html (27/09/2026). */
+.loja-avisos { max-width: 720px; margin: 16px auto 0; padding: 0 16px; }
+.loja-aviso {
+  margin: 0 0 8px; padding: 10px 14px; border-radius: 10px;
+  background: #fffdf3; border: 1px solid #e6cf7a; color: #6b5510;
+  font-size: 14px; line-height: 1.45;
+}
+.loja-aviso-danger, .loja-aviso-error {
+  background: #fff5f5; border-color: #f1a9a9; color: #8a1f1f;
+}
+.loja-aviso-success { background: #f3fbf5; border-color: #9fd6ae; color: #1f5b31; }

@@ -215,6 +215,18 @@
 </script>
 
 <main>
+  {# Avisos do servidor (flash). A loja nunca os mostrava: "digite EXCLUIR",
+     "nota fiscal indisponível" e o aviso de pedido em andamento ficavam
+     presos na sessão (auditoria 27/09/2026). #}
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+  {% if msgs %}
+  <div class="loja-avisos" role="status">
+    {% for cat, msg in msgs %}
+    <p class="loja-aviso loja-aviso-{{ cat }}">{{ msg }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
   {% block content %}{% endblock %}
 </main>
 
