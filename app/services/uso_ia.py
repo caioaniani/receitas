@@ -14,8 +14,9 @@ Dois cuidados deliberados no `registrar`:
   derrubar o vigia, o bot ou o OCR.
 
 Precos em USD por 1M tokens (skill claude-api; Sonnet 5.5 / Opus 5.5 / Fable
-pela tabela de 25/09/2026). Cache read = 0.1x do input; cache write (5min) =
-1.25x do input — formula oficial da Anthropic.
+pela tabela de 25/09/2026). Cache read = 0.1x do input, exceto os modelos com
+preco de cache read proprio em `_CACHE_READ` (Opus 5.5 e Fable 5.1 cobram
+menos); cache write (5min) = 1.25x do input.
 """
 import logging
 from datetime import timedelta
@@ -41,12 +42,13 @@ _PRECOS = {
     # atual da Anthropic.
     'claude-sonnet-5-5': (Decimal('2'), Decimal('10')),
     'claude-opus-5-5': (Decimal('4'), Decimal('20')),
+    'claude-fable-5-1': (Decimal('10'), Decimal('50')),
     'claude-fable-5': (Decimal('10'), Decimal('50')),
-    # Sonnet 5 (padrao de 05/08 a 28/09/2026): linha mantida como estava
-    # ($3/$15, a "tabela cheia" da nota de 05/08, superestimando de
-    # proposito). A tabela da skill de 25/09/2026 lista o Sonnet 5 a $2/$10;
-    # ajustar e decisao do dono. So afeta env que volte ao Sonnet 5.
-    'claude-sonnet-5': (Decimal('3'), Decimal('15')),
+    # Sonnet 5 (padrao de 05/08 a 28/09/2026; hoje e o modelo do fallback de
+    # recusa). Ficou em $3/$15 ate 31/08 de proposito (a nota de 05/08 tratava
+    # $2/$10 como promocao); a tabela de 25/09/2026 lista $2/$10, o mesmo
+    # preco do 5.5.
+    'claude-sonnet-5': (Decimal('2'), Decimal('10')),
     'claude-opus-5': (Decimal('5'), Decimal('25')),
     'claude-opus-4-8': (Decimal('5'), Decimal('25')),
     'claude-opus-4-7': (Decimal('5'), Decimal('25')),
@@ -55,13 +57,24 @@ _PRECOS = {
     'claude-sonnet-4-5': (Decimal('3'), Decimal('15')),
     'claude-haiku-4-5': (Decimal('1'), Decimal('5')),
 }
+# Cache read com preco proprio (USD por 1M), onde a tabela nao e 0.1x do
+# input: Opus 5.5 $0,20 (0.05x) e Fable 5.1 $0,25 (0.025x); o Fable 5 segue
+# $1 (0.1x). Sonnet 5.5 ($0,20) ja e 0.1x.
+_CACHE_READ = {
+    'claude-opus-5-5': Decimal('0.20'),
+    'claude-fable-5-1': Decimal('0.25'),
+}
 _MILHAO = Decimal('1000000')
 
 
 def _precos(modelo):
+    """(input, output, cache_read) por 1M tokens, ou None."""
     chave = ia_modelos.casar_prefixo(modelo, _PRECOS)
     # modelo desconhecido — nao da pra precificar com confianca
-    return _PRECOS[chave] if chave else None
+    if not chave:
+        return None
+    p_in, p_out = _PRECOS[chave]
+    return p_in, p_out, _CACHE_READ.get(chave, p_in / 10)
 
 
 def calcular_custo(modelo, input_t, output_t, cache_read=0, cache_create=0):
@@ -70,11 +83,11 @@ def calcular_custo(modelo, input_t, output_t, cache_read=0, cache_create=0):
     pr = _precos(modelo)
     if not pr:
         return None
-    p_in, p_out = pr
+    p_in, p_out, p_cache_read = pr
     return (
         Decimal(int(input_t or 0)) * p_in
         + Decimal(int(output_t or 0)) * p_out
-        + Decimal(int(cache_read or 0)) * p_in / 10            # cache read 0.1x
+        + Decimal(int(cache_read or 0)) * p_cache_read
         + Decimal(int(cache_create or 0)) * p_in * Decimal('1.25')  # write 1.25x
     ) / _MILHAO
 

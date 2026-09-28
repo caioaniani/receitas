@@ -487,14 +487,12 @@ def rascunho_resposta(review_pk):
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=api_key, timeout=45, max_retries=1)
-        resp = client.messages.create(
+        # sem tools; teto curto: raciocinio desligado pelo parametro que o
+        # modelo aceita (ia_modelos.criar, que registra o custo)
+        resp = ia_modelos.criar(
+            client, 'avaliacao_google',
             model=modelo, max_tokens=400,
-            # sem tools; teto curto: raciocinio desligado pelo parametro que
-            # o modelo aceita
-            **ia_modelos.opcoes_sem_raciocinio(modelo),
             messages=[{'role': 'user', 'content': prompt}])
-        from app.services import uso_ia
-        uso_ia.registrar('avaliacao_google', modelo, getattr(resp, 'usage', None))
         # Recusa: o texto parcial NUNCA vira rascunho de resposta publica.
         categoria = ia_modelos.recusa(resp)
         if categoria:

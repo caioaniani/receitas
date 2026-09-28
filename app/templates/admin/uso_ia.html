@@ -19,7 +19,8 @@
     A medição começou em <strong>25/06/2026</strong> — antes disso nada era
     registrado, então a janela só fica completa depois de acumular {{ dias }}
     dias inteiros de uso. Cálculo: tokens reais de cada chamada × preço do
-    modelo (cache já considerado a 0,1×).
+    modelo (leitura de cache pelo preço de cada modelo; tentativa recusada
+    pela IA também conta).
 </div>
 
 {% if not linhas %}

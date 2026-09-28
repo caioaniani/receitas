@@ -44,8 +44,9 @@ class _IAError(Exception):
 
 
 def _chamar(system, instrucao):
-    """Chama o modelo e devolve os dados JSON (lista/dict). Levanta _IAError
-    com mensagem amigável em qualquer falha. Custo registrado em UsoIA."""
+    """Chama o modelo e devolve (dados JSON (lista/dict), modelo que
+    respondeu). Levanta _IAError com mensagem amigável em qualquer falha.
+    Custo registrado em UsoIA."""
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
         raise _IAError('ANTHROPIC_API_KEY não configurada.')
@@ -55,21 +56,18 @@ def _chamar(system, instrucao):
         raise _IAError('biblioteca anthropic não instalada.') from e
     client = anthropic.Anthropic(api_key=api_key, timeout=120, max_retries=1)
     try:
-        resp = client.messages.create(
+        # gerador de JSON sem tools: raciocinio desligado pelo parametro que
+        # o modelo aceita (ia_modelos.criar, que registra o custo)
+        resp = ia_modelos.criar(
+            client, 'treino_ia_perguntas',
             model=MODELO, max_tokens=3000, system=system,
-            # gerador de JSON sem tools: raciocinio desligado pelo parametro
-            # que o modelo aceita
-            **ia_modelos.opcoes_sem_raciocinio(MODELO),
             messages=[{'role': 'user', 'content': instrucao}])
-        from app.services import uso_ia
-        uso_ia.registrar('treino_ia_perguntas', MODELO,
-                         getattr(resp, 'usage', None))
         ia_modelos.exigir_resposta(resp)
         bruto = ''.join(b.text for b in resp.content
                         if getattr(b, 'type', '') == 'text')
         bruto = re.sub(r'^```(?:json)?\s*|\s*```$', '', bruto.strip(),
                        flags=re.MULTILINE)
-        return json.loads(bruto)
+        return json.loads(bruto), ia_modelos.modelo_servido(resp, MODELO)
     except json.JSONDecodeError as e:
         raise _IAError('a IA devolveu resposta inválida — tente de novo.') from e
     except ia_modelos.RespostaRecusada as e:
@@ -91,13 +89,13 @@ def gerar(texto, n=5):
     instrucao = (f'Gere {n} pergunta(s) a partir deste conteúdo:\n\n'
                  f'{texto[:8000]}')
     try:
-        dados = _chamar(SYSTEM, instrucao)
+        dados, usado = _chamar(SYSTEM, instrucao)
     except _IAError as e:
         return {'erro': str(e)}
     perguntas = _sanitizar(dados)
     if not perguntas:
         return {'erro': 'a IA não retornou perguntas utilizáveis.'}
-    return {'perguntas': perguntas, 'modelo_usado': MODELO}
+    return {'perguntas': perguntas, 'modelo_usado': usado}
 
 
 def gerar_com_momento(segmentos, n=3):
@@ -114,13 +112,13 @@ def gerar_com_momento(segmentos, n=3):
     instrucao = (f'Gere {n} pergunta(s) de checkpoint a partir desta '
                  f'transcrição com tempo (segundos):\n\n{linhas}')
     try:
-        dados = _chamar(SYSTEM_MOMENTO, instrucao)
+        dados, usado = _chamar(SYSTEM_MOMENTO, instrucao)
     except _IAError as e:
         return {'erro': str(e)}
     perguntas = _sanitizar(dados, com_momento=True, momento_max=momento_max)
     if not perguntas:
         return {'erro': 'a IA não retornou perguntas utilizáveis.'}
-    return {'perguntas': perguntas, 'modelo_usado': MODELO}
+    return {'perguntas': perguntas, 'modelo_usado': usado}
 
 
 def _sanitizar(dados, com_momento=False, momento_max=None):

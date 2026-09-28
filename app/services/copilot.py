@@ -1495,27 +1495,23 @@ def interpretar(prompt_text, user, historico=None, images=None,
                                 'cache_control': {'type': 'ephemeral'}}
 
     modelo_efetivo = modelo or MODELO_DEFAULT
-    opcoes_ia = ia_modelos.opcoes_com_ferramentas(modelo_efetivo)
+    # Custo separado por canal (copilot do Slack x WhatsApp do dono — mesmo
+    # motor). ia_modelos.criar aplica os parametros do modelo, registra o
+    # custo de cada tentativa (inclusive a recusada) e faz o fallback.
+    _canal_uso = 'whatsapp' if apenas_leitura else 'slack'
     try:
-        response = client.messages.create(
+        response = ia_modelos.criar(
+            client, f'copilot_{_canal_uso}', canal=_canal_uso,
+            ferramentas=True,
             model=modelo_efetivo,
             max_tokens=4000,
             system=[{'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}}],
             tools=tools_com_cache,
             messages=messages,
-            **opcoes_ia,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception('Copilot: erro Anthropic')
         return {'tipo': 'erro', 'explicacao': f'Erro Anthropic: {exc}', 'raw': None}
-
-    # Registro de custo: separa copilot do Slack do WhatsApp do dono — mesmo
-    # motor, canais distintos. Antes da checagem de recusa: recusa tambem
-    # consome tokens.
-    _canal_uso = 'whatsapp' if apenas_leitura else 'slack'
-    from app.services import uso_ia
-    uso_ia.registrar(f'copilot_{_canal_uso}', modelo_efetivo,
-                     getattr(response, 'usage', None), canal=_canal_uso)
 
     # Recusa das salvaguardas: o conteudo vem vazio ou PARCIAL — nunca
     # executar leitura nem montar preview de escrita a partir dele.
@@ -1533,7 +1529,8 @@ def interpretar(prompt_text, user, historico=None, images=None,
     # Sonnet 5.5 o texto mais longo volta como nota de progresso num bloco
     # thinking (display 'updates'); o raciocinio em si segue escondido.
     texto_partes = ia_modelos.textos_visiveis(
-        response, progresso=ia_modelos.mostra_progresso(opcoes_ia))
+        response,
+        progresso=ia_modelos.progresso_na_resposta(response, modelo_efetivo))
 
     # Consolidacao defensiva: se Claude chamar `registrar_desperdicio` mais de
     # uma vez na mesma resposta (que era o bug antigo — handler so pegava o

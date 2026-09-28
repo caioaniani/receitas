@@ -240,22 +240,20 @@ def _chamar_modelo(api_key, contexto):
     import anthropic
     # timeout: vigia roda em thread best-effort — nunca vale segurar 10min.
     client = anthropic.Anthropic(api_key=api_key, timeout=45, max_retries=1)
-    resp = client.messages.create(
+    # O vigia devolve JSON curto: raciocinio aqui comeria o teto de 400
+    # tokens e multiplicaria o custo. O parametro que desliga depende do
+    # modelo (no Sonnet 5.5, between_tools; 'disabled' da 400) — sai de
+    # ia_modelos.criar, que tambem registra o custo.
+    resp = ia_modelos.criar(
+        client, 'vigia',
         model=MODELO,
         max_tokens=MAX_TOKENS,
-        # O vigia devolve JSON curto: raciocinio aqui comeria o teto de 400
-        # tokens e multiplicaria o custo. O parametro que desliga depende do
-        # modelo (no Sonnet 5.5, between_tools; 'disabled' da 400) — vem de
-        # ia_modelos, nunca escrito a mao.
-        **ia_modelos.opcoes_sem_raciocinio(MODELO),
         # cache_control: o PROMPT_VIGIA e estatico e o vigia e o maior volume
         # de IA do sistema — cache read custa 0.1x do input.
         system=[{'type': 'text', 'text': PROMPT_VIGIA,
                  'cache_control': {'type': 'ephemeral'}}],
         messages=[{'role': 'user', 'content': contexto}],
     )
-    from app.services import uso_ia
-    uso_ia.registrar('vigia', MODELO, getattr(resp, 'usage', None))
     # Recusa das salvaguardas: conteudo vazio/parcial nao e veredito — sobe
     # como erro pelo caminho de falha de sempre (log + {'erro'}).
     ia_modelos.exigir_resposta(resp)
@@ -909,18 +907,16 @@ def _chamar_modelo_abandono(api_key, contexto):
     import anthropic
     # timeout: roda em cron best-effort — nunca vale segurar 10min.
     client = anthropic.Anthropic(api_key=api_key, timeout=45, max_retries=1)
-    resp = client.messages.create(
+    resp = ia_modelos.criar(
+        client, 'vigia',  # mesma regra acima
         model=MODELO,
         max_tokens=MAX_TOKENS,
-        **ia_modelos.opcoes_sem_raciocinio(MODELO),  # mesma regra acima
         # cache_control: o cron avalia varias conversas paradas em sequencia
         # na mesma janela de 5min — o PROMPT_ABANDONO estatico cacheia.
         system=[{'type': 'text', 'text': PROMPT_ABANDONO,
                  'cache_control': {'type': 'ephemeral'}}],
         messages=[{'role': 'user', 'content': contexto}],
     )
-    from app.services import uso_ia
-    uso_ia.registrar('vigia', MODELO, getattr(resp, 'usage', None))
     ia_modelos.exigir_resposta(resp)
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()

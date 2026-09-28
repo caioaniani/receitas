@@ -3990,16 +3990,17 @@ def debug_ia():
     """Modelo de IA de cada função e verificação real da API (owner-only).
 
     Sem parâmetro: só mostra o modelo EFETIVO de cada função (envs do
-    Railway incluídas) — sem custo. `?testar=1` faz duas chamadas mínimas e
-    reais com os mesmos parâmetros do sistema (sem ferramentas e com
-    ferramenta) e mostra o modelo que respondeu, o stop_reason e o erro cru
-    se a API recusar — a suíte simula a Anthropic e não prova que a API
-    aceita um parâmetro (incidente de 05-17/08/2026). Custo de centavos,
-    registrado em /admin/uso-ia como 'Verificação da IA'."""
+    Railway incluídas) — sem custo. `?testar=1` faz, para CADA modelo
+    distinto em uso, duas chamadas mínimas e reais com os mesmos parâmetros
+    do sistema (sem ferramentas e com ferramenta) e mostra o modelo que
+    respondeu, o stop_reason e o erro cru se a API recusar — a suíte simula a
+    Anthropic e não prova que a API aceita um parâmetro (incidente de
+    05-17/08/2026). Custo de centavos, registrado em /admin/uso-ia como
+    'Verificação da IA'."""
     from app.services import ia_modelos
     out = ia_modelos.modelos_por_funcao()
     if request.args.get('testar') == '1':
-        out['verificacao'] = ia_modelos.verificar_ao_vivo()
+        out['verificacao'] = ia_modelos.verificar_modelos_em_uso()
     else:
         out['como_testar'] = ('Abra /admin/debug-ia?testar=1 para duas '
                               'chamadas reais de teste (centavos).')

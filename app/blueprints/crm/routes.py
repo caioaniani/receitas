@@ -102,7 +102,7 @@ def _lock_conv_cross_worker(conv_id):
 
 
 # ── Debounce/coalescing de rajada (02/07/2026) ────────────────────────────
-# Cliente que quebra a frase em 3 balões gerava 3 chamadas Opus + 3 respostas.
+# Cliente que quebra a frase em 3 balões gerava 3 chamadas de IA + 3 respostas.
 # Cada webhook agora DEPOSITA a mensagem no buffer da conversa e a thread
 # espera o debounce; quem acorda DRENA tudo que acumulou e responde UMA vez
 # (as threads das mensagens já drenadas acham o buffer vazio e saem).

@@ -46,12 +46,13 @@ def extrair_itens_nota(image_bytes, mimetype='image/jpeg'):
     client = anthropic.Anthropic(api_key=api_key)
     modelo = ia_modelos.MODELO_PADRAO
     try:
-        response = client.messages.create(
+        # Extracao de cupom sem tools: raciocinio so comeria teto/custo —
+        # desligado pelo parametro que o modelo aceita (ia_modelos.criar,
+        # que tambem registra o custo).
+        response = ia_modelos.criar(
+            client, 'ocr_cupom',
             model=modelo,
             max_tokens=2000,
-            # Extracao de cupom sem tools: raciocinio so comeria teto/custo —
-            # desligado pelo parametro que o modelo aceita.
-            **ia_modelos.opcoes_sem_raciocinio(modelo),
             system=SYSTEM_PROMPT,
             messages=[{
                 'role': 'user',
@@ -62,8 +63,6 @@ def extrair_itens_nota(image_bytes, mimetype='image/jpeg'):
                 ],
             }],
         )
-        from app.services import uso_ia
-        uso_ia.registrar('ocr_cupom', modelo, getattr(response, 'usage', None))
     except Exception as exc:  # noqa: BLE001
         ia_modelos.registrar_falha(logger, 'ocr_nota', exc)
         return {'erro': f'Anthropic falhou: {exc}'}

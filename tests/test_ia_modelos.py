@@ -284,94 +284,126 @@ def test_sdk_le_a_categoria_da_recusa():
     assert ia_modelos.recusa(resp) == 'general_harms'
 
 
-# ── 4. Trava por AST: toda chamada passa pelos helpers ──────
+# ── 4. Trava por AST: toda chamada passa por ia_modelos.criar ─
 
 _APP = pathlib.Path(__file__).resolve().parent.parent / 'app'
 _HELPERS = {'opcoes_sem_raciocinio', 'opcoes_com_ferramentas'}
+# Encaminha a `ia_modelos.criar` com um retry de sobrecarga (chatbot).
+_WRAPPERS = {'_chamar_com_retry_sobrecarga'}
 
 
-def _chamadas_da_api():
-    """(arquivo, linha, nó) de toda chamada que manda `model=` à API:
-    `<x>.messages.create(...)` e o wrapper do bot
-    `_chamar_com_retry_sobrecarga(...)`."""
-    achadas = []
+def _arvores():
     for arq in sorted(_APP.rglob('*.py')):
-        arvore = ast.parse(arq.read_text(encoding='utf-8'))
-        for no in ast.walk(arvore):
-            if not isinstance(no, ast.Call):
+        yield arq, ast.parse(arq.read_text(encoding='utf-8'))
+
+
+def _eh_messages_create(no):
+    f = no.func
+    return (isinstance(f, ast.Attribute) and f.attr == 'create'
+            and isinstance(f.value, ast.Attribute)
+            and f.value.attr == 'messages')
+
+
+def _eh_criar(no):
+    f = no.func
+    if isinstance(f, ast.Attribute) and f.attr == 'criar' \
+            and isinstance(f.value, ast.Name) and f.value.id == 'ia_modelos':
+        return True
+    return isinstance(f, ast.Name) and f.id in _WRAPPERS
+
+
+def _chamadas_criar():
+    """(arquivo, função, nó) de cada chamada de IA do sistema: `ia_modelos.
+    criar(...)` ou o wrapper do bot com `model=` (o próprio wrapper repassa
+    **kwargs e fica de fora)."""
+    achadas = []
+    for arq, arvore in _arvores():
+        for func in ast.walk(arvore):
+            if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            f = no.func
-            eh_create = (isinstance(f, ast.Attribute) and f.attr == 'create'
-                         and isinstance(f.value, ast.Attribute)
-                         and f.value.attr == 'messages')
-            eh_wrapper = (isinstance(f, ast.Name)
-                          and f.id == '_chamar_com_retry_sobrecarga')
-            if not (eh_create or eh_wrapper):
-                continue
-            if not any(k.arg == 'model' for k in no.keywords):
-                continue  # o proprio wrapper repassa **kwargs
-            achadas.append((arq, no.lineno, no, arvore))
+            for no in ast.walk(func):
+                if (isinstance(no, ast.Call) and _eh_criar(no)
+                        and any(k.arg == 'model' for k in no.keywords)):
+                    achadas.append((arq, func, no))
     return achadas
 
 
-def _opcao_vem_do_helper(no_kw, arvore):
-    """O `**x` da chamada e `ia_modelos.opcoes_*(...)` direto ou um nome
-    atribuido a partir de um deles no mesmo arquivo."""
-    valor = no_kw.value
-    if isinstance(valor, ast.Call) and isinstance(valor.func, ast.Attribute):
-        return valor.func.attr in _HELPERS
-    if isinstance(valor, ast.Name):
+def test_messages_create_so_dentro_de_ia_modelos():
+    """Ninguem chama a API direto: os parametros por modelo, o custo e o
+    fallback de recusa ficam num lugar so."""
+    for arq, arvore in _arvores():
         for no in ast.walk(arvore):
-            if (isinstance(no, ast.Assign)
-                    and any(isinstance(t, ast.Name) and t.id == valor.id
-                            for t in no.targets)
-                    and isinstance(no.value, ast.Call)
-                    and isinstance(no.value.func, ast.Attribute)
-                    and no.value.func.attr in _HELPERS):
-                return True
-        # parametro de funcao interna (verificar_ao_vivo._rodar recebe
-        # `opcoes` ja montado pelos helpers)
-        return valor.id == 'opcoes'
-    return False
+            if isinstance(no, ast.Call) and _eh_messages_create(no):
+                assert arq.name == 'ia_modelos.py', \
+                    f'{arq.name}:{no.lineno} chama messages.create direto'
+
+
+def test_helpers_de_parametros_so_dentro_de_ia_modelos():
+    for arq, arvore in _arvores():
+        if arq.name == 'ia_modelos.py':
+            continue
+        for no in ast.walk(arvore):
+            if (isinstance(no, ast.Call)
+                    and isinstance(no.func, ast.Attribute)
+                    and no.func.attr in _HELPERS):
+                pytest.fail(f'{arq.name}:{no.lineno} monta parametros de '
+                            'raciocinio fora do ia_modelos.criar')
 
 
 def test_universo_de_chamadas_conhecido():
-    """Se aparecer chamada nova, este numero muda e obriga a olhar se ela
-    passa pelos helpers (os outros testes da secao ja cobrem)."""
-    arquivos = sorted({a.name for a, _, _, _ in _chamadas_da_api()})
-    assert arquivos == sorted([
-        'cadastro_ia.py', 'chatbot.py', 'chatbot_auditor.py',
-        'chatbot_vigia.py', 'conta_pagar_ia.py', 'copilot.py',
-        'google_reviews.py', 'ia_modelos.py', 'ocr_nota.py',
-        'planejamento_ia.py', 'seo_descricoes.py', 'treino_ia_perguntas.py',
-    ])
-    # 14 chamadas do sistema (o bot conta 1: o wrapper de retry) + a da
-    # verificacao ao vivo
-    assert len(_chamadas_da_api()) == 15
+    """Se aparecer chamada nova, a contagem muda e obriga a olhar a secao."""
+    achadas = _chamadas_criar()
+    por_arquivo = {}
+    for arq, _, _ in achadas:
+        por_arquivo[arq.name] = por_arquivo.get(arq.name, 0) + 1
+    assert por_arquivo == {
+        'cadastro_ia.py': 1, 'chatbot.py': 2, 'chatbot_auditor.py': 1,
+        'chatbot_vigia.py': 2, 'conta_pagar_ia.py': 1, 'copilot.py': 1,
+        'google_reviews.py': 1, 'ocr_nota.py': 1, 'planejamento_ia.py': 2,
+        'seo_descricoes.py': 1, 'treino_ia_perguntas.py': 1,
+    }
 
 
 def test_nenhuma_chamada_escreve_raciocinio_a_mao():
-    for arq, linha, no, _ in _chamadas_da_api():
-        literais = {k.arg for k in no.keywords} & {'thinking',
-                                                   'output_config'}
-        assert not literais, f'{arq.name}:{linha} escreve {literais} a mao'
+    proibidos = {'thinking', 'output_config', 'extra_headers', 'extra_body'}
+    for arq, _, no in _chamadas_criar():
+        literais = {k.arg for k in no.keywords} & proibidos
+        assert not literais, f'{arq.name}:{no.lineno} escreve {literais}'
+        assert not any(k.arg is None for k in no.keywords), \
+            f'{arq.name}:{no.lineno} expande **kwargs numa chamada de IA'
 
 
-def test_toda_chamada_passa_pelos_helpers():
-    for arq, linha, no, arvore in _chamadas_da_api():
-        expandidos = [k for k in no.keywords if k.arg is None]
-        assert any(_opcao_vem_do_helper(k, arvore) for k in expandidos), \
-            f'{arq.name}:{linha} nao usa ia_modelos.opcoes_*'
+def _alvo_da_atribuicao(func, chamada):
+    for no in ast.walk(func):
+        if isinstance(no, ast.Assign) and no.value is chamada \
+                and len(no.targets) == 1 \
+                and isinstance(no.targets[0], ast.Name):
+            return no.targets[0].id
+    return None
 
 
-def test_todo_arquivo_com_chamada_trata_recusa():
-    for arq in {a for a, _, _, _ in _chamadas_da_api()}:
-        if arq.name == 'ia_modelos.py':
-            continue
-        src = arq.read_text(encoding='utf-8')
-        assert ('ia_modelos.recusa(' in src
-                or 'ia_modelos.exigir_resposta(' in src), \
-            f'{arq.name} nao trata stop_reason=refusal'
+def test_toda_chamada_confere_recusa_antes_de_usar():
+    """POR CHAMADA (nao por arquivo): o resultado de cada criar passa por
+    `ia_modelos.recusa`/`exigir_resposta` depois dela e antes de a mesma
+    variavel receber outra resposta."""
+    for arq, func, no in _chamadas_criar():
+        nome = _alvo_da_atribuicao(func, no)
+        assert nome, f'{arq.name}:{no.lineno} resposta sem variavel'
+        proxima = min((n.lineno for n in ast.walk(func)
+                       if isinstance(n, ast.Assign) and n.lineno > no.lineno
+                       and any(isinstance(t, ast.Name) and t.id == nome
+                               for t in n.targets)), default=10**9)
+        conferida = any(
+            isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+            and n.func.attr in {'recusa', 'exigir_resposta'}
+            and isinstance(n.func.value, ast.Name)
+            and n.func.value.id == 'ia_modelos'
+            and n.args and isinstance(n.args[0], ast.Name)
+            and n.args[0].id == nome
+            and no.lineno < n.lineno < proxima
+            for n in ast.walk(func))
+        assert conferida, (f'{arq.name}:{no.lineno} ({func.name}) nao '
+                           f'confere a recusa de {nome!r}')
 
 
 def test_nenhum_id_de_modelo_literal_fora_da_fonte_unica():

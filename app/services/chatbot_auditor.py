@@ -425,18 +425,16 @@ def _chamar_sonnet(api_key, contexto, prompt_sistema=None):
     # (7/9/12/15/19h) e o cache ephemeral vive 5min — pagariamos o premio
     # de escrita (1.25x) sem nunca ler de volta.
     client = anthropic.Anthropic(api_key=api_key, timeout=60, max_retries=1)
-    resp = client.messages.create(
+    # Relatorio em JSON sem tools: raciocinio desligado (custo/teto
+    # previsiveis). Parametros por modelo e custo em UsoIA: ia_modelos.criar.
+    resp = ia_modelos.criar(
+        client, 'auditor',
         model=MODELO,
         max_tokens=MAX_TOKENS,
-        # Relatorio em JSON sem tools: raciocinio desligado (custo/teto
-        # previsiveis). O parametro depende do modelo — ia_modelos.
-        **ia_modelos.opcoes_sem_raciocinio(MODELO),
         system=prompt_sistema or PROMPT_AUDITOR,
         messages=[{'role': 'user', 'content': contexto}],
     )
-    from app.services import uso_ia
-    uso_ia.registrar('auditor', MODELO, getattr(resp, 'usage', None))
-    ia_modelos.exigir_resposta(resp)  # recusa -> {'erro'} de sempre
+    ia_modelos.exigir_resposta(resp)  # recusa: tratada em auditar_periodo
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
     if texto.startswith('```'):
@@ -553,6 +551,9 @@ def auditar_periodo(inicio, fim, *, enviar=True, forcar_envio=False,
     )
     try:
         rel = _chamar_sonnet(api_key, contexto, prompt_sistema=prompt_sistema)
+    except ia_modelos.RespostaRecusada as exc:
+        return _recusa_do_periodo(exc, inicio, fim, titulo=titulo,
+                                  enviar=enviar)
     except Exception as exc:  # noqa: BLE001
         logger.exception('auditor: Sonnet falhou')
         return {'erro': str(exc)}
@@ -632,6 +633,36 @@ def auditar_dia_resumo(dia=None, *, enviar=True):
                            dados_extras=extras)
 
 
+def _recusa_do_periodo(exc, inicio, fim, *, titulo, enviar):
+    """A IA recusou o relatorio (salvaguardas da Anthropic). Diferente de erro
+    de rede, a recusa se REPETE para a mesma entrada — o guia da API manda
+    nao reenviar o mesmo pedido. Reauditar a janela a cada execucao cobraria
+    tokens e calaria o auditor ate alguem mexer no AppConfig (a janela so
+    cresce e a fala que disparou a recusa continua na amostra). Por isso o
+    resultado NAO tem 'erro' (a janela pendente avanca o ponteiro) e o dono
+    e avisado uma vez, com o periodo que ficou sem analise."""
+    logger.error('auditor: a IA recusou o relatorio de %s a %s (categoria '
+                 '%s) — periodo pulado', inicio, fim, exc.categoria)
+    periodo = (f'{inicio.strftime("%d/%m %H:%M")} a '
+               f'{fim.strftime("%d/%m %H:%M")}')
+    mensagem = (f'*{titulo}* — {periodo}\n\nA IA recusou analisar este '
+                f'periodo pelas regras de seguranca da Anthropic (categoria: '
+                f'{exc.categoria}). O periodo ficou sem relatorio; a proxima '
+                'execucao segue normal. As conversas continuam no Chatwoot.')
+    resultado = {'ok': False, 'recusa': exc.categoria, 'mensagem': mensagem,
+                 'enviado': False}
+    numero = _numero_destino() if enviar else None
+    if numero:
+        try:
+            from app.services import zapi
+            envio = zapi.enviar_texto(numero, mensagem)
+            resultado['enviado'] = bool(envio.get('ok'))
+        except Exception as e:  # noqa: BLE001
+            logger.exception('auditor: aviso de recusa falhou')
+            resultado['erro_envio'] = str(e)
+    return resultado
+
+
 def auditar_janela_pendente(*, enviar=True):
     """Audita a janela desde a ULTIMA execucao registrada ate agora. Anti-spam
     nativo: rodando 5x por dia, cada execucao olha so o que aconteceu desde a
@@ -657,7 +688,8 @@ def auditar_janela_pendente(*, enviar=True):
     res = auditar_periodo(inicio, fim, enviar=enviar)
     # So avanca o ponteiro se a execucao chegou ao Sonnet de fato (ou foi
     # legitimamente "sem dados"). Erro de API NAO avanca — proxima tentativa
-    # cobre a mesma janela e nao perde nada.
+    # cobre a mesma janela e nao perde nada. Recusa da IA avanca (ela se
+    # repetiria para a mesma janela — ver _recusa_do_periodo).
     if 'erro' not in res:
         try:
             from app.extensions import db

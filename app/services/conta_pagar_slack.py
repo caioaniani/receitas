@@ -4,7 +4,7 @@ O bot SO LE os canais de recebimento (nunca posta). Pra cada arquivo
 (imagem ou PDF) de uma mensagem:
   1. baixa do Slack (bot token);
   2. sobe pro Dropbox (documento original preservado ANTES de qualquer IA);
-  3. extrai dados via IA (Sonnet, fallback Opus);
+  3. extrai dados via IA (conta_pagar_ia, modelo padrao de ia_modelos);
   4. cria ContaPagar (idempotente por slack_file_id).
 
 Nunca exige SlackVinculo (funcionarios de loja nao tem) e nunca responde.

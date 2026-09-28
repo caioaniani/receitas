@@ -186,8 +186,10 @@ def processar_payload(payload):
 
     from app.services import copilot as copilot_svc
     try:
-        modelo = (current_app.config.get('ZAPI_BOT_MODELO')
-                  or MODELO_WHATSAPP_DEFAULT)
+        # Mesma normalizacao que a visao por funcao (/admin/debug-ia) usa:
+        # espacos nas pontas saem, vazio vale o padrao.
+        modelo = ia_modelos.modelo_configurado(
+            current_app.config.get('ZAPI_BOT_MODELO'), 'ZAPI_BOT_MODELO')
         resp = copilot_svc.interpretar(
             texto or '(imagem enviada)',
             user,

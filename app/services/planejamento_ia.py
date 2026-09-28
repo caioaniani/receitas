@@ -118,7 +118,7 @@ Responda APENAS JSON valido (sem markdown):
 def _chamar_opus(system, payload_texto, funcao):
     """Chamada padrao (o nome e historico — o modelo e MODELO): timeout,
     custo em UsoIA, parse de JSON. Devolve (dados, None) ou
-    (None, mensagem_de_erro)."""
+    (None, mensagem_de_erro); `dados['_modelo_servido']` diz quem respondeu."""
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
         return None, 'ANTHROPIC_API_KEY nao configurada'
@@ -129,30 +129,34 @@ def _chamar_opus(system, payload_texto, funcao):
     client = anthropic.Anthropic(api_key=api_key, timeout=120,
                                  max_retries=1)
     try:
-        from app.services import uso_ia
         # proposta em JSON, sem tools: raciocinio desligado pelo parametro
-        # que o modelo aceita (as DUAS chamadas usam o mesmo)
-        opcoes = ia_modelos.opcoes_sem_raciocinio(MODELO)
-        response = client.messages.create(
-            model=MODELO, max_tokens=4000, system=system, **opcoes,
+        # que o modelo aceita — as DUAS chamadas passam por ia_modelos.criar
+        # (parametros pelo modelo, custo em UsoIA, fallback de recusa)
+        response = ia_modelos.criar(
+            client, funcao,
+            model=MODELO, max_tokens=4000, system=system,
             messages=[{'role': 'user', 'content': payload_texto}])
-        uso_ia.registrar(funcao, MODELO, getattr(response, 'usage', None))
         ia_modelos.exigir_resposta(response)
         if getattr(response, 'stop_reason', None) == 'max_tokens':
             # Grid grande pode estourar a saida — refaz UMA vez com teto
             # maior (padrao do retry de truncamento do chatbot, P2 02/07);
             # sem isso o JSON cortado viraria "resposta invalida" eterno.
-            response = client.messages.create(
-                model=MODELO, max_tokens=8000, system=system, **opcoes,
+            response = ia_modelos.criar(
+                client, funcao,
+                model=MODELO, max_tokens=8000, system=system,
                 messages=[{'role': 'user', 'content': payload_texto}])
-            uso_ia.registrar(funcao, MODELO,
-                             getattr(response, 'usage', None))
             ia_modelos.exigir_resposta(response)
         bruto = ''.join(b.text for b in response.content
                         if getattr(b, 'type', '') == 'text')
         bruto = re.sub(r'^```(?:json)?\s*|\s*```$', '', bruto.strip(),
                        flags=re.MULTILINE)
-        return json.loads(bruto), None
+        dados = json.loads(bruto)
+        if isinstance(dados, dict):
+            # Quem respondeu (o do fallback de recusa, quando houve) — o
+            # rotulo 'modelo_usado' da tela sai daqui.
+            dados['_modelo_servido'] = ia_modelos.modelo_servido(response,
+                                                                 MODELO)
+        return dados, None
     except json.JSONDecodeError:
         logger.warning('%s: resposta nao-JSON do modelo', funcao)
         return None, 'a IA devolveu resposta invalida — tente de novo'
@@ -316,7 +320,7 @@ def sugerir_pedido_loja_ia(loja_id, *, horizonte_dias=7, janela_semanas=6,
     return {'itens': itens_ok,
             'parecer': (dados.get('parecer') or '').strip(),
             'dias': [d['data'] for d in dias],
-            'modelo_usado': MODELO}
+            'modelo_usado': dados.get('_modelo_servido') or MODELO}
 
 
 def analisar_producao_ia(*, horizonte_dias=7, janela_semanas=6,
@@ -405,4 +409,4 @@ def analisar_producao_ia(*, horizonte_dias=7, janela_semanas=6,
                            'motivo': (a.get('motivo') or '').strip()})
     return {'ajustes': ajustes_ok,
             'parecer': (dados.get('parecer') or '').strip(),
-            'modelo_usado': MODELO}
+            'modelo_usado': dados.get('_modelo_servido') or MODELO}

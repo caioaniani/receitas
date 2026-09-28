@@ -915,12 +915,18 @@ substituira a regra de 25/06 "Sonnet 4.6 exceto bot/WhatsApp/OCRs = Opus
 O bot de atendimento e o follow-up foram migrados, mas desde 24/09/2026
 (atendimento restrito) so rodam em teste offline.
 
-**FONTE UNICA: `app/services/ia_modelos.py`** — `MODELO_PADRAO` e os
-parametros que DEPENDEM DO MODELO. NUNCA escrever `thinking=`/
-`output_config=` nem id `'claude-...'` numa chamada (ha trava por AST em
-`tests/test_ia_modelos.py`: toda `messages.create` expande
-`**ia_modelos.opcoes_*`, trata recusa e nao tem id literal fora de
-`ia_modelos`/`uso_ia`). Chamada nova = usar os helpers.
+**FONTE UNICA: `app/services/ia_modelos.py`** — `MODELO_PADRAO`, os
+parametros que DEPENDEM DO MODELO e a PROPRIA CHAMADA:
+`ia_modelos.criar(client, '<funcao>', model=..., ferramentas=False|True,
+canal=None, **kwargs)` aplica os parametros do modelo, registra o custo de
+CADA tentativa em UsoIA e faz o fallback de recusa. NUNCA chamar
+`client.messages.create` fora de `ia_modelos`, montar `thinking=`/
+`output_config=`/`extra_headers` na chamada nem escrever id `'claude-...'`
+(trava por AST em `tests/test_ia_modelos.py`: `messages.create` so em
+ia_modelos, a contagem de chamadas por arquivo, e a recusa conferida POR
+CHAMADA — o resultado de cada `criar` passa por `recusa()`/
+`exigir_resposta()` antes de ser lido ou sobrescrito). Chamada nova = usar
+`criar` e conferir a recusa.
 - **Sem ferramentas** (vigia, auditor, follow-up, OCRs, SEO, reviews,
   treino, cadastro, planejamento): `opcoes_sem_raciocinio(modelo)`. No
   5.5 = `thinking={'type': 'between_tools'}` + `output_config.effort
@@ -945,23 +951,39 @@ parametros que DEPENDEM DO MODELO. NUNCA escrever `thinking=`/
   `ia_modelos.recusa()`/`exigir_resposta()` em TODA chamada; cada funcao
   usa o caminho de falha que ja tinha (bot = handoff para a equipe, nunca
   turno vazio; copilot = `tipo 'erro'`; OCR/cadastro/planejamento/treino/
-  reviews = mensagem "a IA recusou..."; SEO = None). Fallback do servidor
-  (`fallbacks`) NAO foi ligado.
-- **Erro da API**: `ia_modelos.registrar_falha` — 400/401/403/404 (nao se
-  resolve tentando de novo: parametro, chave, modelo) = ERROR (Sentry);
-  rede/timeout/429/5xx = WARNING (politica de ruido). Fecha a classe do
-  incidente de 05-17/08 nas funcoes que so logavam WARNING.
-- **Envs do Railway MANDAM** (`ia_modelos.modelo_do_ambiente`; vazia =
-  padrao): OCR_MODELO_OPUS, CADASTRO_IA_MODELO, PLANEJAMENTO_IA_MODELO,
+  reviews = mensagem "a IA recusou..."; SEO = None). O AUDITOR trata a
+  recusa como janela CONSUMIDA (o ponteiro avanca e o dono recebe um aviso)
+  — ela se repete para a mesma entrada, e parar o ponteiro calava o auditor
+  para sempre.
+- **Fallback de recusa (item [BLOCKS] do guia), NO CLIENTE**: `criar` refaz
+  UMA vez no `claude-sonnet-5` as recusas `cyber` e `frontier_llm` do 5.5 —
+  as mesmas que o fallback do servidor (`fallbacks: "default"`) refaria —
+  com os parametros do Sonnet 5 (`disabled`, nunca `between_tools`). NAO usa
+  o beta do servidor de proposito: um beta em TODA chamada, se mudar,
+  derruba todas as funcoes de IA juntas (classe do incidente de 05-17/08);
+  no cliente so custa quando a recusa acontece. Kill-switch
+  `IA_FALLBACK_RECUSA=0`. `modelo_usado` (OCR NF, cadastro, planejamento,
+  treino) e a explicacao do copilot seguem o modelo que RESPONDEU
+  (`ia_modelos.modelo_servido`/`progresso_na_resposta`).
+- **Erro da API**: `ia_modelos.registrar_falha` — transitorio (conexao/
+  timeout do SDK, 408/409/413/429/5xx) = WARNING (politica de ruido); TODO
+  o resto = ERROR (Sentry): 400/401/403/404 e excecao que nem chegou a rede
+  (o TypeError do SDK de 05-17/08, erro de codigo). Aplicado nas funcoes que
+  so logavam WARNING (OCRs, cadastro, planejamento, treino, reviews).
+- **Envs do Railway MANDAM** (`ia_modelos.modelo_do_ambiente` /
+  `modelo_configurado` — a MESMA normalizacao na chamada e na visao por
+  funcao; espacos nas pontas saem, vazia = padrao): OCR_MODELO_OPUS, CADASTRO_IA_MODELO, PLANEJAMENTO_IA_MODELO,
   GOOGLE_REVIEWS_IA_MODELO, TREINO_IA_MODELO, ZAPI_BOT_MODELO. Os
   parametros saem do modelo EFETIVO — env antiga recebe `disabled`, nunca
   `between_tools`. Conferir em `GET /admin/debug-ia` (owner;
   `fora_do_padrao`) ou no bloco `ia` da sonda `/api/claude/deploy`.
 - **Verificacao REAL depois de deploy que mexa na IA**:
-  `/admin/debug-ia?testar=1` (duas chamadas minimas com os mesmos
-  parametros do sistema, centavos, UsoIA 'verificacao_ia'). A suite mocka
-  a Anthropic — so esta rota prova que a API aceita os parametros. Os
-  testes `test_sdk_*` provam so que o SDK INSTALADO serializa os campos.
+  `/admin/debug-ia?testar=1` — para CADA modelo distinto em uso (o padrao e
+  os de env), duas chamadas minimas com os mesmos parametros do sistema
+  (sem e com ferramenta), centavos, UsoIA 'verificacao_ia'. A suite mocka a
+  Anthropic — so esta rota prova que a API aceita os parametros. Os testes
+  `test_sdk_*` provam so que o SDK INSTALADO serializa os campos. NAO
+  exercita o fallback de recusa (nao ha como provocar uma recusa).
 - **Effort**: `EFFORT_PADRAO='high'` explicito (os niveis do 5.5 foram
   recalibrados; sem eval medida no trafego real, manteve-se o nominal).
   Varredura de effort contra eval = decisao/projeto separado.
@@ -971,9 +993,11 @@ parametros que DEPENDEM DO MODELO. NUNCA escrever `thinking=`/
 - **Extracao de resposta**: SEMPRE iterar `resp.content` filtrando
   `type == 'text'` (ou `textos_visiveis`) — `content[0]` pode ser thinking.
 - **`uso_ia._PRECOS`**: linha propria do 5.5 ($2/$10), Opus 5.5 ($4/$20),
-  Fable ($10/$50). A linha do Sonnet 5 ficou em $3/$15 (a tabela atual lista
-  $2/$10; ajustar e decisao do dono — so afeta env que volte ao 5). Modelo
-  novo SEM linha = custo some do /admin/uso-ia (ha teste travando).
+  Fable 5.1 e 5 ($10/$50); cache read pelo preco de cada modelo
+  (`_CACHE_READ`: Opus 5.5 $0,20, Fable 5.1 $0,25; o resto 0.1x do input).
+  Sonnet 5 = $2/$10 (tabela de 25/09/2026; os $3/$15 de 05/08 tratavam
+  $2/$10 como promocao ate 31/08 — ficou permanente).
+  Modelo novo SEM linha = custo some do /admin/uso-ia (ha teste travando).
 - Prompts NAO afirmam o modelo ("Voce roda em Opus 4.8" ficou falso a
   cada troca — removido do bot e do copilot, ha teste).
 - Testes: `tests/test_ia_modelos.py` (unidades, SDK, trava AST) e
@@ -5593,9 +5617,10 @@ recebimento; o bot **so le** (nunca posta), a IA extrai os dados e cria uma
 - **Modelo**: `app/models/financeiro.py::ContaPagar` (Numeric(10,2) pra dinheiro;
   `slack_file_id` unique = idempotencia). `db.create_all` cria a tabela.
 - **Extrator**: `app/services/conta_pagar_ia.py::extrair_documento` — Claude
-  vision, **Sonnet primeiro, Opus no fallback** se faltar campo critico
-  (valor/fornecedor/codigo de barras). Aceita imagem e PDF (document block).
-  Modelos via env `OCR_MODELO_SONNET`/`OCR_MODELO_OPUS`.
+  vision, UMA chamada (sem cascata desde 14/06/2026) no modelo padrao de
+  `ia_modelos` (Sonnet 5.5). Aceita imagem e PDF (document block). Override
+  pela env `OCR_MODELO_OPUS` (nome historico; `OCR_MODELO_SONNET` nao existe
+  mais).
 - **Captura**: `app/services/conta_pagar_slack.py::processar` — sobe a imagem pro
   Dropbox (`upload_publico`) ANTES de extrair (nao perde o doc se a IA falhar).
   Interceptado em `slack_bot.processar_evento_mensagem` (canal em
@@ -6364,8 +6389,8 @@ area Catalogo), service `app/services/cadastro_ia.py`.
 
 - **Fluxo**: upload de imagem (JPG/PNG/WebP <=8MB) OU texto colado →
   `analisar()` manda catalogo atual (produtos+componentes, receitas, MPs;
-  caps com aviso, nunca truncar em silencio) + a lista pro Sonnet 4.6
-  (`CADASTRO_IA_MODELO` pra override; custo em UsoIA funcao=
+  caps com aviso, nunca truncar em silencio) + a lista pro modelo padrao
+  de `ia_modelos` (Sonnet 5.5; `CADASTRO_IA_MODELO` pra override; custo em UsoIA funcao=
   'cadastro_ia') → tabela de REVISAO editavel (checkbox por item e por
   componente, nome/preco/categoria/qtd) → `salvar_lote()` grava.
 - **A IA so propoe, o banco manda**: `_sanitizar_proposta` re-resolve
@@ -6388,9 +6413,10 @@ area Catalogo), service `app/services/cadastro_ia.py`.
 Pedido do dono ("criar uma IA para fazer pedido para as lojas e para a
 producao... colocar o opus 4.8"); escolha dele: botao NAS TELAS (nao
 Slack/cron), producao so propoe (ENVIAR segue humano). Service
-`app/services/planejamento_ia.py`; modelo **Opus 4.8** (excecao
-consciente a padronizacao Sonnet, decisao do dono; env
-`PLANEJAMENTO_IA_MODELO`). Custo em UsoIA ('pedido_loja_ia' /
+`app/services/planejamento_ia.py`; nasceu em Opus 4.8 (excecao do dono em
+08/07), padronizado em Sonnet 5 em 05/08 e em **Sonnet 5.5** em 28/09/2026
+(decisao do dono "toda IA e bot"; modelo de `ia_modelos`, env
+`PLANEJAMENTO_IA_MODELO` sobrescreve). Custo em UsoIA ('pedido_loja_ia' /
 'producao_ia'). A IA SEMPRE propoe POR CIMA dos motores deterministicos
 — ela nao inventa a conta, ajusta com contexto (calendario/feriados que
 o modelo conhece — nao ha tabela de datas especiais) e justifica.

@@ -260,16 +260,14 @@ def analisar(*, file_bytes=None, mimetype=None, texto=None):
     client = anthropic.Anthropic(api_key=api_key, timeout=120,
                                  max_retries=1)
     try:
-        response = client.messages.create(
+        # extracao de JSON sem tools: raciocinio desligado pelo parametro
+        # que o modelo aceita (ia_modelos.criar, que registra o custo)
+        response = ia_modelos.criar(
+            client, 'cadastro_ia',
             model=MODELO, max_tokens=4000, system=SYSTEM_PROMPT,
-            # extracao de JSON sem tools: raciocinio desligado pelo
-            # parametro que o modelo aceita
-            **ia_modelos.opcoes_sem_raciocinio(MODELO),
             messages=[{'role': 'user', 'content': content}])
-        from app.services import uso_ia
-        uso_ia.registrar('cadastro_ia', MODELO,
-                         getattr(response, 'usage', None))
         ia_modelos.exigir_resposta(response)
+        modelo_usado = ia_modelos.modelo_servido(response, MODELO)
         bruto = ''.join(b.text for b in response.content
                         if getattr(b, 'type', '') == 'text')
         bruto = re.sub(r'^```(?:json)?\s*|\s*```$', '', bruto.strip(),
@@ -287,7 +285,7 @@ def analisar(*, file_bytes=None, mimetype=None, texto=None):
     itens = _sanitizar_proposta(dados)
     if not itens:
         return {'erro': 'a IA nao encontrou itens na lista enviada'}
-    return {'itens': itens, 'avisos': avisos, 'modelo_usado': MODELO}
+    return {'itens': itens, 'avisos': avisos, 'modelo_usado': modelo_usado}
 
 
 def salvar_lote(itens, campo_preco, user=None):

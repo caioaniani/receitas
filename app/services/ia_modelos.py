@@ -122,19 +122,27 @@ def familia(modelo):
     return casar_prefixo(modelo, _FAMILIAS)
 
 
+def modelo_configurado(valor, origem='config'):
+    """Normaliza um modelo vindo de configuração (env do Railway ou
+    `app.config`): sem espaços nas pontas; vazio vale o padrão. Um modelo que
+    o sistema não conhece segue valendo (quem define sabe o que pediu), mas
+    fica no log: os parâmetros de raciocínio caem no lado seguro (nenhum).
+    Fonte única da regra — a chamada e a visão por função (/admin/debug-ia)
+    usam esta mesma função, para nunca divergirem."""
+    limpo = (valor or '').strip() if isinstance(valor, str) else ''
+    modelo = limpo or MODELO_PADRAO
+    if limpo and familia(modelo) is None:
+        logger.warning('ia_modelos: %s=%r não é um modelo conhecido — sem '
+                       'parâmetros de raciocínio', origem, limpo)
+    return modelo
+
+
 def modelo_do_ambiente(env_var=None):
     """Modelo de uma função: a env (quando definida e não vazia) manda sobre o
     padrão — é a válvula do dono no Railway. Env vazia vale o padrão (antes,
-    `os.environ.get(VAR, padrão)` devolvia '' e a chamada ia sem modelo). Uma
-    env com modelo que o sistema não conhece segue valendo (quem define sabe o
-    que pediu), mas fica no log: os parâmetros de raciocínio caem no lado
-    seguro (nenhum)."""
-    valor = (os.environ.get(env_var) or '').strip() if env_var else ''
-    modelo = valor or MODELO_PADRAO
-    if valor and familia(modelo) is None:
-        logger.warning('ia_modelos: %s=%r não é um modelo conhecido — sem '
-                       'parâmetros de raciocínio', env_var, valor)
-    return modelo
+    `os.environ.get(VAR, padrão)` devolvia '' e a chamada ia sem modelo)."""
+    valor = os.environ.get(env_var) if env_var else None
+    return modelo_configurado(valor, env_var or 'env')
 
 
 def opcoes_sem_raciocinio(modelo):
@@ -179,6 +187,21 @@ def mostra_progresso(opcoes):
     return ((opcoes or {}).get('thinking') or {}).get('display') == 'updates'
 
 
+def modelo_servido(resp, pedido):
+    """Modelo que de fato respondeu — o do fallback, quando `criar` refez a
+    chamada após uma recusa; `pedido` quando a resposta não diz."""
+    servido = getattr(resp, 'model', None)
+    return servido if isinstance(servido, str) and servido else pedido
+
+
+def progresso_na_resposta(resp, modelo_pedido):
+    """`mostra_progresso` para a resposta que VOLTOU numa rota com
+    ferramentas: quando `criar` refez a chamada noutro modelo (fallback de
+    recusa), vale o que foi pedido a ESSE modelo, não ao original."""
+    return mostra_progresso(
+        opcoes_com_ferramentas(modelo_servido(resp, modelo_pedido)))
+
+
 def textos_visiveis(resp, progresso=False):
     """Textos que o usuário pode ler, na ordem: blocos `text` e, com
     `progresso`, as notas de progresso (blocos thinking não vazios)."""
@@ -196,6 +219,13 @@ def textos_visiveis(resp, progresso=False):
     return partes
 
 
+def _categoria_recusa(resp):
+    if getattr(resp, 'stop_reason', None) != 'refusal':
+        return None
+    detalhes = getattr(resp, 'stop_details', None)
+    return getattr(detalhes, 'category', None) or 'sem_categoria'
+
+
 def recusa(resp):
     """Categoria da recusa quando a resposta foi recusada pelas salvaguardas
     (`stop_reason == 'refusal'`, HTTP 200), senão None.
@@ -204,12 +234,10 @@ def recusa(resp):
     lido como completo. O Sonnet 5.5 recusa em cinco categorias (cyber, bio,
     frontier_llm, reasoning_extraction, general_harms — esta pode pegar
     trabalho benigno). Categoria ausente vira 'sem_categoria'."""
-    if getattr(resp, 'stop_reason', None) != 'refusal':
-        return None
-    detalhes = getattr(resp, 'stop_details', None)
-    categoria = getattr(detalhes, 'category', None) or 'sem_categoria'
-    logger.warning('IA recusou a resposta (modelo=%s, categoria=%s)',
-                   getattr(resp, 'model', '?'), categoria)
+    categoria = _categoria_recusa(resp)
+    if categoria:
+        logger.warning('IA recusou a resposta (modelo=%s, categoria=%s)',
+                       getattr(resp, 'model', '?'), categoria)
     return categoria
 
 
@@ -222,16 +250,31 @@ def exigir_resposta(resp):
     return resp
 
 
-# Erros que tentar de novo não resolve: parâmetro recusado (400), chave
-# inválida (401), sem permissão (403), modelo inexistente (404). 413 fica de
-# fora: depende da entrada (uma imagem grande), não do sistema.
-_STATUS_PERMANENTE = frozenset({400, 401, 403, 404})
+# Falhas que se resolvem tentando de novo: tempo esgotado (408), conflito
+# (409), limite de taxa (429), erro do servidor e sobrecarga (5xx, 529) e
+# entrada grande demais (413, depende da entrada, não do sistema). Todo o
+# resto se repete em TODA execução: parâmetro recusado (400), chave inválida
+# (401), sem permissão (403), modelo inexistente (404) — e exceção que nem
+# chegou à rede (TypeError do SDK que não conhece um parâmetro, a causa do
+# incidente de 05-17/08/2026, ou erro de código nosso).
+_STATUS_TRANSITORIO = frozenset({408, 409, 413, 429})
 
 
 def falha_permanente(exc):
-    """True quando a API recusou a chamada por um motivo que se repete em
-    TODA execução (a classe do incidente de 05-17/08/2026)."""
-    return getattr(exc, 'status_code', None) in _STATUS_PERMANENTE
+    """True quando a falha se repete em TODA execução — a função está morta
+    até alguém mexer (a classe do incidente de 05-17/08/2026)."""
+    try:
+        import anthropic
+        if isinstance(exc, anthropic.APIConnectionError):  # inclui timeout
+            return False
+    except ImportError:  # pragma: no cover — SDK é dependência do app
+        pass
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return False
+    status = getattr(exc, 'status_code', None)
+    if isinstance(status, int):
+        return not (status in _STATUS_TRANSITORIO or status >= 500)
+    return True
 
 
 def registrar_falha(log, contexto, exc):
@@ -241,11 +284,83 @@ def registrar_falha(log, contexto, exc):
     (rede, timeout, 429, 5xx, sobrecarga) segue WARNING, pela política de
     ruído do Sentry (o próximo uso tenta de novo)."""
     if falha_permanente(exc):
-        log.error('%s: a API recusou a chamada (HTTP %s — parâmetro, chave '
-                  'ou modelo): %s', contexto,
-                  getattr(exc, 'status_code', '?'), exc, exc_info=exc)
+        log.error('%s: a chamada de IA falhou de forma permanente (%s, HTTP '
+                  '%s — parâmetro, chave, modelo ou código): %s', contexto,
+                  type(exc).__name__, getattr(exc, 'status_code', '-'), exc,
+                  exc_info=exc)
     else:
         log.warning('%s: falha na chamada: %s', contexto, exc)
+
+
+# ── A chamada ──────────────────────────────────────────────────────────
+
+# Fallback de RECUSA (item [BLOCKS] do guia do Sonnet 5.5). O fallback do
+# servidor da Anthropic (`fallbacks: "default"`, beta
+# server-side-fallback-2026-07-01) refaz no Sonnet 5 só as recusas `cyber` e
+# `frontier_llm` do Sonnet 5.5. O sistema faz o MESMO no cliente, em vez de
+# mandar um beta em TODA chamada: uma mudança no beta derrubaria todas as
+# funções de IA de uma vez (a classe do incidente de 05-17/08/2026), e o
+# retry no cliente só custa algo quando a recusa acontece. As outras
+# categorias (bio, reasoning_extraction, general_harms) não têm fallback —
+# igual ao servidor. O modelo do fallback recebe os parâmetros DELE (no
+# Sonnet 5, `disabled`; `between_tools` daria 400) e não lê os blocos thinking
+# do 5.5, que a API descarta sem erro. Desliga com IA_FALLBACK_RECUSA=0.
+_FALLBACK_RECUSA = {
+    'claude-sonnet-5-5': ('claude-sonnet-5',
+                          frozenset({'cyber', 'frontier_llm'})),
+}
+
+
+def modelo_de_fallback(modelo, categoria):
+    """Modelo em que uma recusa de `categoria` no `modelo` é refeita, ou
+    None."""
+    regra = _FALLBACK_RECUSA.get(familia(modelo) or '')
+    if not regra or not categoria:
+        return None
+    destino, categorias = regra
+    return destino if categoria in categorias else None
+
+
+def _fallback_ligado():
+    return (os.environ.get('IA_FALLBACK_RECUSA') or '1').strip() != '0'
+
+
+def _opcoes(modelo, ferramentas):
+    return (opcoes_com_ferramentas(modelo) if ferramentas
+            else opcoes_sem_raciocinio(modelo))
+
+
+def criar(client, funcao, *, model, ferramentas=False, canal=None,
+          **kwargs):
+    """A chamada à API de mensagens do sistema — TODA função de IA passa por
+    aqui (há trava por AST nos testes):
+    - os parâmetros de raciocínio saem do `model` que vai rodar
+      (`ferramentas=True` nas rotas com tools);
+    - o custo de CADA tentativa vai para UsoIA com o modelo que a atendeu
+      (sessão isolada, best-effort);
+    - recusa `cyber`/`frontier_llm` do Sonnet 5.5 é refeita UMA vez no
+      Sonnet 5 (ver _FALLBACK_RECUSA).
+
+    Devolve a resposta final. O chamador continua obrigado a conferir
+    `recusa()`/`exigir_resposta()` antes de ler o conteúdo: a outra categoria,
+    ou o fallback, também podem recusar. Exceção da API sobe como antes."""
+    from app.services import uso_ia
+
+    resp = client.messages.create(model=model, **_opcoes(model, ferramentas),
+                                  **kwargs)
+    uso_ia.registrar(funcao, model, getattr(resp, 'usage', None),
+                     canal=canal)
+    categoria = _categoria_recusa(resp)
+    destino = modelo_de_fallback(model, categoria)
+    if destino and _fallback_ligado():
+        logger.warning('%s: recusa (%s) no %s — refazendo no %s', funcao,
+                       categoria, model, destino)
+        resp = client.messages.create(model=destino,
+                                      **_opcoes(destino, ferramentas),
+                                      **kwargs)
+        uso_ia.registrar(funcao, destino, getattr(resp, 'usage', None),
+                         canal=canal)
+    return resp
 
 
 # ── Visibilidade e verificação ─────────────────────────────────────────
@@ -267,18 +382,17 @@ def modelos_por_funcao():
         planejamento_ia,
         seo_descricoes,
         treino_ia_perguntas,
-        zapi_bot,
     )
-    whatsapp = ''
-    if has_app_context():
-        whatsapp = (current_app.config.get('ZAPI_BOT_MODELO') or '').strip()
+    whatsapp = modelo_configurado(
+        current_app.config.get('ZAPI_BOT_MODELO') if has_app_context()
+        else None, 'ZAPI_BOT_MODELO')
     modelos = {
         'bot_atendimento': chatbot.MODELO,
         'followup': chatbot.FOLLOWUP_MODELO,
         'vigia': chatbot_vigia.MODELO,
         'auditor': chatbot_auditor.MODELO,
         'copilot_slack': copilot.MODELO_DEFAULT,
-        'copilot_whatsapp': whatsapp or zapi_bot.MODELO_WHATSAPP_DEFAULT,
+        'copilot_whatsapp': whatsapp,
         'ocr_cupom': MODELO_PADRAO,
         'ocr_nf': conta_pagar_ia.MODELO,
         'cadastro_ia': cadastro_ia.MODELO,
@@ -381,3 +495,15 @@ def verificar_ao_vivo(modelo=None):
     ]
     return {'ok': all(t['ok'] for t in testes), 'modelo': modelo,
             'testes': testes}
+
+
+def verificar_modelos_em_uso():
+    """`verificar_ao_vivo` para CADA modelo distinto que as funções usam de
+    fato (o padrão e os que alguma env do Railway pôs no lugar) — uma env
+    antiga recebe parâmetros de OUTRA família, e só uma chamada real prova
+    que a API os aceita. Cobertura: os modelos de `modelos_por_funcao`, com
+    os dois formatos de chamada (sem e com ferramentas)."""
+    modelos = sorted(set(modelos_por_funcao()['por_funcao'].values()))
+    por_modelo = {m: verificar_ao_vivo(m) for m in modelos}
+    return {'ok': all(r.get('ok') for r in por_modelo.values()),
+            'modelos': modelos, 'por_modelo': por_modelo}

@@ -49,16 +49,14 @@ def _chamar_claude(prompt):
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
-        resp = client.messages.create(
+        # sem tools; teto curto: raciocinio desligado pelo parametro que o
+        # modelo aceita (ia_modelos.criar, que registra o custo)
+        resp = ia_modelos.criar(
+            client, 'seo',
             model=MODELO,
             max_tokens=400,
-            # sem tools; teto curto: raciocinio desligado pelo parametro que
-            # o modelo aceita
-            **ia_modelos.opcoes_sem_raciocinio(MODELO),
             messages=[{'role': 'user', 'content': prompt}],
         )
-        from app.services import uso_ia
-        uso_ia.registrar('seo', MODELO, getattr(resp, 'usage', None))
         # Recusa: texto parcial nao vira sugestao (ia_modelos loga a
         # categoria; a tela mostra que a IA nao gerou).
         if ia_modelos.recusa(resp):

@@ -184,7 +184,7 @@ def test_sonnet_5_tem_preco_na_tabela():
     trava pra troca de modelo nunca mais esquecer a tabela."""
     from app.services.uso_ia import calcular_custo
     assert calcular_custo('claude-sonnet-5', 1_000_000, 1_000_000) \
-        == Decimal('18')
+        == Decimal('12')
 
 
 def test_sonnet_5_5_tem_preco_proprio():

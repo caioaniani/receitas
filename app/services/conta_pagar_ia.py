@@ -84,24 +84,24 @@ def _content_block(file_bytes, mimetype):
 
 
 def _chamar(client, modelo, bloco):
-    response = client.messages.create(
+    """(dados, modelo que respondeu)."""
+    # Extracao de NF/boleto sem tools: raciocinio so comeria teto/custo —
+    # desligado pelo parametro que o modelo aceita (ia_modelos.criar, que
+    # tambem registra o custo).
+    response = ia_modelos.criar(
+        client, 'ocr_nf',
         model=modelo,
         max_tokens=2000,
-        # Extracao de NF/boleto sem tools: raciocinio so comeria teto/custo
-        # — desligado pelo parametro que o modelo aceita.
-        **ia_modelos.opcoes_sem_raciocinio(modelo),
         system=SYSTEM_PROMPT,
         messages=[{'role': 'user', 'content': [
             bloco,
             {'type': 'text', 'text': 'Extrai os dados deste documento.'},
         ]}],
     )
-    from app.services import uso_ia
-    uso_ia.registrar('ocr_nf', modelo, getattr(response, 'usage', None))
     ia_modelos.exigir_resposta(response)  # recusa nao e documento lido
     texto = ''.join(b.text for b in response.content if b.type == 'text').strip()
     texto = re.sub(r'^```(?:json)?\s*|\s*```$', '', texto, flags=re.MULTILINE).strip()
-    return json.loads(texto)
+    return json.loads(texto), ia_modelos.modelo_servido(response, modelo)
 
 
 def extrair_documento(file_bytes, mimetype='image/jpeg'):
@@ -123,8 +123,8 @@ def extrair_documento(file_bytes, mimetype='image/jpeg'):
     client = anthropic.Anthropic(api_key=api_key)
     bloco = _content_block(file_bytes, mimetype)
     try:
-        dados = _chamar(client, MODELO, bloco)
-        dados['modelo_usado'] = MODELO
+        dados, usado = _chamar(client, MODELO, bloco)
+        dados['modelo_usado'] = usado
         return dados
     except json.JSONDecodeError:
         return {'erro': 'json_invalido'}

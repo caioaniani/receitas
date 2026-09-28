@@ -1200,7 +1200,7 @@ _TEXTO_VAZIO_RECLAMACAO = (
     'para a nossa equipe dar retorno.')
 # Timeout da chamada a Anthropic. Sem isso o default do SDK (~10 min) segura
 # a thread E o lock da conversa quando a conexao trava — o cliente espera 10
-# minutos pelo fallback. 60s cobre Opus com tools folgado.
+# minutos pelo fallback. 60s cobre o modelo com tools folgado.
 API_TIMEOUT_S = 60
 
 # Janela de atendimento humano (BRT). O bot CONTINUA respondendo fora dela
@@ -1419,8 +1419,9 @@ def _e_loop_repetido(historico, minimo=3):
     return len(alvo) >= 2 and all(u == alvo for u in users)
 
 
-def _chamar_com_retry_sobrecarga(client, **kwargs):
-    """`messages.create` com UMA retentativa extra para falha PONTUAL da API
+def _chamar_com_retry_sobrecarga(client, funcao='bot_atendimento',
+                                 **kwargs):
+    """`ia_modelos.criar` com UMA retentativa extra para falha PONTUAL da API
     (429/500/529 — sobrecarga e rate limit respondem RÁPIDO, não são hang).
 
     Caso real 16/07/2026 (auditor): um 529 isolado derrubou a conversa
@@ -1433,14 +1434,14 @@ def _chamar_com_retry_sobrecarga(client, **kwargs):
 
     import anthropic
     try:
-        return client.messages.create(**kwargs)
+        return ia_modelos.criar(client, funcao, **kwargs)
     except anthropic.APIStatusError as exc:
         if getattr(exc, 'status_code', None) not in (429, 500, 529):
             raise
         logger.warning('chatbot: API %s (sobrecarga pontual) — retry único '
                        'em 2s', exc.status_code)
         _t.sleep(2)
-        return client.messages.create(**kwargs)
+        return ia_modelos.criar(client, funcao, **kwargs)
 
 
 def _resp_handoff(texto, motivo, tools_usadas=None, tools_resumo=None):
@@ -2356,8 +2357,13 @@ def _responder_modelo_offline(historico, *, telefone_contato=None,
 
     for _ in range(MAX_ITERACOES):
         try:
+            # Raciocinio adaptativo (ferramentas=True); no Sonnet 5.5 o texto
+            # entre tools volta em bloco thinking (display 'updates'). Aqui
+            # ele nao vai ao cliente: com tool_use o texto e descartado e o
+            # handoff usa o input da tool. Custo registrado pelo criar.
             resp = _chamar_com_retry_sobrecarga(
                 client,
+                ferramentas=True,
                 model=MODELO,
                 max_tokens=max_tokens_atual,
                 system=[{'type': 'text',
@@ -2366,20 +2372,12 @@ def _responder_modelo_offline(historico, *, telefone_contato=None,
                          'cache_control': {'type': 'ephemeral'}}],
                 tools=tools_cache,
                 messages=messages,
-                # Raciocinio adaptativo; no Sonnet 5.5 o texto entre tools
-                # volta em bloco thinking (display 'updates'). Aqui ele nao
-                # vai ao cliente: com tool_use o texto e descartado e o
-                # handoff usa o input da tool.
-                **ia_modelos.opcoes_com_ferramentas(MODELO),
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception('chatbot: erro Anthropic')
             return _resp_handoff(_FALLBACK, f'erro anthropic: {exc}',
                                  tools_usadas=tools_usadas,
                                  tools_resumo=tools_resumo)
-
-        from app.services import uso_ia
-        uso_ia.registrar('bot_atendimento', MODELO, getattr(resp, 'usage', None))
 
         # Truncou no teto de tokens: refaz UMA vez com folga em vez de mandar
         # resposta cortada (link de carrinho/preco pela metade) ao cliente.
@@ -2672,17 +2670,16 @@ def _followup_gerar_texto(api_key, historico, minutos):
             continue
         quem = 'CLIENTE' if m.get('role') == 'user' else 'NOS'
         linhas.append(f'{quem}: {content}')
-    resp = client.messages.create(
+    # Gerador de UMA frase com teto de 150 tokens: raciocinio comeria o teto
+    # sem ganho — desligado pelo parametro que o modelo aceita
+    # (ia_modelos.criar, que registra o custo).
+    resp = ia_modelos.criar(
+        client, 'followup',
         model=FOLLOWUP_MODELO,
         max_tokens=150,
-        # Gerador de UMA frase com teto de 150 tokens: raciocinio comeria o
-        # teto sem ganho — desligado pelo parametro que o modelo aceita.
-        **ia_modelos.opcoes_sem_raciocinio(FOLLOWUP_MODELO),
         system=FOLLOWUP_PROMPT.format(minutos=minutos),
         messages=[{'role': 'user', 'content': '\n'.join(linhas) or '(vazio)'}],
     )
-    from app.services import uso_ia
-    uso_ia.registrar('followup', FOLLOWUP_MODELO, getattr(resp, 'usage', None))
     ia_modelos.exigir_resposta(resp)  # recusa nao vira cutucao parcial
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
