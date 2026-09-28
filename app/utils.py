@@ -1,4 +1,5 @@
 """Utilitários compartilhados."""
+import re
 from datetime import UTC, date, datetime, timedelta, timezone
 
 
@@ -256,23 +257,21 @@ DOC_CNPJ = 'cnpj'
 _PESOS_CNPJ = (6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)
 
 
-def normalizar_documento(valor):
-    """Forma canônica de CPF/CNPJ: maiúsculas e só [0-9A-Z] (sem ``./-``,
-    espaços ou outros sinais). Não valida — só normaliza.
+# Rótulo colado pelo autopreenchimento/cópia ("CPF: 529.982.247-25",
+# "CNPJ nº 11.222.333/0001-81", "CPF/CNPJ 529..."). Só com separador depois
+# (':' ou espaço): "CPF5299..." sem separador pode ser um CNPJ alfanumérico.
+_ROTULO_DOCUMENTO = re.compile(
+    r'^\s*(?:cpf|cnpj)(?:\s*/\s*(?:cpf|cnpj))?(?:\s*n[º°o]\.?)?\s*[:\s]\s*',
+    re.IGNORECASE)
 
-    >>> normalizar_documento('12.abc.345/01de-35')
-    '12ABC34501DE35'
-    >>> normalizar_documento(' 529.982.247-25 ')
-    '52998224725'
-    """
+
+def _so_alfanumericos(valor):
     return ''.join(c.upper() for c in str(valor or '')
                    if c.isascii() and c.isalnum())
 
 
-def cpf_valido(valor):
-    """CPF: 11 dígitos numéricos + dígitos verificadores (Receita Federal).
-    Rejeita sequências iguais ('11111111111') e qualquer letra."""
-    d = normalizar_documento(valor)
+def _cpf_ok(d):
+    """CPF já normalizado: 11 dígitos + DVs; sequência igual não vale."""
     if len(d) != 11 or not d.isdigit() or len(set(d)) == 1:
         return False
     for i in (9, 10):
@@ -293,6 +292,44 @@ def _dv_cnpj(base):
     return 0 if resto < 2 else 11 - resto
 
 
+def _cnpj_ok(d):
+    """CNPJ já normalizado: 12 posições [0-9A-Z] + 2 DV numéricos."""
+    if len(d) != 14 or not d[12:].isdigit() or len(set(d)) == 1:
+        return False
+    return _dv_cnpj(d[:12]) == int(d[12]) and _dv_cnpj(d[:13]) == int(d[13])
+
+
+def normalizar_documento(valor):
+    """Forma canônica de CPF/CNPJ: maiúsculas e só [0-9A-Z] (sem ``./-``,
+    espaços ou outros sinais). Não valida — só normaliza. Um rótulo no
+    começo ("CPF: ", "CNPJ nº ") sai, a menos que o texto inteiro já seja
+    um documento válido e o resto não (revisão 28/09/2026).
+
+    >>> normalizar_documento('12.abc.345/01de-35')
+    '12ABC34501DE35'
+    >>> normalizar_documento(' 529.982.247-25 ')
+    '52998224725'
+    >>> normalizar_documento('CPF: 529.982.247-25')
+    '52998224725'
+    """
+    texto = str(valor or '')
+    inteiro = _so_alfanumericos(texto)
+    m = _ROTULO_DOCUMENTO.match(texto)
+    if not m:
+        return inteiro
+    sem_rotulo = _so_alfanumericos(texto[m.end():])
+    if ((_cpf_ok(inteiro) or _cnpj_ok(inteiro))
+            and not (_cpf_ok(sem_rotulo) or _cnpj_ok(sem_rotulo))):
+        return inteiro
+    return sem_rotulo
+
+
+def cpf_valido(valor):
+    """CPF: 11 dígitos numéricos + dígitos verificadores (Receita Federal).
+    Rejeita sequências iguais ('11111111111') e qualquer letra."""
+    return _cpf_ok(normalizar_documento(valor))
+
+
 def cnpj_valido(valor):
     """CNPJ numérico ou alfanumérico: 12 posições [0-9A-Z] + 2 DV numéricos.
     Para CNPJ só com dígitos o cálculo é idêntico ao tradicional. Rejeita
@@ -301,10 +338,7 @@ def cnpj_valido(valor):
     >>> cnpj_valido('12.ABC.345/01DE-35'), cnpj_valido('11.222.333/0001-81')
     (True, True)
     """
-    d = normalizar_documento(valor)
-    if (len(d) != 14 or not d[12:].isdigit() or len(set(d)) == 1):
-        return False
-    return _dv_cnpj(d[:12]) == int(d[12]) and _dv_cnpj(d[:13]) == int(d[13])
+    return _cnpj_ok(normalizar_documento(valor))
 
 
 def tipo_documento(valor):

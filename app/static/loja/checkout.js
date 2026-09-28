@@ -286,8 +286,11 @@
     function aplicarEnderecoFiscal() {
       var modo = modoSelecionado();
       var doc = form.querySelector('[name="cpf"]');
-      // CNPJ alfanumérico: letras contam (mesma regra do fiscal-cnpj.js).
-      var pj = doc && (doc.value || '').replace(/[^0-9A-Za-z]/g, '').length === 14;
+      // Regra ÚNICA de "é CNPJ" (numérico ou alfanumérico): a do
+      // fiscal-cnpj.js. Duas regras divergiam e 14 caracteres fora do
+      // formato escondiam o endereço que o servidor depois exigia.
+      var pj = !!(doc && window.DocumentoFiscal
+                  && window.DocumentoFiscal.ehCnpj(doc.value));
       var retiradaPJ = modo === 'retirada' && pj;
       var bloco = document.getElementById('bloco-entrega');
       bloco.style.display = retiradaPJ ? 'none' : 'block';

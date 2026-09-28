@@ -162,9 +162,36 @@ def _itens_agregados(itens):
 def _contato_normalizado(nome, email, telefone, documento, cep, logradouro, numero,
                          complemento, bairro, cidade, uf):
     from app.services.fiscal_online import digitos
-    return (_texto(nome), _texto(email), digitos(telefone), digitos(documento),
+    from app.utils import normalizar_documento
+    # Documento pela fonte única: `digitos` apagava as letras do CNPJ
+    # alfanumérico e trocar só uma letra passava como "mesmo envio".
+    return (_texto(nome), _texto(email), digitos(telefone), normalizar_documento(documento),
             digitos(cep), _texto(logradouro), _texto(numero), _texto(complemento),
             _texto(bairro), _texto(cidade), _texto(str(uf or '').strip().upper()[:2]))
+
+
+def _fiscal_do_form(form):
+    """Dados fiscais do bloco de CNPJ como o checkout os grava, ou None
+    (CPF, ou PJ sem o bloco). Mesma normalização de `checkout_fiscal.validar`."""
+    from app.services import checkout_fiscal
+    from app.utils import normalizar_documento
+    if (len(normalizar_documento(form.get('cpf'))) != 14
+            or form.get('fiscal_checkout') != '1'):
+        return None
+    dados = checkout_fiscal._normalizar(
+        {campo: form.get('fiscal_' + campo) for campo in checkout_fiscal.CAMPOS})
+    return tuple(sorted(dados.items())), str(form.get('fiscal_situacao_ie') or 'desconhecida')
+
+
+def _fiscal_da_compra(pedido):
+    """A mesma forma de `_fiscal_do_form`, lida do cadastro fiscal gravado."""
+    from app.services.fiscal_online import registro
+    row = registro(pedido)
+    dados = {campo: valor for campo, valor in ((row.dados or {}) if row else {}).items()
+             if not campo.startswith('_')}
+    if not dados:
+        return None
+    return tuple(sorted(dados.items())), row.situacao_ie
 
 
 def _envio_normalizado(kit, form, agenda):
@@ -192,7 +219,9 @@ def _envio_normalizado(kit, form, agenda):
         form.get('logradouro'), form.get('numero'), form.get('complemento'),
         form.get('bairro'), form.get('cidade'), form.get('uf'))
     datas = tuple((item['data'], item['janela'].strip()) for item in agenda)
-    return datas, itens, contato
+    # Razão social, IE e endereço fiscal corrigidos no reenvio não podem
+    # devolver a compra com a NF dos dados antigos (revisão 28/09/2026).
+    return datas, itens, contato, _fiscal_do_form(form)
 
 
 def _compra_normalizada(compra):
@@ -217,7 +246,7 @@ def _compra_normalizada(compra):
         principal.endereco_bairro, principal.endereco_cidade, principal.endereco_uf)
     datas = tuple(sorted((p.data_entrega.isoformat() if p.data_entrega else '',
                           (p.janela_entrega or '').strip()) for p in pedidos))
-    return datas, itens_por_entrega[0], contato
+    return datas, itens_por_entrega[0], contato, _fiscal_da_compra(principal)
 
 
 def _pode_devolver_existente(compra, kit, form, agenda, base):

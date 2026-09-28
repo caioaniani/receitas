@@ -17,8 +17,10 @@ ROTULOS = {'nome': 'razão social', 'endereco': 'logradouro', 'numero': 'número
 
 def digitos(valor):
     """Só dígitos — CEP e inscrição estadual. Documento (CPF/CNPJ) usa
-    `normalizar_documento`: o CNPJ alfanumérico perderia as letras."""
-    return ''.join(c for c in str(valor or '') if c.isdigit())
+    `normalizar_documento`: o CNPJ alfanumérico perderia as letras. Só
+    0-9 ASCII: `isdigit` aceita '²' e dígitos de outros alfabetos, que iam
+    para a NF (mesma regra de `loja_checkout._so_digitos`)."""
+    return ''.join(c for c in str(valor or '') if '0' <= c <= '9')
 
 
 def cortar_aos_limites(dados):

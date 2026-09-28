@@ -16,6 +16,7 @@ import logging
 import time
 
 from app.services import vnda
+from app.utils import normalizar_documento
 
 logger = logging.getLogger(__name__)
 
@@ -480,7 +481,9 @@ def _nf_pedido_online(cpf_digits, numero):
     if not p:
         return None
     from app.services.fiscal_online import documento
-    cpf_pedido = documento(p) if p.cliente_id else ''
+    # `documento` lê o documento CONGELADO da compra antes do cadastro:
+    # pedido sem `cliente_id` com CPF fiscal também é autorizado (M12).
+    cpf_pedido = documento(p)
     if not cpf_pedido or cpf_pedido != cpf_digits:
         # Não confirma que o pedido existe — mesma resposta de "não bateu".
         return ('nao_encontrado', 'cpf nao bate (pedido online)',
@@ -537,7 +540,8 @@ def buscar_nota_fiscal(cpf, numero_pedido, *, conv_id=None, canal=None):
 
     SEMPRE registra no NFLog (audit LGPD)."""
     from app.services import tiny
-    cpf_d = ''.join(c for c in (cpf or '') if c.isdigit())
+    # Fonte única de documento: o CNPJ alfanumérico perderia as letras.
+    cpf_d = normalizar_documento(cpf)
     numero = (numero_pedido or '').strip()
 
     def _log(resultado, detalhe=''):
@@ -680,7 +684,7 @@ def _autorizar_pedido(code, telefone_contato, cpf_cliente):
             return {'ok': True, 'order': order}
 
     # 2. Match por CPF.
-    cpf_digits = ''.join(c for c in (cpf_cliente or '') if c.isdigit())
+    cpf_digits = normalizar_documento(cpf_cliente)
     if cpf_digits:
         try:
             cpf_pedido = vnda.cpf_do_pedido(code)
@@ -791,7 +795,7 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente,
             if tel and telefone_chave(tel) == tel_contato:
                 autorizado_como = rotulo
                 break
-    cpf_d = ''.join(c for c in (cpf_cliente or '') if c.isdigit())
+    cpf_d = normalizar_documento(cpf_cliente)
     cpf_pedido = ''
     if not autorizado_como:
         from app.services.fiscal_online import documento

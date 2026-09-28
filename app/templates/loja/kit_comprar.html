@@ -111,7 +111,7 @@
           <label for="kit-cliente-sobrenome">Sobrenome<input type="text" name="sobrenome" id="kit-cliente-sobrenome" autocomplete="family-name" maxlength="150" value="{{ form.get('sobrenome', '') }}" required></label>
           <label class="kits-field-wide" for="kit-email">E-mail<input type="email" name="email" id="kit-email" autocomplete="email" maxlength="200" value="{{ form.get('email', '') }}" required></label>
           <label for="kit-telefone">Telefone com DDD<input type="tel" name="telefone" id="kit-telefone" autocomplete="tel" value="{{ form.get('telefone', '') }}" placeholder="(11) 99999-9999" required></label>
-          <label for="kit-cpf">CPF ou CNPJ<input type="text" name="cpf" id="kit-cpf" autocapitalize="characters" spellcheck="false" maxlength="18" value="{{ form.get('cpf', '') }}" required></label>
+          <label for="kit-cpf">CPF ou CNPJ<input type="text" name="cpf" id="kit-cpf" autocapitalize="characters" spellcheck="false" maxlength="18" data-doc-fiscal value="{{ form.get('cpf', '') }}" required><button type="button" class="btn-link doc-letras" data-doc-letras hidden>CNPJ com letras? Usar o teclado de letras</button></label>
         </div>
       </section>
       {% include 'loja/_fiscal_cnpj.html' %}

@@ -7,9 +7,13 @@
    * + 2 dígitos verificadores). Reduzir a dígitos TRUNCA o CNPJ novo.
    * Exposto em window.DocumentoFiscal para a máscara do checkout usar a
    * MESMA regra (fonte única no navegador). */
+  // Rótulo colado pelo autopreenchimento ("CPF: 529...", "CNPJ nº ...") —
+  // mesma regra de _ROTULO_DOCUMENTO no servidor: só com ':' ou espaço depois.
+  var ROTULO = /^\s*(?:cpf|cnpj)(?:\s*\/\s*(?:cpf|cnpj))?(?:\s*n[º°o]\.?)?\s*[:\s]\s*/i;
   var DocumentoFiscal = {
     normalizar: function (valor) {
-      return String(valor || '').replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+      return String(valor || '').replace(ROTULO, '')
+        .replace(/[^0-9A-Za-z]/g, '').toUpperCase();
     },
     // Formato de CNPJ (numérico ou alfanumérico); o servidor confere o DV.
     ehCnpj: function (valor) {
@@ -34,6 +38,32 @@
     }
   };
   window.DocumentoFiscal = DocumentoFiscal;
+
+  /* Teclado do celular: a maioria informa CPF (só números), então o campo
+   * abre o teclado numérico; "CNPJ com letras?" troca para o de letras.
+   * Aplicado só com JavaScript — sem ele o campo fica no teclado de texto
+   * e aceita os dois formatos. */
+  function tecladoDoDocumento() {
+    document.querySelectorAll('[data-doc-fiscal]').forEach(function (campo) {
+      var botao = campo.parentNode && campo.parentNode.querySelector('[data-doc-letras]');
+      function usarLetras(focar) {
+        campo.setAttribute('inputmode', 'text');
+        if (botao) botao.hidden = true;
+        if (focar) { campo.blur(); campo.focus(); }
+      }
+      if (/[A-Za-z]/.test(DocumentoFiscal.normalizar(campo.value))) {
+        usarLetras(false);
+      } else {
+        campo.setAttribute('inputmode', 'numeric');
+        if (botao) botao.hidden = false;
+      }
+      if (botao) botao.addEventListener('click', function () { usarLetras(true); });
+      campo.addEventListener('input', function () {
+        if (/[A-Za-z]/.test(DocumentoFiscal.normalizar(campo.value))
+            && campo.getAttribute('inputmode') !== 'text') usarLetras(false);
+      });
+    });
+  }
 
   function iniciar() {
     document.querySelectorAll('[data-fiscal-cnpj]').forEach(function (bloco) {
@@ -211,6 +241,7 @@
       atualizarTipo();
     });
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
-  else iniciar();
+  function iniciarTudo() { tecladoDoDocumento(); iniciar(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciarTudo);
+  else iniciarTudo();
 })();

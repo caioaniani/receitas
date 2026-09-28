@@ -1404,3 +1404,19 @@ body.modal-instalar-aberto { overflow: hidden; }
   background: #fff5f5; border-color: #f1a9a9; color: #8a1f1f;
 }
 .loja-aviso-success { background: #f3fbf5; border-color: #9fd6ae; color: #1f5b31; }
+
+/* "CNPJ com letras?" — troca o teclado numérico do campo de documento pelo
+   de letras (fiscal-cnpj.js; só aparece com JavaScript). */
+.doc-letras {
+  display: inline-block;
+  margin-top: 4px;
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  color: var(--texto);
+  font-family: var(--fonte-corpo);
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.doc-letras[hidden] { display: none; }
