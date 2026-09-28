@@ -292,6 +292,13 @@ def modelos_por_funcao():
         'por_funcao': modelos,
         'fora_do_padrao': sorted(f for f, m in modelos.items()
                                  if m != MODELO_PADRAO),
+        # Funções migradas que hoje não chamam a API em produção (decisão de
+        # 24/09/2026, atendimento restrito): o modelo vale se forem religadas.
+        'desligadas_nos_canais': {
+            'bot_atendimento': 'motor de IA do atendimento só roda em teste '
+                               'offline desde 24/09/2026',
+            'followup': 'retomada automática desativada em 24/09/2026',
+        },
     }
 
 
