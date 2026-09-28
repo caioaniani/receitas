@@ -474,6 +474,16 @@ def _persistir_composicao_menu(poi, produto_id, comp):
         ))
 
 
+def _cliente_da_sessao():
+    """Cliente logado na loja nesta requisição, ou None (anônimo, fora de
+    request — ex.: testes que chamam o serviço direto)."""
+    from flask import has_request_context
+    if not has_request_context():
+        return None
+    from app.services import loja_auth
+    return loja_auth.cliente_atual()
+
+
 def _email_valido(email):
     email = (email or '').strip()
     return '@' in email and '.' in email.split('@')[-1] and len(email) >= 6
@@ -1018,11 +1028,22 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     # ── Cria/reusa cliente (guest por email) ───────────────────────────
     cliente = Cliente.query.filter(
         db.func.lower(Cliente.email) == email.lower()).with_for_update().first()
+    # O e-mail digitado NÃO prova identidade: qualquer visitante pode usar o
+    # e-mail de outra pessoa. Por isso o cadastro de um Cliente que JÁ existe
+    # só é alterado quando quem compra está LOGADO nessa mesma conta. Sem
+    # isso, um checkout anônimo trocava nome/telefone/CPF/endereço da conta
+    # alheia — e o telefone trocado abria a conta pelo portal Wi-Fi, que usa
+    # o telefone cadastrado como prova de posse (auditoria 27/09/2026). Os
+    # dados digitados continuam valendo para ESTE pedido (snapshot abaixo).
+    dono_logado = False
     if not cliente:
         cliente = Cliente(nome=nome, email=email, telefone=telefone, cpf=cpf,
                           origem='site')
         db.session.add(cliente)
     else:
+        logado = _cliente_da_sessao()
+        dono_logado = logado is not None and logado.id == cliente.id
+    if dono_logado:
         # Antes de trocar o documento compartilhado, preserva o dos pedidos
         # legados que ainda não possuem snapshot. Não reescreve snapshots existentes.
         from app.models import FiscalPedidoOnline
