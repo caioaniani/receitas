@@ -3537,6 +3537,37 @@ todos com teste em `tests/test_checkout_auditoria_graves.py`:
   (com nome/telefone) não é engolido pelo do preview anônimo.
 - Entradas malformadas (JSON não-lista/aninhado, '²', `?k=` não-ASCII)
   respondem 4xx; dígitos só ASCII nas rotas da loja e no `pagarme`.
+- **Frete — teto do Google POR CANAL** (`frete.CANAL_CHECKOUT/PREVIEW/
+  DESPACHO`): a cotação anônima (`/loja/api/frete` e o bot) usa o canal
+  preview e só consome até o sub-teto `FRETE_GOOGLE_MAX_DIA_PREVIEW`
+  (número ou '%'; vazio = 60% de `FRETE_GOOGLE_MAX_DIA`); checkout e despacho
+  usam o restante do total. Contador 'dia|total|preview' em AppConfig com
+  compare-and-swap em savepoint. `FRETE_GOOGLE_MAX_DIA=0` = nenhuma chamada
+  remota. ZERO_RESULTS vira cache negativo (`google_zero`, 30 dias). A
+  coordenada da BrasilAPI deixou de ser "precisa": vale só como ÚLTIMO
+  recurso, `impreciso=True`, fonte `brasilapi` (alerta + sensor); antes
+  dela vêm a retentativa do Google com o logradouro oficial e a cadeia do
+  Nominatim. O vigia do site acusa canário de dentro resolvido só pelo CEP.
+  Testes: `tests/test_frete_auditoria.py`.
+- **CNPJ alfanumérico (IN RFB 2.229/2024)**: fonte única em `app/utils.py`
+  (`normalizar_documento`, `cpf_valido`, `cnpj_valido`, `tipo_documento`,
+  `documento_valido`) e `window.DocumentoFiscal` no navegador (máscara do
+  checkout e dos kits). NUNCA reduzir documento a dígitos (`_so_digitos` é só
+  para telefone/CEP). A consulta pública do checkout corta cada campo ao
+  limite do Tiny ANTES de assinar e diz o que abreviou; a reconsulta do dono
+  não corta (pendência para conferência). Consulta que falha NÃO fica em
+  cache e a rota responde 404 (não encontrado) ou 503 (indisponível).
+  Testes: `tests/test_checkout_fiscal_auditoria.py`.
+- **Kits**: o mesmo `checkout_token` só devolve a compra existente num duplo
+  clique IDÊNTICO e ainda aberto; formulário alterado ou compra encerrada =
+  409 com token novo (`FormularioJaUsado`). Estorno em 'solicitado' é
+  resolvido lendo a cobrança (`canceled_amount` cobrindo todos os estornos
+  da cobrança; recusa explícita libera novo pedido; sem prova segue
+  solicitado, DELETE nunca reenviado). Uma parada bloqueada não derruba o
+  "Iniciar rota" (savepoint por parada). Pagamento em dobro ou em compra
+  cancelada de propósito avisa o dono. A expiração consulta o gateway sem
+  trava e age por compra, com commit próprio (QR válido adia; pago
+  confirma). Testes: `tests/test_kits_auditoria.py`.
 
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
