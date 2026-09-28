@@ -16,6 +16,7 @@ import os
 from datetime import timedelta
 from unittest.mock import patch
 
+import requests
 from flask import Flask
 
 from app.extensions import db
@@ -197,12 +198,13 @@ def test_reserva_nao_perde_incremento_de_outro_worker(app):
     def ler_com_concorrente(bruto, hoje_iso):
         resultado = original(bruto, hoje_iso)
         if not estado['interferiu']:
-            # O "outro worker" grava entre a leitura e o UPDATE desta reserva.
+            # O "outro worker" grava, em OUTRA conexão, entre a leitura e o
+            # UPDATE desta reserva.
             estado['interferiu'] = True
-            db.session.execute(update(AppConfig)
-                               .where(AppConfig.key == 'frete_google_dia')
-                               .values(value=f'{dia}|3|1')
-                               .execution_options(synchronize_session=False))
+            with db.engine.begin() as outro:
+                outro.execute(update(AppConfig.__table__)
+                              .where(AppConfig.__table__.c.key == 'frete_google_dia')
+                              .values(value=f'{dia}|3|1'))
         return resultado
 
     with patch('app.services.frete._ler_uso', side_effect=ler_com_concorrente):
@@ -212,9 +214,8 @@ def test_reserva_nao_perde_incremento_de_outro_worker(app):
 
 def test_falha_de_banco_na_reserva_nao_descarta_o_estado_do_chamador(app,
                                                                      caplog):
-    """Erro nosso ao reservar a vaga desfaz só o savepoint: sem Google nesta
-    cotação, mas o que o chamador já tinha na sessão continua lá (um rollback
-    geral apagaria em silêncio o que o checkout acumulou)."""
+    """Erro de banco no contador: sem Google nesta cotação, e a sessão do
+    chamador segue intacta (o contador roda em conexão própria)."""
     from sqlalchemy.exc import OperationalError
     _ligar_google(app, teto=10)
     db.session.add(AppConfig(key='estado_do_chamador', value='preservar'))
@@ -223,12 +224,23 @@ def test_falha_de_banco_na_reserva_nao_descarta_o_estado_do_chamador(app,
         raise OperationalError('SELECT', {}, Exception('conexão perdida'))
 
     with patch('app.services.frete._ler_uso', side_effect=banco_caiu), \
-         caplog.at_level(logging.ERROR, logger='app.services.frete'):
+         caplog.at_level(logging.WARNING, logger='app.services.frete'):
         assert frete._reservar_vaga_google(frete.CANAL_CHECKOUT) is False
     db.session.commit()
     assert AppConfig.get('estado_do_chamador') == 'preservar'
     assert AppConfig.get('frete_google_dia') is None
-    assert any('reservar vaga' in rec.message for rec in caplog.records)
+    assert any('contador do teto' in rec.message for rec in caplog.records)
+
+
+def test_reserva_nao_commita_a_transacao_do_chamador(app):
+    """Revisão 28/09/2026: a reserva fazia `commit` da sessão do checkout (e
+    soltava o FOR UPDATE da compra de kit) no meio da compra."""
+    _ligar_google(app, teto=10)
+    db.session.add(AppConfig(key='pendente_do_chamador', value='x'))
+    assert frete._reservar_vaga_google(frete.CANAL_CHECKOUT) is True
+    db.session.rollback()                     # o chamador desiste
+    assert AppConfig.get('pendente_do_chamador') is None
+    assert frete.uso_google_hoje()['total'] == 1   # a vaga ficou gravada
 
 
 def test_zero_results_fica_em_cache_e_nao_paga_de_novo(app):
@@ -308,15 +320,20 @@ def test_corrida_na_gravacao_do_cache_nao_inutiliza_a_sessao(app):
     cfg = AppConfig(key='pendente_do_chamador', value='x')
     db.session.add(cfg)
 
-    class _QueryCega:
+    import sqlalchemy
+    real_select = sqlalchemy.select
+
+    def select_cego(*cols):
         """Simula o outro processo: a linha existe, mas este não a viu."""
-        def filter_by(self, **kw):
-            return self
+        consulta = real_select(*cols)
 
-        def first(self):
-            return None
+        class _Cega:
+            def where(self, *a):
+                return consulta.where(
+                    GeocodeCache.__table__.c.chave == '__ninguem__')
+        return _Cega()
 
-    with patch.object(google_maps.GeocodeCache, 'query', _QueryCega()):
+    with patch.object(sqlalchemy, 'select', select_cego):
         google_maps._gravar_cache_preciso('rua disputada, 7', (-1.0, -1.0),
                                           'google')
     db.session.commit()                         # sessão segue utilizável
@@ -414,6 +431,92 @@ def test_centroide_do_cep_no_nominatim_vem_antes_da_brasilapi(app):
     assert any(q.startswith('05688-020') for q in chamadas)
 
 
+_BRASILAPI_SEM_COORD = dict(_BRASILAPI_COM_COORD, location={'coordinates': {}})
+
+
+def test_com_numero_o_texto_do_cliente_vem_antes_do_rotulo_oficial(app):
+    """Revisão 28/09/2026: com número, o rótulo oficial (rua SEM número) era
+    tentado primeiro e aceito como PRECISO — um ponto qualquer da rua."""
+    app.config['FRETE_GOOGLE'] = '0'
+    consultas = []
+
+    def fake_get(url, **kw):
+        if 'brasilapi' in url:
+            return _Resp(200, _BRASILAPI_SEM_COORD)
+        q = (kw.get('params') or {}).get('q', '')
+        consultas.append(q)
+        return _Resp(200, [{'lat': '-23.6097', 'lon': '-46.7110',
+                            'display_name': q, 'address': {'city': 'São Paulo'}}])
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
+        r = frete.consultar_frete(
+            'Rua Cândido de Azevedo Marques, 750, Morumbi, 05688-020')
+    assert '750' in consultas[0]
+    assert r['fonte'] == 'gratis' and r['impreciso'] is False
+
+
+def test_numero_nao_localizado_cota_pela_rua_marcado_impreciso(app):
+    app.config['FRETE_GOOGLE'] = '0'
+
+    def fake_get(url, **kw):
+        if 'brasilapi' in url:
+            return _Resp(200, _BRASILAPI_SEM_COORD)
+        q = (kw.get('params') or {}).get('q', '')
+        if '750' in q or not q.startswith('Rua Joaquim'):
+            return _Resp(200, [])
+        return _Resp(200, [{'lat': '-23.6097', 'lon': '-46.7110',
+                            'display_name': q, 'address': {'city': 'São Paulo'}}])
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
+        r = frete.consultar_frete(
+            'Rua Cândido de Azevedo Marques, 750, Morumbi, 05688-020')
+    assert r['ok'] is True
+    assert r['fonte'] == 'rua_sem_numero' and r['impreciso'] is True
+
+
+def test_nominatim_fora_encerra_a_cadeia_com_a_coordenada_da_brasilapi(app):
+    """Nominatim fora custava 5 × 8 s por cotação (uma chamada por etapa)."""
+    app.config['FRETE_GOOGLE'] = '0'
+    nominatim = []
+
+    def fake_get(url, **kw):
+        if 'brasilapi' in url:
+            return _Resp(200, _BRASILAPI_COM_COORD)
+        nominatim.append(url)
+        raise requests.ConnectionError('fora')
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
+        r = frete.consultar_frete(
+            'Rua Cândido de Azevedo Marques, 750, Morumbi, 05688-020')
+    assert len(nominatim) == 1
+    assert r['ok'] is True and r['fonte'] == 'brasilapi' and r['impreciso'] is True
+
+
+def test_nominatim_com_http_de_erro_e_sem_outra_fonte_nao_localiza(app):
+    app.config['FRETE_GOOGLE'] = '0'
+    nominatim = []
+
+    def fake_get(url, **kw):
+        if 'brasilapi' in url:
+            return _Resp(200, _BRASILAPI_SEM_COORD)
+        nominatim.append(url)
+        return _Resp(503, None)
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
+        r = frete.consultar_frete(
+            'Rua Cândido de Azevedo Marques, 750, Morumbi, 05688-020')
+    assert len(nominatim) == 1
+    assert r == {'ok': False, 'erro': 'nao_encontrado'}
+
+
+def test_candidato_sem_coordenada_e_pulado(app):
+    with patch('app.services.frete.requests.get', return_value=_Resp(200, [
+            {'lat': None, 'lon': None, 'display_name': 'sem ponto'},
+            {'lat': '-23.61', 'lon': '-46.70', 'display_name': 'com ponto'}])):
+        geo = frete._geocodificar_texto('Rua Qualquer, 1')
+    assert geo == (-23.61, -46.70, 'com ponto')
+
+
 def test_retentativa_nao_repete_o_mesmo_texto_no_google(app):
     """Se o endereço oficial montado é o mesmo texto já tentado (mesma chave
     de cache), não há segunda chamada paga."""
@@ -439,6 +542,89 @@ def test_nominatim_com_resposta_fora_do_formato_nao_derruba(app):
                return_value=_Resp(200, {'error': 'Too many requests'})):
         r = frete.consultar_frete('Rua Qualquer, 1, São Paulo')
     assert r == {'ok': False, 'erro': 'nao_encontrado'}
+
+
+# ── Cache do Google compartilhado: frete × despacho × rotas ────────────────
+
+def _google_resp(tipo, numero='1822'):
+    return _Resp(200, {'status': 'OK', 'results': [{
+        'partial_match': False, 'types': ['street_address'],
+        'address_components': [{'long_name': numero, 'types': ['street_number']}],
+        'geometry': {'location_type': tipo,
+                     'location': {'lat': -23.6708, 'lng': -46.6883}}}]})
+
+
+def test_rotas_gravam_fonte_propria_que_o_frete_nao_trata_como_precisa(app):
+    """O geocode das rotas não confere `location_type` (aceita centroide):
+    gravado como 'google', o frete cobrava por esse ponto como preciso."""
+    from app.services import google_maps
+    app.config['GOOGLE_MAPS_API_KEY'] = 'chave-teste'
+    with patch.object(google_maps, '_geocode_remoto', return_value=(-23.6, -46.7)):
+        assert google_maps.geocode('Rua das Rotas, 10') == (-23.6, -46.7)
+        assert google_maps.geocode_em_lote(['Rua do Lote, 20']) == {
+            'Rua do Lote, 20': (-23.6, -46.7)}
+    for texto in ('Rua das Rotas, 10', 'Rua do Lote, 20'):
+        linha = GeocodeCache.query.filter_by(
+            chave=google_maps._normalizar_chave(texto)).one()
+        assert linha.fonte == google_maps.FONTE_ROTA
+        assert google_maps.cache_preciso(texto) == (None, None)
+
+
+def test_falha_das_rotas_nao_apaga_a_resposta_negativa_do_google(app):
+    """Apagar o ZERO_RESULTS do frete fazia o frete pagar de novo pelo mesmo
+    texto; o cache de outra fonte (Nominatim antigo) continua sendo limpo."""
+    from app.services import google_maps
+    app.config['GOOGLE_MAPS_API_KEY'] = 'chave-teste'
+    zero = google_maps._normalizar_chave('Rua Inexistente, 1')
+    antigo = google_maps._normalizar_chave('Rua Antiga, 2')
+    db.session.add_all([
+        GeocodeCache(chave=zero, lat=None, lng=None,
+                     fonte=google_maps.FONTE_ZERO, criado_em=agora()),
+        GeocodeCache(chave=antigo, lat=-23.5, lng=-46.6, fonte='nominatim')])
+    db.session.commit()
+    with patch.object(google_maps, '_geocode_remoto', return_value=None):
+        assert google_maps.geocode('Rua Inexistente, 1') is None
+        assert google_maps.geocode_em_lote(['Rua Antiga, 2']) == {'Rua Antiga, 2': None}
+    assert GeocodeCache.query.filter_by(chave=zero).one().fonte == google_maps.FONTE_ZERO
+    assert GeocodeCache.query.filter_by(chave=antigo).first() is None
+
+
+def test_despacho_sem_prova_da_porta_nao_desliga_o_google_do_frete(app):
+    """GEOMETRIC_CENTER não prova a porta (o despacho recusa), mas é preciso
+    para o frete: gravar 'google_aprox' desligava o Google daquele texto."""
+    from app.services import google_maps
+    app.config['GOOGLE_MAPS_API_KEY'] = 'chave-teste'
+    texto = 'Avenida Sabará, 1822, São Paulo'
+    with patch.object(google_maps.requests, 'get',
+                      return_value=_google_resp('GEOMETRIC_CENTER')):
+        assert google_maps.geocode_preciso(texto, numero_entrega='1822') is None
+    assert google_maps.cache_preciso(texto) == ('preciso', (-23.6708, -46.6883))
+    assert google_maps.cache_preciso(texto, numero_entrega='1822') == (None, None)
+
+
+def test_despacho_aproximado_continua_negativo_para_o_frete(app):
+    from app.services import google_maps
+    app.config['GOOGLE_MAPS_API_KEY'] = 'chave-teste'
+    texto = 'Avenida Sabará, 1822, São Paulo'
+    with patch.object(google_maps.requests, 'get',
+                      return_value=_google_resp('APPROXIMATE')):
+        assert google_maps.geocode_preciso(texto, numero_entrega='1822') is None
+    assert google_maps.cache_preciso(texto) == ('negativo', None)
+
+
+def test_gravar_cache_do_google_nao_commita_o_chamador(app):
+    """Revisão 28/09/2026: a gravação em savepoint fazia `commit` da sessão do
+    checkout (e soltava a trava da compra de kit)."""
+    from app.services import google_maps
+    app.config['GOOGLE_MAPS_API_KEY'] = 'chave-teste'
+    db.session.add(AppConfig(key='pendente_do_chamador', value='x'))
+    with patch.object(google_maps.requests, 'get',
+                      return_value=_google_resp('ROOFTOP')):
+        assert google_maps.geocode_preciso('Rua Nova, 5') == (-23.6708, -46.6883)
+    db.session.rollback()
+    assert AppConfig.get('pendente_do_chamador') is None
+    assert GeocodeCache.query.filter_by(
+        chave=google_maps._normalizar_chave('Rua Nova, 5')).one().fonte == 'google'
 
 
 # ── Painel e vigia acompanham ──────────────────────────────────────────────
@@ -475,7 +661,7 @@ def test_vigia_acusa_canario_que_so_resolveu_pelo_cep(app):
                side_effect=frete_impreciso):
         problemas = site_vigia.checar_frete()
     assert len(problemas) == 1
-    assert 'só resolveu pelo CEP' in problemas[0] and 'brasilapi' in problemas[0]
+    assert 'resolveu sem precisão' in problemas[0] and 'brasilapi' in problemas[0]
 
 
 # ── 3. As envs do frete chegam ao app ───────────────────────────────────────
