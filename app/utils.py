@@ -237,6 +237,86 @@ def telefone_chave(numero):
     return d[-10:]
 
 
+# ── Documento CPF/CNPJ (27/09/2026) ────────────────────────────────────
+# CNPJ ALFANUMÉRICO (IN RFB 2.229/2024): inscrições novas a partir de julho
+# de 2026 têm as 12 primeiras posições em [0-9A-Z] e os 2 dígitos
+# verificadores numéricos. Reduzir o documento a dígitos TRUNCA esse CNPJ
+# (o checkout recusava a compra e o fluxo fiscal perdia as letras). Fonte
+# ÚNICA de normalização/validação de documento: checkout, cadastro fiscal
+# do pedido, consulta pública e Tiny leem daqui — nunca `isdigit` para
+# documento. Espelho no navegador: `window.DocumentoFiscal`, em
+# app/static/loja/fiscal-cnpj.js (mesma regra de caracteres e de tipo).
+
+DOC_CPF = 'cpf'
+DOC_CNPJ = 'cnpj'
+_PESOS_CNPJ = (6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)
+
+
+def normalizar_documento(valor):
+    """Forma canônica de CPF/CNPJ: maiúsculas e só [0-9A-Z] (sem ``./-``,
+    espaços ou outros sinais). Não valida — só normaliza.
+
+    >>> normalizar_documento('12.abc.345/01de-35')
+    '12ABC34501DE35'
+    >>> normalizar_documento(' 529.982.247-25 ')
+    '52998224725'
+    """
+    return ''.join(c.upper() for c in str(valor or '')
+                   if c.isascii() and c.isalnum())
+
+
+def cpf_valido(valor):
+    """CPF: 11 dígitos numéricos + dígitos verificadores (Receita Federal).
+    Rejeita sequências iguais ('11111111111') e qualquer letra."""
+    d = normalizar_documento(valor)
+    if len(d) != 11 or not d.isdigit() or len(set(d)) == 1:
+        return False
+    for i in (9, 10):
+        soma = sum(int(d[j]) * (i + 1 - j) for j in range(i))
+        dig = (soma * 10) % 11
+        if dig == 10:
+            dig = 0
+        if dig != int(d[i]):
+            return False
+    return True
+
+
+def _dv_cnpj(base):
+    """DV módulo 11 do CNPJ; cada caractere vale ``ord(c) - 48`` (o dígito
+    vale ele mesmo, 'A' = 17 … 'Z' = 42), com os pesos de sempre."""
+    pesos = _PESOS_CNPJ[-len(base):]
+    resto = sum((ord(c) - 48) * p for c, p in zip(base, pesos, strict=True)) % 11
+    return 0 if resto < 2 else 11 - resto
+
+
+def cnpj_valido(valor):
+    """CNPJ numérico ou alfanumérico: 12 posições [0-9A-Z] + 2 DV numéricos.
+    Para CNPJ só com dígitos o cálculo é idêntico ao tradicional. Rejeita
+    sequências iguais ('11111111111111').
+
+    >>> cnpj_valido('12.ABC.345/01DE-35'), cnpj_valido('11.222.333/0001-81')
+    (True, True)
+    """
+    d = normalizar_documento(valor)
+    if (len(d) != 14 or not d[12:].isdigit() or len(set(d)) == 1):
+        return False
+    return _dv_cnpj(d[:12]) == int(d[12]) and _dv_cnpj(d[:13]) == int(d[13])
+
+
+def tipo_documento(valor):
+    """``DOC_CPF``/``DOC_CNPJ`` para documento VÁLIDO; ``None`` caso contrário."""
+    if cpf_valido(valor):
+        return DOC_CPF
+    if cnpj_valido(valor):
+        return DOC_CNPJ
+    return None
+
+
+def documento_valido(valor):
+    """CPF ou CNPJ (numérico ou alfanumérico) válido."""
+    return tipo_documento(valor) is not None
+
+
 # ── Timezone helpers (BRT / America/Sao_Paulo) ─────────────────────────
 # Sistema todo opera em BRT naive. Brasil nao tem DST desde 2019, offset -3 fixo.
 

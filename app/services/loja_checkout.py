@@ -28,7 +28,13 @@ from app.extensions import db
 from app.models import Cliente, Loja, PedidoOnline, PedidoOnlineItem
 from app.services import frete as frete_svc
 from app.services import loja_catalogo
-from app.utils import agora
+from app.utils import (
+    agora,
+    cnpj_valido,
+    cpf_valido,
+    documento_valido,
+    normalizar_documento,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -604,52 +610,29 @@ def _validar_limite(erros, rotulo, valor, limite):
 
 
 def _so_digitos(s):
+    """Só dígitos — para telefone e CEP. NUNCA para CPF/CNPJ: o CNPJ
+    alfanumérico perderia as letras; documento usa
+    `app.utils.normalizar_documento`."""
     return ''.join(c for c in (s or '') if c.isdigit())
 
 
 def _cpf_valido(cpf):
-    """Valida 11 dígitos + dígitos verificadores. Algoritmo padrão da
-    Receita Federal. Rejeita sequências iguais ('11111111111')."""
-    cpf = _so_digitos(cpf)
-    if len(cpf) != 11 or len(set(cpf)) == 1:
-        return False
-    for i in (9, 10):
-        soma = sum(int(cpf[j]) * (i + 1 - j) for j in range(i))
-        dig = (soma * 10) % 11
-        if dig == 10:
-            dig = 0
-        if dig != int(cpf[i]):
-            return False
-    return True
+    """CPF válido. Delega ao helper canônico (`app.utils.cpf_valido`) — o
+    nome fica aqui porque rotas e testes o importam deste módulo."""
+    return cpf_valido(cpf)
 
 
 def _cnpj_valido(cnpj):
-    """Valida 14 dígitos + dígitos verificadores (mod 11 com os pesos da
-    Receita Federal). Rejeita sequências iguais ('11111111111111')."""
-    cnpj = _so_digitos(cnpj)
-    if len(cnpj) != 14 or len(set(cnpj)) == 1:
-        return False
-    pesos = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-    for i in (12, 13):
-        soma = sum(int(cnpj[j]) * pesos[len(pesos) - i + j] for j in range(i))
-        dig = 11 - (soma % 11)
-        if dig >= 10:
-            dig = 0
-        if dig != int(cnpj[i]):
-            return False
-    return True
+    """CNPJ válido, numérico OU alfanumérico (IN RFB 2.229/2024). Delega ao
+    helper canônico (`app.utils.cnpj_valido`)."""
+    return cnpj_valido(cnpj)
 
 
 def _cpf_cnpj_valido(doc):
-    """CPF (11 dígitos) ou CNPJ (14 dígitos) válido — o campo de documento
+    """CPF ou CNPJ (numérico ou alfanumérico) válido — o campo de documento
     do checkout aceita os dois (pedido do dono, 13/07/2026: cliente PJ
     compra pelo site e precisa da NF no CNPJ)."""
-    doc = _so_digitos(doc)
-    if len(doc) == 11:
-        return _cpf_valido(doc)
-    if len(doc) == 14:
-        return _cnpj_valido(doc)
-    return False
+    return documento_valido(doc)
 
 
 def _montar_endereco(form, incluir_complemento=True):
@@ -743,7 +726,9 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     email = (form.get('email') or '').strip()
     telefone, telefone_erro = _normalizar_telefone_checkout(
         form.get('telefone'))
-    cpf = _so_digitos(form.get('cpf') or '')
+    # Documento canônico (maiúsculas, só [0-9A-Z]): reduzir a dígitos
+    # truncava o CNPJ ALFANUMÉRICO (auditoria 27/09/2026).
+    cpf = normalizar_documento(form.get('cpf'))
     from app.services import checkout_fiscal
     fiscal_snapshot, fiscal_erros = checkout_fiscal.validar(form, cpf)
     erros.extend(fiscal_erros)

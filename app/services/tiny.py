@@ -291,9 +291,15 @@ def _so_digitos(s):
 
 
 def buscar_contato_por_documento(documento):
-    """Pesquisa cadastro INTERNO por documento exato; duplicatas não são escolhidas."""
-    doc = _so_digitos(documento)
-    if len(doc) not in (11, 14):
+    """Pesquisa cadastro INTERNO por documento exato; duplicatas não são escolhidas.
+
+    Documento na forma canônica (`app.utils.normalizar_documento`): o CNPJ
+    alfanumérico reduzido a dígitos iria TRUNCADO ao Tiny — e, com três
+    letras, a sobra de 11 dígitos seria pesquisada como se fosse um CPF.
+    """
+    from app.utils import documento_valido, normalizar_documento
+    doc = normalizar_documento(documento)
+    if not documento_valido(doc):
         return {'erro': 'Documento inválido.'}
     encontrados = {}
     pagina = 1
@@ -312,7 +318,7 @@ def buscar_contato_por_documento(documento):
             return {'erro': 'Resposta inválida do cadastro Tiny.'}
         for linha in linhas:
             contato = linha.get('contato') if isinstance(linha, dict) else None
-            if isinstance(contato, dict) and _so_digitos(contato.get('cpf_cnpj')) == doc:
+            if isinstance(contato, dict) and normalizar_documento(contato.get('cpf_cnpj')) == doc:
                 if contato.get('id'):
                     encontrados[str(contato['id'])] = contato
         try:
@@ -330,7 +336,7 @@ def buscar_contato_por_documento(documento):
         return {'contato': None}
     retorno = _get('contato.obter.php', params={'id': next(iter(encontrados))})
     contato = (retorno or {}).get('contato')
-    if not isinstance(contato, dict) or _so_digitos(contato.get('cpf_cnpj')) != doc:
+    if not isinstance(contato, dict) or normalizar_documento(contato.get('cpf_cnpj')) != doc:
         return {'erro': 'Não foi possível conferir o documento do cadastro Tiny.'}
     return {'contato': contato}
 
