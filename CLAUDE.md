@@ -3425,6 +3425,65 @@ reembolsar esse recebimento pelo Pagar.me. Devolução externa não está
 implementada. Caminho e operação em `docs/pagamento-externo-site.md` e no
 Manual de operação (QUANDO PRECISAR).
 
+## Auditoria do checkout do site (27-28/09/2026)
+
+Pedido do dono ("veja se está tudo ok com o checkout" → "pode fazer direto
+em produção"). Varredura de 10 dimensões com verificação adversarial:
+53 problemas distintos (6 graves, 26 médios, 21 baixos). Contratos novos,
+todos com teste em `tests/test_checkout_auditoria_graves.py`:
+
+- **O e-mail digitado no checkout NÃO prova identidade.** `criar_pedido` só
+  altera nome/telefone/CPF/endereço de um `Cliente` existente quando quem
+  compra está LOGADO nessa conta (`_cliente_da_sessao`); anônimo usa os dados
+  só no snapshot do pedido. O Wi-Fi (`_guest_tem_telefone_divergente`) só
+  conta telefone de pedido PAGO. Consequência aceita: convidado recorrente
+  não atualiza o cadastro pelo checkout.
+- **Plano do dia confere a QUANTIDADE**, somada por item (inteiro + fatiado,
+  menus diferentes disputam o mesmo limite): checkout, `/api/disponibilidade-
+  checkout` (`qtd` no corpo, `disponivel` na resposta) e
+  `loja_catalogo.saldo_do_plano`. Pagamento que chega acima do limite
+  reserva com `forcar=True` e avisa o dono (a demanda paga é real).
+- **Nova cobrança só depois de encerrar a anterior NO PAGAR.ME**
+  (`_resolver_tentativas_pendentes`): tentativa paga no gateway confirma o
+  pedido; cartão pendente bloqueia; Pix pendente é cancelado por
+  `pagarme.cancelar_cobranca_pendente`, que LÊ a resposta — DELETE em
+  cobrança paga é ESTORNO: a tentativa vira 'estornado' e o 'paid' atrasado
+  dela nunca confirma o pedido. Gateway fora = não cobra de novo.
+- `_marcar_pago`: segundo pagamento no mesmo pedido e pagamento em pedido
+  cancelado DE PROPÓSITO (motivo ≠ pix_expirado) avisam o dono; cancelamento
+  deliberado não volta a "pago" sozinho (mesma regra dos kits). Pix expirado
+  pago depois volta limpo (sem cancelado_em/motivo).
+- **Webhook**: falha no processamento (inclusive na busca do pedido) devolve
+  o claim de `PagarmeEvento` e a rota responde 500 → o Pagar.me reentrega.
+  Só `IntegrityError` no claim é "duplicado".
+- **Cron de expiração em DUAS fases** (`loja_estoque_reserva._expirar_um`):
+  consulta o Pagar.me SEM trava nenhuma, depois trava o pedido, reconfere e
+  cancela/marca pago/adia, com commit por pedido. NUNCA fazer rede segurando
+  FOR UPDATE do pedido ou o lock da loja (provado em Postgres: travava o
+  checkout da loja inteira). Não cancela com QR do Pix válido; pedido que o
+  gateway não deixa decidir vai pro fim da fila e avisa o dono após 24 h;
+  order 404 conta como encerrada (com aviso).
+- A baixa continua SÓ por confirmação do gateway — webhook, ou consulta ao
+  Pagar.me (conciliação, nova tentativa, expiração). Nunca pelo retorno do
+  checkout. `conciliar_pedido` consulta TODAS as tentativas.
+- Avisos de pedido pago: `loja_alerta.alertar_pedido_pago` (sessão isolada,
+  teto de críticos/h `LOJA_ALERTA_PAGO_MAX_CRITICO_HORA`=6; 'acima do plano'
+  sai como normal). `FRETE_GOOGLE`, `FRETE_GOOGLE_MAX_DIA` e `FRETE_SENSOR`
+  agora estão no `config.py` (antes a env do Railway era ignorada).
+- **XSS**: dado de origem externa (e-mail do checkout, nome do pré-cadastro,
+  razão social, fornecedor, MP, categoria) nunca dentro de onsubmit/onclick.
+  Padrão: `data-msg="..."` + `confirm(this.dataset.msg)`, ou `data-confirmar`
+  no `<form>` (handler delegado em `app.js`). E-mail do checkout recusa
+  `<>()[]\,;:"` e espaço.
+- Checkout JS: janela de HOJE filtrada pelo FIM (`LojaCheckout.janelaAindaServe`,
+  igual ao servidor — faixa larga de data especial); falha passageira da
+  conferência de disponibilidade não trava o botão (o servidor confere de
+  novo); confirmação com cartão em confirmação não oferece "pagar de novo"
+  e o polling acompanha por até 1 h.
+- **PENDENTE (decisão do dono)**: convidado sem senha ainda pode ser
+  "reivindicado" pelo Wi-Fi por quem pagar um pedido com o e-mail dele; fechar
+  de vez exige confirmação por e-mail (link) para convidados no Wi-Fi.
+
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
 Escrito na pedra a pedido do dono ("ja tinha falado uma vez mas nao ficou
