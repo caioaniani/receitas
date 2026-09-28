@@ -19,10 +19,10 @@
 <div class="alert alert-info small">
     <i class="bi bi-info-circle"></i>
     Cada linha é um endereço que <strong>pode ter custado uma venda</strong>: ou o
-    site não localizou (venda travou), ou cotou o frete pelo <strong>centroide do
-    CEP</strong> (valor impreciso), ou ficou <strong>fora da área</strong> (além do
-    raio), ou a Lalamove não conseguiu o endereço pra despachar. Sucesso normal
-    não aparece aqui.
+    site não localizou (venda travou), ou cotou o frete <strong>só pelo CEP</strong>
+    (valor impreciso — fonte <code>cep_centroide</code> ou <code>brasilapi</code>),
+    ou ficou <strong>fora da área</strong> (além do raio), ou a Lalamove não
+    conseguiu o endereço pra despachar. Sucesso normal não aparece aqui.
 </div>
 
 <div class="row g-3 mb-3">
@@ -35,7 +35,7 @@
     <div class="col-6 col-md-3">
         <div class="card h-100"><div class="card-body text-center py-3">
             <div class="display-6 mb-0 text-warning">{{ r.impreciso }}</div>
-            <div class="small text-muted">Frete IMPRECISO<br>(centroide do CEP)</div>
+            <div class="small text-muted">Frete IMPRECISO<br>(só pelo CEP)</div>
         </div></div>
     </div>
     <div class="col-6 col-md-3">
@@ -52,9 +52,10 @@
     </div>
     <div class="col-6 col-md-3">
         <div class="card h-100"><div class="card-body text-center py-3">
-            <div class="h4 mb-0">{{ r.google_chamadas_hoje }}</div>
+            <div class="h4 mb-0">{{ r.google_chamadas_hoje }}<span class="small text-muted"> / {{ r.google_teto_dia }}</span></div>
             <div class="small text-muted">Google hoje<br>
-                ≈ US$ {{ '%.2f'|format(r.google_custo_hoje_usd) }}</div>
+                ≈ US$ {{ '%.2f'|format(r.google_custo_hoje_usd) }}<br>
+                cotação anônima: {{ r.google_preview_hoje }} / {{ r.google_teto_preview }}</div>
         </div></div>
     </div>
 </div>

@@ -86,6 +86,7 @@ class FreteSensor(db.Model):
     desfecho = db.Column(db.String(24), index=True)  # barrado | impreciso |
     #                                        resolvido_google | lalamove_falhou
     fonte = db.Column(db.String(20))        # google | gratis | cep_centroide
+    #                                        | brasilapi | latlng
     endereco = db.Column(db.String(300))
     cep = db.Column(db.String(12))
     km = db.Column(db.Float)
