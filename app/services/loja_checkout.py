@@ -20,6 +20,7 @@ Modos de entrega (decisão do dono 17/06/2026):
 """
 import logging
 import os
+import re
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -484,9 +485,17 @@ def _cliente_da_sessao():
     return loja_auth.cliente_atual()
 
 
+# Formato de e-mail: um único @, nada de espaço nem dos caracteres que não
+# aparecem em endereço real mas servem pra quebrar HTML/JS (<>()[]\,;:" e
+# aspas duplas). Apóstrofo continua aceito (O'Neil@...). Defesa em
+# profundidade: a saída também escapa (auditoria do checkout, 27/09/2026).
+_RE_EMAIL_CHECKOUT = re.compile(
+    r'^[^@\s<>()\[\]\\,;:"]+@[^@\s<>()\[\]\\,;:"\']+\.[^@\s<>()\[\]\\,;:"\'.]{2,}$')
+
+
 def _email_valido(email):
     email = (email or '').strip()
-    return '@' in email and '.' in email.split('@')[-1] and len(email) >= 6
+    return len(email) >= 6 and bool(_RE_EMAIL_CHECKOUT.match(email))
 
 
 def _nome_valido(s):
