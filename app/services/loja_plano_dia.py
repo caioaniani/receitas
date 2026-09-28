@@ -138,12 +138,25 @@ def remover_regra_semanal(kind, item_id):
     venda continuavam com o limite antigo — só as outras ficavam livres
     (auditoria 27/09/2026). Mesmo tratamento de `remover_excecao`: das
     datas de hoje em diante sem exceção própria, o limite vira "sem limite"
-    e a reserva/venda é preservada."""
+    e a reserva/venda é preservada.
+
+    Só as linhas que a REGRA escreveu (valor igual ao que ela dava para
+    aquela data) são liberadas. Um limite gravado à mão pelas telas legadas
+    (ex.: o dono zerou um dia que a regra permitia) tem outro valor e fica —
+    liberá-lo reabriria a venda de um dia fechado de propósito (revisão
+    28/09/2026)."""
     from app.utils import hoje
     row = (db.session.query(EstoqueSiteRegraSemanal)
            .filter_by(kind=kind, item_id=item_id).first())
     if row is None:
         return
+    regra_mask, regra_limite = row.dias_mask, row.qtd_limite
+
+    def _valor_da_regra(data):
+        if not (regra_mask >> data.weekday()) & 1:
+            return 0
+        return _limite_como_planejado(regra_limite)
+
     db.session.delete(row)
     datas_com_excecao = {
         d for (d,) in db.session.query(EstoqueSiteExcecao.data)
@@ -155,6 +168,8 @@ def remover_regra_semanal(kind, item_id):
     for plano in planos:
         if plano.data in datas_com_excecao:
             continue
+        if (plano.qtd_planejada or 0) != _valor_da_regra(plano.data):
+            continue   # limite manual: não foi a regra que escreveu
         plano.qtd_planejada = DEFAULT_QTD_PLANEJADA + (plano.qtd_reservada or 0)
     db.session.commit()
 

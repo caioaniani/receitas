@@ -490,6 +490,26 @@ def test_remover_regra_semanal_libera_datas_com_venda(app):
     assert EstoqueSitePlano.query.filter_by(item_id=prod.id, data=dia).one().qtd_reservada == 5
 
 
+def test_remover_regra_semanal_preserva_limite_manual(app):
+    """Revisão 28/09/2026: o dono zerou à mão (tela legada) um dia que a
+    regra permitia; remover a regra não pode reabrir esse dia."""
+    from app.extensions import db
+    from app.models import EstoqueSitePlano
+    from app.services import loja_plano_dia
+    from app.utils import hoje
+    prod = _produto(db)
+    dia_manual = hoje() + timedelta(days=2)
+    loja_plano_dia.salvar_regra_semanal('produto', prod.id, range(7), 5)
+    db.session.add(EstoqueSitePlano(kind='produto', item_id=prod.id,
+                                    data=dia_manual, qtd_planejada=0,
+                                    qtd_reservada=0))
+    db.session.commit()
+    loja_plano_dia.remover_regra_semanal('produto', prod.id)
+    assert EstoqueSitePlano.query.filter_by(
+        item_id=prod.id, data=dia_manual).one().qtd_planejada == 0
+    assert loja_plano_dia.saldo('produto', prod.id, dia_manual) == 0
+
+
 def test_editar_data_de_pedido_pago_move_a_reserva_do_plano(app, admin_user):
     from app.extensions import db
     from app.models import EstoqueSitePlano

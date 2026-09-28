@@ -201,10 +201,15 @@ def _gravar_snapshot(pedido, el, qtd):
         reg.quantidade = int(reg.quantidade or 0) + int(qtd)
 
 
-def _linhas_do_snapshot(pedido):
+def _linhas_do_snapshot(pedido, *, lojas_extras=()):
     """(registros, [(el, qtd)]) da reserva congelada, com as linhas travadas
     (lock da loja + FOR UPDATE); None se o pedido não tem snapshot (pedido
-    anterior à tabela — o chamador usa a reexpansão pelo cadastro)."""
+    anterior à tabela — o chamador usa a reexpansão pelo cadastro).
+
+    `lojas_extras`: lojas que o CHAMADOR vai travar depois na mesma transação
+    (ex.: a loja da baixa real). Entram no MESMO `serializar_lojas` para que
+    todas saiam em ordem crescente — travar a do snapshot e depois outra de
+    id menor deadlocka no Postgres com o sync do Seru (revisão 28/09/2026)."""
     from app.models import ReservaEstoqueSite
     if pedido.id is None:
         return None
@@ -212,7 +217,8 @@ def _linhas_do_snapshot(pedido):
             .order_by(ReservaEstoqueSite.id).all())
     if not regs:
         return None
-    estoque_helpers.serializar_lojas([r.loja_id for r in regs])
+    estoque_helpers.serializar_lojas([r.loja_id for r in regs]
+                                     + list(lojas_extras))
     linhas = []
     for r in regs:
         if r.coluna not in _COLUNAS_ESTOQUE:
@@ -297,10 +303,10 @@ def consumir(pedido, *, loja_id, usuario_id=None):
     # 1. Libera a reserva — pelo SNAPSHOT gravado no `reservar` (a cesta pode
     #    ter sido editada depois do checkout); pedido antigo, sem snapshot,
     #    reexpande pelo cadastro como antes. Nao depende da baixa real abaixo.
-    snap = _linhas_do_snapshot(pedido)
+    snap = _linhas_do_snapshot(pedido, lojas_extras=[loja_id])
     if snap is not None:
         regs, linhas_snap = snap
-        estoque_helpers.serializar_loja(loja_id)     # a baixa real abaixo
+        estoque_helpers.serializar_loja(loja_id)     # já travada acima (reentrante)
         # Se o QR expirou, o cron já liberou (e apagou o snapshot); o que
         # sobrar aqui só é devolvido com a reserva viva.
         if pedido.reserva_expira_em is not None:

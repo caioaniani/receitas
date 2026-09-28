@@ -6155,6 +6155,11 @@ def _loja_online_pedido_editar(codigo):
     trocou_loja = (loja_antiga and loja_nova and loja_antiga.id != loja_nova.id)
     if trocou_loja and reserva_fisica_viva:
         expira = p.reserva_expira_em   # a troca de loja não renova o prazo
+        # As duas lojas travadas JÁ em ordem crescente: liberar(antiga) e
+        # reservar(nova) na ordem da edição podiam deadlockar no Postgres com
+        # o sync do Seru ou com outra edição no sentido contrário.
+        from app.services import estoque_helpers
+        estoque_helpers.serializar_lojas([loja_antiga.id, loja_nova.id])
         loja_estoque_reserva.liberar(p, loja_id=loja_antiga.id)
         loja_estoque_reserva.reservar(p, loja_id=loja_nova.id)
         p.reserva_expira_em = expira
