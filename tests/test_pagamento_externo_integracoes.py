@@ -129,7 +129,12 @@ def test_reabrir_expirado_preserva_reserva_de_outro_cliente(cenario):
     loja_estoque_reserva.reservar(outro, loja_id=saldo.loja_id)
     p.reserva_expira_em = agora() - timedelta(minutes=1)
     db.session.commit()
-    assert loja_estoque_reserva.liberar_expirados() == [p.codigo]
+    # O cron consulta o gateway antes de cancelar (auditoria 27/09/2026):
+    # aqui a tentativa já está encerrada lá.
+    encerrado = {'ok': True, 'status': 'failed', 'pago': False,
+                 'charge_status': 'failed'}
+    with patch('app.services.pagarme.consultar_order', return_value=encerrado):
+        assert loja_estoque_reserva.liberar_expirados() == [p.codigo]
     assert saldo.quantidade_reservada == 3
     _confirmar(p, owner)
     assert p.status == 'pago' and p.cancelado_em is None

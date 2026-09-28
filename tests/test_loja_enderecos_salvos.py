@@ -3,6 +3,7 @@
 Auto-salva no fim do checkout (cliente logado + modo entrega) e
 pré-preenche no GET do próximo checkout.
 """
+from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal
 from unittest.mock import patch
@@ -30,6 +31,15 @@ def _cliente_logado(app, c, email='end@x.com'):
     with c.session_transaction() as s:
         s['cliente_id'] = cli_id
     return cli_id
+
+
+@contextmanager
+def _logado_na_requisicao(app, cli_id):
+    """Requisição com a conta do cliente logada na sessão da loja."""
+    from flask import session
+    with app.test_request_context('/loja/checkout', method='POST'):
+        session['cliente_id'] = cli_id
+        yield
 
 
 def _form_entrega(**kw):
@@ -61,12 +71,14 @@ def test_checkout_auto_salva_endereco_principal(app):
         frete_ok = {'ok': True, 'valor': 15.0, 'gratis': False,
                     'fora_area': False, 'distancia_km': 3.0,
                     'endereco': 'Rua Tal, 77', 'aviso': ''}
-        with patch('app.services.frete.consultar_frete', return_value=frete_ok):
+        # O endereço só é salvo com a conta LOGADA na requisição (auditoria
+        # 27/09/2026 — o e-mail digitado não prova que a conta é de quem
+        # compra; antes o teste passava fora de request e salvava por e-mail).
+        with patch('app.services.frete.consultar_frete', return_value=frete_ok), \
+                _logado_na_requisicao(app, cli_id):
             pedido, erros = loja_checkout.criar_pedido(
                 form, [{'kind': 'produto', 'id': prod.id, 'qtd': 1}],
                 base=base_dt)
-        # Como criar_pedido roda fora do request flask-client, o Cliente
-        # foi resolvido por email — então salva pra ele.
         assert erros == [] and pedido is not None
         ends = EnderecoCliente.query.filter_by(cliente_id=cli_id).all()
         assert len(ends) == 1
@@ -146,12 +158,14 @@ def test_endereco_repetido_nao_duplica(app):
                     'endereco': '', 'aviso': ''}
         with patch('app.services.frete.consultar_frete', return_value=frete_ok):
             # Pedido 1
-            loja_checkout.criar_pedido(
-                form, [{'kind': 'produto', 'id': prod.id, 'qtd': 1}],
-                base=base_dt)
+            with _logado_na_requisicao(app, cli_id):
+                loja_checkout.criar_pedido(
+                    form, [{'kind': 'produto', 'id': prod.id, 'qtd': 1}],
+                    base=base_dt)
             # Pedido 2 (mesmo endereço)
-            loja_checkout.criar_pedido(
-                form, [{'kind': 'produto', 'id': prod.id, 'qtd': 2}],
-                base=base_dt)
+            with _logado_na_requisicao(app, cli_id):
+                loja_checkout.criar_pedido(
+                    form, [{'kind': 'produto', 'id': prod.id, 'qtd': 2}],
+                    base=base_dt)
         ends = EnderecoCliente.query.filter_by(cliente_id=cli_id).all()
         assert len(ends) == 1   # deduplicou

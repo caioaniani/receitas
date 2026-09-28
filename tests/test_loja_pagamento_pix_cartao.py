@@ -244,10 +244,20 @@ def test_iniciar_cartao_marca_substituicao_de_pix_pendente(app):
                    return_value=_fake_resp(200, body_pix)):
             loja_pagamento.iniciar_pix(ped)
         body_c = {'id': 'or_c', 'charges': [{'id': 'ch_c', 'status': 'paid'}]}
+        # O Pix anterior segue pendente no gateway: é CANCELADO lá antes da
+        # nova cobrança (auditoria 27/09/2026 — antes só virava 'falhou'
+        # localmente e o QR antigo continuava pagável).
+        pendente = {'ok': True, 'status': 'pending', 'pago': False,
+                    'charge_id': 'ch_p', 'charge_status': 'pending'}
         with patch('app.services.pagarme.requests.post',
-                   return_value=_fake_resp(200, body_c)):
+                   return_value=_fake_resp(200, body_c)), \
+                patch('app.services.pagarme.consultar_order',
+                      return_value=pendente), \
+                patch('app.services.pagarme.cancelar_charge',
+                      return_value={'ok': True}) as cancelar:
             pag, erros = loja_pagamento.iniciar_cartao(ped, 'tok', parcelas=1)
         assert erros == []
+        cancelar.assert_called_once_with('ch_p')
         pix = PagamentoOnline.query.filter_by(pedido_id=ped.id, metodo='pix').first()
         assert pix.status == 'falhou'  # substituído
         assert pag.metodo == 'cartao'
