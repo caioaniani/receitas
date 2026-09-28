@@ -45,7 +45,7 @@
                         {{ 'Reativar' if not c.ativo else 'Arquivar' }}</button>
                 </form>
                 <form method="POST" action="{{ url_for('b2b.cliente_excluir', cid=c.id) }}" class="d-inline"
-                      onsubmit="return confirm('Excluir {{ c.nome }} DEFINITIVAMENTE? Só funciona se ele não tiver venda/fatura/orçamento no histórico.');">
+                      onsubmit="return confirm(this.dataset.msg);" data-msg="Excluir {{ c.nome }} DEFINITIVAMENTE? Só funciona se ele não tiver venda/fatura/orçamento no histórico.">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-sm btn-outline-danger" title="Excluir de vez (só cliente sem histórico — teste/duplicado)">
                         <i class="bi bi-trash"></i></button>

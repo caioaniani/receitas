@@ -345,9 +345,11 @@ def reservar(kind, item_id, data, qtd, *, commit=True, forcar=False):
     de setar limite manual; primeira venda deixou item esgotado). Agora cria
     com 99999, replicando o comportamento default da tela.
 
-    ``forcar`` é exclusivo do recebimento tardio de kit já pago, cujo caller
-    registra alerta auditável: contabiliza demanda real acima do limite em
-    vez de omitir capacidade de um pagamento recebido.
+    ``forcar`` é só para pagamento JÁ RECEBIDO acima do limite — kit pago
+    após a liberação da capacidade (`kits_capacidade.reservar_compra`) e
+    pedido do site pago quando o saldo acabou entre o checkout e o pagamento
+    (`loja_pagamento._reservar_no_plano_do_dia`). Os dois callers avisam o
+    dono: contabiliza a demanda real em vez de omitir um pagamento recebido.
 
     Sem plano de dia: ainda eh chamado, mas eh idempotente em servico de
     cancelamento. Caller decide se chamar baseado em `tem_plano(data)`."""

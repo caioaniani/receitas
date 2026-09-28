@@ -298,6 +298,78 @@ def liberar(pedido, *, loja_id):
     return {'liberadas': len(linhas)}
 
 
+# Pedido que o gateway ainda não deixa cancelar (QR válido, cartão em
+# análise, Pagar.me fora) volta pro fim da fila: sem isso os presos ocupavam
+# sempre o começo do lote de 200 e nenhum pedido novo expirava.
+_ADIAR_EXPIRACAO = timedelta(minutes=5)
+# Pedido esperando o gateway há mais que isso gera UM aviso por dia ao dono.
+_PRESO_ALERTA = timedelta(hours=24)
+
+
+def _expirar_um(pedido_id, base, _loja_baixa, _marcar_pago,
+                situacao_no_gateway):
+    """Um pedido do lote do cron, em DUAS fases e numa transação própria.
+
+    Fase 1 (sem nenhuma trava): consulta o Pagar.me. A rede NÃO pode rodar
+    segurando o FOR UPDATE do pedido nem o lock da loja — com o gateway lento
+    isso parava checkout, webhook e o sync do Seru da loja, e abria deadlock
+    com o webhook (revisão da auditoria, 27/09/2026, provado em Postgres).
+    Fase 2: trava o pedido, reconfere o status (o webhook pode ter chegado no
+    meio) e cancela, marca pago ou adia — com commit ao final.
+
+    Devolve o código do pedido cancelado, ou None."""
+    p = db.session.get(PedidoOnline, pedido_id)
+    if (p is None or p.status != 'aguardando_pagamento' or p.pago_em
+            or p.reserva_expira_em is None or p.reserva_expira_em >= base):
+        db.session.commit()
+        return None
+    situacao, pag = situacao_no_gateway(p, base=base)
+    db.session.commit()   # grava o que a consulta encerrou; solta tudo
+
+    # A confirmação (gateway ou owner) pode ter ocorrido após a consulta.
+    # Mesma ordem de locks do pagamento: pedido antes das linhas de estoque.
+    db.session.refresh(p, with_for_update=True)
+    if (p.status != 'aguardando_pagamento' or p.pago_em
+            or p.reserva_expira_em is None or p.reserva_expira_em >= base):
+        db.session.commit()
+        return None
+    if situacao == 'pago':
+        mudou = _marcar_pago(p, pag, enviar_confirmacao=False)
+        db.session.commit()
+        logger.warning('liberar_expirados: %s estava PAGO no gateway sem '
+                       'webhook — marcado pago em vez de cancelado', p.codigo)
+        if mudou:
+            from app.services.kits_pagamento import apos_confirmacao
+            apos_confirmacao(p)
+        return None
+    if situacao != 'livre':
+        p.reserva_expira_em = base + _ADIAR_EXPIRACAO
+        db.session.commit()
+        if p.criado_em and base - p.criado_em > _PRESO_ALERTA:
+            from app.services.loja_pagamento import _alertar_pedido_pago
+            _alertar_pedido_pago(
+                p,
+                f'⚠️ Pedido do site {p.codigo} está há mais de 24 h esperando '
+                'o Pagar.me confirmar o pagamento (cartão em análise ou '
+                'gateway sem resposta). A reserva de estoque continua presa — '
+                'confira no painel do Pagar.me.',
+                f'preso_gateway|{p.codigo}', critico=False, cooldown=86400)
+        return None
+    loja = _loja_baixa(p)
+    if not loja:
+        logger.warning('liberar_expirados: pedido %s sem loja origem',
+                       p.codigo)
+        p.reserva_expira_em = None
+        db.session.commit()
+        return None
+    liberar(p, loja_id=loja.id)
+    p.status = 'cancelado'
+    p.motivo_cancelamento = 'pix_expirado'
+    p.cancelado_em = base
+    db.session.commit()
+    return p.codigo
+
+
 def liberar_expirados(*, agora_=None, max_lote=200):
     """Cron 5min: pega pedidos `aguardando_pagamento` com
     `reserva_expira_em < agora` e libera reserva + marca cancelado.
@@ -331,48 +403,18 @@ def liberar_expirados(*, agora_=None, max_lote=200):
                  .filter(EntregaKit.pedido_id == PedidoOnline.id).exists())
          .order_by(PedidoOnline.reserva_expira_em)
          .limit(max_lote))
-    for p in q.all():
-        # A confirmação (gateway ou owner) pode ter ocorrido após o SELECT.
-        # Mesma ordem de locks do pagamento: pedido antes das linhas de estoque.
-        db.session.refresh(p, with_for_update=True)
-        if (p.status != 'aguardando_pagamento' or p.pago_em
-                or p.reserva_expira_em is None or p.reserva_expira_em >= base):
-            continue
-        # O gateway é a fonte da verdade: pagamento recebido cujo webhook
-        # falhou/atrasou não pode virar "Pix expirado" (auditoria 27/09/2026).
-        situacao, pag = situacao_no_gateway(p, base=base)
-        if situacao == 'pago':
-            try:
-                mudou = _marcar_pago(p, pag, enviar_confirmacao=False)
-                db.session.commit()
-            except Exception:  # noqa: BLE001
-                db.session.rollback()
-                logger.exception('liberar_expirados: %s pago no gateway, mas '
-                                 'marcar pago falhou', p.codigo)
-                continue
-            logger.warning('liberar_expirados: %s estava PAGO no gateway sem '
-                           'webhook — marcado pago em vez de cancelado',
-                           p.codigo)
-            if mudou:
-                from app.services.kits_pagamento import apos_confirmacao
-                apos_confirmacao(p)
-            continue
-        if situacao != 'livre':
-            continue
-        loja = _loja_baixa(p)
-        if not loja:
-            logger.warning('liberar_expirados: pedido %s sem loja origem',
-                           p.codigo)
-            p.reserva_expira_em = None
-            continue
-        liberar(p, loja_id=loja.id)
-        p.status = 'cancelado'
-        p.motivo_cancelamento = 'pix_expirado'
-        p.cancelado_em = base
-        codigos.append(p.codigo)
-    # Commita sempre: além dos cancelamentos, a consulta ao gateway pode ter
-    # marcado tentativas encerradas lá como 'falhou'.
+    ids = [pid for (pid,) in q.with_entities(PedidoOnline.id).all()]
     db.session.commit()
+    for pid in ids:
+        try:
+            cancelado = _expirar_um(pid, base, _loja_baixa, _marcar_pago,
+                                    situacao_no_gateway)
+        except Exception:  # noqa: BLE001 — um pedido não trava o lote
+            db.session.rollback()
+            logger.exception('liberar_expirados: pedido %s falhou', pid)
+            continue
+        if cancelado:
+            codigos.append(cancelado)
     if codigos:
         logger.info('liberar_expirados: %d pedido(s) cancelado(s): %s',
                     len(codigos), ', '.join(codigos))

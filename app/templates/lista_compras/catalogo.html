@@ -101,7 +101,7 @@
                                 </button>
                             </form>
                             <form method="POST" class="d-inline"
-                                  onsubmit="return confirm('Remover {{ it.nome_item }}?');">
+                                  onsubmit="return confirm(this.dataset.msg);" data-msg="Remover {{ it.nome_item }}?">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="acao" value="remover">
                                 <input type="hidden" name="item_id" value="{{ it.id }}">

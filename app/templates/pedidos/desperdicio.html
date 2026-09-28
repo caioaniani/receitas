@@ -158,7 +158,7 @@
                         {% if current_user.is_admin() or current_user.is_gerente() %}
                         <td>
                             <form method="POST" action="{{ url_for('pedidos.desperdicio_excluir', id=d.id) }}"
-                                  onsubmit="return confirm('Excluir e estornar {{ d.quantidade }} un de {{ d.nome_item }}?');">
+                                  onsubmit="return confirm(this.dataset.msg);" data-msg="Excluir e estornar {{ d.quantidade }} un de {{ d.nome_item }}?">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-link btn-sm text-danger p-0" title="Excluir e estornar">
                                     <i class="bi bi-x-lg"></i>

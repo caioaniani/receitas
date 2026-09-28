@@ -62,7 +62,7 @@
             <a href="{{ url_for('fornecedores.lista') }}" class="btn-pill btn-pill-outline">cancelar</a>
             {% if fornecedor %}
             <form method="POST" action="{{ url_for('fornecedores.excluir', id=fornecedor.id) }}"
-                  class="ms-auto" onsubmit="return confirm('Excluir/desativar {{ fornecedor.nome }}?');">
+                  class="ms-auto" onsubmit="return confirm(this.dataset.msg);" data-msg="Excluir/desativar {{ fornecedor.nome }}?">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn-pill btn-pill-outline" style="border-color:var(--cor-vermelho); color:var(--cor-vermelho);">
                     <i class="bi bi-trash"></i> excluir

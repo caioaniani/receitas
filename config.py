@@ -174,6 +174,13 @@ class Config:
     RETENCAO_BACKUPS_DIAS = int(os.environ.get('RETENCAO_BACKUPS_DIAS', '90') or '90')
     # Sensor do frete (PII: endereço/contato do cliente) — poda por LGPD.
     RETENCAO_FRETE_SENSOR_DIAS = int(os.environ.get('RETENCAO_FRETE_SENSOR_DIAS', '90') or '90')
+    # Frete do site (09/07/2026): kill-switch e teto diário do Google e o
+    # sensor de venda barrada. Sem declarar aqui a env do Railway NUNCA chega
+    # ao app (config.from_object só lê esta classe) — a mesma armadilha do
+    # Spotify; achado da auditoria do checkout de 27/09/2026.
+    FRETE_GOOGLE = os.environ.get('FRETE_GOOGLE', '1')
+    FRETE_GOOGLE_MAX_DIA = os.environ.get('FRETE_GOOGLE_MAX_DIA', '500')
+    FRETE_SENSOR = os.environ.get('FRETE_SENSOR', '1')
     # Coordenadas da loja matriz — origem das rotas de entrega
     ROTA_ORIGEM_LAT = os.environ.get('ROTA_ORIGEM_LAT', '')
     ROTA_ORIGEM_LNG = os.environ.get('ROTA_ORIGEM_LNG', '')
@@ -414,6 +421,10 @@ class Config:
     # ou, na ausencia, ZAPI_NUMERO_DESTINO (mesmo padrao dos outros alertas).
     LOJA_ALERTA_TRAVA = os.environ.get('LOJA_ALERTA_TRAVA', '1')
     LOJA_ALERTA_NUMERO = os.environ.get('LOJA_ALERTA_NUMERO', '')
+    # Teto por hora dos avisos CRÍTICOS de pedido pago que precisa de
+    # conferência (duplicidade, pago em cancelado, estorno involuntário).
+    LOJA_ALERTA_PAGO_MAX_CRITICO_HORA = os.environ.get(
+        'LOJA_ALERTA_PAGO_MAX_CRITICO_HORA', '6')
     # Hosts que servem SOMENTE a loja (admin/gestão viram 404 neles, raiz
     # redireciona pra /loja/). CSV. gestao.* NÃO entra aqui — continua full.
     LOJA_HOSTS = os.environ.get(

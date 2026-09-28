@@ -331,17 +331,81 @@ def alertar_endereco_falho(endereco, cep=None, contato=None,
         logger.exception('loja_alerta: falha ao agendar alerta de endereco')
 
 
-def alertar_pedido_pago(texto, chave):
-    """Alerta ao dono sobre um pedido JÁ PAGO que precisa de conferência
-    (pago acima do limite do Plano do dia, pagamento em duplicidade, dinheiro
-    recebido num pedido cancelado, chargeback). É dinheiro recebido: isento
-    do teto/hora global do Z-API (critico=True) e NÃO obedece ao kill-switch
-    das travas (`LOJA_ALERTA_TRAVA`), que existe pra ruído de checkout.
-    Best-effort/assíncrono; dedup por `chave` (mesmo evento não repete)."""
+# Teto de avisos CRÍTICOS de pedido pago por hora (cruza workers). Passado o
+# teto, o aviso sai como normal e cai no teto/hora global do Z-API — mesma
+# proteção do alerta da Lalamove (`lalamove_alerta._critico_permitido`): um
+# lote de pedidos pagos acima do plano não pode inundar o WhatsApp do dono
+# nem arriscar o bloqueio da conta (revisão da auditoria, 27/09/2026).
+_CHAVE_CRITICO_PAGO = 'loja_alerta_pago_criticos_hora'
+
+
+def _max_critico_pago_hora():
     try:
-        if not _deve_enviar(f'pago|{chave}'):
+        return max(0, int(current_app.config.get(
+            'LOJA_ALERTA_PAGO_MAX_CRITICO_HORA') or 6))
+    except (TypeError, ValueError):
+        return 6
+
+
+def _critico_pago_permitido():
+    """Conta os avisos críticos da hora em AppConfig numa sessão ISOLADA
+    (o caller está no meio da transação do pagamento). Fail-open."""
+    from sqlalchemy.orm import Session
+
+    from app.extensions import db
+    from app.models import AppConfig
+    from app.utils import agora
+    hora = agora().strftime('%Y%m%d%H')
+    try:
+        with Session(db.engine) as s:
+            row = s.get(AppConfig, _CHAVE_CRITICO_PAGO)
+            h, _, n = ((row.value if row else '') or '').partition(':')
+            n = int(n) if (h == hora and n.isdigit()) else 0
+            if row is None:
+                row = AppConfig(key=_CHAVE_CRITICO_PAGO)
+                s.add(row)
+            row.value = f'{hora}:{n + 1}'
+            s.commit()
+        return n < _max_critico_pago_hora()
+    except Exception:  # noqa: BLE001
+        logger.exception('loja_alerta: contador de críticos falhou (fail-open)')
+        return True
+
+
+def _claim_pago(chave, cooldown):
+    """Dedupe do aviso de pedido pago. `cooldown` maior que a janela padrão
+    (ex.: pedido preso esperando o gateway, avisado 1x por dia) usa só o
+    claim persistente, em sessão isolada."""
+    if cooldown <= _DEDUP_SEGUNDOS:
+        return _deve_enviar(f'pago|{chave}')
+    import hashlib
+
+    from app.services.whatsapp import claim_por_cooldown
+    h = hashlib.sha1(f'pago|{chave}'.encode('utf-8', 'ignore')).hexdigest()[:24]
+    try:
+        return claim_por_cooldown(f'loja_alerta_{h}', cooldown,
+                                  sessao_isolada=True)
+    except Exception:  # noqa: BLE001
+        logger.exception('loja_alerta: dedupe do aviso de pedido pago falhou')
+        return True
+
+
+def alertar_pedido_pago(texto, chave, *, critico=True,
+                        cooldown=_DEDUP_SEGUNDOS):
+    """Alerta ao dono sobre um pedido JÁ PAGO que precisa de conferência
+    (pagamento em duplicidade, dinheiro recebido num pedido cancelado,
+    estorno involuntário, chargeback, pago acima do limite do Plano do dia).
+    NÃO obedece ao kill-switch das travas (`LOJA_ALERTA_TRAVA`), que existe
+    pra ruído de checkout. `critico=True` isenta do teto/hora global do Z-API
+    até `LOJA_ALERTA_PAGO_MAX_CRITICO_HORA` avisos por hora; depois sai como
+    normal. Best-effort/assíncrono; dedup por `chave` durante `cooldown`
+    segundos. Nunca commita a sessão do caller."""
+    try:
+        if not _claim_pago(chave, cooldown):
             return
+        if critico:
+            critico = _critico_pago_permitido()
         app = current_app._get_current_object()
-        _POOL.submit(_enviar_direto, app, texto, True)
+        _POOL.submit(_enviar_direto, app, texto, critico)
     except Exception:  # noqa: BLE001
         logger.exception('loja_alerta: falha ao agendar alerta de pedido pago')

@@ -57,7 +57,7 @@
                     {% endif %}
                     {% if st != 'fechada' %}
                     <form method="POST" action="{{ url_for('lista_compras.fechar') }}"
-                          class="mt-1" onsubmit="return confirm('Marcar a semana de {{ loja.nome }} como comprada?');">
+                          class="mt-1" onsubmit="return confirm(this.dataset.msg);" data-msg="Marcar a semana de {{ loja.nome }} como comprada?">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="semana_id" value="{{ info.semana.id }}">
                         <input type="hidden" name="voltar" value="{{ request.full_path }}">

@@ -29,7 +29,7 @@
             <td class="text-end fw-bold">R$ {{ '%.2f'|format(a.total) }}</td>
             <td>
                 <form method="POST" action="{{ url_for('b2b.fatura_fechar') }}" class="d-flex gap-1 flex-wrap align-items-center"
-                      onsubmit="return confirm('Fechar a conta de {{ a.cliente.nome }} no período informado?');">
+                      onsubmit="return confirm(this.dataset.msg);" data-msg="Fechar a conta de {{ a.cliente.nome }} no período informado?">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="cliente_id" value="{{ a.cliente.id }}">
                     <input type="date" name="data_inicio" value="{{ a.primeira.isoformat() }}" class="form-control form-control-sm" style="width:145px" title="Início do período" required>

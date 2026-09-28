@@ -35,7 +35,7 @@
               {% endif %}
             </span>
             <form method="POST" action="{{ url_for('receitas.massa_base_editar', id=mb.id) }}" style="margin:0; flex:0 0 auto;"
-                  onsubmit="return confirm('Tirar «{{ p.nome }}» do grupo?');">
+                  onsubmit="return confirm(this.dataset.msg);" data-msg="Tirar «{{ p.nome }}» do grupo?">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="acao" value="remover">
               <input type="hidden" name="receita_id" value="{{ p.receita_id }}">
@@ -75,7 +75,7 @@
         <button type="submit" class="btn btn-outline-secondary btn-sm">Renomear</button>
       </form>
       <form method="POST" action="{{ url_for('receitas.massa_base_editar', id=mb.id) }}"
-            onsubmit="return confirm('Excluir o grupo «{{ mb.nome }}»?');">
+            onsubmit="return confirm(this.dataset.msg);" data-msg="Excluir o grupo «{{ mb.nome }}»?">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="acao" value="excluir">
         <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i> Excluir grupo</button>

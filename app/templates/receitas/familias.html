@@ -42,15 +42,15 @@
             <div class="d-flex gap-1">
                 <span class="small text-muted me-2">Aplicar nesta categoria:</span>
                 <button type="button" class="btn btn-sm btn-outline-primary"
-                        onclick="aplicarCategoria('{{ categoria|e }}', 'viennoiserie')">
+                        onclick="aplicarCategoria(this.dataset.categoria, 'viennoiserie')" data-categoria="{{ categoria }}">
                     Viennoiserie
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-primary"
-                        onclick="aplicarCategoria('{{ categoria|e }}', 'pao_sourdough')">
+                        onclick="aplicarCategoria(this.dataset.categoria, 'pao_sourdough')" data-categoria="{{ categoria }}">
                     Pão/Sourdough
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-primary"
-                        onclick="aplicarCategoria('{{ categoria|e }}', 'fornada_especial')">
+                        onclick="aplicarCategoria(this.dataset.categoria, 'fornada_especial')" data-categoria="{{ categoria }}">
                     Fornada
                 </button>
             </div>

@@ -74,7 +74,9 @@
     {% if cartao_confirmando %}
     <p class="small text-muted">
       O banco está confirmando o pagamento com cartão. Não é preciso pagar de
-      novo — aguarde nesta página.</p>
+      novo: esta página se atualiza sozinha, e você recebe um e-mail quando o
+      pagamento for confirmado. Se o banco recusar, o link para tentar de
+      novo aparece aqui.</p>
     {% else %}
     <p class="small text-muted">
       Ainda não pagou?
@@ -198,21 +200,31 @@
 {% if pedido.status == 'aguardando_pagamento' %}
 <script>
   // Auto-refresh: cartão/Pix confirmam via webhook em segundos. Faz poll do
-  // status e recarrega quando virar 'pago' (ou 'cancelado').
+  // status e recarrega quando virar 'pago' (ou 'cancelado') — ou quando o
+  // cartão em confirmação deixar de estar (recusado pelo banco: a página
+  // volta a mostrar o link de pagar). Com cartão em análise o poll não
+  // desiste em 4 min: passa a checar a cada 30 s por até 1 h.
   (function () {
     var tentativas = 0;
-    var t = setInterval(function () {
+    var cartao = {{ 'true' if cartao_confirmando else 'false' }};
+    function checar() {
       tentativas++;
-      if (tentativas > 40) { clearInterval(t); return; }  // ~4 min e para
+      if (tentativas > 40 && !cartao) return;          // ~4 min e para
+      if (tentativas > 150) return;                     // ~1 h no total
       fetch('/loja/pedido/{{ pedido.codigo }}/status')
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
-          if (d && d.status && d.status !== 'aguardando_pagamento') {
-            clearInterval(t);
+          if (!d || !d.status) return;
+          if (d.status !== 'aguardando_pagamento'
+              || (cartao && d.cartao_confirmando === false)) {
             window.location.reload();
           }
-        }).catch(function () {});
-    }, 6000);
+        }).catch(function () {})
+        .then(function () {
+          setTimeout(checar, tentativas > 40 ? 30000 : 6000);
+        });
+    }
+    setTimeout(checar, 6000);
   })();
 </script>
 {% endif %}

@@ -465,6 +465,49 @@ def cancelar_charge(charge_id, valor_decimal=None, *, detalhar=False):
                if detalhar else {})}
 
 
+def cancelar_cobranca_pendente(charge_id):
+    """Cancela uma cobrança que acreditamos NÃO paga (Pix substituído ou
+    vencido) e diz o que o gateway fez de fato.
+
+    No Pagar.me, DELETE /charges/{id} numa cobrança PAGA é o ESTORNO — se o
+    cliente pagou o QR no mesmo instante da troca, o "cancelamento" devolve o
+    dinheiro. Por isso o corpo da resposta é lido (revisão da auditoria,
+    27/09/2026). Devolve:
+    - {'ok': True}: cancelada sem ter sido paga;
+    - {'ok': False, 'estornou_pago': True}: estava paga e foi estornada;
+    - {'ok': False, 'incerto': True}: não dá pra saber (rede, 5xx, corpo
+      sem status reconhecido) — o caller trata como possivelmente viva."""
+    if not disponivel() or not charge_id:
+        return {'ok': False, 'incerto': True,
+                'erro': 'PAGARME_API_KEY ou charge_id ausente'}
+    try:
+        r = requests.delete(f'{_BASE}/charges/{charge_id}',
+                            headers=_headers(), timeout=_TIMEOUT)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('pagarme cancelar_cobranca_pendente falhou: %s', exc)
+        return {'ok': False, 'incerto': True, 'erro': str(exc)}
+    if r.status_code not in (200, 201, 202):
+        return {'ok': False, 'incerto': True,
+                'erro': f'HTTP {r.status_code}: {(r.text or "")[:200]}'}
+    try:
+        corpo = r.json() or {}
+    except ValueError:
+        corpo = {}
+    status = (corpo.get('status') or '').lower()
+    transacao = corpo.get('last_transaction') or {}
+    st_tr = (transacao.get('status') or '').lower()
+    tipo_tr = (transacao.get('transaction_type') or transacao.get('type')
+               or '').lower()
+    if status in ('refunded', 'pending_refund', 'paid') or st_tr in (
+            'refunded', 'pending_refund') or 'refund' in tipo_tr:
+        return {'ok': False, 'estornou_pago': True, 'status': status,
+                'erro': f'cobrança estava paga ({status or st_tr})'}
+    if status in ('canceled', 'cancelled', 'failed', 'voided'):
+        return {'ok': True, 'status': status}
+    return {'ok': False, 'incerto': True, 'status': status,
+            'erro': f'status inesperado no cancelamento: {status or "?"}'}
+
+
 def consultar_order(order_id):
     """Consulta um order no Pagar.me (GET /orders/<id>). Usado pela
     conciliação manual (admin) quando o webhook não chega — a fonte da

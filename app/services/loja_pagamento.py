@@ -10,8 +10,14 @@ Faz a ponte entre o PedidoOnline (Fase 3) e o serviço pagarme.py:
 
 DECISÕES DE DINHEIRO (não desviar sem perguntar — CLAUDE.md peso especial):
 - Pagar.me usa CENTAVOS; `pagarme._centavos` é o único conversor.
-- Baixa de estoque acontece SÓ pelo webhook 'paid'; nunca no retorno do
-  checkout. Reentrega do mesmo evento é absorvida por `PagarmeEvento`.
+- Baixa de estoque acontece SÓ quando o GATEWAY confirma o pagamento: pelo
+  webhook 'paid' ou, se ele falhar/atrasar, pela consulta ao Pagar.me
+  (conciliação manual, nova tentativa de pagamento, cron de expiração —
+  auditoria 27/09/2026). Nunca pelo retorno do checkout. Reentrega do mesmo
+  evento é absorvida por `PagarmeEvento`; falha no meio do processamento
+  devolve o claim e a rota responde 500 pra o Pagar.me reentregar.
+- Nova cobrança só depois de encerrar a anterior no Pagar.me
+  (`_resolver_tentativas_pendentes`) — nunca duas cobranças vivas.
 - ESTORNO AUTOMÁTICO DESATIVADO (decisão do dono 18/06/2026): o VNDA já
   sofreu cancelamento em massa no gateway (bug/abuso). Por isso o webhook
   de estorno NÃO cancela pedido nem devolve estoque — só loga. O reembolso
@@ -87,8 +93,8 @@ _MSG_PAGAMENTO_JA_CONFIRMADO = (
     'O pagamento deste pedido já foi confirmado. Atualize a página.')
 _MSG_CARTAO_EM_ANALISE = (
     'Seu pagamento com cartão ainda está sendo confirmado pelo banco. Aguarde '
-    'alguns instantes nesta página antes de tentar de novo — assim você não '
-    'é cobrado duas vezes.')
+    'a confirmação antes de tentar de novo — assim você não é cobrado duas '
+    'vezes.')
 _MSG_PIX_ANTERIOR_ATIVO = (
     'Não conseguimos cancelar o Pix gerado antes, e ele ainda pode ser pago. '
     'Pague pelo QR que já está na tela ou tente de novo em instantes.')
@@ -97,14 +103,35 @@ _MSG_GATEWAY_INDISPONIVEL = (
     'de novo em instantes.')
 
 
+_MSG_PIX_ANTERIOR_ESTORNADO = (
+    'O Pix gerado antes foi pago no mesmo instante em que você trocou a forma '
+    'de pagamento, e o banco já está devolvendo esse valor. Confira seu '
+    'extrato e tente de novo; se preferir, fale com a gente.')
+
+
 def _consultar_tentativa(pag):
     """Situação de UMA tentativa no gateway: 'pago', 'encerrado' (falhou/
     cancelada/estornada — não cobra mais), 'pendente' ou None (consulta
-    falhou). Sem order_id = a tentativa nunca chegou ao Pagar.me."""
+    falhou de forma transitória: rede, 5xx, sem chave). Sem order_id = a
+    tentativa nunca chegou ao Pagar.me. 404 = a chave atual não enxerga a
+    order (ex.: troca de ambiente) — conta como encerrada, com aviso ao
+    dono, pra não prender o pedido pra sempre."""
     if not pag.pagarme_order_id:
         return 'encerrado'
     consulta = pagarme.consultar_order(pag.pagarme_order_id)
     if not consulta.get('ok'):
+        if str(consulta.get('erro') or '').startswith('HTTP 404'):
+            logger.warning('Tentativa %s: order %s não existe para a chave '
+                           'atual do Pagar.me', pag.id, pag.pagarme_order_id)
+            _alertar_pedido_pago(
+                pag.pedido,
+                f'⚠️ Pedido do site {pag.pedido.codigo}: o Pagar.me não '
+                f'encontra a cobrança {pag.pagarme_order_id} (chave trocada?). '
+                'O pedido será tratado como não pago — confira no painel do '
+                'Pagar.me se não há dinheiro nela.',
+                f'order_404|{pag.pagarme_order_id}', critico=False,
+                cooldown=86400)
+            return 'encerrado'
         return None
     if consulta.get('pago'):
         return 'pago'
@@ -121,6 +148,45 @@ def _confirmar_pelo_gateway(pedido, pag):
     falhou): marca pago pela mesma lógica da conciliação/webhook. O caller
     faz o commit; devolve True se o pedido mudou pra pago."""
     return _marcar_pago(pedido, pag, enviar_confirmacao=False)
+
+
+def _encerrar_pix_pendente(pedido, pag, motivo):
+    """Cancela no gateway um Pix que o sistema acredita não pago.
+
+    DELETE numa cobrança PAGA é estorno: se o cliente pagou o QR no mesmo
+    instante, o cancelamento devolve o dinheiro. Por isso a resposta é
+    conferida (revisão da auditoria, 27/09/2026). Devolve:
+    - 'encerrado': cancelado sem pagamento (tentativa vira 'falhou');
+    - 'estornado': estava paga e o cancelamento a estornou — a tentativa
+      vira 'estornado' (o webhook 'paid' atrasado não confirma mais o
+      pedido) e o dono é avisado;
+    - 'pago': o cancelamento falhou porque ela já estava paga — o caller
+      confirma o pedido;
+    - 'vivo': não deu pra saber — tratar como ainda pagável."""
+    cancel = pagarme.cancelar_cobranca_pendente(pag.pagarme_charge_id)
+    if cancel.get('ok'):
+        pag.status = 'falhou'
+        pag.erro = motivo
+        return 'encerrado'
+    if cancel.get('estornou_pago'):
+        pag.status = 'estornado'
+        pag.erro = ('Pix pago no mesmo instante da troca — estornado ao '
+                    'cancelar a cobrança antiga')
+        logger.warning('Pedido %s: Pix %s estava pago e foi estornado ao ser '
+                       'substituído', pedido.codigo, pag.pagarme_charge_id)
+        _alertar_pedido_pago(
+            pedido,
+            f'⚠️ Pedido do site {pedido.codigo}: o cliente pagou o Pix no '
+            'mesmo instante em que trocou de forma de pagamento, e o '
+            'cancelamento da cobrança antiga ESTORNOU esse Pix. O pedido '
+            'segue aguardando pagamento — confira no Pagar.me.',
+            f'estorno_involuntario|{pag.id}')
+        return 'estornado'
+    if _consultar_tentativa(pag) == 'pago':
+        return 'pago'
+    logger.warning('Pedido %s: não cancelou o Pix %s: %s', pedido.codigo,
+                   pag.pagarme_charge_id, cancel.get('erro'))
+    return 'vivo'
 
 
 def _resolver_tentativas_pendentes(pedido):
@@ -152,18 +218,15 @@ def _resolver_tentativas_pendentes(pedido):
             continue
         if pag.metodo == 'cartao':
             return _MSG_CARTAO_EM_ANALISE
-        cancel = pagarme.cancelar_charge(pag.pagarme_charge_id)
-        if not cancel.get('ok'):
-            # O cancelamento pode ter falhado porque o Pix acabou de ser pago.
-            if _consultar_tentativa(pag) == 'pago':
-                _confirmar_pelo_gateway(pedido, pag)
-                return _MSG_PAGAMENTO_JA_CONFIRMADO
-            logger.warning('Pedido %s: não cancelou o Pix anterior %s: %s',
-                           pedido.codigo, pag.pagarme_charge_id,
-                           cancel.get('erro'))
+        fim = _encerrar_pix_pendente(
+            pedido, pag, 'substituído por nova tentativa (cancelado no Pagar.me)')
+        if fim == 'pago':
+            _confirmar_pelo_gateway(pedido, pag)
+            return _MSG_PAGAMENTO_JA_CONFIRMADO
+        if fim == 'estornado':
+            return _MSG_PIX_ANTERIOR_ESTORNADO
+        if fim == 'vivo':
             return _MSG_PIX_ANTERIOR_ATIVO
-        pag.status = 'falhou'
-        pag.erro = 'substituído por nova tentativa (cancelado no Pagar.me)'
     return None
 
 
@@ -173,14 +236,16 @@ def situacao_no_gateway(pedido, *, base=None):
     — o webhook pode ter falhado ou atrasado com o dinheiro já recebido
     (auditoria 27/09/2026: o cron cancelava pedido pago como pix_expirado).
 
+    Faz HTTP: o caller NÃO pode estar segurando lock de pedido/loja
+    (`liberar_expirados` chama isto fora de transação e só depois trava).
+
     Devolve (situacao, pagamento):
     - ('pago', pag): o gateway confirma — o caller marca pago em vez de
       cancelar;
     - ('aguardar', None): QR do Pix ainda válido, cartão em análise ou
-      gateway fora — não cancela neste ciclo (volta em 5 min);
+      gateway fora — não cancela neste ciclo;
     - ('livre', None): nada vivo no gateway — pode cancelar.
-    Pode marcar tentativas como 'falhou' (encerradas no gateway); o caller
-    commita."""
+    Pode marcar tentativas como 'falhou'/'estornado'; o caller commita."""
     base = base or agora()
     for pag in sorted(pedido.pagamentos, key=lambda p: p.id or 0):
         if pag.status != 'pendente':
@@ -204,13 +269,12 @@ def situacao_no_gateway(pedido, *, base=None):
             return 'aguardar', None
         # Pix vencido que o gateway ainda mostra pendente: encerra lá antes
         # de cancelar aqui (senão ele ainda poderia ser pago).
-        cancel = pagarme.cancelar_charge(pag.pagarme_charge_id)
-        if not cancel.get('ok'):
-            if _consultar_tentativa(pag) == 'pago':
-                return 'pago', pag
+        fim = _encerrar_pix_pendente(pedido, pag,
+                                     'Pix expirado (cancelado no Pagar.me)')
+        if fim == 'pago':
+            return 'pago', pag
+        if fim == 'vivo':
             return 'aguardar', None
-        pag.status = 'falhou'
-        pag.erro = 'Pix expirado (cancelado no Pagar.me)'
     return 'livre', None
 
 
@@ -387,24 +451,29 @@ def _reservar_no_plano_do_dia(pedido):
         _alertar_acima_do_plano(pedido, it.nome, qtd)
 
 
-def _alertar_pedido_pago(pedido, texto, chave):
+def _alertar_pedido_pago(pedido, texto, chave, **kw):
     """Aviso ao dono sobre pedido PAGO que precisa de conferência. Nunca
-    derruba o pagamento (best-effort)."""
+    derruba o pagamento (best-effort). `kw` = critico/cooldown do
+    `loja_alerta.alertar_pedido_pago`."""
     try:
         from app.services import loja_alerta
-        loja_alerta.alertar_pedido_pago(texto, chave)
+        loja_alerta.alertar_pedido_pago(texto, chave, **kw)
     except Exception:  # noqa: BLE001
-        logger.exception('Pedido %s: alerta ao dono falhou', pedido.codigo)
+        logger.exception('Pedido %s: alerta ao dono falhou',
+                         getattr(pedido, 'codigo', '?'))
 
 
 def _alertar_acima_do_plano(pedido, nome_item, qtd):
     data_fmt = pedido.data_entrega.strftime('%d/%m/%Y')
+    # Não é dinheiro em risco (o pedido está pago e reservado): sai como
+    # aviso normal, sujeito ao teto/hora do Z-API — um lote de pedidos
+    # acima do plano numa data especial não inunda o WhatsApp do dono.
     _alertar_pedido_pago(
         pedido,
         f'⚠️ Pedido do site {pedido.codigo} PAGO acima do limite do Plano do '
         f'dia: {qtd}x {nome_item} para {data_fmt}. A reserva foi feita mesmo '
         'assim (o cliente já pagou) — confira a produção desse dia.',
-        f'acima_plano|{pedido.codigo}|{nome_item}')
+        f'acima_plano|{pedido.codigo}|{nome_item}', critico=False)
 
 
 def _devolver_ao_plano_do_dia(pedido, *, commit=True):
@@ -731,6 +800,26 @@ def _marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None)
                 'no painel do Pagar.me.',
                 f'duplicado|{pedido.codigo}|{pagamento.id}')
         return False  # já processado
+    if pagamento and pagamento.status == 'estornado':
+        # Evento 'paid' atrasado de uma tentativa que o próprio sistema já
+        # estornou (Pix pago no instante em que foi substituído): o dinheiro
+        # voltou pro cliente — o pedido NÃO pode virar pago por ela (revisão
+        # da auditoria, 27/09/2026).
+        logger.warning('Pedido %s: evento pago de tentativa já estornada (%s) '
+                       'ignorado', pedido.codigo, pagamento.pagarme_charge_id)
+        return False
+    if (pagamento and pagamento.status == 'falhou'
+            and pedido.status == 'aguardando_pagamento'):
+        # O gateway confirma o pagamento de uma tentativa que tínhamos dado
+        # por encerrada (substituída/cancelada). O dinheiro entrou: o pedido
+        # é confirmado, mas o dono confere se nada foi estornado no caminho.
+        _alertar_pedido_pago(
+            pedido,
+            f'⚠️ Pedido do site {pedido.codigo} foi confirmado por uma '
+            'tentativa de pagamento que o sistema tinha dado por encerrada '
+            f'({pagamento.metodo}). Confira no Pagar.me se não houve estorno '
+            'ou cobrança em dobro.',
+            f'tentativa_encerrada_paga|{pagamento.id}')
     if pedido.status == 'cancelado' and pedido.motivo_cancelamento != 'pix_expirado':
         # Cancelamento DELIBERADO (admin, reembolso) não é revertido por um
         # pagamento que chega depois — mesma regra dos kits
@@ -974,21 +1063,40 @@ def conciliar_pedido(codigo, aplicar=False):
         return {'ok': False, 'erro': 'pedido não encontrado', 'codigo': codigo}
     from app.services.compra_kits import principal_do_pedido
     p = principal_do_pedido(p)
-    pag = next((pg for pg in p.pagamentos if pg.pagarme_order_id), None)
-    if not pag:
+    # TODAS as tentativas, da mais recente pra mais antiga: no fluxo "cartão
+    # recusado → Pix pago" a primeira tentativa é a recusada, e consultar só
+    # ela respondia "Pagar.me não confirma" com o Pix pago (auditoria
+    # 27/09/2026).
+    tentativas = sorted((pg for pg in p.pagamentos if pg.pagarme_order_id),
+                        key=lambda pg: pg.id or 0, reverse=True)
+    if not tentativas:
         return {'ok': False, 'erro': 'pedido sem pagarme_order_id (não '
                 'iniciado no Pagar.me?)', 'codigo': codigo,
                 'status_local': p.status}
-    consulta = pagarme.consultar_order(pag.pagarme_order_id)
-    if not consulta.get('ok'):
+    consultadas = []
+    pag = consulta = None
+    for tentativa in tentativas:
+        c = pagarme.consultar_order(tentativa.pagarme_order_id)
+        consultadas.append({'order_id': tentativa.pagarme_order_id,
+                            'metodo': tentativa.metodo,
+                            'status': c.get('status') if c.get('ok') else None,
+                            'erro': None if c.get('ok') else c.get('erro')})
+        if c.get('ok') and c.get('pago'):
+            pag, consulta = tentativa, c
+            break
+    if pag is None and all(x['erro'] for x in consultadas):
         return {'ok': False, 'erro': 'falha ao consultar Pagar.me',
-                'detalhe': consulta, 'codigo': codigo}
+                'consultadas': consultadas, 'codigo': codigo}
     out = {'ok': True, 'codigo': p.codigo, 'status_local': p.status,
-           'pagarme_status': consulta.get('status'),
-           'pagarme_pago': bool(consulta.get('pago')),
-           'order_id': pag.pagarme_order_id}
-    if not consulta.get('pago'):
+           'pagarme_pago': pag is not None, 'consultadas': consultadas,
+           'order_id': pag.pagarme_order_id if pag else None,
+           'pagarme_status': consulta.get('status') if consulta else None}
+    if pag is None:
         out['acao'] = 'nada — Pagar.me NÃO confirma pago'
+        return out
+    if p.status == 'cancelado' and p.motivo_cancelamento != 'pix_expirado':
+        out['acao'] = ('PAGO no Pagar.me, mas o pedido foi CANCELADO de '
+                       'propósito — não reativado; estorne ou reabra à mão')
         return out
     if not aplicar:
         out['acao'] = ('dry-run — Pagar.me confirma PAGO. '
@@ -1036,16 +1144,29 @@ def processar_webhook(evento):
         return {'ok': False, 'erro': 'evento sem id'}
 
     # Idempotência: tenta gravar primeiro; se já existe, era reentrega.
+    from sqlalchemy.exc import IntegrityError
     novo = PagarmeEvento(evento_id=str(evt_id), tipo=tipo)
     db.session.add(novo)
     try:
         db.session.commit()
-    except Exception:  # noqa: BLE001 — IntegrityError em PG / SQLite
+    except IntegrityError:
         db.session.rollback()
         return {'ok': True, 'duplicado': True}
+    except Exception as exc:  # noqa: BLE001 — banco fora: não é duplicado
+        db.session.rollback()
+        logger.exception('webhook %s: claim do evento falhou: %s', tipo, exc)
+        return {'ok': False, 'erro': str(exc), 'reentregar': True}
 
     data = evento.get('data') or evento.get('object') or {}
-    pedido, pagamento = _encontrar_pedido(data)
+    if not isinstance(data, dict):
+        data = {}
+    try:
+        pedido, pagamento = _encontrar_pedido(data)
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        logger.exception('webhook %s: busca do pedido falhou: %s', tipo, exc)
+        _devolver_claim_evento(evt_id)
+        return {'ok': False, 'erro': str(exc), 'reentregar': True}
     if not pedido:
         logger.warning('webhook %s: pedido não encontrado (%s)', tipo, evt_id)
         return {'ok': True, 'sem_pedido': True}

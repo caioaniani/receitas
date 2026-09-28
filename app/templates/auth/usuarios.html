@@ -258,7 +258,7 @@
                     </form>
                     <!-- Excluir -->
                     <form method="POST" action="{{ url_for('auth.excluir_usuario', id=u.id) }}" class="d-inline"
-                          onsubmit="return confirm('Excluir {{ u.nome }}?')">
+                          onsubmit="return confirm(this.dataset.msg)" data-msg="Excluir {{ u.nome }}?">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir" aria-label="Excluir {{ u.nome }}">
                             <i class="bi bi-trash"></i>

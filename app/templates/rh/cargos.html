@@ -47,7 +47,7 @@
                     <td class="col-acoes">
                         {% if not c.funcionarios %}
                         <button type="button" class="btn-circle"
-                                onclick="if(confirm('Excluir cargo {{ c.nome }}?')) { document.getElementById('del-cargo-{{ c.id }}').submit(); }"
+                                onclick="if(confirm(this.dataset.msg)) { document.getElementById('del-cargo-{{ c.id }}').submit(); }" data-msg="Excluir cargo {{ c.nome }}?"
                                 title="Excluir">
                             <i class="bi bi-trash"></i>
                         </button>

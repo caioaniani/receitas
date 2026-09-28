@@ -48,7 +48,7 @@
                         <form method="POST" action="{{ url_for('rh.excluir_loja', id=l.id) }}" style="display:inline;">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn-circle"
-                                    onclick="return confirm('Excluir loja {{ l.nome }}?')"
+                                    onclick="return confirm(this.dataset.msg)" data-msg="Excluir loja {{ l.nome }}?"
                                     title="Excluir">
                                 <i class="bi bi-trash"></i>
                             </button>

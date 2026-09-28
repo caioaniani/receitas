@@ -193,9 +193,7 @@ def pedido_pix(codigo):
         return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
     pag, erros = loja_pagamento.iniciar_pix(pedido)
     if erros:
-        return render_template(
-            'loja/pagamento.html',
-            **_ctx_pagamento(pedido, erros=erros)), 400
+        return _apos_tentativa_recusada(pedido, codigo, erros)
     return redirect(url_for('loja.pedido_pagamento', codigo=codigo))
 
 
@@ -223,13 +221,37 @@ def pedido_cartao(codigo):
     pag, erros = loja_pagamento.iniciar_cartao(pedido, token, parcelas,
                                                billing=billing)
     if erros:
-        return render_template(
-            'loja/pagamento.html',
-            **_ctx_pagamento(pedido, erros=erros)), 400
-    # Cartão aprovado pelo Pagar.me: redireciona pra confirmação. A baixa
-    # de estoque acontece quando chegar o webhook 'paid' (única fonte de
-    # verdade — evita race).
+        return _apos_tentativa_recusada(pedido, codigo, erros)
+    # Cartão aceito pelo Pagar.me: redireciona pra confirmação. A baixa de
+    # estoque acontece com o evento 'paid' (webhook) — ou, se ele não chegar,
+    # pela consulta ao gateway na próxima tentativa/expiração.
     return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
+
+
+def _cartao_confirmando(pedido):
+    """Há cartão aceito pelo gateway esperando o webhook? Fonte única da
+    página de confirmação e do JSON de status (o polling recarrega quando
+    isso muda — ex.: o antifraude recusou e o cliente precisa do link de
+    pagar de novo)."""
+    from app.services.compra_kits import principal_do_pedido
+    return any(pg.metodo == 'cartao' and pg.status == 'pendente'
+               and pg.pagarme_order_id
+               for pg in principal_do_pedido(pedido).pagamentos)
+
+
+def _apos_tentativa_recusada(pedido, codigo, erros):
+    """Resposta quando `iniciar_pix/iniciar_cartao` não abriu cobrança. Se o
+    pedido deixou de aguardar pagamento (a tentativa anterior estava paga no
+    gateway) ou o cartão anterior ainda está em confirmação, o lugar certo é
+    a página do pedido — que acompanha o status sozinha — e não um erro 400
+    em cima do formulário de pagar de novo (revisão da auditoria 27/09/2026)."""
+    from app.extensions import db
+    db.session.refresh(pedido)
+    if (pedido.status != 'aguardando_pagamento'
+            or erros == [loja_pagamento._MSG_CARTAO_EM_ANALISE]):
+        return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
+    return render_template(
+        'loja/pagamento.html', **_ctx_pagamento(pedido, erros=erros)), 400
 
 
 def _rastreio_do_pedido(p):
@@ -253,7 +275,9 @@ def pedido_status(codigo):
     p = PedidoOnline.query.filter_by(codigo=codigo).first()
     if not p:
         return jsonify(status='nao_encontrado'), 404
-    out = {'status': p.status, 'codigo': p.codigo}
+    out = {'status': p.status, 'codigo': p.codigo,
+           'cartao_confirmando': (p.status == 'aguardando_pagamento'
+                                  and _cartao_confirmando(p))}
     # Rastreio por PROGRESSO (01/08/2026, Dia dos Pais): quando o pedido é
     # de HOJE e a rota do motorista já saiu, a página de acompanhar mostra
     # "você é a Nª parada · previsão ~HH:MM". Mesma autorização de sempre:
@@ -326,15 +350,18 @@ def webhook_pagarme():
         hit['status'] = 401
         _gravar_pagarme_hit(hit)
         return jsonify(ok=False, erro='unauthorized'), 401
-    hit['status'] = 200
-    _gravar_pagarme_hit(hit)
     evento = request.get_json(silent=True) or {}
     res = loja_pagamento.processar_webhook(evento)
     # Falha no MEIO do processamento (banco, baixa de estoque): 500 pra o
     # Pagar.me reentregar — o claim do evento já foi devolvido. Antes vinha
     # 200 e o pagamento recebido se perdia (auditoria 27/09/2026).
     if res.get('reentregar'):
+        hit['status'] = 500
+        hit['erro'] = str(res.get('erro') or '')[:200]
+        _gravar_pagarme_hit(hit)
         return jsonify(ok=False, erro='falha ao processar — reentregar'), 500
+    hit['status'] = 200
+    _gravar_pagarme_hit(hit)
     # Devolve 200 mesmo em "sem_pedido"/"ignorado" pra Pagar.me NÃO ficar
     # reentregando indefinidamente um evento que não vai processar.
     return jsonify(res), 200
@@ -1245,14 +1272,12 @@ def pedido_confirmado(codigo):
     # segue com polling de 30s no /status. Regra em `_rastreio_do_pedido`
     # (fonte única com o JSON do polling).
     rastreio = _rastreio_do_pedido(pedido)
-    from app.services.compra_kits import grupo_do_pedido, principal_do_pedido
+    from app.services.compra_kits import grupo_do_pedido
     # Cartão aceito pelo gateway esperando o webhook: a página NÃO convida a
     # pagar de novo (era assim que o cliente pagava em dobro — auditoria
     # 27/09/2026). Nova tentativa também é barrada no servidor.
-    cartao_confirmando = any(
-        pg.metodo == 'cartao' and pg.status == 'pendente'
-        and pg.pagarme_order_id
-        for pg in principal_do_pedido(pedido).pagamentos)
+    cartao_confirmando = (pedido.status == 'aguardando_pagamento'
+                          and _cartao_confirmando(pedido))
     return render_template('loja/pedido_confirmado.html', pedido=pedido,
                            compra_kit=grupo_do_pedido(pedido),
                            ga_purchase=ga_purchase, rastreio=rastreio,

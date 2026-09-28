@@ -20,8 +20,10 @@
   // que o servidor aceita: a venda barrada de 09/08 de novo (auditoria
   // 27/09/2026). Pra janela de 1h dá o mesmo corte de sempre.
   function janelaAindaServe(janela, minHora) {
+    // Ilegível (fora do formato HH:MM): o servidor decide — ele também a
+    // mantém na lista (loja_checkout._sem_janelas_passadas).
+    if (!/^\d{2}:\d{2}/.test(String(janela))) return true;
     var inicio = parseInt(String(janela).slice(0, 2), 10);
-    if (isNaN(inicio)) return true;   // ilegível: o servidor decide
     var partes = String(janela).split('–');
     var fim = partes.length > 1
       ? parseInt(partes[1].trim().slice(0, 2), 10) : NaN;
@@ -580,7 +582,11 @@
           'X-CSRFToken': meta ? meta.getAttribute('content') : '',
         },
         body: JSON.stringify({ data: data, itens: itensCart })
-      }).then(function (r) { return r.json(); })
+      }).then(function (r) {
+          // 429/5xx/HTML: falha da CONFERÊNCIA, não do item — cai no catch.
+          if (!r.ok && r.status !== 400) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
         .then(function (j) {
           if (!j.ok) {
             aviso.className = 'dispon-checkout ko';
@@ -601,7 +607,8 @@
             var falta = (it.disponivel > 0)
               ? ' <span>(só ' + escapeHtml(String(it.disponivel)) +
                 ' disponíve' + (it.disponivel === 1 ? 'l' : 'is') +
-                ' — diminua a quantidade)</span>'
+                ' — diminua a quantidade no <a href="/loja/carrinho">' +
+                'carrinho</a>)</span>'
               : '';
             html += '<li>' + escapeHtml(it.nome) + falta +
               ' <button type="button" class="btn-link-vermelho" ' +
@@ -626,9 +633,14 @@
           travarSubmit(true);
         })
         .catch(function () {
-          aviso.className = 'dispon-checkout ko';
-          aviso.textContent = 'Erro ao verificar — tente outra data.';
-          travarSubmit(true);
+          // Falha passageira da conferência (rede, limite de requisições) não
+          // trava a compra: o servidor confere a disponibilidade de novo ao
+          // concluir o pedido (auditoria 27/09/2026 — antes o botão ficava
+          // desabilitado sem nova tentativa).
+          aviso.className = 'dispon-checkout verificando';
+          aviso.textContent = 'Não conseguimos conferir a disponibilidade ' +
+            'agora — ela é conferida de novo quando você concluir o pedido.';
+          travarSubmit(false);
         });
     }
 

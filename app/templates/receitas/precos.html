@@ -87,15 +87,15 @@
             <div class="d-flex gap-1 align-items-center">
                 <span class="small text-muted me-2">Categoria:</span>
                 <button type="button" class="btn btn-sm btn-outline-primary"
-                        onclick="aplicarMargem('r:{{ categoria|e }}', 'preco_loja')">
+                        onclick="aplicarMargem('r:' + this.dataset.categoria, 'preco_loja')" data-categoria="{{ categoria }}">
                     +% em loja
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-primary"
-                        onclick="aplicarMargem('r:{{ categoria|e }}', 'preco_site')">
+                        onclick="aplicarMargem('r:' + this.dataset.categoria, 'preco_site')" data-categoria="{{ categoria }}">
                     +% em site
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-secondary"
-                        onclick="sincronizar('r:{{ categoria|e }}')">
+                        onclick="sincronizar('r:' + this.dataset.categoria)" data-categoria="{{ categoria }}">
                     site = loja
                 </button>
             </div>
@@ -237,11 +237,11 @@
             <div class="d-flex gap-1 align-items-center">
                 <span class="small text-muted me-2">Categoria:</span>
                 <button type="button" class="btn btn-sm btn-outline-success"
-                        onclick="aplicarMargem('p:{{ categoria|e }}', 'preco_loja')">+% em loja</button>
+                        onclick="aplicarMargem('p:' + this.dataset.categoria, 'preco_loja')" data-categoria="{{ categoria }}">+% em loja</button>
                 <button type="button" class="btn btn-sm btn-outline-success"
-                        onclick="aplicarMargem('p:{{ categoria|e }}', 'preco_site')">+% em site</button>
+                        onclick="aplicarMargem('p:' + this.dataset.categoria, 'preco_site')" data-categoria="{{ categoria }}">+% em site</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary"
-                        onclick="sincronizar('p:{{ categoria|e }}')">site = loja</button>
+                        onclick="sincronizar('p:' + this.dataset.categoria)" data-categoria="{{ categoria }}">site = loja</button>
             </div>
         </div>
         <div class="card-body p-0">

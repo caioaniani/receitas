@@ -165,7 +165,7 @@
               <td colspan="3" class="py-1">
                 <form method="POST" action="{{ url_for('main.loja_online_pedido_reduzir_item', codigo=p.codigo) }}"
                       class="d-flex align-items-center gap-2 flex-wrap mb-0"
-                      onsubmit="return confirm('Reduzir «{{ it.nome }}» de {{ it.quantidade }} un para a nova quantidade?\n\nIsso ESTORNA a diferença no cartão do cliente e devolve ao estoque. O frete continua cobrado. Se a NF já foi emitida, você terá que corrigi-la manualmente no Tiny.');">
+                      onsubmit="return confirm(this.dataset.msg);" data-msg="Reduzir «{{ it.nome }}» de {{ it.quantidade }} un para a nova quantidade?&#10;&#10;Isso ESTORNA a diferença no cartão do cliente e devolve ao estoque. O frete continua cobrado. Se a NF já foi emitida, você terá que corrigi-la manualmente no Tiny.">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   {{ embed_field() }}
                   <input type="hidden" name="item_id" value="{{ it.id }}">

@@ -36,11 +36,11 @@
             <strong>{{ categoria }}</strong>
             <div class="d-flex gap-1">
                 <button type="button" class="btn btn-sm btn-outline-primary"
-                        onclick="marcarCategoria('r', '{{ categoria|e }}', true)">
+                        onclick="marcarCategoria('r', this.dataset.categoria, true)" data-categoria="{{ categoria }}">
                     Marcar categoria
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-secondary"
-                        onclick="marcarCategoria('r', '{{ categoria|e }}', false)">
+                        onclick="marcarCategoria('r', this.dataset.categoria, false)" data-categoria="{{ categoria }}">
                     Limpar categoria
                 </button>
             </div>
@@ -79,11 +79,11 @@
             <strong>{{ categoria }}</strong>
             <div class="d-flex gap-1">
                 <button type="button" class="btn btn-sm btn-outline-primary"
-                        onclick="marcarCategoria('p', '{{ categoria|e }}', true)">
+                        onclick="marcarCategoria('p', this.dataset.categoria, true)" data-categoria="{{ categoria }}">
                     Marcar categoria
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-secondary"
-                        onclick="marcarCategoria('p', '{{ categoria|e }}', false)">
+                        onclick="marcarCategoria('p', this.dataset.categoria, false)" data-categoria="{{ categoria }}">
                     Limpar categoria
                 </button>
             </div>

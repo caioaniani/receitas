@@ -490,7 +490,8 @@
          continua aqui (fornadas em levas). #}
       <form method="POST" action="{{ url_for('padeiro.produzir_plano', item_id=it.item_id) }}"
             class="prod-dia-form" data-unidade="{{ it.unidade }}"
-            onsubmit="return prodConfirma(this, {{ it.falta }}, '{{ it.nome|e }}');">
+            data-nome="{{ it.nome }}"
+            onsubmit="return prodConfirma(this, {{ it.falta }}, this.dataset.nome);">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="encerrar" value="">
         <input type="hidden" name="produzido_esperado" value="{{ it.produzido }}">
