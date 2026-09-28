@@ -51,7 +51,7 @@ def test_familia_pelo_prefixo_mais_longo(modelo, esperada):
 def test_sonnet_5_5_desliga_com_between_tools_e_effort_explicito():
     opcoes = ia_modelos.opcoes_sem_raciocinio('claude-sonnet-5-5')
     assert opcoes == {'thinking': {'type': 'between_tools'},
-                      'output_config': {'effort': 'high'}}
+                      'output_config': {'effort': 'medium'}}
     # between_tools nao aceita nenhum outro campo dentro de thinking
     assert set(opcoes['thinking']) == {'type'}
 
@@ -61,9 +61,10 @@ def test_sonnet_5_5_desliga_com_between_tools_e_effort_explicito():
     'claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6'])
 def test_modelos_anteriores_seguem_com_disabled(modelo):
     """Env antiga (ex.: OCR_MODELO_OPUS=claude-opus-4-8) nunca recebe o
-    parametro que so o 5.5 aceita."""
+    parametro que so o 5.5 aceita — e segue o modo medio do sistema."""
     assert ia_modelos.opcoes_sem_raciocinio(modelo) == {
-        'thinking': {'type': 'disabled'}}
+        'thinking': {'type': 'disabled'},
+        'output_config': {'effort': 'medium'}}
 
 
 @pytest.mark.parametrize('modelo', ['claude-opus-5-5', 'claude-fable-5-1'])
@@ -77,6 +78,47 @@ def test_modelos_que_nao_desligam_usam_effort_low(modelo):
 def test_sem_parametro_quando_o_modelo_nao_precisa_ou_e_desconhecido(modelo):
     assert ia_modelos.opcoes_sem_raciocinio(modelo) == {}
     assert ia_modelos.opcoes_com_ferramentas(modelo) == {}
+
+
+# Modo medio (decisao do dono, 28/09/2026).
+
+
+def test_effort_do_sistema_e_medio_e_cabe_no_between_tools():
+    """`between_tools` so aceita effort high ou abaixo (400 em xhigh/max):
+    o nivel do sistema nunca pode passar disso."""
+    assert ia_modelos.EFFORT_PADRAO == 'medium'
+    assert ia_modelos.EFFORT_PADRAO in {'low', 'medium', 'high'}
+
+
+@pytest.mark.parametrize('chave', sorted(
+    c for c, f in ia_modelos._FAMILIAS.items() if f['aceita_effort']))
+def test_toda_familia_que_aceita_effort_vai_no_modo_medio(chave):
+    """Com ferramentas, sempre medium; sem ferramentas, medium — exceto quem
+    nao desliga o raciocinio (Opus 5.5, Fable), que fica no low, o minimo
+    dele."""
+    com = ia_modelos.opcoes_com_ferramentas(chave)
+    assert com['output_config'] == {'effort': 'medium'}
+    sem = ia_modelos.opcoes_sem_raciocinio(chave)
+    if ia_modelos._FAMILIAS[chave]['desligar'] == 'nao_desliga':
+        assert sem == {'output_config': {'effort': 'low'}}
+    else:
+        assert sem['output_config'] == {'effort': 'medium'}
+
+
+def test_familias_sem_effort_garantido_nao_recebem_o_parametro():
+    assert {c for c, f in ia_modelos._FAMILIAS.items()
+            if not f['aceita_effort']} == {'claude-sonnet-4-5',
+                                          'claude-haiku-4-5'}
+
+
+def test_effort_da_chamada_sai_das_mesmas_opcoes_do_criar():
+    assert ia_modelos.effort_da_chamada('claude-sonnet-5-5', False) == \
+        'medium'
+    assert ia_modelos.effort_da_chamada('claude-sonnet-5-5', True) == 'medium'
+    assert ia_modelos.effort_da_chamada('claude-opus-5-5', False) == 'low'
+    assert ia_modelos.effort_da_chamada('claude-opus-5-5', True) == 'medium'
+    assert ia_modelos.effort_da_chamada('claude-haiku-4-5', True) is None
+    assert ia_modelos.effort_da_chamada('desconhecido', False) is None
 
 
 def test_nenhum_modelo_alem_do_5_5_recebe_between_tools():
@@ -94,16 +136,16 @@ def test_com_ferramentas_no_5_5_pede_notas_de_progresso():
     assert opcoes['thinking'] == {'type': 'adaptive', 'display': 'updates'}
     assert opcoes['extra_headers'] == {
         'anthropic-beta': 'thinking-display-updates-2026-08-18'}
-    assert opcoes['output_config'] == {'effort': 'high'}
+    assert opcoes['output_config'] == {'effort': 'medium'}
     assert ia_modelos.mostra_progresso(opcoes) is True
 
 
-def test_com_ferramentas_em_modelo_antigo_nao_manda_nada():
-    """Sonnet 5 / Opus 4.8 devolvem o texto entre tools como `text` — o
-    comportamento de antes, sem beta nem display."""
+def test_com_ferramentas_em_modelo_antigo_so_leva_o_effort():
+    """Sonnet 5 / Opus 4.8 devolvem o texto entre tools como `text` — sem beta
+    nem display; so o effort do modo medio."""
     for modelo in ('claude-sonnet-5', 'claude-opus-4-8'):
         opcoes = ia_modelos.opcoes_com_ferramentas(modelo)
-        assert opcoes == {}
+        assert opcoes == {'output_config': {'effort': 'medium'}}
         assert ia_modelos.mostra_progresso(opcoes) is False
 
 
@@ -246,7 +288,7 @@ def test_sdk_serializa_between_tools_e_effort():
         messages=[{'role': 'user', 'content': 'oi'}],
         **ia_modelos.opcoes_sem_raciocinio('claude-sonnet-5-5'))
     assert capturado['body']['thinking'] == {'type': 'between_tools'}
-    assert capturado['body']['output_config'] == {'effort': 'high'}
+    assert capturado['body']['output_config'] == {'effort': 'medium'}
 
 
 def test_sdk_serializa_display_updates_e_o_beta():
@@ -362,6 +404,20 @@ def test_universo_de_chamadas_conhecido():
         'google_reviews.py': 1, 'ocr_nota.py': 1, 'planejamento_ia.py': 2,
         'seo_descricoes.py': 1, 'treino_ia_perguntas.py': 1,
     }
+
+
+def test_chamadas_com_ferramentas_batem_com_a_visao_por_funcao():
+    """`FUNCOES_COM_FERRAMENTAS` diz ao /admin/debug-ia qual rota cada funcao
+    usa. Chamada nova com ferramentas muda esta contagem e obriga a
+    atualizar o conjunto."""
+    por_arquivo = {}
+    for arq, _, no in _chamadas_criar():
+        if any(k.arg == 'ferramentas' and isinstance(k.value, ast.Constant)
+               and k.value.value is True for k in no.keywords):
+            por_arquivo[arq.name] = por_arquivo.get(arq.name, 0) + 1
+    assert por_arquivo == {'chatbot.py': 1, 'copilot.py': 1}
+    assert ia_modelos.FUNCOES_COM_FERRAMENTAS == {
+        'bot_atendimento', 'copilot_slack', 'copilot_whatsapp'}
 
 
 def test_nenhuma_chamada_escreve_raciocinio_a_mao():
