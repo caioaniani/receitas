@@ -764,8 +764,14 @@ def test_compra_com_entrega_fora_de_espera_nao_consulta_o_gateway(compra, gatewa
     db.session.commit()
     consulta = Mock(side_effect=AssertionError('não deveria consultar o gateway'))
     monkeypatch.setattr(loja_pagamento, 'situacao_no_gateway', consulta)
-    assert kits_estoque.expirar_compras() == []
-    assert kits_estoque._expirar_compra(compra.id, agora()) == []
+    # A seleção do lote já exclui a compra…
+    selecionadas = []
+    original = kits_estoque._expirar_compra
+    monkeypatch.setattr(kits_estoque, '_expirar_compra',
+                        lambda cid, base: selecionadas.append(cid) or original(cid, base))
+    assert kits_estoque.expirar_compras() == [] and selecionadas == []
+    # …e a fase 1, chamada direto, também não consulta o gateway.
+    assert original(compra.id, agora()) == []
     consulta.assert_not_called()
 
 
