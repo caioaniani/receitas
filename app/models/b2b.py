@@ -23,6 +23,7 @@ class ClienteB2B(db.Model):
     cnpj_cpf = db.Column(db.String(20))
     telefone = db.Column(db.String(30))
     email = db.Column(db.String(120))
+    emails_cobranca = db.Column(db.JSON, nullable=True)
     endereco = db.Column(db.String(250))
     # Endereco estruturado pra NF-e (06/07/2026): a SEFAZ exige logradouro/
     # numero/bairro/cidade/uf SEPARADOS — mesma licao do PedidoOnline. O

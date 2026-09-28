@@ -121,6 +121,8 @@ def _validar(doc, job):
     from app.services.cobrancas_envio import email_valido
     if not email_valido((doc.cliente.email or '').strip()):
         raise ValueError('Complete o e-mail do cliente antes da emissão automática.')
+    from app.services.cobrancas_destinatarios import copias_do_documento
+    copias_do_documento(doc, doc.cliente.email)
     from app.services.cobrancas_nf import validar_assinatura
     validar_assinatura(doc)
 

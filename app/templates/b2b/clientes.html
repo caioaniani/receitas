@@ -83,6 +83,11 @@
                         <div class="col-6"><label class="form-label small">Contato</label><input type="text" name="contato" class="form-control form-control-sm"></div>
                     </div>
                     <div class="mb-2"><label class="form-label small">E-mail</label><input type="email" name="email" class="form-control form-control-sm"></div>
+                    <div class="mb-2">
+                        <label class="form-label small" for="emails-cobranca-novo">E-mails adicionais para NF-e + boleto</label>
+                        <textarea id="emails-cobranca-novo" name="emails_cobranca" class="form-control form-control-sm" rows="2" maxlength="3000" placeholder="financeiro@cliente.com.br, compras@cliente.com.br"></textarea>
+                        <div class="form-text">Até 10 endereços, separados por vírgula ou um por linha. Recebem cópia (CC), visível aos destinatários, nos próximos envios por pedido ou fatura mensal. Salvar não envia nem reenvia cobranças.</div>
+                    </div>
                     <div class="mb-2"><label class="form-label small">Endereço (linha livre — boleto)</label><input type="text" name="endereco" class="form-control form-control-sm"></div>
                     {# Endereço estruturado: a SEFAZ exige os campos separados na NF-e #}
                     <div class="border rounded p-2 mb-2">
@@ -138,6 +143,11 @@
                         <div class="col-6"><label class="form-label small">Contato</label><input type="text" name="contato" class="form-control form-control-sm" value="{{ c.contato or '' }}"></div>
                     </div>
                     <div class="mb-2"><label class="form-label small">E-mail</label><input type="email" name="email" class="form-control form-control-sm" value="{{ c.email or '' }}"></div>
+                    <div class="mb-2">
+                        <label class="form-label small" for="emails-cobranca-{{ c.id }}">E-mails adicionais para NF-e + boleto</label>
+                        <textarea id="emails-cobranca-{{ c.id }}" name="emails_cobranca" class="form-control form-control-sm" rows="2" maxlength="3000" placeholder="financeiro@cliente.com.br, compras@cliente.com.br">{{ (c.emails_cobranca or [])|join('\n') }}</textarea>
+                        <div class="form-text">Até 10 endereços, separados por vírgula ou um por linha. Recebem cópia (CC), visível aos destinatários, nos próximos envios por pedido ou fatura mensal. Salvar não envia nem reenvia cobranças.</div>
+                    </div>
                     <div class="mb-2"><label class="form-label small">Endereço (linha livre — boleto)</label><input type="text" name="endereco" class="form-control form-control-sm" value="{{ c.endereco or '' }}"></div>
                     <div class="border rounded p-2 mb-2">
                         <div class="small fw-bold mb-1">Endereço fiscal (NF-e)</div>

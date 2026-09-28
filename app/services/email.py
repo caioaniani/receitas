@@ -31,17 +31,18 @@ _MESSAGE_STREAM = 'outbound'
 COPIAS_OCULTAS_COBRANCA = ('caio@opao.online', 'dakson@opao.online', 'contato@opao.online')
 
 
-def copias_ocultas_cobranca(destinatario):
+def copias_ocultas_cobranca(destinatario, copias=None):
     """Cópias internas do envio B2B; não duplica quem já é destinatário."""
-    return [email for email in COPIAS_OCULTAS_COBRANCA
-            if email.casefold() != (destinatario or '').strip().casefold()]
+    visiveis = {(endereco or '').strip().casefold()
+                for endereco in [destinatario, *(copias or [])]}
+    return [email for email in COPIAS_OCULTAS_COBRANCA if email.casefold() not in visiveis]
 
 
 def disponivel():
     return bool((current_app.config.get('POSTMARK_SERVER_TOKEN') or '').strip())
 
 
-def enviar(destinatario, assunto, html, *, texto=None, anexos=None, bcc=None,
+def enviar(destinatario, assunto, html, *, texto=None, anexos=None, bcc=None, cc=None,
            stream=None):
     """Envia um email. Retorna {'ok': True, 'id': ...} ou
     {'ok': False, 'erro': ...}. Best-effort — nunca propaga exceção.
@@ -79,6 +80,8 @@ def enviar(destinatario, assunto, html, *, texto=None, anexos=None, bcc=None,
         payload['ReplyTo'] = reply_to
     if bcc:
         payload['Bcc'] = ','.join(bcc)
+    if cc:
+        payload['Cc'] = ','.join(cc)
     if texto:
         payload['TextBody'] = texto
     if anexos:
@@ -875,7 +878,8 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
                   anexos=[(nome_pdf, pdf_bytes, 'application/pdf')])
 
 
-def enviar_nf_e_boleto_b2b(venda, destinatario, nf_pdf, boletos, *, rotulo=None):
+def enviar_nf_e_boleto_b2b(venda, destinatario, nf_pdf, boletos, *, rotulo=None,
+                          cc=None, bcc=None):
     """Manda a NF (DANFE) + o(s) boleto(s) da venda B2B num e-mail SÓ, com
     todos os PDFs anexados (pedido do dono 10/07/2026 — evita 2 e-mails).
 
@@ -948,7 +952,8 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
     Dúvidas? Responda este e-mail ou fale com a gente.</p>
 </div></body></html>"""
     return enviar(destinatario, assunto, html, texto='\n'.join(linhas),
-                  anexos=anexos, bcc=copias_ocultas_cobranca(destinatario))
+                  anexos=anexos, cc=cc,
+                  bcc=copias_ocultas_cobranca(destinatario, cc) if bcc is None else bcc)
 
 
 def _texto_boas_vindas(nome, login, senha, base, chatwoot):

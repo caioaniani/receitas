@@ -6,15 +6,12 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import db
 from app.models import EnvioCobranca, FaturaB2B
 from app.services import email as email_svc
+from app.services.cobrancas_destinatarios import conferir_versao_copias, copias_do_documento
+from app.services.cobrancas_destinatarios import email_valido as email_valido
 from app.utils import agora
 
 
-def email_valido(valor):
-    import re
-    return bool(valor and len(valor) <= 254 and re.fullmatch(r'[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+', valor))
-
-
-def _registro(doc, cobrancas, destinatario, documentos, usuario, chave=None):
+def _registro(doc, cobrancas, destinatario, documentos, usuario, chave=None, copias=None):
     fatura = isinstance(doc, FaturaB2B)
     referencia = (f'Fatura {doc.codigo}' if fatura else f'Venda #{doc.id}') if doc else 'Boleto avulso'
     return EnvioCobranca(
@@ -23,7 +20,8 @@ def _registro(doc, cobrancas, destinatario, documentos, usuario, chave=None):
         venda_id=doc.id if doc and not fatura else None,
         cobranca_ids=[c.id for c in cobrancas],
         referencia=referencia, destinatario=destinatario[:254],
-        copias_ocultas=(email_svc.copias_ocultas_cobranca(destinatario)
+        copias=list(copias) if copias is not None else None,
+        copias_ocultas=(email_svc.copias_ocultas_cobranca(destinatario, copias)
                        if documentos == 'nf_boleto' else []),
         documentos=documentos, nf_id=getattr(doc, 'tiny_nota_fiscal_id', None),
         status='preparando', usuario_id=usuario.id, usuario_nome=usuario.nome[:100])
@@ -61,17 +59,15 @@ def _repeticao(anterior, r, destinatario):
     return anterior, False
 
 
-def enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado=False):
+def enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado=False, versao_destinatarios=None):
     from app.services.central_cobrancas import carregar
     from app.services.cobrancas_trava import chave_documento, trava
     with trava(chave_documento(r.documento) if r.documento else f'boleto:{r.id}'):
         db.session.expire_all()
         r = carregar(r.tipo, r.id)
-        if banco_confirmado and not r.bloqueio and r.cobranca.status == 'remessa' and r.cobranca.remessa_id:
-            from app.services.cobrancas_automacao import confirmar_titulo
-            confirmar_titulo(r.cobranca, usuario.id)
-            db.session.commit()
-        return _enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado)
+        return _enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado,
+                               conferir_copias=True, versao_destinatarios=versao_destinatarios,
+                               registrar_confirmacao_banco=True)
 
 
 def enviar_automatico(r, chave, usuario):
@@ -94,7 +90,8 @@ def enviar_automatico(r, chave, usuario):
         return _enviar_conjunto(r, r.email, chave, usuario, banco_confirmado=True)
 
 
-def _enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado=False):
+def _enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado=False, *,
+                    conferir_copias=False, versao_destinatarios=None, registrar_confirmacao_banco=False):
     """Reserva a intenção antes do envio. Repetir o POST não duplica e-mail.
 
     Nova tentativa deliberada requer nova chave (nova abertura da tela).
@@ -121,10 +118,18 @@ def _enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado=False):
     validar_assinatura(r.documento)
     if not email_valido(destinatario):
         raise ValueError('Informe um único e-mail válido para receber os dois documentos.')
+    copias = copias_do_documento(r.documento, destinatario)
+    if conferir_copias:
+        conferir_versao_copias(r.documento, versao_destinatarios)
     if r.cobranca.status == 'remessa' and not banco_confirmado:
         raise ValueError('Confirme que o boleto foi registrado no banco antes de enviar ao cliente.')
+    if (registrar_confirmacao_banco and banco_confirmado
+            and r.cobranca.status == 'remessa' and r.cobranca.remessa_id):
+        from app.services.cobrancas_automacao import confirmar_titulo
+        confirmar_titulo(r.cobranca, usuario.id)
+        db.session.commit()
 
-    e = _registro(r.documento, [r.cobranca], destinatario, 'nf_boleto', usuario, chave)
+    e = _registro(r.documento, [r.cobranca], destinatario, 'nf_boleto', usuario, chave, copias)
     db.session.add(e)
     try:
         db.session.commit()
@@ -152,8 +157,9 @@ def _enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado=False):
                   if r.tipo == 'fatura' else f'venda #{r.documento.id}')
         envio_iniciado = True
         resultado = email_svc.enviar_nf_e_boleto_b2b(
-            r.documento, destinatario, bytes(nf_pdf),
-            [{'cob': c, 'pdf': boleto_pdf, 'linha_digitavel': ld}], rotulo=rotulo)
+            r.documento, e.destinatario, bytes(nf_pdf),
+            [{'cob': c, 'pdf': boleto_pdf, 'linha_digitavel': ld}], rotulo=rotulo,
+            cc=e.copias, bcc=e.copias_ocultas)
     except Exception as exc:  # Nenhuma queda do provedor deve derrubar a tela.
         # Depois de iniciar o envio, uma exceção pode ocorrer após a aceitação
         # pelo provedor. Não ofereça uma falsa certeza de que nada foi enviado.

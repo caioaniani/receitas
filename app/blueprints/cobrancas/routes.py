@@ -183,8 +183,9 @@ def lista():
 def documentos(tipo, ref):
     _admin_ou_403()
     from app.services.central_cobrancas import ENVIOS, atribuir_envios, carregar, historico
+    from app.services.cobrancas_destinatarios import copias_do_documento, versao_copias
     from app.services.cobrancas_envio import enviar_conjunto
-    from app.services.email import COPIAS_OCULTAS_COBRANCA
+    from app.services.email import COPIAS_OCULTAS_COBRANCA, copias_ocultas_cobranca
     r = carregar(tipo, ref)
     # Uma parcela absorvida por fatura sempre volta à cobrança consolidada.
     if (r.tipo, r.id) != (tipo, ref):
@@ -194,7 +195,8 @@ def documentos(tipo, ref):
     if request.method == 'POST':
         try:
             e, novo = enviar_conjunto(r, request.form.get('email'), request.form.get('chave'),
-                                     current_user, request.form.get('banco_confirmado') == '1')
+                                     current_user, request.form.get('banco_confirmado') == '1',
+                                     request.form.get('versao_destinatarios'))
         except ValueError as exc:
             flash(str(exc), 'warning')
         else:
@@ -207,9 +209,17 @@ def documentos(tipo, ref):
         return redirect(url_for('cobrancas.documentos', tipo=tipo, ref=ref))
     envios = historico(r)
     atribuir_envios(r, envios)
+    try:
+        copias = copias_do_documento(r.documento, '')
+        versao = versao_copias(r.documento)
+        erro_copias = ''
+    except ValueError as exc:
+        copias, versao, erro_copias = [], '', str(exc)
     return render_template('cobrancas/documentos.html', r=r, historico=envios,
                            envio_labels=ENVIOS, chave=str(uuid4()),
-                           copias_ocultas=COPIAS_OCULTAS_COBRANCA)
+                           copias=copias, versao_destinatarios=versao, erro_copias=erro_copias,
+                           copias_ocultas=copias_ocultas_cobranca(r.email, copias),
+                           copias_ocultas_base=COPIAS_OCULTAS_COBRANCA)
 
 
 @cobrancas_bp.route('/<any(fatura,parcela,boleto):tipo>/<int:ref>/baixar')

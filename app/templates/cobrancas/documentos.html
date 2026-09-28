@@ -40,6 +40,7 @@
         <div class="cob-send-confirmed" role="status">
             <strong>NF + boleto enviados em {{ (ultimo.concluido_em or ultimo.criado_em).strftime('%d/%m/%Y às %H:%M') }}</strong>
             <span>Para {{ ultimo.destinatario }} · por {{ ultimo.usuario_nome or 'usuário não registrado' }}.</span>
+            {% if ultimo.copias %}<span>Em cópia (CC): {{ ultimo.copias|join(', ') }}.</span>{% endif %}
             <small>Envio aceito pelo serviço de e-mail. Não confirma entrega ou leitura.</small>
         </div>
         {% if r.envio and r.envio.id != ultimo.id %}<p class="cob-notice">Última tentativa: {{ envio_labels.get(r.envio.status, 'Envio não confirmado') }} em {{ r.envio.criado_em.strftime('%d/%m/%Y às %H:%M') }}. O envio confirmado acima permanece registrado.</p>{% endif %}
@@ -60,17 +61,23 @@
         <a class="btn btn-outline-secondary" href="{{ url_for('cobrancas.banco') }}">Operações do banco</a>
         {% else %}
         {% if r.envio and not r.envio_confirmado %}<p class="cob-notice">Há histórico, mas nenhum envio confirmado deste conjunto de NF + boleto. Confira abaixo antes de enviar.</p>{% endif %}
+        {% if erro_copias %}<p class="cob-notice">{{ erro_copias }}</p>{% endif %}
         <form method="POST" class="cob-send-form" id="cob-send-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="chave" value="{{ chave }}">
+            <input type="hidden" name="versao_destinatarios" value="{{ versao_destinatarios }}">
             <label for="cob-email">Enviar os dois documentos para</label>
             <input id="cob-email" type="email" class="form-control" name="email" value="{{ r.email }}" required maxlength="254" autocomplete="email" placeholder="financeiro@cliente.com.br">
-            <p class="cob-bcc"><strong>Cópia oculta automática:</strong> {{ copias_ocultas|join(', ') }}.<br>Esses destinatários não aparecem para o cliente.</p>
+            <div id="cob-cc" data-copias='{{ copias|tojson }}'>
+                <strong>Em cópia (CC):</strong> <span id="cob-cc-lista">{{ copias|join(', ') if copias else 'Nenhum e-mail adicional cadastrado.' }}</span>
+                <p class="small">As cópias são visíveis aos destinatários. Para alterar, edite os e-mails adicionais no <a href="{{ url_for('b2b.clientes') }}">cadastro do cliente</a>.</p>
+            </div>
+            <p class="cob-bcc" id="cob-bcc" data-copias='{{ copias_ocultas_base|tojson }}'><strong>Cópia oculta automática:</strong> <span id="cob-bcc-lista">{{ copias_ocultas|join(', ') if copias_ocultas else 'Nenhuma — os endereços internos já estão entre os destinatários.' }}</span><br>As cópias ocultas não aparecem para o cliente. Endereços já presentes em Para ou CC não recebem uma cópia duplicada.</p>
             {% if r.cobranca.status == 'remessa' %}
             <label class="cob-confirm"><input type="checkbox" name="banco_confirmado" value="1" required>
                 Conferi no Sicredi que este boleto foi registrado. O ERP ainda só registra a geração do arquivo.</label>
             {% endif %}
-            <button class="btn btn-success" type="submit" id="cob-send-button">{{ 'Enviar novamente' if r.envio_confirmado else 'Enviar NF + boleto' }}</button>
+            <button class="btn btn-success" type="submit" id="cob-send-button" {% if erro_copias %}disabled{% endif %}>{{ 'Enviar novamente' if r.envio_confirmado else 'Enviar NF + boleto' }}</button>
             <small>O envio não emite uma nova NF, não gera outro boleto e não altera o saldo.</small>
         </form>
         {% endif %}
@@ -81,6 +88,8 @@
         <article class="cob-history-item">
             <div><strong>{{ envio_labels.get(e.status, 'Envio não confirmado') }}</strong><small>{{ (e.concluido_em or e.criado_em).strftime('%d/%m/%Y às %H:%M') }} · {{ e.usuario_nome or 'Usuário não registrado' }}</small></div>
             <p><strong>Para:</strong> {{ e.destinatario }}<br><strong>Documentos:</strong> {{ {'nf': 'Somente NF', 'boleto': 'Somente boleto', 'nf_boleto': 'NF + boleto'}[e.documentos] }}</p>
+            {% if e.copias %}<p><strong>Em cópia (CC):</strong> {{ e.copias|join(', ') }}</p>
+            {% elif e.copias is none %}<p class="text-muted">Cópias adicionais não registradas neste envio antigo.</p>{% endif %}
             {% if e.copias_ocultas %}<p><strong>Cópia oculta:</strong> {{ e.copias_ocultas|join(', ') }}</p>
             {% elif e.copias_ocultas is none %}<p class="text-muted">Cópias ocultas não registradas neste envio antigo.</p>{% endif %}
             {% if e.anexos %}<p class="cob-file-names">{{ e.anexos|join(' · ') }}</p>{% endif %}

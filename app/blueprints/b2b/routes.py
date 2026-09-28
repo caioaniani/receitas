@@ -303,11 +303,17 @@ def cliente_novo():
     if ClienteB2B.query.filter_by(nome=nome).first():
         flash(f'Cliente "{nome}" ja existe.', 'warning')
         return redirect(url_for('b2b.clientes'))
+    try:
+        email, adicionais = _emails_cobranca_form()
+    except ValueError as exc:
+        flash(str(exc), 'danger')
+        return redirect(url_for('b2b.clientes'))
     c = ClienteB2B(
         nome=nome,
         cnpj_cpf=(request.form.get('cnpj_cpf') or '').strip() or None,
         telefone=(request.form.get('telefone') or '').strip() or None,
-        email=(request.form.get('email') or '').strip() or None,
+        email=email or None,
+        emails_cobranca=adicionais,
         endereco=(request.form.get('endereco') or '').strip() or None,
         contato=(request.form.get('contato') or '').strip() or None,
         desconto_percentual=float(request.form.get('desconto_percentual') or 0),
@@ -319,6 +325,20 @@ def cliente_novo():
     db.session.commit()
     flash(f'Cliente "{nome}" cadastrado.', 'success')
     return redirect(url_for('b2b.clientes'))
+
+
+def _emails_cobranca_form(cliente=None):
+    from app.services.cobrancas_destinatarios import email_valido, normalizar_adicionais
+
+    principal = (request.form.get('email') or '').strip()
+    if principal and (len(principal) > 120 or not email_valido(principal)):
+        raise ValueError('Informe um e-mail principal válido, com até 120 caracteres.')
+    # Formulários abertos antes da atualização não apagam as cópias cadastradas.
+    valor = request.form.get('emails_cobranca', getattr(cliente, 'emails_cobranca', None))
+    adicionais = normalizar_adicionais(valor, principal)
+    if adicionais and not principal:
+        raise ValueError('Informe também o e-mail principal para receber NF-e + boleto.')
+    return principal, adicionais
 
 
 def _aplicar_endereco_estruturado(c):
@@ -350,10 +370,16 @@ def cliente_editar(cid):
             ClienteB2B.nome == nome, ClienteB2B.id != c.id).first():
         flash(f'Ja existe outro cliente chamado "{nome}".', 'warning')
         return redirect(url_for('b2b.clientes'))
+    try:
+        email, adicionais = _emails_cobranca_form(c)
+    except ValueError as exc:
+        flash(str(exc), 'danger')
+        return redirect(url_for('b2b.clientes'))
     c.nome = nome
     c.cnpj_cpf = (request.form.get('cnpj_cpf') or '').strip() or None
     c.telefone = (request.form.get('telefone') or '').strip() or None
-    c.email = (request.form.get('email') or '').strip() or None
+    c.email = email or None
+    c.emails_cobranca = adicionais
     c.endereco = (request.form.get('endereco') or '').strip() or None
     c.contato = (request.form.get('contato') or '').strip() or None
     c.desconto_percentual = float(request.form.get('desconto_percentual') or 0)

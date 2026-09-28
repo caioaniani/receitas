@@ -70,9 +70,36 @@ abrem a fatura consolidada.
 
 Cada novo envio conjunto inclui cópia oculta para `caio@opao.online`,
 `dakson@opao.online` e `contato@opao.online`, sem expor esses destinatários
-no corpo/CC do e-mail. Se um deles já for o destinatário principal, não é
+no corpo/CC do e-mail. Se um deles já estiver no destinatário principal ou CC, não é
 duplicado na cópia oculta. O histórico guarda a lista efetivamente usada.
 Os demais e-mails transacionais não recebem essas cópias.
+
+### E-mails adicionais do cliente
+
+Em **B2B → Clientes → Editar**, manter um único endereço em **E-mail** e
+preencher **E-mails adicionais para NF-e + boleto** com até dez endereços,
+separados por vírgula, ponto e vírgula ou quebra de linha. Endereços inválidos
+bloqueiam o cadastro inteiro; repetidos e o principal são deduplicados sem
+diferenciar maiúsculas/minúsculas. Campo vazio remove as cópias. Formulários
+antigos sem esse campo preservam a lista cadastrada.
+
+Os adicionais recebem **CC, visível aos demais destinatários**, nos próximos
+envios conjuntos manuais e automáticos, por pedido ou fatura mensal. Não
+mudam o e-mail fiscal enviado ao Tiny. Clientes mensais continuam fechando
+mensalmente; cadastrar/editar endereços não emite nem reenvia documentos.
+
+A tela de envio mostra as cópias e atualiza a deduplicação quando o principal
+é editado. Uma versão assinada vincula a lista ao documento: se o cadastro
+mudar enquanto a tela estiver aberta, é necessário reabrir e conferir antes
+de enviar. Destinatários não são aceitos de campos CC/BCC arbitrários do POST.
+Principal, CC e BCC efetivos ficam congelados em `envio_cobranca` antes da
+rede, inclusive se o cadastro mudar durante a obtenção dos PDFs.
+
+Adicionar uma cópia não invalida um envio já confirmado nem provoca disparo
+automático retroativo. Para reenviar deliberadamente aos novos destinatários,
+abrir **NF + boleto / Histórico → Enviar novamente**. O histórico anterior
+continua mostrando a lista usada naquele momento; `copias = NULL` significa
+registro antigo sem informação, enquanto `[]` registra envio novo sem CC.
 
 A tela destaca o último envio conjunto aceito pelo provedor, com data,
 hora e destinatário, e oferece **Enviar novamente**. Uma falha posterior
@@ -121,6 +148,14 @@ o JSON anulável da classificação em `venda_b2b`. Registros existentes
 permanecem sem classificação/cópias inventadas. Nenhuma venda é alterada
 automaticamente na migração.
 
+A migração `d48e7a91c203` (após `a9d4e7b2c610`) acrescenta somente os JSONs
+anuláveis `cliente_b2b.emails_cobranca` e `envio_cobranca.copias`, também com
+fallback idempotente no migrador legado SQLite/PostgreSQL. Publicar primeiro
+a expansão, conferir as duas colunas em `/admin/debug-schema`, e só então
+publicar os models/formulários/envio. Não há preenchimento retroativo.
+Rollback de código preserva as colunas e os dados; nunca fazer downgrade
+destrutivo para voltar a interface.
+
 Não exige nova variável de ambiente. Reutiliza Tiny, Sicredi e o serviço de
 e-mail já configurados. Após publicar, verificar GET da central, banco e
 documentos de uma fatura existente. Não usar envio real como smoke test sem
@@ -152,3 +187,9 @@ cobre classificação auditável, preservação financeira/estoque, autorizaçã
 ausência em pendências e bloqueios de geração/envio/recebimento.
 Conferência visual local usa dados fictícios, sem rede de saída e com
 requisições de escrita bloqueadas. Não modifica dados de produção.
+
+`test_cobrancas_destinatarios.py`, `test_cobrancas_emails_adicionais.py`,
+`test_cobrancas_destinatarios_js.py` e `test_cobrancas_emails_migracao.py`
+cobrem validação, cadastro sem efeitos externos, versões desatualizadas,
+payload Postmark, snapshot, reenvio deliberado, automação mensal/avulsa,
+prévia dinâmica e migração aditiva repetida sobre dados existentes.
