@@ -1245,10 +1245,18 @@ def pedido_confirmado(codigo):
     # segue com polling de 30s no /status. Regra em `_rastreio_do_pedido`
     # (fonte única com o JSON do polling).
     rastreio = _rastreio_do_pedido(pedido)
-    from app.services.compra_kits import grupo_do_pedido
+    from app.services.compra_kits import grupo_do_pedido, principal_do_pedido
+    # Cartão aceito pelo gateway esperando o webhook: a página NÃO convida a
+    # pagar de novo (era assim que o cliente pagava em dobro — auditoria
+    # 27/09/2026). Nova tentativa também é barrada no servidor.
+    cartao_confirmando = any(
+        pg.metodo == 'cartao' and pg.status == 'pendente'
+        and pg.pagarme_order_id
+        for pg in principal_do_pedido(pedido).pagamentos)
     return render_template('loja/pedido_confirmado.html', pedido=pedido,
                            compra_kit=grupo_do_pedido(pedido),
                            ga_purchase=ga_purchase, rastreio=rastreio,
+                           cartao_confirmando=cartao_confirmando,
                            em_teste=_em_teste())
 
 

@@ -71,10 +71,16 @@
     {% elif pedido.status == 'aguardando_pagamento' %}
     <p id="status-aguardando"><strong>Confirmando seu pagamento…</strong>
       Assim que cair, esta página atualiza sozinha.</p>
+    {% if cartao_confirmando %}
+    <p class="small text-muted">
+      O banco está confirmando o pagamento com cartão. Não é preciso pagar de
+      novo — aguarde nesta página.</p>
+    {% else %}
     <p class="small text-muted">
       Ainda não pagou?
       <a href="{{ url_for('loja.pedido_pagamento', codigo=pedido.codigo) }}">
         Ir para o pagamento</a> (Pix ou cartão).</p>
+    {% endif %}
     {% elif pedido.status == 'em_preparo' %}
     <p><strong>Em preparo.</strong> A equipe está preparando seu pedido.</p>
     {% elif pedido.status == 'a_caminho' %}
