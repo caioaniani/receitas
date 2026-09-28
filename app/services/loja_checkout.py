@@ -73,7 +73,9 @@ def lead_do_carrinho(itens_raw):
     QUALQUER item for `sob_encomenda`, senão 0. Recebe a lista crua
     [{kind,id,...}] (mesma de `montar_itens`) e consulta o catálogo. Best-
     effort: item inválido/fora de catálogo é ignorado (não força lead)."""
-    for raw in (itens_raw or []):
+    for raw in (itens_raw if isinstance(itens_raw, list) else []):
+        if not isinstance(raw, dict):
+            continue
         kind = (str(raw.get('kind') or '')).strip()
         try:
             item_id = int(raw.get('id'))

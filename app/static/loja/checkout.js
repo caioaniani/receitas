@@ -625,7 +625,8 @@
           'Content-Type': 'application/json',
           'X-CSRFToken': meta ? meta.getAttribute('content') : '',
         },
-        body: JSON.stringify({ data: data, itens: itensCart })
+        body: JSON.stringify({ data: data, itens: itensCart,
+                               modo: modoSelecionado() })
       }).then(function (r) {
           // 429/5xx/HTML: falha da CONFERÊNCIA, não do item — cai no catch.
           if (!r.ok && r.status !== 400) throw new Error('HTTP ' + r.status);
@@ -634,9 +635,14 @@
         .then(function (j) {
           if (rodada !== rodadaDisp) return;   // resposta velha
           if (!j.ok) {
-            aviso.className = 'dispon-checkout ko';
-            aviso.textContent = 'Não consegui verificar — tente outra data.';
-            travarSubmit(true);
+            // Data que a conferência não aceita (fora da janela): o servidor
+            // valida de novo ao concluir e explica — não trava a compra aqui
+            // (auditoria 27/09/2026).
+            aviso.className = 'dispon-checkout verificando';
+            aviso.textContent = 'Não conseguimos conferir a disponibilidade ' +
+              'dessa data agora — ela é conferida de novo quando você ' +
+              'concluir o pedido.';
+            travarSubmit(false);
             return;
           }
           if (!j.esgotados || !j.esgotados.length) {
@@ -649,7 +655,9 @@
           // Tem item(ns) esgotado(s) — mostra lista + acoes.
           var html = '<strong>⚠ Itens sem disponibilidade pra essa data:</strong><ul style="margin:8px 0 10px 18px;">';
           j.esgotados.forEach(function (it) {
-            var falta = (it.disponivel > 0)
+            var falta = it.bloqueado
+              ? ' <span>(não vendido nessa data)</span>'
+              : (it.disponivel > 0)
               ? ' <span>(só ' + escapeHtml(String(it.disponivel)) +
                 ' disponíve' + (it.disponivel === 1 ? 'l' : 'is') +
                 ' — diminua a quantidade no <a href="/loja/carrinho">' +
@@ -670,8 +678,8 @@
               'Trocar pra ' + br + ' (todos disponíveis)</button>';
           } else {
             html += '<p style="margin:6px 0 0; font-size:13px;">' +
-              'Nenhuma data nos próximos 30 dias tem todos os itens — ' +
-              'tire o esgotado ou tente uma data específica.</p>';
+              'Nenhuma data do calendário tem todos os itens — ' +
+              'tire o esgotado do carrinho.</p>';
           }
           aviso.className = 'dispon-checkout ko';
           aviso.innerHTML = html;

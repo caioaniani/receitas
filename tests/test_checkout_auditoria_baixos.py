@@ -162,3 +162,61 @@ def test_confirmacao_do_express_usa_o_prazo_gravado(app, monkeypatch):
                   janela_entrega='em até 2h', endereco_entrega='Rua A, 10')
     h = app.test_client().get(f'/loja/pedido/{ped.codigo}').get_data(as_text=True)
     assert 'Express — em até 2h' in h and 'em até 1h' not in h
+
+
+# ── 35. "Trocar pra dd/mm" só sugere data que o checkout aceita ─────────
+
+def _disp(app, data, prod_id, **extra):
+    return app.test_client().post(
+        '/loja/api/disponibilidade-checkout',
+        json={'data': data.isoformat(),
+              'itens': [{'kind': 'produto', 'id': prod_id}], **extra}).get_json()
+
+
+def test_sugestao_pula_dia_fechado(app):
+    from app.extensions import db
+    from app.services import loja_data_especial, loja_plano_dia
+    from app.utils import hoje
+    p = _produto(db)
+    d1, d2, d3 = (hoje() + timedelta(days=i) for i in (1, 2, 3))
+    loja_plano_dia.definir('produto', p.id, hoje(), 0)   # hoje pode ter janela
+    loja_plano_dia.definir('produto', p.id, d1, 0)
+    loja_data_especial.definir(d2, '', rotulo='Natal')
+    assert _disp(app, d1, p.id)['proxima_disponivel'] == d3.isoformat()
+
+
+def test_sugestao_respeita_o_d2_da_encomenda(app):
+    from app.extensions import db
+    from app.services import loja_plano_dia
+    from app.utils import hoje
+    p = _produto(db, sob_encomenda=True)
+    d2, d3 = hoje() + timedelta(days=2), hoje() + timedelta(days=3)
+    loja_plano_dia.definir('produto', p.id, d2, 0)
+    assert _disp(app, d2, p.id)['proxima_disponivel'] == d3.isoformat()
+
+
+def test_sugestao_nao_passa_do_fim_do_calendario(app):
+    from app.extensions import db
+    from app.services import loja_plano_dia
+    from app.utils import hoje
+    p = _produto(db)
+    for i in range(0, 20):
+        loja_plano_dia.definir('produto', p.id, hoje() + timedelta(days=i), 0)
+    loja_plano_dia.definir('produto', p.id, hoje() + timedelta(days=20), 5)
+    assert _disp(app, hoje() + timedelta(days=1), p.id)['proxima_disponivel'] is None
+
+
+def test_item_bloqueado_na_data_especial_aparece_na_conferencia(app):
+    from app.extensions import db
+    from app.services import loja_data_especial, loja_plano_dia
+    from app.utils import hoje
+    p = _produto(db, nome='Caixa de Mini')
+    d2, d3 = hoje() + timedelta(days=2), hoje() + timedelta(days=3)
+    for i in (0, 1):   # hoje/amanhã sem saldo: a sugestão cai depois do bloqueio
+        loja_plano_dia.definir('produto', p.id, hoje() + timedelta(days=i), 0)
+    loja_data_especial.definir(d2, '06:00-10:00', rotulo='Dia dos Pais',
+                               bloquear_itens='Caixa de Mini')
+    j = _disp(app, d2, p.id)
+    assert [e['nome'] for e in j['esgotados']] == ['Caixa de Mini']
+    assert j['esgotados'][0]['bloqueado'] is True
+    assert j['proxima_disponivel'] == d3.isoformat()

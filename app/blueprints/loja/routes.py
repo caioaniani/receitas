@@ -1453,8 +1453,14 @@ def api_disponibilidade_checkout():
     esgotados = []
     nomes_esgotados = []
     fora_do_catalogo = False
+    # Itens com o nome canônico — `itens_bloqueados` (curadoria de data
+    # especial) casa pelo nome/categoria, igual ao `criar_pedido`.
+    itens_nomeados = []
     for (kind, item_id), qtd in pedidos.items():
         cat = loja_catalogo.por_id_publicado(kind, item_id)
+        if cat is not None:
+            itens_nomeados.append({'kind': kind, 'id': item_id,
+                                   'nome': cat.get('nome') or ''})
         if cat is None:
             fora_do_catalogo = True
             saldo = 0
@@ -1484,8 +1490,23 @@ def api_disponibilidade_checkout():
                           'disponivel': saldo or 0, 'pedido': qtd})
         nomes_esgotados.append(nome)
 
-    # Proxima data em que TODOS os itens do carrinho tem saldo pra
-    # quantidade pedida (ate +30 dias).
+    # Curadoria da data especial (ex.: "sem minis no Dia dos Pais"): o POST
+    # recusa esses itens — a conferência avisa antes, em vez de mostrar "✓".
+    from app.services import loja_data_especial
+    ja_listados = {(e['kind'], e['id']) for e in esgotados}
+    barrados = set(loja_data_especial.itens_bloqueados(d, itens_nomeados))
+    for it in itens_nomeados:
+        if it['nome'] in barrados and (it['kind'], it['id']) not in ja_listados:
+            esgotados.append({'kind': it['kind'], 'id': it['id'],
+                              'nome': it['nome'], 'disponivel': 0,
+                              'pedido': pedidos[(it['kind'], it['id'])],
+                              'bloqueado': True})
+            nomes_esgotados.append(it['nome'])
+
+    # Proxima data em que TODOS os itens do carrinho cabem — procurada nas
+    # MESMAS datas que o checkout aceita (auditoria 27/09/2026: antes eram
+    # hoje+1..+30 pelo plano só, e o botão sugeria dia fechado, data antes
+    # do D+2 da encomenda ou além do fim do calendário — o POST recusava).
     proxima = None
     if esgotados and not fora_do_catalogo:
         def _cabe(dia):
@@ -1493,9 +1514,11 @@ def api_disponibilidade_checkout():
                 s = loja_catalogo.saldo_do_plano(k, iid, dia)
                 if s is not None and q > s:
                     return False
-            return True
-        for i in range(1, 31):
-            d2 = hoje() + timedelta(days=i)
+            return not loja_data_especial.itens_bloqueados(dia, itens_nomeados)
+        modo = dados.get('modo') if dados.get('modo') == 'retirada' else 'agendada'
+        lead = loja_checkout.lead_do_carrinho(
+            [{'kind': k, 'id': i} for (k, i) in pedidos])
+        for d2 in loja_checkout.datas_disponiveis(modo, lead_dias=lead):
             if d2 == d:
                 continue
             if _cabe(d2):
