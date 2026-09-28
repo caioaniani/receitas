@@ -3591,6 +3591,52 @@ todos com teste em `tests/test_checkout_auditoria_graves.py`:
   cancelada de propósito avisa o dono. A expiração consulta o gateway sem
   trava e age por compra, com commit próprio (QR válido adia; pago
   confirma). Testes: `tests/test_kits_auditoria.py`.
+- **2ª revisão independente (28/09/2026, blocos frete/fiscal/kits)** —
+  aplicados (25 achados; o 7 ficou como pendência):
+  - **Frete**: com NÚMERO do cliente, o texto dele vem antes do rótulo
+    oficial sem número; o rótulo só resolve depois, como `rua_sem_numero`
+    (IMPRECISO). Nominatim fora (rede/timeout/HTTP) ENCERRA a cadeia na 1ª
+    falha (antes 5 × 8 s por cotação, com 8 threads no app) — com a
+    coordenada da BrasilAPI ela sai imprecisa, senão 'nao_encontrado'.
+    Candidato sem coordenada é pulado (TypeError dava 500).
+  - **Conexão PRÓPRIA** (`db.engine.begin()`) para a reserva do teto do
+    Google e para o cache do `geocode_preciso`: nunca commitam nem soltam
+    as travas da transação do chamador. Em SQLite (testes) a escrita falha
+    se o chamador tiver escrita pendente já enviada — o cache se perde e
+    a cotação segue (Postgres não tem esse efeito).
+  - **Cache do Google, três semânticas**: rotas gravam `google_rota` (não
+    conferem `location_type`; o frete não confia), falha das rotas nunca
+    apaga linha de resposta do Google (`google*`), e o despacho sem prova
+    de porta grava `google` quando o ponto é preciso para o frete.
+  - **Kits**: o frete é cotado ANTES da trava do kit, depois de a
+    composição passar numa conferência sem trava (escolha inválida não
+    cota); sob a trava tudo é conferido de novo e preço que mudou durante a
+    cotação recusa a compra. Nonce de compra PAGA leva à página do pedido
+    (sem convite a comprar de novo); cancelada/expirada têm mensagem
+    própria. Dados fiscais e CNPJ com letras entram na comparação do
+    reenvio. Parada bloqueada fica fora do "saiu para entrega", aparece na
+    tela do motorista ("não entregar — conferir com a equipe",
+    `saida_producao_site.motivo_bloqueio`, fonte única com a coleta) e
+    marcar entregue responde 409 (motorista, painel, ação do admin); o
+    webhook da Lalamove registra a coleta física e deixa o bloqueio no log.
+    Estorno incerto só vira 'recusado' com prova de ser DESTA entrega
+    (única pendente na cobrança + transação falha posterior ao pedido);
+    o dono registra a conferência manual (`resolver_estorno_manual`, rota
+    `.../estorno-kit/conferir`, owner, motivo obrigatório, nunca chama o
+    gateway). Expiração não seleciona compra com entrega fora de espera.
+  - **Documento**: `normalizar_documento` tira rótulo colado com
+    separador ("CPF: ", "CNPJ nº ") — campo aceita 32 caracteres e a
+    máscara encurta; bot e reenvio do kit comparam pela fonte única;
+    checkout usa `DocumentoFiscal.ehCnpj` para "é PJ"; teclado numérico
+    por padrão com "CNPJ com letras?" (só com JS); `fiscal_online.digitos`
+    só ASCII. `cnpj.consultar` devolve `falha` estruturada e "não
+    encontrado" só com 404 de TODAS as bases (B2B e checkout decidem pelo
+    código; busca B2B aceita CNPJ com letras).
+  - `/loja/api/frete` recusa JSON forjado com 400; janelas da divulgação e
+    sonda `frete-debug` cotam na cota do preview.
+  - PENDENTE (não verificável daqui): se o Pagar.me v5 e o Tiny aceitam
+    CNPJ alfanumérico no `customer.document`/`cpf_cnpj` — validar no
+    sandbox; se recusarem, o cliente PJ novo cria o pedido e não paga.
 
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
