@@ -234,6 +234,10 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
     O nonce vem da sessão assinada; a rota confere sua origem. A unicidade e
     o lock do kit impedem duas compras por um duplo clique do mesmo formulário.
     Os valores individuais são os únicos pedidos que entram no faturamento.
+
+    Nonce já usado: devolve a compra existente SÓ quando o envio é o mesmo e
+    ela ainda aguarda pagamento no prazo (duplo clique). Caso contrário
+    levanta `FormularioJaUsado`, sem cotar frete nem gravar nada.
     """
     from app.services import kits_adicionais, kits_cafe, loja_checkout, loja_plano_dia
 
@@ -251,32 +255,17 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
         if existente:
             if existente.kit_id != kit.id:
                 return None, ['Este formulário pertence a outro kit. Reabra a compra.']
-            return existente, []
+            if _pode_devolver_existente(existente, kit, form, agenda, base):
+                return existente, []
+            codigo = existente.pedido_principal.codigo
+            # Solta a trava do kit antes de a rota reapresentar o formulário.
+            db.session.rollback()
+            raise FormularioJaUsado(codigo)
         if not kit.ativo:
             return None, ['Este kit não está disponível para compra.']
-        suco_id = None
-        valores_suco = (form.getlist('suco_id') if hasattr(form, 'getlist') else
-                        [form['suco_id']] if 'suco_id' in form else [])
-        if kit.sucos:
-            if (len(valores_suco) != 1 or not isinstance(valores_suco[0], str)
-                    or not re.fullmatch(r'[1-9][0-9]{0,9}', valores_suco[0])):
-                return None, ['Escolha um dos sucos disponíveis neste kit.']
-            suco_id = int(valores_suco[0])
-        elif valores_suco:
-            return None, ['Este kit não oferece escolha de suco.']
-        grupos = {opcao.grupo for opcao in kit.opcoes}
-        campos_escolha = {f'escolha_{grupo}' for grupo in grupos}
-        if any(campo.startswith('escolha_') and campo not in campos_escolha for campo in form):
-            return None, ['Este kit não oferece uma das escolhas recebidas. Reabra o kit.']
-        escolhas = {}
-        for grupo in grupos:
-            campo = f'escolha_{grupo}'
-            valores = (form.getlist(campo) if hasattr(form, 'getlist') else
-                       [form[campo]] if campo in form else [])
-            if (len(valores) != 1 or not isinstance(valores[0], str)
-                    or not re.fullmatch(r'(receita|produto):[1-9][0-9]{0,9}', valores[0])):
-                return None, ['Escolha uma opção de cada grupo disponível neste kit.']
-            escolhas[grupo] = valores[0]
+        suco_id, escolhas, erros = _ler_escolhas(kit, form)
+        if erros:
+            return None, erros
         try:
             # Captura o produto escolhido antes de qualquer cotação externa.
             raw = kits_cafe.itens_do_kit(kit, suco_id, escolhas)
