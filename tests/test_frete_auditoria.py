@@ -722,6 +722,48 @@ def test_api_frete_do_checkout_cota_no_canal_preview(app, monkeypatch):
     assert vistos == [frete.CANAL_PREVIEW]
 
 
+def test_api_frete_com_json_forjado_responde_400(app, monkeypatch):
+    """Revisão 28/09/2026: lista ou número no campo davam 500."""
+    app.config['LOJA_HOSTS'] = 'localhost'
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    cliente = app.test_client()
+    with patch('app.blueprints.loja.routes.frete_svc.consultar_frete') as cotar:
+        for corpo in ([1], {'endereco': 5}, {'cep': ['04077000']},
+                      {'endereco': 'x' * 401}):
+            resp = cliente.post('/loja/api/frete', json=corpo)
+            assert resp.status_code == 400, corpo
+            assert resp.get_json()['ok'] is False
+    cotar.assert_not_called()
+
+
+def test_divulgacao_e_sonda_cotam_no_canal_preview(app, owner_user, monkeypatch):
+    """A tela de janelas da divulgação cota enquanto se digita e a sonda
+    frete-debug é de diagnóstico: nenhuma das duas gasta a cota do checkout."""
+    from datetime import timedelta
+    app.config['CLAUDE_API_TOKEN'] = 'tok-teste'
+    vistos = []
+
+    def _consultar(geo, *, canal=frete.CANAL_CHECKOUT):
+        vistos.append(canal)
+        return {'ok': True, 'fora_area': False, 'distancia_km': 2.0}
+
+    cliente = app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao['_user_id'] = str(owner_user.id)
+        sessao['_fresh'] = True
+    amanha = (hoje() + timedelta(days=1)).isoformat()
+    with patch('app.services.frete.consultar_frete', side_effect=_consultar), \
+         patch('app.services.frete._geocodificar_texto', return_value=None), \
+         patch('app.services.frete._geocodificar_cep', return_value=None):
+        r = cliente.get('/admin/loja-online/divulgacao/janelas?modo=agendada&data='
+                        + amanha + '&logradouro=Rua+X&numero=1&cidade=SP')
+        assert r.status_code == 200
+        r = cliente.get('/api/claude/frete-debug?q=Rua+X,+1',
+                        headers={'Authorization': 'Bearer tok-teste'})
+        assert r.status_code == 200
+    assert vistos == [frete.CANAL_PREVIEW, frete.CANAL_PREVIEW]
+
+
 def test_bot_cota_frete_no_canal_preview(app):
     """O bot responde cliente anônimo a cada mensagem — mesma cota do
     preview, nunca a do checkout."""
