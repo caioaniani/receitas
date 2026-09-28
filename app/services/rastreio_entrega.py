@@ -51,8 +51,21 @@ def iniciar_rota(driver, dia=None):
     codes = {a.pedido_code for a in _rota_do_driver(driver.id, dia) if a.pedido_code}
     # Inclui a primeira parada já entregue e novas atribuições numa nova
     # confirmação de saída da mesma rota. Registro por item deduplica.
-    for pedido in PedidoOnline.query.filter(PedidoOnline.codigo.in_(codes)).order_by(PedidoOnline.id):
-        registrar(pedido, 'inicio_rota')
+    pedidos = (PedidoOnline.query.filter(PedidoOnline.codigo.in_(codes))
+               .order_by(PedidoOnline.id).all())
+    for pedido in pedidos:
+        codigo = pedido.codigo
+        # Uma parada bloqueada (estorno de kit em andamento, composição sem
+        # vínculo de estoque) não pode derrubar a saída das outras: cada uma
+        # num SAVEPOINT; a que falha desfaz só a própria baixa e fica no log
+        # (erro) para a equipe conferir. A próxima confirmação da mesma rota
+        # tenta de novo — o registro por item deduplica o que já saiu.
+        try:
+            with db.session.begin_nested():
+                registrar(pedido, 'inicio_rota')
+        except ValueError as exc:
+            logger.error('rastreio: saída do pedido %s não registrada no início da rota '
+                         '(motorista %s, %s): %s', codigo, driver.id, dia, exc)
     if ri is None:
         ri = RotaInicio(driver_id=driver.id, data=dia)
         db.session.add(ri)
