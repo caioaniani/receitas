@@ -203,9 +203,16 @@ def kit_comprar(kit_id):
         abort(400, description='Reabra o kit para iniciar a compra.')
     try:
         agenda = json.loads(request.form.get('agenda_json') or '[]')
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, RecursionError):
+        # RecursionError: JSON aninhado forjado ('[[[[...') dava 500.
         agenda = []
-    validos = agenda if isinstance(agenda, list) and len(agenda) <= 31 else []
+    # Reexibição após erro: só pares data/janela em texto curto voltam para
+    # a página — lixo forjado não é devolvido ao navegador.
+    validos = [{'data': a['data'], 'janela': a['janela']} for a in agenda
+               if isinstance(a, dict) and isinstance(a.get('data'), str)
+               and isinstance(a.get('janela'), str)
+               and len(a['data']) <= 10 and len(a['janela']) <= 40] \
+        if isinstance(agenda, list) and len(agenda) <= 31 else []
     try:
         compra, erros = compra_kits.criar_compra(
             kit, request.form, agenda, checkout_token=token)

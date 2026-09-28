@@ -518,3 +518,21 @@ def test_erro_numa_compra_fica_isolado_e_volta_no_ciclo_seguinte(compra, gateway
     assert all(p.status == 'aguardando_pagamento' for p in _pedidos(compra))
     # Ciclo seguinte: a mesma compra é resolvida normalmente.
     assert len(kits_estoque.expirar_compras()) == 2
+
+
+# ── Entrada malformada (auditoria, item 34) ─────────────────────────────────
+
+@pytest.mark.loja_host
+@pytest.mark.parametrize('agenda_json', [
+    '[' * 5000 + ']' * 5000,          # aninhado: RecursionError no json.loads
+    '{"data": "2026-10-01"}',          # objeto em vez de lista
+    '[1, null, "x", [["y"]]]',         # itens que não são data/janela
+])
+def test_agenda_forjada_responde_400_sem_500(app, kit, frete, checkout, agenda_json):
+    cliente, token, _ = _abrir(app, kit)
+    resposta = cliente.post(f'/loja/kits-cafe/{kit.id}',
+                            data=_form(checkout_token=token, agenda_json=agenda_json))
+    assert resposta.status_code == 400
+    assert CompraKit.query.count() == 0
+    html = resposta.get_data(as_text=True)
+    assert '[["y"]]' not in html
