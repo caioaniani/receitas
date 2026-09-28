@@ -120,25 +120,63 @@ def test_rota_uso_ia_exige_owner(app, admin_user):
 
 
 def test_modelos_por_funcao():
-    """Padronizacao do dono (05/08/2026): TUDO em Sonnet 5 — substituiu a
-    regra de 25/06 ('Sonnet 4.6 exceto bot/WhatsApp/OCRs = Opus 4.8')."""
+    """Padronizacao do dono (28/09/2026): TUDO em Sonnet 5.5 — substituiu o
+    Sonnet 5 de 05/08/2026 (que substituira a regra de 25/06). O modelo sai de
+    UMA fonte (`ia_modelos.MODELO_PADRAO`)."""
     from app.services import (
+        cadastro_ia,
         chatbot,
         chatbot_auditor,
         chatbot_vigia,
         conta_pagar_ia,
         copilot,
+        ia_modelos,
+        planejamento_ia,
         seo_descricoes,
+        treino_ia_perguntas,
         zapi_bot,
     )
-    assert chatbot_vigia.MODELO == 'claude-sonnet-5'
-    assert chatbot.FOLLOWUP_MODELO == 'claude-sonnet-5'
-    assert seo_descricoes.MODELO == 'claude-sonnet-5'
-    assert chatbot_auditor.MODELO == 'claude-sonnet-5'
-    assert copilot.MODELO_DEFAULT == 'claude-sonnet-5'
-    assert chatbot.MODELO == 'claude-sonnet-5'                 # bot Chatwoot
-    assert zapi_bot.MODELO_WHATSAPP_DEFAULT == 'claude-sonnet-5'  # WhatsApp dono
-    assert conta_pagar_ia.MODELO.startswith('claude-sonnet-5')   # OCR contas
+    assert ia_modelos.MODELO_PADRAO == 'claude-sonnet-5-5'
+    assert chatbot_vigia.MODELO == 'claude-sonnet-5-5'
+    assert chatbot.FOLLOWUP_MODELO == 'claude-sonnet-5-5'
+    assert seo_descricoes.MODELO == 'claude-sonnet-5-5'
+    assert chatbot_auditor.MODELO == 'claude-sonnet-5-5'
+    assert copilot.MODELO_DEFAULT == 'claude-sonnet-5-5'
+    assert chatbot.MODELO == 'claude-sonnet-5-5'                 # bot Chatwoot
+    assert zapi_bot.MODELO_WHATSAPP_DEFAULT == 'claude-sonnet-5-5'  # WhatsApp
+    # Os com env de override: sem env no ambiente de teste = o padrao.
+    assert conta_pagar_ia.MODELO == 'claude-sonnet-5-5'          # OCR contas
+    assert cadastro_ia.MODELO == 'claude-sonnet-5-5'
+    assert planejamento_ia.MODELO == 'claude-sonnet-5-5'
+    assert treino_ia_perguntas.MODELO == 'claude-sonnet-5-5'
+
+
+def test_modelos_por_funcao_na_sonda(app):
+    """A visao por funcao (usada em /admin/debug-ia e na sonda de deploy)
+    mostra TODAS as funcoes no padrao quando nao ha env de override."""
+    from app.services import ia_modelos
+    with app.app_context():
+        app.config['ZAPI_BOT_MODELO'] = ''
+        info = ia_modelos.modelos_por_funcao()
+    assert info['padrao'] == 'claude-sonnet-5-5'
+    assert info['fora_do_padrao'] == []
+    assert set(info['por_funcao']) == {
+        'bot_atendimento', 'followup', 'vigia', 'auditor', 'copilot_slack',
+        'copilot_whatsapp', 'ocr_cupom', 'ocr_nf', 'cadastro_ia',
+        'planejamento', 'treino_ia_perguntas', 'seo', 'avaliacao_google'}
+
+
+def test_env_antiga_aparece_fora_do_padrao(app, monkeypatch):
+    """Env do Railway com modelo antigo MANDA sobre o padrao (valvula do
+    dono) — e a visao por funcao denuncia isso."""
+    from app.services import ia_modelos
+    monkeypatch.setenv('GOOGLE_REVIEWS_IA_MODELO', 'claude-opus-4-8')
+    with app.app_context():
+        app.config['ZAPI_BOT_MODELO'] = 'claude-sonnet-5'
+        info = ia_modelos.modelos_por_funcao()
+    assert info['por_funcao']['avaliacao_google'] == 'claude-opus-4-8'
+    assert info['por_funcao']['copilot_whatsapp'] == 'claude-sonnet-5'
+    assert info['fora_do_padrao'] == ['avaliacao_google', 'copilot_whatsapp']
 
 
 def test_sonnet_5_tem_preco_na_tabela():
@@ -149,11 +187,45 @@ def test_sonnet_5_tem_preco_na_tabela():
         == Decimal('18')
 
 
-def test_ocr_cupom_usa_sonnet_5():
-    """ocr_nota nao tem constante (modelo inline) — confere via codigo-fonte."""
+def test_sonnet_5_5_tem_preco_proprio():
+    """O 5.5 NAO pode cair na linha do Sonnet 5 pelo prefixo: o casamento e
+    pelo prefixo MAIS LONGO ($2/$10, tabela de 25/09/2026)."""
+    from app.services.uso_ia import calcular_custo
+    assert calcular_custo('claude-sonnet-5-5', 1_000_000, 1_000_000) \
+        == Decimal('12')
+    # cache read = 0.1x do input
+    assert calcular_custo('claude-sonnet-5-5', 0, 0, cache_read=1_000_000) \
+        == Decimal('0.2')
+    # id de plataforma (Bedrock) e sufixo de data casam a mesma linha
+    assert calcular_custo('anthropic.claude-sonnet-5-5', 1_000_000, 0) \
+        == Decimal('2')
+    assert calcular_custo('claude-sonnet-5-5-20260925', 1_000_000, 0) \
+        == Decimal('2')
+
+
+def test_opus_5_5_e_fable_nao_caem_no_opus_5():
+    from app.services.uso_ia import calcular_custo
+    assert calcular_custo('claude-opus-5-5', 1_000_000, 1_000_000) \
+        == Decimal('24')
+    assert calcular_custo('claude-opus-5', 1_000_000, 1_000_000) \
+        == Decimal('30')
+    assert calcular_custo('claude-fable-5-1', 1_000_000, 1_000_000) \
+        == Decimal('60')
+
+
+def test_modelo_desconhecido_sem_preco():
+    from app.services.uso_ia import calcular_custo
+    assert calcular_custo('gpt-9', 1, 1) is None
+    # prefixo sem fronteira nao casa ('claude-sonnet-55' nao e o 5.5)
+    assert calcular_custo('claude-sonnet-55', 1, 1) is None
+
+
+def test_ocr_cupom_usa_modelo_padrao():
+    """ocr_nota nao tem constante de modulo (modelo inline) — confere via
+    codigo-fonte que ele vem da fonte unica, sem literal."""
     import inspect
 
     from app.services import ocr_nota
     src = inspect.getsource(ocr_nota)
-    assert "modelo = 'claude-sonnet-5'" in src
-    assert 'claude-sonnet-4-6' not in src  # nao sobrou o antigo
+    assert 'modelo = ia_modelos.MODELO_PADRAO' in src
+    assert "'claude-" not in src  # nenhum id de modelo literal

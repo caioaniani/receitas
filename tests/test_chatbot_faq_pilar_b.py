@@ -670,13 +670,22 @@ def test_canario_embutido_no_system_da_chamada(app, monkeypatch):
         'canario nao foi injetado no system da chamada'
 
 
-# -------- Opus 4.8 + regra "responder antes de perguntar" (14/06/2026) ---
+# -------- Modelo + regra "responder antes de perguntar" (14/06/2026) -----
 
-def test_chatbot_usa_sonnet_5():
-    """Trava do modelo do bot: Sonnet 5 (decisao do dono 05/08/2026 —
-    'trocar todos para sonnet 5'; substituiu o Opus 4.8 de 14/06)."""
+def test_chatbot_usa_sonnet_5_5():
+    """Trava do modelo do bot: Sonnet 5.5 (decisao do dono 28/09/2026 —
+    "aplicar o sonnet 5.5 em toda ia e bot"; antes Sonnet 5 desde 05/08 e
+    Opus 4.8 desde 14/06)."""
     from app.services.chatbot import MODELO
-    assert MODELO == 'claude-sonnet-5', f'modelo mudou: {MODELO}'
+    assert MODELO == 'claude-sonnet-5-5', f'modelo mudou: {MODELO}'
+
+
+def test_prompt_nao_afirma_modelo():
+    """O prompt nao diz ao modelo qual modelo ele e (a frase antiga
+    "Voce roda em Opus 4.8" ficou falsa a cada troca)."""
+    from app.services.chatbot_prompt import PROMPT
+    assert 'Opus 4.8' not in PROMPT
+    assert 'roda em' not in PROMPT
 
 
 def test_prompt_tem_regra_responder_antes_de_perguntar():

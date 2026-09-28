@@ -3982,6 +3982,28 @@ def debug_sentry():
     return jsonify(out), 200
 
 
+@main_bp.route('/admin/debug-ia')
+@owner_required
+def debug_ia():
+    """Modelo de IA de cada função e verificação real da API (owner-only).
+
+    Sem parâmetro: só mostra o modelo EFETIVO de cada função (envs do
+    Railway incluídas) — sem custo. `?testar=1` faz duas chamadas mínimas e
+    reais com os mesmos parâmetros do sistema (sem ferramentas e com
+    ferramenta) e mostra o modelo que respondeu, o stop_reason e o erro cru
+    se a API recusar — a suíte simula a Anthropic e não prova que a API
+    aceita um parâmetro (incidente de 05-17/08/2026). Custo de centavos,
+    registrado em /admin/uso-ia como 'Verificação da IA'."""
+    from app.services import ia_modelos
+    out = ia_modelos.modelos_por_funcao()
+    if request.args.get('testar') == '1':
+        out['verificacao'] = ia_modelos.verificar_ao_vivo()
+    else:
+        out['como_testar'] = ('Abra /admin/debug-ia?testar=1 para duas '
+                              'chamadas reais de teste (centavos).')
+    return jsonify(out), 200
+
+
 @main_bp.route('/admin/vigia-site')
 @owner_required
 def vigia_site():
@@ -4550,7 +4572,7 @@ def vigia_diag():
     """Diagnostico do vigia do chatbot: mostra config + ultimos veredictos.
 
     Owner-only. Pra confirmar que o vigia esta avaliando conversas e que o
-    pipeline (Haiku -> Z-API -> WhatsApp do dono) esta funcionando."""
+    pipeline (IA -> Z-API -> WhatsApp do dono) esta funcionando."""
     import os as _os
 
     from flask import current_app, jsonify
@@ -4581,6 +4603,12 @@ _USO_IA_LABELS = {
     'ocr_nf': 'OCR Contas a Pagar (NF/boleto)',
     'ocr_cupom': 'OCR cupom',
     'seo': 'Descrições SEO',
+    'cadastro_ia': 'Cadastro por IA',
+    'pedido_loja_ia': 'Pedido da loja por IA',
+    'producao_ia': 'Produção por IA',
+    'avaliacao_google': 'Respostas do Google',
+    'treino_ia_perguntas': 'Perguntas do treino',
+    'verificacao_ia': 'Verificação da IA (/admin/debug-ia)',
 }
 
 
@@ -7193,7 +7221,7 @@ def debug_email():
 
 # ── SEO: descricoes geradas com IA (22/06/2026) ───────────────────────
 # Lista produtos publicados com `descricao_seo` vazia, gera sugestao com
-# Claude Haiku, dono revisa e salva. Controle total — nunca publica
+# IA (modelo padrao do sistema), dono revisa e salva. Controle total — nunca publica
 # automaticamente. Service: app/services/seo_descricoes.py.
 
 @main_bp.route('/admin/seo/descricoes')
@@ -7252,7 +7280,8 @@ def seo_descricoes_sugerir():
         return jsonify(ok=False, erro='kind invalido')
     if not texto:
         return jsonify(ok=False,
-                       erro='IA indisponivel (cheque ANTHROPIC_API_KEY)')
+                       erro='a IA não gerou a sugestão — tente de novo '
+                            '(o motivo fica no log)')
     return jsonify(ok=True, sugestao=texto)
 
 

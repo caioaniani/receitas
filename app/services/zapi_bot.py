@@ -16,17 +16,20 @@ import logging
 import requests
 from flask import current_app
 
+from app.services import ia_modelos
+
 logger = logging.getLogger(__name__)
 
-# Limite do contexto enviado ao Claude. Sonnet aguenta 200k tokens, mas 80
-# turnos cobre 99% das conversas e mantem custo controlado. Antigos ficam
+# Limite do historico guardado por conversa: 80 turnos cobre 99% das
+# conversas e mantem custo controlado (o copilot manda as ultimas 20). Antigos ficam
 # persistidos no banco — so nao vao pra cada chamada.
 MAX_HIST_TURNOS = 80
 
-# Fork de persona/modelo (decisao do dono, 11/06/2026): este canal e o
-# "bot completo" — assessor pessoal do dono, com Opus. O Slack continua
-# operacional com Sonnet. Motor (tools/permissoes) e um so: copilot_svc.
-MODELO_WHATSAPP_DEFAULT = 'claude-sonnet-5'
+# Fork de persona (decisao do dono, 11/06/2026): este canal e o "bot
+# completo" — assessor pessoal do dono. Motor (tools/permissoes) e um so:
+# copilot_svc. Modelo: o padrao do sistema (Sonnet 5.5 desde 28/09/2026,
+# ia_modelos.MODELO_PADRAO); a env ZAPI_BOT_MODELO sobrescreve.
+MODELO_WHATSAPP_DEFAULT = ia_modelos.MODELO_PADRAO
 
 PERSONA_DONO = """
 PERSONA DESTE CANAL (WhatsApp pessoal do dono):

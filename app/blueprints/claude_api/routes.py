@@ -973,6 +973,14 @@ def deploy_info():
                 achadas[item] = f'erro: {type(exc).__name__}'
         out['colunas'] = achadas
         out['todas_presentes'] = all(v is True for v in achadas.values())
+    # Modelo de IA EFETIVO por funcao (28/09/2026, troca para o Sonnet 5.5):
+    # uma env antiga no Railway deixaria uma funcao fora do padrao EM
+    # SILENCIO. Read-only, sem chamada a API.
+    try:
+        from app.services import ia_modelos
+        out['ia'] = ia_modelos.modelos_por_funcao()
+    except Exception as exc:                                  # noqa: BLE001
+        out['ia'] = f'erro: {type(exc).__name__}'
     # ?seeds=1 (17/08/2026, caso "seed das danishes nao pegou"): expoe os
     # MARKERS de one-shot (AppConfig com prefixo de seed/retro) — "o seed
     # rodou?" responde-se de fora, sem log do Railway. Read-only; so chaves

@@ -1,4 +1,5 @@
-"""OCR de nota fiscal / cupom — usa Anthropic Vision (Claude Sonnet 4.6).
+"""OCR de nota fiscal / cupom — usa Anthropic Vision (modelo padrao do sistema,
+`ia_modelos.MODELO_PADRAO`).
 
 Recebe imagem (bytes + mimetype), pede pro modelo extrair itens em JSON
 estruturado: [{nome, quantidade, unidade, preco_unitario, preco_total}].
@@ -8,8 +9,13 @@ no blueprint) que decide o que fazer com o resultado.
 """
 import base64
 import json
+import logging
 import os
 import re
+
+from app.services import ia_modelos
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "Voce e um extrator de notas fiscais e cupons. Recebe foto de uma "
@@ -26,7 +32,7 @@ SYSTEM_PROMPT = (
 
 
 def extrair_itens_nota(image_bytes, mimetype='image/jpeg'):
-    """Chama Claude Sonnet 4.6 com a imagem. Retorna dict parseado ou
+    """Chama o modelo padrao com a imagem. Retorna dict parseado ou
     {'erro': '...'} em falha."""
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
@@ -38,14 +44,14 @@ def extrair_itens_nota(image_bytes, mimetype='image/jpeg'):
 
     b64 = base64.b64encode(image_bytes).decode('ascii')
     client = anthropic.Anthropic(api_key=api_key)
-    modelo = 'claude-sonnet-5'
+    modelo = ia_modelos.MODELO_PADRAO
     try:
         response = client.messages.create(
             model=modelo,
             max_tokens=2000,
-            # Extracao de cupom sem tools: thinking adaptativo (padrao do
-            # Sonnet 5) so comeria teto/custo — desligado.
-            thinking={'type': 'disabled'},
+            # Extracao de cupom sem tools: raciocinio so comeria teto/custo —
+            # desligado pelo parametro que o modelo aceita.
+            **ia_modelos.opcoes_sem_raciocinio(modelo),
             system=SYSTEM_PROMPT,
             messages=[{
                 'role': 'user',
@@ -59,7 +65,12 @@ def extrair_itens_nota(image_bytes, mimetype='image/jpeg'):
         from app.services import uso_ia
         uso_ia.registrar('ocr_cupom', modelo, getattr(response, 'usage', None))
     except Exception as exc:  # noqa: BLE001
+        ia_modelos.registrar_falha(logger, 'ocr_nota', exc)
         return {'erro': f'Anthropic falhou: {exc}'}
+    # Recusa das salvaguardas: conteudo vazio/parcial nao e nota lida.
+    categoria = ia_modelos.recusa(response)
+    if categoria:
+        return {'erro': str(ia_modelos.RespostaRecusada(categoria))}
 
     texto = ''.join(b.text for b in response.content if b.type == 'text').strip()
     # Modelo as vezes envolve em ```json — tira.

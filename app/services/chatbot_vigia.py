@@ -1,10 +1,10 @@
 """Vigia do chatbot — IA supervisora que assiste cada conversa do bot e alerta
 o dono via WhatsApp (Z-API) quando detecta problema.
 
-Roda DEPOIS de o bot ter respondido (nao atrasa o cliente). Modelo: Sonnet
-4.6 (subido de Haiku em 25/06/2026 na padronizacao do dono — input 3x mais
-caro; e o MAIOR volume de IA do sistema porque roda a cada resposta). Por
-isso ha um short-circuit deterministico: fechamento trivial do cliente
+Roda DEPOIS de o bot ter respondido (nao atrasa o cliente). Modelo: o padrao
+do sistema (`ia_modelos.MODELO_PADRAO`, Sonnet 5.5 desde 28/09/2026). E o
+MAIOR volume de IA do sistema porque roda a cada resposta. Por isso ha um
+short-circuit deterministico: fechamento trivial do cliente
 ("ok", "obrigada") nao gasta chamada de modelo (02/07/2026).
 
 Detecta principalmente:
@@ -30,13 +30,14 @@ from collections import deque
 
 from flask import current_app
 
+from app.services import ia_modelos
 from app.services.atendimento_humano import (
     POLITICA_ATENDIMENTO as POLITICA_ATENDIMENTO_RESTRITA,
 )
 
 logger = logging.getLogger(__name__)
 
-MODELO = 'claude-sonnet-5'
+MODELO = ia_modelos.MODELO_PADRAO
 MAX_TOKENS = 400
 # Marcador reservado, persistido SOMENTE a partir do resultado interno do
 # roteador deterministico. Nao inferir pela data nem pelo texto do cliente.
@@ -167,7 +168,7 @@ def _resumo_catalogo_site(limite=120):
     vigia avisou 'erro critico' quando bot e site estavam alinhados).
 
     Lista TODOS os produtos do catalogo (disponiveis e esgotados) pro
-    Haiku ter contexto pra distinguir os dois casos."""
+    modelo ter contexto pra distinguir os dois casos."""
     try:
         from app.services import bot_tools
     except Exception:  # noqa: BLE001
@@ -242,10 +243,11 @@ def _chamar_modelo(api_key, contexto):
     resp = client.messages.create(
         model=MODELO,
         max_tokens=MAX_TOKENS,
-        # Sonnet 5 liga thinking adaptativo por padrao; o vigia e o MAIOR
-        # volume de IA do sistema e devolve JSON curto — thinking aqui
-        # comeria o teto de 400 tokens e multiplicaria o custo. Desligado.
-        thinking={'type': 'disabled'},
+        # O vigia devolve JSON curto: raciocinio aqui comeria o teto de 400
+        # tokens e multiplicaria o custo. O parametro que desliga depende do
+        # modelo (no Sonnet 5.5, between_tools; 'disabled' da 400) — vem de
+        # ia_modelos, nunca escrito a mao.
+        **ia_modelos.opcoes_sem_raciocinio(MODELO),
         # cache_control: o PROMPT_VIGIA e estatico e o vigia e o maior volume
         # de IA do sistema — cache read custa 0.1x do input.
         system=[{'type': 'text', 'text': PROMPT_VIGIA,
@@ -254,6 +256,9 @@ def _chamar_modelo(api_key, contexto):
     )
     from app.services import uso_ia
     uso_ia.registrar('vigia', MODELO, getattr(resp, 'usage', None))
+    # Recusa das salvaguardas: conteudo vazio/parcial nao e veredito — sobe
+    # como erro pelo caminho de falha de sempre (log + {'erro'}).
+    ia_modelos.exigir_resposta(resp)
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
     # Tolerante a markdown wrappers do tipo ```json ... ```
@@ -317,15 +322,15 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
     # quando o bot transfere SEM ter chamado tool de busca/resolucao E a
     # conversa tem sinais claros de COMPRA EM CURSO, alerta IMEDIATO
     # (banner + WhatsApp), nao espera o resumo diario. Determinístico
-    # (regex) — auditavel, sem depender do humor do Haiku que ja falhou
+    # (regex) — auditavel, sem depender do humor do modelo que ja falhou
     # em pegar isso (caso real: conversas de hoje).
     #
-    # Quando bate, pula o Haiku (1) reage instantaneo, (2) evita o Haiku
+    # Quando bate, pula o modelo (1) reage instantaneo, (2) evita o modelo
     # subestimar como "media" e o alerta nao sair. O motivo customizado
     # diz exatamente o que aconteceu pra o dono agir.
     if _e_handoff_preguicoso_em_compra(historico, rb, conv_id=conv_id):
         logger.warning('vigia: HANDOFF PREGUICOSO EM VENDA detectado '
-                       'conv=%s (deterministico, pulou Haiku)', conv_id)
+                       'conv=%s (deterministico, pulou o modelo)', conv_id)
         veredicto = {
             'alerta': True,
             'gravidade': 'alta',
@@ -521,7 +526,7 @@ def handoff_foi_preguicoso(tools_usadas, conv_id=None, *, motivo=None,
 
 
 def _processar_veredicto(veredicto, nome_contato, conv_id):
-    """Pos-processa um veredicto (vem do Haiku OU do detector deterministico):
+    """Pos-processa um veredicto (vem do modelo OU do detector deterministico):
     valida, decide se manda WhatsApp, dispara o envio. Centralizado pra os
     dois caminhos gerarem o MESMO efeito (banner do painel + WhatsApp +
     persistencia via _registrar)."""
@@ -633,7 +638,7 @@ _SINAIS_RECLAMACAO = re.compile(
 
 def _e_handoff_preguicoso_em_compra(historico, resultado_bot, conv_id=None):
     """True se: bot fez handoff SEM tool de busca + cliente em compra ativa.
-    Determinístico pra ser auditavel e nao depender do Haiku."""
+    Determinístico pra ser auditavel e nao depender do modelo."""
     rb = resultado_bot or {}
     if rb.get('politica_atendimento') == POLITICA_ATENDIMENTO_RESTRITA:
         return False
@@ -829,7 +834,7 @@ def ultimos(limite=30):
 
 def disparar_teste(cenario='estoque'):
     """Dispara uma avaliacao com conversa SINTETICA pra confirmar que o
-    pipeline inteiro funciona (Haiku -> Z-API -> WhatsApp do dono). Retorna
+    pipeline inteiro funciona (IA -> Z-API -> WhatsApp do dono). Retorna
     o resultado bruto pra mostrar na rota /admin/vigia/teste.
 
     Cenarios:
@@ -907,7 +912,7 @@ def _chamar_modelo_abandono(api_key, contexto):
     resp = client.messages.create(
         model=MODELO,
         max_tokens=MAX_TOKENS,
-        thinking={'type': 'disabled'},   # mesma regra da avaliacao acima
+        **ia_modelos.opcoes_sem_raciocinio(MODELO),  # mesma regra acima
         # cache_control: o cron avalia varias conversas paradas em sequencia
         # na mesma janela de 5min — o PROMPT_ABANDONO estatico cacheia.
         system=[{'type': 'text', 'text': PROMPT_ABANDONO,
@@ -916,6 +921,7 @@ def _chamar_modelo_abandono(api_key, contexto):
     )
     from app.services import uso_ia
     uso_ia.registrar('vigia', MODELO, getattr(resp, 'usage', None))
+    ia_modelos.exigir_resposta(resp)
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
     if texto.startswith('```'):

@@ -4,11 +4,10 @@ Baseado em `ocr_nota.py`, mas pra contas a pagar: classifica o documento
 (nota fiscal ou boleto) e extrai fornecedor, valor, vencimento, codigo de
 barras / linha digitavel, itens.
 
-Modelo: Opus 4.8 direto (decisao do dono 14/06/2026 — vale o custo extra
-pra reduzir os fallbacks e os campos faltantes que o humano tinha que
-preencher na mao). Modelo configuravel por env var (caso o id do Opus
-mude). Atras de erro de json/transient, o codigo tenta UMA vez com o
-mesmo modelo — sem cascata Sonnet->Opus.
+Modelo: o padrao do sistema (`ia_modelos.MODELO_PADRAO`, Sonnet 5.5 desde
+28/09/2026), numa unica chamada — sem cascata entre modelos (decisao do dono
+14/06/2026). A env OCR_MODELO_OPUS (nome historico) sobrescreve o modelo; os
+parametros de raciocinio saem de `ia_modelos` pelo modelo efetivo.
 
 Aceita imagem (image/*) e PDF (application/pdf — boleto as vezes eh PDF).
 NAO grava nada — so extrai. Quem chamar decide o que fazer.
@@ -19,9 +18,11 @@ import logging
 import os
 import re
 
+from app.services import ia_modelos
+
 logger = logging.getLogger(__name__)
 
-MODELO = os.environ.get('OCR_MODELO_OPUS', 'claude-sonnet-5')
+MODELO = ia_modelos.modelo_do_ambiente('OCR_MODELO_OPUS')
 
 SYSTEM_PROMPT = (
     "Voce extrai dados de documentos de compra (nota fiscal ou boleto) a "
@@ -86,9 +87,9 @@ def _chamar(client, modelo, bloco):
     response = client.messages.create(
         model=modelo,
         max_tokens=2000,
-        # Extracao de NF/boleto sem tools: thinking adaptativo (padrao do
-        # Sonnet 5) so comeria teto/custo — desligado.
-        thinking={'type': 'disabled'},
+        # Extracao de NF/boleto sem tools: raciocinio so comeria teto/custo
+        # — desligado pelo parametro que o modelo aceita.
+        **ia_modelos.opcoes_sem_raciocinio(modelo),
         system=SYSTEM_PROMPT,
         messages=[{'role': 'user', 'content': [
             bloco,
@@ -97,6 +98,7 @@ def _chamar(client, modelo, bloco):
     )
     from app.services import uso_ia
     uso_ia.registrar('ocr_nf', modelo, getattr(response, 'usage', None))
+    ia_modelos.exigir_resposta(response)  # recusa nao e documento lido
     texto = ''.join(b.text for b in response.content if b.type == 'text').strip()
     texto = re.sub(r'^```(?:json)?\s*|\s*```$', '', texto, flags=re.MULTILINE).strip()
     return json.loads(texto)
@@ -106,7 +108,7 @@ def extrair_documento(file_bytes, mimetype='image/jpeg'):
     """Extrai dados de uma NF/boleto. Retorna dict com os campos +
     `modelo_usado`, ou `{'erro': ...}`.
 
-    Opus 4.8 direto — sem cascata. Decisao do dono 14/06/2026.
+    Uma chamada, sem cascata entre modelos (decisao do dono 14/06/2026).
     """
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
@@ -126,6 +128,8 @@ def extrair_documento(file_bytes, mimetype='image/jpeg'):
         return dados
     except json.JSONDecodeError:
         return {'erro': 'json_invalido'}
+    except ia_modelos.RespostaRecusada as exc:
+        return {'erro': str(exc)}
     except Exception as exc:  # noqa: BLE001
-        logger.warning('conta_pagar_ia falhou: %s', exc)
-        return {'erro': f'opus: {exc}'}
+        ia_modelos.registrar_falha(logger, 'conta_pagar_ia', exc)
+        return {'erro': f'IA: {exc}'}

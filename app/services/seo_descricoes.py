@@ -15,12 +15,13 @@ dono (decisao 22/06/2026).
 import logging
 import os
 
+from app.services import ia_modelos
+
 logger = logging.getLogger(__name__)
 
-# Sonnet 4.6 por decisao do dono (25/06/2026) — padronizacao dos modelos.
-# Geracao de descricao e tarefa simples (baixo volume: ~1x por receita), o
-# custo extra vs Haiku e marginal aqui.
-MODELO = 'claude-sonnet-5'
+# Modelo padrao do sistema (Sonnet 5.5 desde 28/09/2026, decisao do dono).
+# Geracao de descricao e tarefa simples e de baixo volume (~1x por receita).
+MODELO = ia_modelos.MODELO_PADRAO
 
 _INSTRUCOES_BASE = (
     "Escreva uma descricao curta (2 frases, MAXIMO 220 caracteres) "
@@ -51,11 +52,17 @@ def _chamar_claude(prompt):
         resp = client.messages.create(
             model=MODELO,
             max_tokens=400,
-            thinking={'type': 'disabled'},  # sem tools; teto curto
+            # sem tools; teto curto: raciocinio desligado pelo parametro que
+            # o modelo aceita
+            **ia_modelos.opcoes_sem_raciocinio(MODELO),
             messages=[{'role': 'user', 'content': prompt}],
         )
         from app.services import uso_ia
         uso_ia.registrar('seo', MODELO, getattr(resp, 'usage', None))
+        # Recusa: texto parcial nao vira sugestao (ia_modelos loga a
+        # categoria; a tela mostra que a IA nao gerou).
+        if ia_modelos.recusa(resp):
+            return None
         # resp.content e' lista de blocks; pega o texto.
         partes = [b.text for b in resp.content
                   if getattr(b, 'type', '') == 'text']

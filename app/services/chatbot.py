@@ -10,11 +10,12 @@ import re
 
 from flask import current_app
 
+from app.services import ia_modelos
 from app.services.chatbot_prompt import PROMPT
 
 logger = logging.getLogger(__name__)
 
-MODELO = 'claude-sonnet-5'
+MODELO = ia_modelos.MODELO_PADRAO
 
 # === Defesa anti-prompt-injection (14/06/2026) =========================
 #
@@ -2343,9 +2344,9 @@ def _responder_modelo_offline(historico, *, telefone_contato=None,
     # uma unica vez — o modelo recebe um tool_result mandando consultar.
     handoff_ja_bloqueado = False
     # Retry unico quando a resposta trunca no max_tokens (senao link/preco
-    # cortado ia pro cliente). Teto com folga pro Sonnet 5: o thinking
-    # adaptativo (ligado por padrao, e desejado — bot usa tools melhor) e o
-    # tokenizador novo (~30% mais tokens) dividem o MESMO max_tokens.
+    # cortado ia pro cliente). Teto com folga: o raciocinio adaptativo
+    # (ligado por padrao, e desejado — bot usa tools melhor) e a resposta
+    # dividem o MESMO max_tokens.
     max_tokens_atual = 4000
     retry_truncado_usado = False
     # Breakpoint de cache movel no fim das messages: as iteracoes do loop de
@@ -2365,6 +2366,11 @@ def _responder_modelo_offline(historico, *, telefone_contato=None,
                          'cache_control': {'type': 'ephemeral'}}],
                 tools=tools_cache,
                 messages=messages,
+                # Raciocinio adaptativo; no Sonnet 5.5 o texto entre tools
+                # volta em bloco thinking (display 'updates'). Aqui ele nao
+                # vai ao cliente: com tool_use o texto e descartado e o
+                # handoff usa o input da tool.
+                **ia_modelos.opcoes_com_ferramentas(MODELO),
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception('chatbot: erro Anthropic')
@@ -2384,6 +2390,16 @@ def _responder_modelo_offline(historico, *, telefone_contato=None,
             logger.warning('chatbot: resposta truncada em max_tokens — '
                            'refazendo com %d', max_tokens_atual)
             continue
+
+        # Recusa das salvaguardas: o conteudo vem vazio ou PARCIAL. Nunca
+        # ler como resposta nem como turno vazio (que pode encerrar em
+        # silencio) — a conversa vai para a equipe.
+        categoria_recusa = ia_modelos.recusa(resp)
+        if categoria_recusa:
+            return _resp_handoff(_FALLBACK,
+                                 f'recusa da IA: {categoria_recusa}',
+                                 tools_usadas=tools_usadas,
+                                 tools_resumo=tools_resumo)
 
         tool_uses = [b for b in resp.content if getattr(b, 'type', None) == 'tool_use']
 
@@ -2590,7 +2606,7 @@ def _responder_modelo_offline(historico, *, telefone_contato=None,
 # - Teto por ciclo (CHATBOT_FOLLOWUP_MAX_POR_CICLO, default 3).
 # - Kill-switch: CHATBOT_FOLLOWUP=0.
 
-FOLLOWUP_MODELO = 'claude-sonnet-5'
+FOLLOWUP_MODELO = ia_modelos.MODELO_PADRAO
 
 FOLLOWUP_PROMPT = (
     'Você é o atendente virtual da padaria O Pão. A conversa abaixo parou: '
@@ -2659,15 +2675,15 @@ def _followup_gerar_texto(api_key, historico, minutos):
     resp = client.messages.create(
         model=FOLLOWUP_MODELO,
         max_tokens=150,
-        # Sonnet 5 liga thinking adaptativo por padrao; num gerador de UMA
-        # frase com teto de 150 tokens, o thinking comeria o teto e custaria
-        # a mais sem ganho — desligado explicito (padrao dos classificadores).
-        thinking={'type': 'disabled'},
+        # Gerador de UMA frase com teto de 150 tokens: raciocinio comeria o
+        # teto sem ganho — desligado pelo parametro que o modelo aceita.
+        **ia_modelos.opcoes_sem_raciocinio(FOLLOWUP_MODELO),
         system=FOLLOWUP_PROMPT.format(minutos=minutos),
         messages=[{'role': 'user', 'content': '\n'.join(linhas) or '(vazio)'}],
     )
     from app.services import uso_ia
     uso_ia.registrar('followup', FOLLOWUP_MODELO, getattr(resp, 'usage', None))
+    ia_modelos.exigir_resposta(resp)  # recusa nao vira cutucao parcial
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
     return texto.strip('"“” ').strip()

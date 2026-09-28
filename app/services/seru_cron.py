@@ -876,7 +876,7 @@ def iniciar(app):
 
     # Vigia do chatbot — detector de conversas ABANDONADAS. Roda a cada 5 min,
     # acha conversas em status `pending` paradas ha > CHATBOT_VIGIA_ABANDONO_MIN
-    # (default 15 min) e avalia via Haiku. Anti-spam: dedupe persistente em
+    # (default 15 min) e avalia via IA (modelo padrao do sistema). Anti-spam: dedupe persistente em
     # VigiaVeredito + idade maxima + teto por ciclo.
     _scheduler.add_job(
         lambda app=app: _run_vigia_abandono(app),

@@ -30,7 +30,7 @@ from app.utils import agora
 logger = logging.getLogger(__name__)
 
 # Pool dedicado pra processamento async dos eventos Slack.
-# Slack exige ack <3s; chamada Haiku leva 2-5s. Resposta vai por
+# Slack exige ack <3s; chamada de IA leva segundos. Resposta vai por
 # chat.postMessage depois.
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix='slack-bot')
 

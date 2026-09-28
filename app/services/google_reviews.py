@@ -31,6 +31,7 @@ from urllib.parse import urlencode
 import requests
 
 from app.extensions import db
+from app.services import ia_modelos
 from app.utils import agora
 
 logger = logging.getLogger(__name__)
@@ -458,7 +459,8 @@ def responder(review_pk, texto, user_id=None):
 # ── Rascunho de resposta com IA (Sonnet) ─────────────────────────────
 
 def rascunho_resposta(review_pk):
-    """Sugere um rascunho de resposta (nao publica). Sonnet, custo em UsoIA.
+    """Sugere um rascunho de resposta (nao publica). Modelo padrao do sistema
+    (env GOOGLE_REVIEWS_IA_MODELO sobrescreve), custo em UsoIA.
     Retorna (texto|None, msg)."""
     import os
 
@@ -469,7 +471,7 @@ def rascunho_resposta(review_pk):
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
         return None, 'IA indisponivel (sem ANTHROPIC_API_KEY).'
-    modelo = os.environ.get('GOOGLE_REVIEWS_IA_MODELO', 'claude-sonnet-5')
+    modelo = ia_modelos.modelo_do_ambiente('GOOGLE_REVIEWS_IA_MODELO')
     estrelas = rev.nota or 0
     prompt = (
         'Voce e o dono de uma padaria artesanal (Opao) respondendo a uma '
@@ -487,16 +489,22 @@ def rascunho_resposta(review_pk):
         client = anthropic.Anthropic(api_key=api_key, timeout=45, max_retries=1)
         resp = client.messages.create(
             model=modelo, max_tokens=400,
-            thinking={'type': 'disabled'},  # sem tools; teto curto
+            # sem tools; teto curto: raciocinio desligado pelo parametro que
+            # o modelo aceita
+            **ia_modelos.opcoes_sem_raciocinio(modelo),
             messages=[{'role': 'user', 'content': prompt}])
         from app.services import uso_ia
         uso_ia.registrar('avaliacao_google', modelo, getattr(resp, 'usage', None))
+        # Recusa: o texto parcial NUNCA vira rascunho de resposta publica.
+        categoria = ia_modelos.recusa(resp)
+        if categoria:
+            return None, str(ia_modelos.RespostaRecusada(categoria))
         partes = [b.text for b in resp.content
                   if getattr(b, 'type', '') == 'text']
         texto = ' '.join(p.strip() for p in partes if p).strip()
         return (texto or None), ('' if texto else 'A IA nao retornou texto.')
     except Exception as e:  # noqa: BLE001
-        logger.warning('google_reviews: rascunho IA falhou: %s', e)
+        ia_modelos.registrar_falha(logger, 'google_reviews: rascunho IA', e)
         return None, 'Falha ao gerar o rascunho.'
 
 

@@ -1,5 +1,6 @@
 """Servico do Copilot: interpreta comandos em linguagem natural via
-Claude Haiku 4.5 e retorna acoes estruturadas pra preview/aprovacao.
+Claude (modelo em `ia_modelos.MODELO_PADRAO`) e retorna acoes estruturadas pra
+preview/aprovacao.
 
 Tools suportadas:
 - criar_pedido (write) — pedido de loja pra producao
@@ -21,21 +22,18 @@ from flask import current_app
 
 from app.extensions import db
 from app.models import Loja, MateriaPrima, Produto, Receita
+from app.services import ia_modelos
 from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
 
 # Modelo default do copilot (Slack e canais operacionais que NAO passam
-# override `modelo=`).
-#
-# Historico do fork (14/06/2026, decisao do dono):
-# - WhatsApp do dono (zapi_bot.py) passa `modelo=MODELO_WHATSAPP_DEFAULT`
-#   = Opus 4.8 — caminho premium pra ele.
-# - Slack (slack_bot.py) NAO passa override — opera em Sonnet 4.6,
-#   modelo default mais barato. Decidido apos a janela de tentar Opus
-#   default em todos os canais: o ganho de qualidade no Slack nao
-#   compensou o custo extra com 12 atendentes usando.
-MODELO_DEFAULT = 'claude-sonnet-5'
+# override `modelo=`). Desde 28/09/2026 (decisao do dono) toda IA do sistema
+# roda o modelo de `ia_modelos.MODELO_PADRAO` (Sonnet 5.5). O WhatsApp do dono
+# (zapi_bot.py) passa `modelo=` — a env ZAPI_BOT_MODELO ou o mesmo padrao.
+# Historico: 14/06 Opus 4.8 no WhatsApp e Sonnet 4.6 no Slack; 05/08 Sonnet 5
+# em todos os canais.
+MODELO_DEFAULT = ia_modelos.MODELO_PADRAO
 
 
 # ── Tools ──────────────────────────────────────────────────────────────
@@ -1312,7 +1310,7 @@ TOOLS DISPONIVEIS — PLANEJAMENTO (PARA + 12 Week Year):
 - criar_tarefa: cria nova tarefa em projeto ou inbox
 
 REGRAS:
-- PREFIRA RESPONDER A PERGUNTAR (14/06/2026, Opus 4.8): se voce tem como
+- PREFIRA RESPONDER A PERGUNTAR: se voce tem como
   inferir/escolher com confianca razoavel, RESPONDA e siga — nao pare pra
   pedir esclarecimento de cada campo. Use o catalogo, o historico, o
   contexto e escolha o mais provavel; mencione no texto qual escolheu pra
@@ -1407,14 +1405,16 @@ def interpretar(prompt_text, user, historico=None, images=None,
     ('ah entendi, foi aqui' depois de uma resposta).
 
     images: lista opcional de {mimetype, base64} pra mandar imagens junto
-    com o prompt (vision do Haiku). Usado pelo Slack bot.
+    com o prompt (vision). Usado pelo Slack bot.
 
     apenas_leitura: se True, remove TODAS as tools de write (REQUER_APROVACAO)
     antes de mandar pra Claude. Usado pelo bot WhatsApp do dono (modo so
     consulta). Como Claude nem ve a tool, nao tem como tentar usa-la.
 
-    modelo: override do model id (default MODELO_DEFAULT/Sonnet). O bot do
-    WhatsApp do dono passa Opus — fork de modelo por canal, motor unico.
+    modelo: override do model id (default MODELO_DEFAULT). O bot do WhatsApp
+    do dono passa o modelo dele (env ZAPI_BOT_MODELO ou o padrao) — motor
+    unico. Os parametros de raciocinio saem de `ia_modelos` pelo modelo
+    efetivo: um override antigo nunca recebe parametro que so o 5.5 aceita.
 
     system_extra: bloco de persona por canal, anexado ao fim do system
     prompt (ex: persona de assessor do dono no WhatsApp).
@@ -1494,25 +1494,46 @@ def interpretar(prompt_text, user, historico=None, images=None,
         tools_com_cache[-1] = {**tools_com_cache[-1],
                                 'cache_control': {'type': 'ephemeral'}}
 
+    modelo_efetivo = modelo or MODELO_DEFAULT
+    opcoes_ia = ia_modelos.opcoes_com_ferramentas(modelo_efetivo)
     try:
         response = client.messages.create(
-            model=modelo or MODELO_DEFAULT,
+            model=modelo_efetivo,
             max_tokens=4000,
             system=[{'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}}],
             tools=tools_com_cache,
             messages=messages,
+            **opcoes_ia,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception('Copilot: erro Anthropic')
         return {'tipo': 'erro', 'explicacao': f'Erro Anthropic: {exc}', 'raw': None}
 
+    # Registro de custo: separa copilot do Slack do WhatsApp do dono — mesmo
+    # motor, canais distintos. Antes da checagem de recusa: recusa tambem
+    # consome tokens.
+    _canal_uso = 'whatsapp' if apenas_leitura else 'slack'
+    from app.services import uso_ia
+    uso_ia.registrar(f'copilot_{_canal_uso}', modelo_efetivo,
+                     getattr(response, 'usage', None), canal=_canal_uso)
+
+    # Recusa das salvaguardas: o conteudo vem vazio ou PARCIAL — nunca
+    # executar leitura nem montar preview de escrita a partir dele.
+    categoria_recusa = ia_modelos.recusa(response)
+    if categoria_recusa:
+        return {'tipo': 'erro',
+                'explicacao': str(ia_modelos.RespostaRecusada(categoria_recusa)),
+                'raw': {'stop_reason': response.stop_reason}}
+
     tool_calls_raw = []
-    texto_partes = []
     for block in response.content:
         if block.type == 'tool_use':
             tool_calls_raw.append({'name': block.name, 'input': block.input})
-        elif block.type == 'text':
-            texto_partes.append(block.text)
+    # Texto que o modelo escreveu junto da tool (a explicacao do preview). No
+    # Sonnet 5.5 o texto mais longo volta como nota de progresso num bloco
+    # thinking (display 'updates'); o raciocinio em si segue escondido.
+    texto_partes = ia_modelos.textos_visiveis(
+        response, progresso=ia_modelos.mostra_progresso(opcoes_ia))
 
     # Consolidacao defensiva: se Claude chamar `registrar_desperdicio` mais de
     # uma vez na mesma resposta (que era o bug antigo — handler so pegava o
@@ -1556,12 +1577,6 @@ def interpretar(prompt_text, user, historico=None, images=None,
         },
     }
 
-    # Registro de custo: separa copilot do Slack (Sonnet) do WhatsApp do dono
-    # (Opus) — mesmo motor, canais e modelos distintos.
-    _canal_uso = 'whatsapp' if apenas_leitura else 'slack'
-    from app.services import uso_ia
-    uso_ia.registrar(f'copilot_{_canal_uso}', modelo or MODELO_DEFAULT,
-                     getattr(response, 'usage', None), canal=_canal_uso)
 
     if tool_call and tool_name:
         # Enriquece params com info do banco (matches de produto/MP)

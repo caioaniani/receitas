@@ -6,8 +6,8 @@ Claude Sonnet detectar PADROES (handoff evitavel repetido, produto com erro
 recorrente, momento de pico critico, perda de venda) e escreve um resumo
 acionavel pro WhatsApp do dono via Z-API.
 
-Usa Sonnet (nao Haiku) porque eh meta-analise — vale a pena. Volume baixo
-(1x dia), custo ~R$0,30/dia.
+Modelo: o padrao do sistema (`ia_modelos.MODELO_PADRAO`, Sonnet 5.5 desde
+28/09/2026). Volume baixo (poucas execucoes por dia).
 """
 import json
 import logging
@@ -17,9 +17,11 @@ from datetime import datetime, timedelta
 
 from flask import current_app
 
+from app.services import ia_modelos
+
 logger = logging.getLogger(__name__)
 
-MODELO = 'claude-sonnet-5'
+MODELO = ia_modelos.MODELO_PADRAO
 MAX_TOKENS = 1200
 # Teto do detalhe pedido-a-pedido no `funil_site` (hora + codigo dos pagos):
 # dia normal tem <20 pedidos pagos; data especial (Dia dos Pais ~100) nao
@@ -426,14 +428,15 @@ def _chamar_sonnet(api_key, contexto, prompt_sistema=None):
     resp = client.messages.create(
         model=MODELO,
         max_tokens=MAX_TOKENS,
-        # Sonnet 5 liga thinking adaptativo por padrao; relatorio de texto
-        # sem tools nao precisa — desligado (custo/teto previsiveis).
-        thinking={'type': 'disabled'},
+        # Relatorio em JSON sem tools: raciocinio desligado (custo/teto
+        # previsiveis). O parametro depende do modelo — ia_modelos.
+        **ia_modelos.opcoes_sem_raciocinio(MODELO),
         system=prompt_sistema or PROMPT_AUDITOR,
         messages=[{'role': 'user', 'content': contexto}],
     )
     from app.services import uso_ia
     uso_ia.registrar('auditor', MODELO, getattr(resp, 'usage', None))
+    ia_modelos.exigir_resposta(resp)  # recusa -> {'erro'} de sempre
     texto = ''.join(b.text for b in resp.content
                     if getattr(b, 'type', None) == 'text' and b.text).strip()
     if texto.startswith('```'):

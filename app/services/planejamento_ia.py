@@ -1,4 +1,4 @@
-"""Planejamento assistido por IA — Opus 4.8 (08/07/2026, pedido do dono).
+"""Planejamento assistido por IA (08/07/2026, pedido do dono).
 
 Duas frentes, SEMPRE por cima dos motores deterministicos (a IA nao
 inventa a conta — ela ajusta a sugestao com contexto e justifica):
@@ -25,9 +25,10 @@ inventa a conta — ela ajusta a sugestao com contexto e justifica):
    (fornada especial etc.). ENVIAR ao padeiro segue 100% humano
    (decisao do dono: ordem enviada so muda por gesto explicito).
 
-Modelo: Opus 4.8 por decisao do dono (08/07/2026) — excecao consciente a
-padronizacao Sonnet. Override via env PLANEJAMENTO_IA_MODELO. Custo em
-UsoIA (funcoes 'pedido_loja_ia' / 'producao_ia').
+Modelo: o padrao do sistema (`ia_modelos.MODELO_PADRAO`, Sonnet 5.5 desde
+28/09/2026; nasceu em Opus 4.8 em 08/07 e foi padronizado em 05/08).
+Override via env PLANEJAMENTO_IA_MODELO. Custo em UsoIA (funcoes
+'pedido_loja_ia' / 'producao_ia').
 """
 
 import json
@@ -36,11 +37,12 @@ import os
 import re
 from datetime import timedelta
 
+from app.services import ia_modelos
 from app.utils import hoje
 
 logger = logging.getLogger(__name__)
 
-MODELO = os.environ.get('PLANEJAMENTO_IA_MODELO', 'claude-sonnet-5')
+MODELO = ia_modelos.modelo_do_ambiente('PLANEJAMENTO_IA_MODELO')
 
 # Template unico pros dois modos da tela de pedidos (media | venda+estoque):
 # muda qual motor e a BASE exibida na grade e o campo identificador que o
@@ -114,8 +116,9 @@ Responda APENAS JSON valido (sem markdown):
 
 
 def _chamar_opus(system, payload_texto, funcao):
-    """Chamada padrao: Opus 4.8, timeout, custo em UsoIA, parse de JSON.
-    Devolve (dados, None) ou (None, mensagem_de_erro)."""
+    """Chamada padrao (o nome e historico — o modelo e MODELO): timeout,
+    custo em UsoIA, parse de JSON. Devolve (dados, None) ou
+    (None, mensagem_de_erro)."""
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
         return None, 'ANTHROPIC_API_KEY nao configurada'
@@ -127,21 +130,24 @@ def _chamar_opus(system, payload_texto, funcao):
                                  max_retries=1)
     try:
         from app.services import uso_ia
+        # proposta em JSON, sem tools: raciocinio desligado pelo parametro
+        # que o modelo aceita (as DUAS chamadas usam o mesmo)
+        opcoes = ia_modelos.opcoes_sem_raciocinio(MODELO)
         response = client.messages.create(
-            model=MODELO, max_tokens=4000, system=system,
-            thinking={'type': 'disabled'},  # proposta em JSON, sem tools
+            model=MODELO, max_tokens=4000, system=system, **opcoes,
             messages=[{'role': 'user', 'content': payload_texto}])
         uso_ia.registrar(funcao, MODELO, getattr(response, 'usage', None))
+        ia_modelos.exigir_resposta(response)
         if getattr(response, 'stop_reason', None) == 'max_tokens':
             # Grid grande pode estourar a saida — refaz UMA vez com teto
             # maior (padrao do retry de truncamento do chatbot, P2 02/07);
             # sem isso o JSON cortado viraria "resposta invalida" eterno.
             response = client.messages.create(
-                model=MODELO, max_tokens=8000, system=system,
-                thinking={'type': 'disabled'},
+                model=MODELO, max_tokens=8000, system=system, **opcoes,
                 messages=[{'role': 'user', 'content': payload_texto}])
             uso_ia.registrar(funcao, MODELO,
                              getattr(response, 'usage', None))
+            ia_modelos.exigir_resposta(response)
         bruto = ''.join(b.text for b in response.content
                         if getattr(b, 'type', '') == 'text')
         bruto = re.sub(r'^```(?:json)?\s*|\s*```$', '', bruto.strip(),
@@ -150,9 +156,11 @@ def _chamar_opus(system, payload_texto, funcao):
     except json.JSONDecodeError:
         logger.warning('%s: resposta nao-JSON do modelo', funcao)
         return None, 'a IA devolveu resposta invalida — tente de novo'
+    except ia_modelos.RespostaRecusada as exc:
+        return None, str(exc)  # mensagem nossa, sem detalhe do SDK
     except Exception as exc:
         # Detalhe cru (SDK/HTTP) so no log — a UI recebe algo generico.
-        logger.warning('%s: falha na chamada: %s', funcao, exc)
+        ia_modelos.registrar_falha(logger, funcao, exc)
         return None, 'a IA não respondeu — tente de novo em instantes'
 
 

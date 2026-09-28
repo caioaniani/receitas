@@ -27,12 +27,12 @@ def _interpretar(app, admin_user, **kwargs):
             return cliente.messages.create.call_args[1]
 
 
-def test_default_e_sonnet_5(app, admin_user, monkeypatch):
-    """Padronizacao do dono 05/08/2026: Sonnet 5 em todos os canais (o
+def test_default_e_sonnet_5_5(app, admin_user, monkeypatch):
+    """Padronizacao do dono 28/09/2026: Sonnet 5.5 em todos os canais (o
     mecanismo de override `modelo=` continua vivo — teste abaixo)."""
     monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-teste')
     chamada = _interpretar(app, admin_user)
-    assert chamada['model'] == 'claude-sonnet-5'
+    assert chamada['model'] == 'claude-sonnet-5-5'
 
 
 def test_override_de_modelo_e_persona(app, admin_user, monkeypatch):
@@ -44,8 +44,8 @@ def test_override_de_modelo_e_persona(app, admin_user, monkeypatch):
     assert system_texto.rstrip().endswith('PERSONA TESTE XYZ')
 
 
-def test_zapi_bot_usa_sonnet_5_e_persona(app, admin_user, monkeypatch):
-    """O canal do dono passa Sonnet 5 (default ou env ZAPI_BOT_MODELO) e a
+def test_zapi_bot_usa_sonnet_5_5_e_persona(app, admin_user, monkeypatch):
+    """O canal do dono passa Sonnet 5.5 (default ou env ZAPI_BOT_MODELO) e a
     persona de assessor pro motor compartilhado."""
     from app.extensions import db
     from app.models import Usuario
@@ -66,7 +66,7 @@ def test_zapi_bot_usa_sonnet_5_e_persona(app, admin_user, monkeypatch):
                 'text': {'message': 'resumo de hoje'},
             })
         kwargs = fake.call_args[1]
-        assert kwargs['modelo'] == 'claude-sonnet-5'
+        assert kwargs['modelo'] == 'claude-sonnet-5-5'
         assert 'assessor executivo' in kwargs['system_extra']
         assert kwargs['apenas_leitura'] is True
 

@@ -345,8 +345,9 @@ def test_universo_de_chamadas_conhecido():
         'google_reviews.py', 'ia_modelos.py', 'ocr_nota.py',
         'planejamento_ia.py', 'seo_descricoes.py', 'treino_ia_perguntas.py',
     ])
-    # 15 chamadas do sistema + a da verificacao ao vivo
-    assert len(_chamadas_da_api()) == 16
+    # 14 chamadas do sistema (o bot conta 1: o wrapper de retry) + a da
+    # verificacao ao vivo
+    assert len(_chamadas_da_api()) == 15
 
 
 def test_nenhuma_chamada_escreve_raciocinio_a_mao():

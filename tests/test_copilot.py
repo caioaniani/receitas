@@ -3,9 +3,9 @@
 # -------- Fork de modelo Slack/WhatsApp + regra "responder antes" (14/06) -
 
 def test_copilot_default_e_sonnet_no_slack():
-    """Padronizacao do dono 05/08/2026: Sonnet 5 em todos os canais."""
+    """Padronizacao do dono 28/09/2026: Sonnet 5.5 em todos os canais."""
     from app.services.copilot import MODELO_DEFAULT
-    assert MODELO_DEFAULT == 'claude-sonnet-5', \
+    assert MODELO_DEFAULT == 'claude-sonnet-5-5', \
         f'modelo mudou: {MODELO_DEFAULT}'
 
 

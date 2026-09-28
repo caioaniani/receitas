@@ -763,7 +763,7 @@ def mp_dia():
 @login_required
 @admin_required
 def ia_proposta():
-    """Análise do cronograma pela IA (Opus 4.8): devolve AJUSTES de célula
+    """Análise do cronograma pela IA: devolve AJUSTES de célula
     propostos com motivo + parecer. Read-only — aplicar é outro gesto."""
     from app.services import planejamento_ia
     from app.services.previsao_producao import MOTORES_PREVISAO_PRODUCAO

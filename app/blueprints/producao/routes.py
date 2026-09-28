@@ -992,7 +992,7 @@ def previsao_acuracia_rodar():
 @login_required
 @admin_required
 def pedidos_semana_ia():
-    """Proposta da IA (Opus 4.8) para o pedido de UMA loja — preenche a
+    """Proposta da IA para o pedido de UMA loja — preenche a
     grade das telas /pedidos-semana/media (modo='media', default) e
     /pedidos-semana/estoque (modo='venda') via JS. NADA é criado aqui:
     o pedido continua nascendo pelos botões Gerar de sempre."""

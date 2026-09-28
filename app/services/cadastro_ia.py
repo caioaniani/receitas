@@ -13,8 +13,9 @@ NADA e salvo pela IA: a tela /produtos/cadastro-ia mostra a proposta
 editavel e so o POST de salvar grava — humano SEMPRE revisa, porque
 componente errado = baixa de estoque errada no motor de vendas.
 
-Modelo: Sonnet 4.6 (padronizacao do dono 25/06/2026), override via env
-CADASTRO_IA_MODELO. Custo registrado em UsoIA (funcao='cadastro_ia').
+Modelo: o padrao do sistema (`ia_modelos.MODELO_PADRAO`, Sonnet 5.5 desde
+28/09/2026), override via env CADASTRO_IA_MODELO. Custo registrado em UsoIA
+(funcao='cadastro_ia').
 """
 
 import base64
@@ -25,11 +26,12 @@ import re
 
 from app.extensions import db
 from app.models import MateriaPrima, Produto, ProdutoItem, Receita
+from app.services import ia_modelos
 from app.utils import parse_preco_br
 
 logger = logging.getLogger(__name__)
 
-MODELO = os.environ.get('CADASTRO_IA_MODELO', 'claude-sonnet-5')
+MODELO = ia_modelos.modelo_do_ambiente('CADASTRO_IA_MODELO')
 
 # Campos de preco do Produto que a tela pode escolher como destino do
 # valor lido (whitelist — nunca aceitar nome de coluna vindo do form).
@@ -260,11 +262,14 @@ def analisar(*, file_bytes=None, mimetype=None, texto=None):
     try:
         response = client.messages.create(
             model=MODELO, max_tokens=4000, system=SYSTEM_PROMPT,
-            thinking={'type': 'disabled'},  # extracao de JSON sem tools
+            # extracao de JSON sem tools: raciocinio desligado pelo
+            # parametro que o modelo aceita
+            **ia_modelos.opcoes_sem_raciocinio(MODELO),
             messages=[{'role': 'user', 'content': content}])
         from app.services import uso_ia
         uso_ia.registrar('cadastro_ia', MODELO,
                          getattr(response, 'usage', None))
+        ia_modelos.exigir_resposta(response)
         bruto = ''.join(b.text for b in response.content
                         if getattr(b, 'type', '') == 'text')
         bruto = re.sub(r'^```(?:json)?\s*|\s*```$', '', bruto.strip(),
@@ -273,8 +278,10 @@ def analisar(*, file_bytes=None, mimetype=None, texto=None):
     except json.JSONDecodeError:
         logger.warning('cadastro_ia: resposta nao-JSON do modelo')
         return {'erro': 'a IA devolveu uma resposta invalida — tente de novo'}
+    except ia_modelos.RespostaRecusada as exc:
+        return {'erro': str(exc)}
     except Exception as exc:
-        logger.warning('cadastro_ia: falha na chamada: %s', exc)
+        ia_modelos.registrar_falha(logger, 'cadastro_ia', exc)
         return {'erro': f'falha na IA: {exc}'}
 
     itens = _sanitizar_proposta(dados)

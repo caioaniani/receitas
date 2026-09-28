@@ -5,14 +5,17 @@ A IA só PROPÕE perguntas a partir de um texto (roteiro/resumo/transcrição do
 vídeo que o admin cola). Nada é salvo aqui: a rota devolve as propostas, o admin
 edita/seleciona na tela e só então as escolhidas viram questões (pelo endpoint
 normal de questão). Custo registrado em UsoIA (funcao='treino_ia_perguntas').
-Padrão da casa (mesmo de cadastro_ia): Sonnet, mockável nos testes.
+Padrão da casa (mesmo de cadastro_ia): modelo padrão do sistema
+(`ia_modelos.MODELO_PADRAO`), mockável nos testes.
 """
 import json
 import logging
 import os
 import re
 
-MODELO = os.environ.get('TREINO_IA_MODELO', 'claude-sonnet-5')
+from app.services import ia_modelos
+
+MODELO = ia_modelos.modelo_do_ambiente('TREINO_IA_MODELO')
 logger = logging.getLogger(__name__)
 
 SYSTEM = (
@@ -54,11 +57,14 @@ def _chamar(system, instrucao):
     try:
         resp = client.messages.create(
             model=MODELO, max_tokens=3000, system=system,
-            thinking={'type': 'disabled'},  # gerador de JSON sem tools
+            # gerador de JSON sem tools: raciocinio desligado pelo parametro
+            # que o modelo aceita
+            **ia_modelos.opcoes_sem_raciocinio(MODELO),
             messages=[{'role': 'user', 'content': instrucao}])
         from app.services import uso_ia
         uso_ia.registrar('treino_ia_perguntas', MODELO,
                          getattr(resp, 'usage', None))
+        ia_modelos.exigir_resposta(resp)
         bruto = ''.join(b.text for b in resp.content
                         if getattr(b, 'type', '') == 'text')
         bruto = re.sub(r'^```(?:json)?\s*|\s*```$', '', bruto.strip(),
@@ -66,8 +72,10 @@ def _chamar(system, instrucao):
         return json.loads(bruto)
     except json.JSONDecodeError as e:
         raise _IAError('a IA devolveu resposta inválida — tente de novo.') from e
+    except ia_modelos.RespostaRecusada as e:
+        raise _IAError(str(e)) from e
     except Exception as exc:  # noqa: BLE001 — falha de rede/modelo é reportada
-        logger.warning('treino_ia_perguntas: falha: %s', exc)
+        ia_modelos.registrar_falha(logger, 'treino_ia_perguntas', exc)
         raise _IAError(f'falha na IA: {exc}') from exc
 
 
