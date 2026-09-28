@@ -3484,6 +3484,60 @@ todos com teste em `tests/test_checkout_auditoria_graves.py`:
   "reivindicado" pelo Wi-Fi por quem pagar um pedido com o e-mail dele; fechar
   de vez exige confirmação por e-mail (link) para convidados no Wi-Fi.
 
+**Ondas 2 e 3 (médios e baixos, 28/09/2026)** — testes em
+`tests/test_checkout_auditoria_medios.py` e `..._baixos.py`:
+
+- **Carrinho estrito no checkout**: item que o servidor descarta (menu
+  remontado, pausado, esgotado) RECUSA o pedido com a mensagem
+  (`itens_estritos=True`); `normalizar_itens_raw` aplica os tetos (60 linhas,
+  99 unidades) e soma linhas iguais. O front sincroniza o carrinho UMA
+  requisição por vez (fila em `carrinho.js`), espera a sincronia antes de
+  enviar/navegar e emite `carrinho:mudou` — o checkout repinta resumo, total,
+  cartinha e disponibilidade quando a gaveta muda algo.
+- **Cartão sem resposta do gateway (timeout/5xx/408/409/429) é INCERTO, não
+  recusa**: a tentativa fica pendente com `PREFIXO_INCERTO`, a nova cobrança
+  é barrada e o gateway é consultado (`buscar_orders_por_codigo`); o POST
+  leva `Idempotency-Key`. A tela mostra "confirmando" em vez de "pague de
+  novo". Log do Pagar.me só com `_resumo_log` (NUNCA o corpo: CPF/titular).
+- **Admin cancelar pedido aguardando** (`cancelar_aguardando_pelo_admin`):
+  encerra a cobrança no gateway e libera a reserva; se o gateway diz pago,
+  confirma em vez de cancelar. **Editar data/loja** move as reservas (Plano
+  do dia na data; física na loja). Edição recusa texto maior que a coluna e
+  CEP que não tenha 8 números.
+- **Reserva física congelada por pedido** (`ReservaEstoqueSite`, tabela
+  nova): `liberar`/`consumir` devolvem pelo que `reservar` gravou — cesta
+  editada ou `sob_encomenda` trocado com Pix pendente não vaza mais reserva.
+  Pedido anterior ao deploy segue a reexpansão pelo cadastro.
+- **Pix gerado tarde estende a reserva** (e o `CompraKit.expira_em`) até o
+  fim do QR + 5 min — o cron não cancela com QR pagável na tela.
+- **Preço**: telas recusam mais de 2 casas decimais (`app.utils.
+  parse_preco_br`: ficha, preços em massa, salvar campo, produto, preço do
+  catálogo, cadastro IA); `montar_itens` arredonda o preço legado
+  (ROUND_HALF_UP) e itens, total e Pagar.me fecham por construção.
+- **CEP** no pedido: só 8 números, gravado `NNNNN-NNN` (formato da máscara)
+  antes do frete e do flush (coluna String(9)); inválido não gasta cotação.
+- **Datas**: o "esgotado duro" do checkout olha as MESMAS datas do
+  calendário (`DIAS_AGENDA`, com D+2 da encomenda); "Trocar pra dd/mm"
+  procura em `datas_disponiveis` e pula dia fechado e curadoria da data
+  especial (item bloqueado aparece na conferência como "não vendido nessa
+  data"); sob encomenda com D+2 zerado abre o produto na 1ª data com saldo.
+  Conferência que falha (rede, 429, data fora) NÃO trava o botão.
+- **Express**: re-render com express fechado volta para agendada; a
+  confirmação mostra a janela gravada (1h/2h), nunca "1h" fixo.
+- **E-mails**: reenviar manda só o do status (aguardando → "recebemos";
+  pago em diante → confirmação…; cancelado → nada); "a caminho" linka a
+  página pública; redução de item pago manda o comprovante do estorno
+  PARCIAL e o reembolso total seguinte informa só o restante.
+- **Analytics**: purchase nunca para divulgação (a FLAG), só nas 24h após o
+  pagamento e guardado em localStorage; `event_time` da Meta em BRT
+  (`analytics_server._epoch_brt`).
+- **NF**: entrega com CNPJ também passa pela trava de endereço (bairro/UF);
+  grupo de entrega com 'SN' e UF maiúscula.
+- Alerta de endereço: a chave de dedup inclui "tem contato" — o do checkout
+  (com nome/telefone) não é engolido pelo do preview anônimo.
+- Entradas malformadas (JSON não-lista/aninhado, '²', `?k=` não-ASCII)
+  respondem 4xx; dígitos só ASCII nas rotas da loja e no `pagarme`.
+
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
 Escrito na pedra a pedido do dono ("ja tinha falado uma vez mas nao ficou
