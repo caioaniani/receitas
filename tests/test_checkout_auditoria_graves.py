@@ -337,7 +337,7 @@ def test_pix_que_nao_cancela_no_gateway_bloqueia_novo_pix(app):
     pendente = {'ok': True, 'status': 'pending', 'pago': False,
                 'charge_status': 'pending'}
     with patch('app.services.pagarme.consultar_order', return_value=pendente), \
-            patch('app.services.pagarme.cancelar_charge',
+            patch('app.services.pagarme.cancelar_cobranca_pendente',
                   return_value={'ok': False, 'erro': 'HTTP 500'}), \
             patch('app.services.pagarme.criar_pedido_cartao') as novo:
         res, erros = loja_pagamento.iniciar_cartao(ped, 'tok')
@@ -510,7 +510,7 @@ def test_expiracao_cancela_pix_vencido_pendente_no_gateway(app):
     pendente = {'ok': True, 'status': 'pending', 'pago': False,
                 'charge_status': 'pending'}
     with patch('app.services.pagarme.consultar_order', return_value=pendente), \
-            patch('app.services.pagarme.cancelar_charge',
+            patch('app.services.pagarme.cancelar_cobranca_pendente',
                   return_value={'ok': True}) as cancelar:
         assert loja_estoque_reserva.liberar_expirados() == [ped.codigo]
     cancelar.assert_called_once_with('ch_1')
@@ -550,3 +550,233 @@ def test_js_e_servidor_concordam_na_janela_larga():
     base = datetime(2026, 8, 9, 7, 29)
     assert loja_checkout._sem_janelas_passadas(['06:00–10:00'], base) == [
         '06:00–10:00']
+
+
+# ── Revisão da onda 1 ──────────────────────────────────────────────────
+
+def test_cancelamento_que_estorna_pix_pago_nao_confirma_o_pedido(app):
+    """DELETE numa cobrança paga é estorno: a tentativa vira 'estornado', o
+    dono é avisado e o 'paid' atrasado dela não confirma o pedido."""
+    from app.extensions import db
+    from app.services import loja_pagamento
+    app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+    prod = _produto(db)
+    ped, pag = _pedido_pag(db, prod, metodo='pix')
+    pendente = {'ok': True, 'status': 'pending', 'pago': False,
+                'charge_status': 'pending'}
+    with patch('app.services.pagarme.consultar_order', return_value=pendente), \
+            patch('app.services.pagarme.cancelar_cobranca_pendente',
+                  return_value={'ok': False, 'estornou_pago': True}), \
+            patch('app.services.loja_alerta.alertar_pedido_pago') as alerta, \
+            patch('app.services.pagarme.criar_pedido_cartao') as novo:
+        res, erros = loja_pagamento.iniciar_cartao(ped, 'tok')
+    assert res is None and 'devolvendo' in erros[0]
+    novo.assert_not_called()
+    alerta.assert_called_once()
+    db.session.refresh(pag)
+    assert pag.status == 'estornado'
+    evento = {'id': 'evt_atrasado', 'type': 'charge.paid',
+              'data': {'id': 'ch_1', 'code': ped.codigo}}
+    loja_pagamento.processar_webhook(evento)
+    db.session.refresh(ped)
+    assert ped.status == 'aguardando_pagamento' and ped.pago_em is None
+
+
+def test_cancelar_cobranca_pendente_le_o_status_da_resposta(app):
+    from app.services import pagarme
+    app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+
+    def resp(status_code, body):
+        class R:
+            text = ''
+            def json(self):
+                return body
+        r = R()
+        r.status_code = status_code
+        return r
+
+    casos = [
+        ({'status': 'canceled'}, {'ok': True}),
+        ({'status': 'refunded'}, {'estornou_pago': True}),
+        ({'status': 'paid', 'last_transaction': {'status': 'pending_refund'}},
+         {'estornou_pago': True}),
+        ({}, {'incerto': True}),
+    ]
+    for corpo, esperado in casos:
+        with patch('app.services.pagarme.requests.delete',
+                   return_value=resp(200, corpo)):
+            r = pagarme.cancelar_cobranca_pendente('ch_1')
+        for k, v in esperado.items():
+            assert r.get(k) == v, (corpo, r)
+    with patch('app.services.pagarme.requests.delete',
+               side_effect=TimeoutError('lento')):
+        assert pagarme.cancelar_cobranca_pendente('ch_1')['incerto'] is True
+
+
+def test_cron_nao_faz_rede_segurando_trava(app):
+    """Entre travar a loja (cancelamento de um pedido) e consultar o Pagar.me
+    pelo próximo, tem que haver commit."""
+    from app.extensions import db
+    from app.services import estoque_helpers, loja_estoque_reserva
+    prod = _produto(db)
+    ped_a, pag_a = _pedido_pag(db, prod, metodo='pix', order='or_a')
+    ped_b, pag_b = _pedido_pag(db, prod, metodo='pix', order='or_b')
+    _expirado(db, ped_a, pag_a)
+    _expirado(db, ped_b, pag_b)
+    eventos = []
+    commit_real = db.session.commit
+    serializar_real = estoque_helpers.serializar_loja
+
+    def commit():
+        eventos.append('commit')
+        return commit_real()
+
+    def serializar(*a, **kw):
+        eventos.append('trava')
+        return serializar_real(*a, **kw)
+
+    def consulta(order_id):
+        eventos.append('rede')
+        return {'ok': True, 'status': 'failed', 'pago': False,
+                'charge_status': 'failed'}
+
+    with patch.object(db.session, 'commit', side_effect=commit), \
+            patch.object(estoque_helpers, 'serializar_loja',
+                         side_effect=serializar), \
+            patch('app.services.pagarme.consultar_order', side_effect=consulta):
+        cancelados = loja_estoque_reserva.liberar_expirados()
+    assert set(cancelados) == {ped_a.codigo, ped_b.codigo}
+    assert 'trava' in eventos and eventos.count('rede') == 2
+    for i, ev in enumerate(eventos):
+        if ev == 'trava':
+            proxima_rede = next((j for j in range(i, len(eventos))
+                                 if eventos[j] == 'rede'), None)
+            if proxima_rede is not None:
+                assert 'commit' in eventos[i:proxima_rede], eventos
+
+
+def test_cron_adia_pedido_preso_pro_fim_da_fila(app):
+    from app.extensions import db
+    from app.services import loja_estoque_reserva
+    from app.utils import agora
+    prod = _produto(db)
+    ped, pag = _pedido_pag(db, prod, metodo='cartao')
+    _expirado(db, ped, pag)
+    pendente = {'ok': True, 'status': 'pending', 'pago': False,
+                'charge_status': 'processing'}
+    with patch('app.services.pagarme.consultar_order', return_value=pendente):
+        assert loja_estoque_reserva.liberar_expirados() == []
+    db.session.refresh(ped)
+    assert ped.status == 'aguardando_pagamento'
+    assert ped.reserva_expira_em > agora()
+
+
+def test_order_404_nao_prende_o_pedido(app):
+    from app.extensions import db
+    from app.services import loja_estoque_reserva
+    prod = _produto(db)
+    ped, pag = _pedido_pag(db, prod, metodo='cartao')
+    _expirado(db, ped, pag)
+    with patch('app.services.pagarme.consultar_order',
+               return_value={'ok': False, 'erro': 'HTTP 404: not found'}), \
+            patch('app.services.loja_alerta.alertar_pedido_pago') as alerta:
+        assert loja_estoque_reserva.liberar_expirados() == [ped.codigo]
+    alerta.assert_called_once()
+
+
+def test_webhook_com_busca_do_pedido_quebrada_devolve_claim(app):
+    from app.extensions import db
+    from app.models import PagarmeEvento
+    from app.services import loja_pagamento
+    prod = _produto(db)
+    ped, _ = _pedido_pag(db, prod, metodo='pix')
+    evento = {'id': 'evt_busca', 'type': 'order.paid',
+              'data': {'id': 'or_1', 'code': ped.codigo}}
+    with patch('app.services.loja_pagamento._encontrar_pedido',
+               side_effect=RuntimeError('banco caiu')):
+        res = loja_pagamento.processar_webhook(evento)
+    assert res.get('reentregar') is True
+    assert PagarmeEvento.query.filter_by(evento_id='evt_busca').count() == 0
+    assert loja_pagamento.processar_webhook(evento).get('pago') is True
+
+
+def test_conciliacao_acha_o_pix_pago_depois_do_cartao_recusado(app):
+    from app.extensions import db
+    from app.models import PagamentoOnline
+    from app.services import loja_pagamento
+    prod = _produto(db)
+    ped, cartao = _pedido_pag(db, prod, metodo='cartao', order='or_card')
+    cartao.status = 'falhou'
+    db.session.add(PagamentoOnline(pedido_id=ped.id, metodo='pix',
+                                   status='pendente', valor=ped.valor_total,
+                                   pagarme_order_id='or_pix',
+                                   pagarme_charge_id='ch_pix'))
+    db.session.commit()
+
+    def consulta(order_id):
+        if order_id == 'or_pix':
+            return {'ok': True, 'status': 'paid', 'pago': True,
+                    'charge_status': 'paid'}
+        return {'ok': True, 'status': 'failed', 'pago': False,
+                'charge_status': 'failed'}
+
+    with patch('app.services.pagarme.consultar_order', side_effect=consulta):
+        r = loja_pagamento.conciliar_pedido(ped.codigo, aplicar=True)
+    assert r['order_id'] == 'or_pix' and r['acao'] == 'MARCADO PAGO'
+    db.session.refresh(ped)
+    assert ped.status == 'pago'
+
+
+def test_tentativa_bloqueada_leva_a_pagina_do_pedido(app):
+    from app.extensions import db
+    app.config['LOJA_HOSTS'] = 'localhost'
+    app.config['PAGARME_API_KEY'] = 'sk_test_abc'
+    app.config['WTF_CSRF_ENABLED'] = False
+    prod = _produto(db)
+    ped, _ = _pedido_pag(db, prod, metodo='cartao')
+    pendente = {'ok': True, 'status': 'pending', 'pago': False,
+                'charge_status': 'processing'}
+    with patch('app.services.pagarme.consultar_order', return_value=pendente):
+        r = app.test_client().post(f'/loja/pedido/{ped.codigo}/pix')
+    assert r.status_code == 302
+    assert r.headers['Location'].endswith(f'/loja/pedido/{ped.codigo}')
+
+
+def test_status_json_informa_cartao_em_confirmacao(app):
+    from app.extensions import db
+    app.config['LOJA_HOSTS'] = 'localhost'
+    prod = _produto(db)
+    ped, _ = _pedido_pag(db, prod, metodo='cartao')
+    j = app.test_client().get(f'/loja/pedido/{ped.codigo}/status').get_json()
+    assert j['cartao_confirmando'] is True
+
+
+@pytest.mark.parametrize('rota', ['/auth/usuarios', '/rh/folha'])
+def test_nome_de_pre_cadastro_nao_vira_js_inline(app, owner_user, rota):
+    """Nome vindo do formulário público de pré-cadastro não entra em
+    onsubmit/onclick (revisão da onda 1)."""
+    import re as _re
+
+    from app.extensions import db
+    from app.models import FolhaPagamento, Funcionario, Usuario
+    from app.utils import agora
+    nome = "Ana'+alert(document.domain)+'"
+    u = Usuario(nome=nome + ' Souza', login='ana', papel='funcionario')
+    u.set_senha('x' * 10)
+    db.session.add(u)
+    f = Funcionario(nome=nome + ' Souza', cpf='52998224725')
+    db.session.add(f)
+    db.session.flush()
+    db.session.add(FolhaPagamento(funcionario_id=f.id, mes=agora().month,
+                                  ano=agora().year))
+    db.session.commit()
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(owner_user.id)
+        s['_fresh'] = True
+    html = c.get(rota).get_data(as_text=True)
+    # O nome aparece na página (a confirmação de excluir existe)...
+    assert 'data-msg="Excluir' in html
+    # ...mas nunca dentro de um handler inline.
+    for handler in _re.findall(r'\son[a-z]+="([^"]*)"', html):
+        assert 'alert(document.domain)' not in handler.replace('&#39;', "'")

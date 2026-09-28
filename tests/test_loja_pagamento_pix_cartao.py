@@ -253,7 +253,7 @@ def test_iniciar_cartao_marca_substituicao_de_pix_pendente(app):
                    return_value=_fake_resp(200, body_c)), \
                 patch('app.services.pagarme.consultar_order',
                       return_value=pendente), \
-                patch('app.services.pagarme.cancelar_charge',
+                patch('app.services.pagarme.cancelar_cobranca_pendente',
                       return_value={'ok': True}) as cancelar:
             pag, erros = loja_pagamento.iniciar_cartao(ped, 'tok', parcelas=1)
         assert erros == []
