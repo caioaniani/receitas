@@ -1083,6 +1083,7 @@ def api_carrinho_salvar():
 
 
 @loja_bp.route('/checkout', methods=['GET', 'POST'])
+@limiter.limit('20 per minute', methods=['POST'])
 def checkout():
     """Checkout do site. GET serve o formulário; POST cria o PedidoOnline.
 
@@ -1098,7 +1099,13 @@ def checkout():
                 itens_raw = json.loads(request.form.get('itens_json') or '[]')
             except ValueError:
                 itens_raw = []
-        pedido, erros = loja_checkout.criar_pedido(request.form, itens_raw)
+        # itens_estritos: item que o servidor descarta (menu com escolha
+        # invalidada, item pausado, esgotado) RECUSA o pedido com a mensagem
+        # específica — antes o pedido nascia sem ele e o cliente só via o
+        # total na tela de pagamento (auditoria 27/09/2026). Mesmo contrato
+        # da compra de kits.
+        pedido, erros = loja_checkout.criar_pedido(request.form, itens_raw,
+                                                   itens_estritos=True)
         if not erros:
             # client_id do GA4 (cookie `_ga`, primeira parte) — permite o
             # purchase server-side deduplicar com o evento do navegador.

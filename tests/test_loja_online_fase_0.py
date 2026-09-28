@@ -259,7 +259,7 @@ def test_preco_zero_ou_vazio_tira_do_site(app, tipo, preco):
         assert _resolver_carrinho_sessao() == []
     itens, avisos = loja_checkout.montar_itens(carrinho)
     assert itens == []
-    assert avisos == ['Um item saiu de catálogo e foi removido do pedido.']
+    assert avisos == ['Um item saiu de catálogo e não está mais à venda — tire-o do carrinho.']
 
 
 def test_preco_rejeita_valor_invalido(app):

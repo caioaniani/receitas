@@ -343,6 +343,56 @@ def _sem_dias_fechados(datas):
             if not (d in regras and regras[d].fechado)]
 
 
+# Mesmos tetos do carrinho da sessão (routes._set_carrinho_sessao): o
+# caminho alternativo do checkout (itens_json do formulário) chegava aqui sem
+# teto — um POST com qtd 1000000 reservava estoque da loja por 35 min e
+# distorcia os auto-pedidos (auditoria 27/09/2026).
+CARRINHO_MAX_ITENS = 60
+CARRINHO_MAX_QTD = 99
+
+
+def normalizar_itens_raw(itens_raw):
+    """Carrinho cru (sessão ou itens_json do form) → lista de dicts com
+    linhas repetidas somadas pela chave (kind, id, fatiado, composição),
+    quantidade entre 1 e 99 por linha e no máximo 60 linhas. Entrada que não
+    é lista/dict (POST forjado) vira vazia em vez de erro 500."""
+    from app.services import loja_menu
+    if not isinstance(itens_raw, list):
+        return []
+    out, idx = [], {}
+    for raw in itens_raw:
+        if not isinstance(raw, dict):
+            continue
+        kind = str(raw.get('kind') or '').strip()
+        try:
+            item_id = int(raw.get('id'))
+            qtd = int(raw.get('qtd') or 0)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if qtd < 1:
+            continue
+        comp = raw.get('comp')
+        try:
+            chave_comp = loja_menu.chave(
+                dict(comp) if isinstance(comp, list) else comp) if comp else ''
+        except Exception:  # noqa: BLE001 — composição torta: sem chave
+            chave_comp = repr(comp)[:200]
+        chave = (kind, item_id, bool(raw.get('fatiado')), chave_comp)
+        if chave in idx:
+            linha = out[idx[chave]]
+            linha['qtd'] = min(CARRINHO_MAX_QTD, linha['qtd'] + qtd)
+            continue
+        if len(out) >= CARRINHO_MAX_ITENS:
+            continue
+        linha = dict(raw)
+        linha['kind'] = kind
+        linha['id'] = item_id
+        linha['qtd'] = min(CARRINHO_MAX_QTD, qtd)
+        idx[chave] = len(out)
+        out.append(linha)
+    return out
+
+
 def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
     """Re-valida o carrinho contra o catálogo. NUNCA usa o preço do
     cliente — pega o preço publicado atual. Devolve (itens, avisos).
@@ -359,6 +409,7 @@ def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
     """
     from app.models import Produto
     from app.services import loja_menu
+    itens_raw = normalizar_itens_raw(itens_raw)
     itens = []
     avisos = []
     datas_estoque = None
@@ -377,7 +428,8 @@ def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
             continue
         cat = loja_catalogo.por_id_venda(kind, item_id)
         if not cat or not cat.get('preco'):
-            avisos.append('Um item saiu de catálogo e foi removido do pedido.')
+            avisos.append('Um item saiu de catálogo e não está mais à venda — '
+                          'tire-o do carrinho.')
             continue
         sob_encomenda = bool(cat.get('sob_encomenda'))
         # Esgotou entre o carrinho e o checkout → não vende (regra do dono).
@@ -390,7 +442,8 @@ def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
                       if datas_estoque is None else
                       loja_catalogo.tem_estoque_site(kind, item_id, datas=datas_estoque))
         if not disponivel:
-            avisos.append(f'"{cat["nome"]}" esgotou e foi removido do pedido.')
+            avisos.append(f'"{cat["nome"]}" esgotou e não está mais '
+                          'disponível — tire-o do carrinho.')
             continue
         preco = Decimal(str(cat['preco']))
         # ── Menu configurável: escolha do cliente é lei do SERVIDOR ──
@@ -402,8 +455,8 @@ def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
         if kind == 'produto' and cat.get('menu'):
             menu_prod = Produto.query.get(item_id)
             if not loja_menu.eh_menu(menu_prod):
-                avisos.append('Um item saiu de catálogo e foi removido do '
-                              'pedido.')
+                avisos.append('Um item saiu de catálogo e não está mais à '
+                              'venda — tire-o do carrinho.')
                 continue
             comp = loja_menu.normalizar(menu_prod, raw.get('comp'))
             erro = loja_menu.validar(menu_prod, comp)
@@ -413,7 +466,7 @@ def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
             preco_menu = loja_menu.preco(menu_prod, comp)
             if preco_menu is None:
                 avisos.append(f'"{cat["nome"]}" está sem preço configurado e '
-                              'foi removido do pedido.')
+                              'não pode ser vendido agora — tire-o do carrinho.')
                 continue
             preco = preco_menu
         # "Fatiado?" sanitizado no SERVIDOR: só vale quando o cliente pediu E
