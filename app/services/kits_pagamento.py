@@ -4,9 +4,16 @@ import logging
 from app.extensions import db
 from app.models import EntregaKit
 from app.services.compra_kits import grupo_do_pedido, pedidos_do_grupo, reler_entregas
-from app.utils import agora
+from app.utils import agora, fmt_brl
 
 logger = logging.getLogger(__name__)
+
+
+def _alertar_dono(texto, chave, **kw):
+    """Aviso ao dono sobre dinheiro que precisa de conferência (sessão isolada,
+    crítico com teto/hora). Best-effort: nunca derruba o pagamento."""
+    from app.services import loja_alerta
+    loja_alerta.alertar_pedido_pago(texto, chave, **kw)
 
 
 def travar(pedido, *, todos=False):
@@ -43,15 +50,34 @@ def marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None):
     compra, pedidos = travar(pedido, todos=True)
     if not compra:
         raise ValueError('Pedido sem compra de kit')
+    status_anterior = None
     if pagamento:
         db.session.refresh(pagamento)
+        status_anterior = pagamento.status
         if pagamento.status != 'estornado':
             pagamento.status = 'pago'
             pagamento.pago_em = pagamento.pago_em or agora()
+    principal = compra.pedido_principal
     if compra.pago_em:
-        if loja_pagamento._tem_pagamento_externo(compra.pedido_principal):
-            logger.warning('Kit %s: gateway reportou pagamento após recebimento externo; '
-                           'conferir possível duplicidade.', compra.id)
+        # Reentrega do mesmo evento chega com a tentativa já 'pago': sem aviso.
+        # Outra tentativa (QR antigo, cartão após Pix, gateway após recebimento
+        # externo) paga depois da confirmação = o cliente pagou em dobro.
+        # Mesma regra do avulso (loja_pagamento._marcar_pago, 27/09/2026).
+        segundo = bool(
+            pagamento and status_anterior not in ('pago', 'estornado')
+            and (loja_pagamento._tem_pagamento_externo(principal)
+                 or any(p.id != pagamento.id and p.status == 'pago'
+                        for p in principal.pagamentos)))
+        if segundo:
+            logger.warning('Kit %s: segundo pagamento recebido (%s); cliente cobrado '
+                           'em duplicidade.', compra.id,
+                           pagamento.pagarme_charge_id or pagamento.id)
+            _alertar_dono(
+                f'⚠️ Compra de kit {principal.codigo} ({compra.kit_nome}) foi PAGA '
+                f'DUAS VEZES (nova cobrança via {pagamento.metodo}, '
+                f'{fmt_brl(pagamento.valor)}). Estorne a cobrança a mais no painel '
+                'do Pagar.me.',
+                f'kit_duplicado|{compra.id}|{pagamento.id}')
         return False
     # Cancelamento deliberado não pode ser revertido por um webhook atrasado.
     # QR expirado é diferente: o gateway ainda pode confirmar dinheiro recebido.
@@ -60,6 +86,18 @@ def marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None):
            for p in pedidos):
         logger.error('Pagamento recebido para kit %s com entrega incompatível; '
                      'requer conferência do owner.', compra.id)
+        if pagamento or loja_pagamento._tem_pagamento_externo(principal):
+            cancelada = any(p.status == 'cancelado' and p.motivo_cancelamento != 'pix_expirado'
+                            for p in pedidos)
+            situacao = ('estava CANCELADA e recebeu pagamento. Ela continua cancelada'
+                        if cancelada else
+                        'recebeu pagamento, mas as entregas não aguardavam pagamento. '
+                        'Nada foi alterado')
+            valor = f' ({fmt_brl(pagamento.valor)} via {pagamento.metodo})' if pagamento else ''
+            _alertar_dono(
+                f'⚠️ Compra de kit {principal.codigo} ({compra.kit_nome}) {situacao}'
+                f'{valor} — estorne o valor no painel do Pagar.me ou fale com o cliente.',
+                f'kit_cancelado_pago|{compra.id}|{pagamento.id if pagamento else "-"}')
         return False
     from app.services.kits_capacidade import reservar_compra
     reservar_compra(compra, pagamento_recebido=True)
