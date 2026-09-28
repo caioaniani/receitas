@@ -297,6 +297,20 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   da Meta). COBERTURA: não enxerga sessão web nem o navegador da TV — o
   caso real era o aviso de pendências do próprio painel + uma pendência
   fantasma (seção "Painel: aviso de pendências..." abaixo), não o servidor.
+- `GET /api/claude/contas-pagar-itens?item=<a|b>&fornecedor=&dias=365&ignorados=1`
+  (28/09/2026, dono: custo de sacos de pão/maletas "tem que ler nas NFs de
+  recebimento"): lê o `itens_json` das `ContaPagar` (NFs postadas nos canais
+  de recebimento e lidas pela IA). `item` aceita alternativas com `|`, cada
+  uma casando todas as palavras sem acento/caixa; devolve `resumo` por item
+  normalizado (`normalizar_item_nome`: ocorrências, último/mín/máx unitário,
+  quantidade e gasto) + as linhas (loja, fornecedor, nota, `revisada`,
+  `preco_por_unidade_base` quando a IA leu o fator, vínculo com MP). Sem
+  `item` nem `fornecedor` = modo descoberta (fornecedores com notas, total
+  e exemplos de itens). Recebimento com vários documentos (NF + boleto,
+  foto repetida — `relacionado_id`) conta os itens UMA vez. COBERTURA: só
+  notas lidas com itens; boleto sem itens, leitura falha e compra sem nota
+  postada ficam fora. Loja pelo `conta_pagar.mapa_lojas_nf(consultar_slack=
+  False)` — fonte única, movida da tela de Contas a Pagar, sem rede.
 - Testes: `tests/test_claude_api.py`.
 
 ## Cockpit do dono — briefing diario + home + manual (16/07/2026)
