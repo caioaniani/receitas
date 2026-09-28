@@ -214,15 +214,21 @@ def test_zero_results_fica_em_cache_e_nao_paga_de_novo(app):
     """O mesmo texto que o Google não conhece, repetido (cliente clicando
     "Calcular frete" de novo), não gasta outra vaga nem outra chamada."""
     _ligar_google(app, teto=10)
-    zero = _Resp(200, {'status': 'ZERO_RESULTS', 'results': []})
-    with patch('app.services.google_maps.requests.get',
-               return_value=zero) as google, \
-         patch('app.services.frete.requests.get',
-               side_effect=_nominatim_vazio):
+    chamadas_google = []
+
+    def fake_get(url, **kw):
+        # google_maps e frete usam o MESMO requests.get: um fake só,
+        # despachando pela URL.
+        if 'googleapis' in url:
+            chamadas_google.append(kw.get('params', {}).get('address'))
+            return _Resp(200, {'status': 'ZERO_RESULTS', 'results': []})
+        return _Resp(200, [])
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
         r1 = frete.consultar_frete('Rua Que Nao Existe, 1', canal='preview')
         r2 = frete.consultar_frete('Rua Que Nao Existe, 1', canal='preview')
     assert r1 == r2 == {'ok': False, 'erro': 'nao_encontrado'}
-    assert google.call_count == 1
+    assert chamadas_google == ['Rua Que Nao Existe, 1']
     assert frete.uso_google_hoje()['total'] == 1
     cache = GeocodeCache.query.one()
     assert cache.fonte == 'google_zero' and cache.lat is None
