@@ -95,7 +95,8 @@
                     <form method="POST" action="{{ url_for('rh.excluir_folha_item', folha_id=fl.id) }}" style="display:inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-outline-danger"
-                                onclick="return confirm('Excluir a folha de {{ fl.funcionario.nome }} ({{ '%02d' % fl.mes }}/{{ fl.ano }})?')"
+                                onclick="return confirm(this.dataset.msg)"
+                                data-msg="Excluir a folha de {{ fl.funcionario.nome }} ({{ '%02d' % fl.mes }}/{{ fl.ano }})?"
                                 title="Excluir folha">
                             <i class="bi bi-trash"></i>
                         </button>
