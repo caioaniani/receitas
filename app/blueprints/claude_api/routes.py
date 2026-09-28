@@ -2628,6 +2628,219 @@ def pedidos_itens():
     return jsonify(ok=True, dias=dias, trecho=trecho, n=len(out), itens=out)
 
 
+def _num(v):
+    """Float finito ou None — os itens da NF vêm da leitura da IA (JSON livre)."""
+    import math
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
+@claude_api_bp.route('/contas-pagar-itens')
+@_claude_auth_required
+def contas_pagar_itens():
+    """Itens das NOTAS FISCAIS de recebimento (Contas a Pagar) — criada em
+    28/09/2026 (dono: custo de sacos de pão, maletas etc. "tem que ler nas
+    NFs de recebimento"). Embalagem comprada fora do cadastro de MP só tem
+    preço no `itens_json` que a IA extraiu de cada NF postada nos canais de
+    recebimento do Slack; nenhuma outra sonda lê essa tabela. Read-only.
+
+    Params:
+    - ?item=<trecho> — um ou mais trechos separados por '|' (OU); cada trecho
+      casa quando TODAS as palavras dele aparecem no nome do item, sem
+      acento/caixa. Ex.: ?item=saco|sacola|maleta.
+    - ?fornecedor=<trecho> — filtra pelo emitente da NF.
+    - sem item nem fornecedor: modo descoberta — fornecedores com nº de
+      notas, total e exemplos de itens, para achar quem vende o quê.
+    - ?dias=N (pela data de chegada da nota, default 365, max 1095).
+    - ?ignorados=1 inclui documentos marcados 'ignorado' (default: fora).
+
+    COBERTURA: só notas que a IA leu COM itens. Boleto sem itens, nota cuja
+    leitura falhou ou compra sem nota postada não aparecem. Valores são os da
+    leitura da IA (corrigíveis na tela; `revisada` diz se alguém conferiu).
+    Documentos agrupados (NF + boleto, foto repetida) contam os itens UMA vez.
+    """
+    import json
+    from datetime import datetime, time, timedelta
+
+    from app.models import ContaPagar, ContaPagarItemMap
+    from app.services.conta_pagar import mapa_lojas_nf
+    from app.services.conta_pagar_estoque import limpar_nome_item, normalizar_item_nome
+    from app.utils import hoje, normalizar_busca
+
+    dias = _int_arg('dias', 365, 1, 1095)
+    corte = datetime.combine(hoje() - timedelta(days=dias - 1), time.min)
+    incluir_ignorados = request.args.get('ignorados') == '1'
+
+    bruto_item = (request.args.get('item') or '').strip()
+    alternativas = [normalizar_busca(t).split() for t in bruto_item.split('|')]
+    alternativas = [a for a in alternativas if len(''.join(a)) >= 2]
+    if bruto_item and not alternativas:
+        return jsonify(ok=False, erro='?item= precisa de ao menos 2 letras'), 400
+    bruto_forn = (request.args.get('fornecedor') or '').strip()
+    termos_forn = normalizar_busca(bruto_forn).split()
+
+    def _casa_item(nome):
+        n = normalizar_busca(nome or '')
+        return any(all(t in n for t in alt) for alt in alternativas)
+
+    q = ContaPagar.query.filter(ContaPagar.criado_em >= corte)
+    if not incluir_ignorados:
+        q = q.filter(ContaPagar.status != 'ignorado')
+    contas = q.order_by(ContaPagar.criado_em.desc(), ContaPagar.id.desc()).all()
+
+    def _itens(c):
+        try:
+            itens = json.loads(c.itens_json or '[]')
+        except (TypeError, ValueError):
+            return []
+        return [it for it in itens if isinstance(it, dict)] if isinstance(itens, list) else []
+
+    def _fornecedor(c):
+        return (c.fornecedor.nome if c.fornecedor else None) or c.fornecedor_nome or ''
+
+    # Um recebimento pode ter vários documentos (NF + boleto, foto repetida):
+    # os itens contam UMA vez, do principal se ele tiver itens.
+    grupos = {}
+    for c in contas:
+        grupos.setdefault(c.relacionado_id or c.id, []).append(c)
+    fonte_itens = {}
+    for gid, docs in grupos.items():
+        com_itens = [d for d in docs if _itens(d)]
+        if com_itens:
+            com_itens.sort(key=lambda d: (d.id != gid, d.id))
+            fonte_itens[gid] = com_itens[0].id
+
+    lojas = mapa_lojas_nf(consultar_slack=False)
+
+    if not alternativas and not termos_forn:
+        forn = {}
+        for c in contas:
+            if fonte_itens.get(c.relacionado_id or c.id) != c.id:
+                continue
+            nome = _fornecedor(c) or '(sem fornecedor lido)'
+            f = forn.setdefault(nome, {'fornecedor': nome, 'notas': 0, 'itens': 0,
+                                       'total': 0.0, 'ultima': None,
+                                       'exemplos_itens': []})
+            itens = _itens(c)
+            f['notas'] += 1
+            f['itens'] += len(itens)
+            f['total'] += _num(c.valor_total) or 0.0
+            data = c.criado_em.date().isoformat() if c.criado_em else None
+            if data and (f['ultima'] is None or data > f['ultima']):
+                f['ultima'] = data
+            for it in itens:
+                nm = limpar_nome_item(it.get('nome') or '')
+                if nm and nm not in f['exemplos_itens'] and len(f['exemplos_itens']) < 6:
+                    f['exemplos_itens'].append(nm)
+        lista = sorted(forn.values(), key=lambda f: -f['total'])
+        for f in lista:
+            f['total'] = round(f['total'], 2)
+        return jsonify(ok=True, modo='descoberta', dias=dias,
+                       notas_com_itens=len(fonte_itens),
+                       documentos_lidos=len(contas),
+                       n_fornecedores=len(lista), fornecedores=lista[:150],
+                       truncado=len(lista) > 150)
+
+    norms_vistos = {}
+    linhas = []
+    for c in contas:
+        if fonte_itens.get(c.relacionado_id or c.id) != c.id:
+            continue
+        nome_forn = _fornecedor(c)
+        if termos_forn and not all(t in normalizar_busca(nome_forn) for t in termos_forn):
+            continue
+        for it in _itens(c):
+            nome = it.get('nome') or ''
+            if alternativas and not _casa_item(nome):
+                continue
+            qtd = _num(it.get('quantidade'))
+            unit = _num(it.get('valor_unitario'))
+            tot = _num(it.get('valor_total'))
+            if unit is None and tot is not None and qtd:
+                unit = tot / qtd
+            if tot is None and unit is not None and qtd is not None:
+                tot = unit * qtd
+            fator = _num(it.get('fator_embalagem'))
+            norm = normalizar_item_nome(nome)
+            norms_vistos[norm] = None
+            linhas.append({
+                'conta_id': c.id,
+                'data': c.criado_em.date().isoformat() if c.criado_em else None,
+                'fornecedor': nome_forn or None,
+                'nf_numero': c.nf_numero,
+                'loja': lojas.get(c.origem_canal, c.origem_canal),
+                'status': c.status,
+                'revisada': c.revisada,
+                'item': limpar_nome_item(nome) or nome,
+                'norm': norm,
+                'quantidade': qtd,
+                'unidade': it.get('unidade'),
+                'valor_unitario': round(unit, 4) if unit is not None else None,
+                'valor_total': round(tot, 2) if tot is not None else None,
+                'fator_embalagem_lido': fator,
+                'unidade_base_lida': it.get('unidade_base_sugerida'),
+                'preco_por_unidade_base': (round(unit / fator, 4)
+                                           if unit is not None and fator and fator > 0
+                                           else None),
+            })
+
+    mapas = {}
+    presentes = [n for n in norms_vistos if n]
+    if presentes:
+        for m in ContaPagarItemMap.query.filter(
+                ContaPagarItemMap.item_nome_norm.in_(presentes)).all():
+            mapas[m.item_nome_norm] = m
+
+    resumo = {}
+    for ln in linhas:
+        m = mapas.get(ln['norm'])
+        ln['vinculo'] = ({'estado': m.estado, 'alvo': m.alvo_nome,
+                          'fator_conversao': m.fator_conversao,
+                          'unidade_compra': m.unidade_compra,
+                          'confirmado': m.confirmado_em is not None}
+                         if m else None)
+        r = resumo.setdefault(ln['norm'] or ln['item'], {
+            'item': ln['item'], 'ocorrencias': 0, 'quantidade_total': 0.0,
+            'gasto_total': 0.0, 'unidades': set(), 'fornecedores': set(),
+            'primeira': ln['data'], 'ultima': ln['data'],
+            'ultimo_valor_unitario': None, 'min_valor_unitario': None,
+            'max_valor_unitario': None, 'vinculo': ln['vinculo']})
+        r['ocorrencias'] += 1
+        r['quantidade_total'] += ln['quantidade'] or 0.0
+        r['gasto_total'] += ln['valor_total'] or 0.0
+        if ln['unidade']:
+            r['unidades'].add(str(ln['unidade']))
+        if ln['fornecedor']:
+            r['fornecedores'].add(ln['fornecedor'])
+        if ln['data'] and (r['primeira'] is None or ln['data'] < r['primeira']):
+            r['primeira'] = ln['data']
+        u = ln['valor_unitario']
+        if u is not None:
+            # linhas vêm da mais recente para a mais antiga: a 1ª com preço é a última compra
+            if r['ultimo_valor_unitario'] is None:
+                r['ultimo_valor_unitario'] = u
+                r['ultima'] = ln['data']
+            r['min_valor_unitario'] = u if r['min_valor_unitario'] is None else min(r['min_valor_unitario'], u)
+            r['max_valor_unitario'] = u if r['max_valor_unitario'] is None else max(r['max_valor_unitario'], u)
+    lista_resumo = []
+    for r in resumo.values():
+        r['unidades'] = sorted(r['unidades'])
+        r['fornecedores'] = sorted(r['fornecedores'])
+        r['quantidade_total'] = round(r['quantidade_total'], 3)
+        r['gasto_total'] = round(r['gasto_total'], 2)
+        lista_resumo.append(r)
+    lista_resumo.sort(key=lambda r: -r['gasto_total'])
+
+    cap = 500
+    return jsonify(ok=True, modo='itens', dias=dias, item=bruto_item or None,
+                   fornecedor=bruto_forn or None, n=len(linhas),
+                   resumo=lista_resumo, itens=linhas[:cap],
+                   truncado=len(linhas) > cap)
+
+
 @claude_api_bp.route('/alertas-debug')
 @_claude_auth_required
 def alertas_debug():
