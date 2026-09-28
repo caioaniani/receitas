@@ -329,3 +329,19 @@ def alertar_endereco_falho(endereco, cep=None, contato=None,
         _POOL.submit(_enviar_direto, app, texto, motivo == 'lalamove')
     except Exception:  # noqa: BLE001
         logger.exception('loja_alerta: falha ao agendar alerta de endereco')
+
+
+def alertar_pedido_pago(texto, chave):
+    """Alerta ao dono sobre um pedido JÁ PAGO que precisa de conferência
+    (pago acima do limite do Plano do dia, pagamento em duplicidade, dinheiro
+    recebido num pedido cancelado, chargeback). É dinheiro recebido: isento
+    do teto/hora global do Z-API (critico=True) e NÃO obedece ao kill-switch
+    das travas (`LOJA_ALERTA_TRAVA`), que existe pra ruído de checkout.
+    Best-effort/assíncrono; dedup por `chave` (mesmo evento não repete)."""
+    try:
+        if not _deve_enviar(f'pago|{chave}'):
+            return
+        app = current_app._get_current_object()
+        _POOL.submit(_enviar_direto, app, texto, True)
+    except Exception:  # noqa: BLE001
+        logger.exception('loja_alerta: falha ao agendar alerta de pedido pago')

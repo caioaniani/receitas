@@ -233,7 +233,21 @@ def _reservar_no_plano_do_dia(pedido):
         # cuidam disso ANTES).
         # O caller confirma pagamento/estoque/plano juntos. Commit aqui soltaria
         # o lock do pedido antes de persistir todo o recebimento.
-        loja_plano_dia.reservar(kind, item_id, pedido.data_entrega, qtd, commit=False)
+        if loja_plano_dia.reservar(kind, item_id, pedido.data_entrega, qtd,
+                                   commit=False):
+            continue
+        # Pagamento JÁ recebido acima do limite (dois clientes levando as
+        # últimas unidades ao mesmo tempo; Pix pago depois de expirar). A
+        # demanda é real: reserva acima do limite — mesma regra dos kits
+        # (kits_capacidade.reservar_compra) — e avisa o dono. Antes o False
+        # era ignorado: a vitrine seguia vendendo o que já tinha dono e o
+        # cancelamento devolvia unidades nunca reservadas (auditoria
+        # 27/09/2026).
+        loja_plano_dia.reservar(kind, item_id, pedido.data_entrega, qtd,
+                                commit=False, forcar=True)
+        logger.warning('Pedido %s pago acima do limite do Plano do dia: %sx %s '
+                       'em %s', pedido.codigo, qtd, it.nome, pedido.data_entrega)
+        _alertar_acima_do_plano(pedido, it.nome, qtd)
 
 
 def _devolver_ao_plano_do_dia(pedido, *, commit=True):
