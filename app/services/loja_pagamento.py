@@ -410,8 +410,37 @@ def iniciar_pix(pedido, expira_em_min=30):
     pag.pix_qr_code = res.get('qr_code')
     pag.pix_qr_code_url = res.get('qr_code_url')
     pag.pix_expira_em = res.get('expira_em')
+    _acompanhar_validade_do_pix(pedido, pag.pix_expira_em)
     db.session.commit()
     return pag, []
+
+
+# Folga entre o fim do QR e o cancelamento automático do pedido (a mesma da
+# reserva original: "Pix 30 min + 5 de folga", TTL_RESERVA_MIN).
+_FOLGA_RESERVA_PIX_MIN = 5
+
+
+def _acompanhar_validade_do_pix(pedido, pix_expira_em):
+    """A reserva vence 35 min após o CHECKOUT, mas o QR vale 30 min a partir
+    da GERAÇÃO: um Pix gerado tarde (cartão recusado antes, por exemplo) era
+    cancelado pelo cron com o QR ainda na tela — e pagável (auditoria
+    27/09/2026). Estende a reserva do pedido (e o prazo da compra de kit) até
+    o fim do QR + folga. Só estende, nunca encurta; a reserva física é
+    contábil (não bloqueia venda), então segurar mais uns minutos não trava
+    ninguém. Roda sob a trava do `preparar_cobranca`."""
+    if pix_expira_em is None:
+        return
+    from datetime import timedelta
+
+    from app.services.compra_kits import grupo_do_pedido, pedidos_do_grupo
+    limite = pix_expira_em + timedelta(minutes=_FOLGA_RESERVA_PIX_MIN)
+    compra = grupo_do_pedido(pedido)
+    pedidos = pedidos_do_grupo(compra) if compra else [pedido]
+    for p in pedidos:
+        if p.reserva_expira_em is not None and p.reserva_expira_em < limite:
+            p.reserva_expira_em = limite
+    if compra is not None and compra.expira_em and compra.expira_em < limite:
+        compra.expira_em = limite
 
 
 def iniciar_cartao(pedido, card_token, parcelas=1, billing=None):

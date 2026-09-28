@@ -220,3 +220,55 @@ def test_item_bloqueado_na_data_especial_aparece_na_conferencia(app):
     assert [e['nome'] for e in j['esgotados']] == ['Caixa de Mini']
     assert j['esgotados'][0]['bloqueado'] is True
     assert j['proxima_disponivel'] == d3.isoformat()
+
+
+# ── 38. Pix gerado tarde: a reserva acompanha a validade do QR ──────────
+
+def test_pix_gerado_tarde_estende_a_reserva_ate_o_fim_do_qr(app):
+    from app.extensions import db
+    from app.services import loja_pagamento
+    from app.utils import agora
+    ped = _pedido(db, _produto(db))
+    ped.reserva_expira_em = agora() + timedelta(minutes=10)
+    db.session.commit()
+    fim_qr = agora() + timedelta(minutes=30)
+    with patch('app.services.pagarme.criar_pedido_pix', return_value={
+            'ok': True, 'order_id': 'or_1', 'charge_id': 'ch_1',
+            'qr_code': 'qr', 'qr_code_url': 'u', 'expira_em': fim_qr}):
+        pag, erros = loja_pagamento.iniciar_pix(ped)
+    assert pag and not erros
+    db.session.refresh(ped)
+    assert ped.reserva_expira_em == fim_qr + timedelta(minutes=5)
+
+
+def test_pix_que_falha_nao_estende_a_reserva(app):
+    from app.extensions import db
+    from app.services import loja_pagamento
+    from app.utils import agora
+    ped = _pedido(db, _produto(db))
+    vence = agora() + timedelta(minutes=10)
+    ped.reserva_expira_em = vence
+    db.session.commit()
+    with patch('app.services.pagarme.criar_pedido_pix',
+               return_value={'ok': False, 'erro': 'x'}):
+        loja_pagamento.iniciar_pix(ped)
+    db.session.refresh(ped)
+    assert ped.reserva_expira_em == vence
+
+
+def test_pix_do_kit_estende_o_prazo_da_compra(app, owner_user, loja):
+    from app.extensions import db
+    from app.services import loja_pagamento
+    from app.utils import agora
+    from tests.test_kits_pagamento import compra as _compra_fixture
+    compra = _compra_fixture.__wrapped__(app, owner_user, loja)
+    compra.expira_em = agora() + timedelta(minutes=8)
+    db.session.commit()
+    fim_qr = agora() + timedelta(minutes=30)
+    with patch('app.services.pagarme.criar_pedido_pix', return_value={
+            'ok': True, 'order_id': 'or_1', 'charge_id': 'ch_1',
+            'qr_code': 'qr', 'qr_code_url': 'u', 'expira_em': fim_qr}):
+        pag, erros = loja_pagamento.iniciar_pix(compra.pedido_principal)
+    assert pag and not erros
+    db.session.refresh(compra)
+    assert compra.expira_em == fim_qr + timedelta(minutes=5)
