@@ -10,7 +10,7 @@ Dois provedores públicos, sem chave, em cascata:
      caso do frete/CEP em 05/07/2026; aqui não confiamos em provedor único)
 
 Devolve dict NORMALIZADO (chaves nossas, independentes do provedor) ou
-{'erro': ...}. Nunca levanta exceção pro caller.
+{'erro': mensagem, 'falha': FALHA_*}. Nunca levanta exceção pro caller.
 """
 import logging
 import re
@@ -20,6 +20,12 @@ import requests
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 10
+
+# Motivo estruturado da falha (revisão 28/09/2026): quem chama decide pelo
+# código, nunca pela frase da mensagem.
+FALHA_INVALIDO = 'invalido'
+FALHA_NAO_ENCONTRADO = 'nao_encontrado'   # TODAS as bases responderam 404
+FALHA_INDISPONIVEL = 'indisponivel'       # alguma base fora/lenta/sem suporte
 
 
 def _so_digitos(s):
@@ -87,20 +93,24 @@ def consultar(cnpj, *, timeout=_TIMEOUT):
     from app.utils import normalizar_documento
     digitos = normalizar_documento(cnpj)
     if len(digitos) != 14:
-        return {'erro': 'CNPJ deve ter 14 dígitos.'}
+        return {'erro': 'CNPJ deve ter 14 dígitos.', 'falha': FALHA_INVALIDO}
     urls = (f'https://brasilapi.com.br/api/cnpj/v1/{digitos}',
             f'https://minhareceita.org/{digitos}')
-    achou_404 = False
+    respostas_404 = 0
     for url in urls:
         d = _consultar_url(url, timeout=timeout)
         if d == 'nao_encontrado':
-            achou_404 = True
+            respostas_404 += 1
             continue
         if d and d.get('razao_social'):
             out = _normalizar(d)
             out['cnpj'] = digitos
             return out
-    if achou_404:
-        return {'erro': 'CNPJ não encontrado na base da Receita.'}
+    # "Não encontrado" só quando TODAS as bases dizem 404: a BrasilAPI atrasa
+    # com empresa recém-aberta, e um 404 dela com a outra base fora mandava o
+    # cliente "conferir o número" de um CNPJ certo (revisão 28/09/2026).
+    if respostas_404 == len(urls):
+        return {'erro': 'CNPJ não encontrado na base da Receita.',
+                'falha': FALHA_NAO_ENCONTRADO}
     return {'erro': 'Consulta de CNPJ indisponível no momento — preencha '
-                    'manualmente ou tente de novo.'}
+                    'manualmente ou tente de novo.', 'falha': FALHA_INDISPONIVEL}

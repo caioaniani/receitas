@@ -181,14 +181,17 @@ document.querySelectorAll('.btn-buscar-cnpj').forEach(function (btn) {
     btn.addEventListener('click', async function () {
         const form = btn.closest('form');
         const msg = form.querySelector('.cnpj-msg');
-        const digitos = (form.querySelector('[name=cnpj_cpf]').value || '').replace(/\D/g, '');
+        // CNPJ alfanumérico (IN RFB 2.229/2024): as letras fazem parte do
+        // número — mesma regra de app.utils.normalizar_documento.
+        const digitos = (form.querySelector('[name=cnpj_cpf]').value || '')
+            .replace(/[^0-9A-Za-z]/g, '').toUpperCase();
         const avisar = function (texto, erro) {
             msg.textContent = texto;
             msg.classList.remove('d-none', 'text-danger', 'text-success');
             msg.classList.add(erro ? 'text-danger' : 'text-success');
         };
         if (digitos.length !== 14) {
-            avisar('Informe um CNPJ com 14 dígitos (busca não vale pra CPF).', true);
+            avisar('Informe um CNPJ completo (14 números, ou letras e números no CNPJ novo). A busca não vale para CPF.', true);
             return;
         }
         btn.disabled = true;

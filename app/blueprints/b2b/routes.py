@@ -506,7 +506,10 @@ def api_cnpj(cnpj):
     from app.services import cnpj as cnpj_svc
     res = cnpj_svc.consultar(cnpj)
     if res.get('erro'):
-        return jsonify(res), 404 if 'não encontrado' in res['erro'] else 400
+        # Pelo código estruturado, nunca pela frase (revisão 28/09/2026).
+        codigo = {cnpj_svc.FALHA_NAO_ENCONTRADO: 404,
+                  cnpj_svc.FALHA_INDISPONIVEL: 503}.get(res.get('falha'), 400)
+        return jsonify(res), codigo
     return jsonify(res)
 
 

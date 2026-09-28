@@ -363,7 +363,9 @@ def test_consulta_empresa_recusa_cadastro_de_outro_cnpj_alfanumerico():
     from app.services.consulta_empresa import _documento_exato
     assert _documento_exato('12.ABC.345/01DE-35', CNPJ_ALFA)
     assert not _documento_exato('12.ABD.345/01DE-35', CNPJ_ALFA)
-    assert not _documento_exato('CNPJ 12ABC34501DE35', CNPJ_ALFA)
+    assert not _documento_exato('12ABC34501DE35X', CNPJ_ALFA)
+    # Rótulo com separador sai na normalização canônica (revisão 28/09/2026).
+    assert _documento_exato('CNPJ 12ABC34501DE35', CNPJ_ALFA)
 
 
 def test_payloads_levam_cnpj_alfanumerico_inteiro(app):
@@ -593,8 +595,43 @@ def test_cnpj_inexistente_e_distinguido_de_provedor_fora(app, monkeypatch):
     from app.services import cnpj, consulta_empresa
     monkeypatch.setattr(consulta_empresa, '_reservar_consulta', lambda: False)
     monkeypatch.setattr(cnpj, 'consultar', lambda doc, timeout=None: {
-        'erro': 'CNPJ não encontrado na base da Receita.'})
+        'erro': 'CNPJ não encontrado na base da Receita.',
+        'falha': cnpj.FALHA_NAO_ENCONTRADO})
     assert consulta_empresa.consultar(CNPJ_NUM)['falha'] == 'nao_encontrado'
+    # A decisão é pelo código, não pela frase (revisão 28/09/2026).
+    monkeypatch.setattr(cnpj, 'consultar', lambda doc, timeout=None: {
+        'erro': 'CNPJ não encontrado na base da Receita.',
+        'falha': cnpj.FALHA_INDISPONIVEL})
+    assert consulta_empresa.consultar(CNPJ_NUM)['falha'] == 'indisponivel'
+
+
+@pytest.mark.parametrize('respostas, falha', [
+    ((404, 404), 'nao_encontrado'),
+    ((404, 503), 'indisponivel'),      # empresa nova: uma base atrasa
+    ((503, 404), 'indisponivel'),
+    ((400, 400), 'indisponivel'),      # base sem suporte ao alfanumérico
+])
+def test_cnpj_so_e_inexistente_quando_todas_as_bases_dizem_404(monkeypatch, respostas, falha):
+    from app.services import cnpj
+    fila = list(respostas)
+    monkeypatch.setattr(cnpj.requests, 'get', lambda url, **kw: SimpleNamespace(
+        status_code=fila.pop(0), json=lambda: {}))
+    assert cnpj.consultar(CNPJ_NUM)['falha'] == falha
+
+
+def test_documento_com_rotulo_colado_e_digitos_ascii():
+    """Revisão 28/09/2026: 'CPF: 529...' (autopreenchimento) era aceito com
+    `_so_digitos` e virou inválido com a normalização alfanumérica."""
+    from app.services.fiscal_online import digitos
+    from app.utils import documento_valido, normalizar_documento
+    assert normalizar_documento('CPF: 529.982.247-25') == '52998224725'
+    assert normalizar_documento('cnpj nº 12.ABC.345/01DE-35') == '12ABC34501DE35'
+    assert normalizar_documento('CPF/CNPJ 11.222.333/0001-81') == '11222333000181'
+    assert documento_valido('CPF: 529.982.247-25')
+    # Sem separador pode ser um CNPJ alfanumérico: nada é cortado.
+    assert normalizar_documento('CPF52998224725') == 'CPF52998224725'
+    # CEP/IE: só 0-9 ASCII ('²' e dígitos de outros alfabetos ficam fora).
+    assert digitos('04077-000²٣') == '04077000'
 
 
 def test_base_publica_consulta_o_cnpj_alfanumerico_inteiro(monkeypatch):

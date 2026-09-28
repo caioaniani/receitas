@@ -234,7 +234,7 @@ def _consultar_endereco(documento):
     from app.services import cnpj
 
     publico = cnpj.consultar(documento, timeout=_TIMEOUT)
-    if isinstance(publico, dict) and 'não encontrado' in _texto(publico.get('erro')).lower():
+    if isinstance(publico, dict) and publico.get('falha') == cnpj.FALHA_NAO_ENCONTRADO:
         return _resultado(aviso='CNPJ não encontrado na base pública.',
                           falha=FALHA_NAO_ENCONTRADO)
     if (not isinstance(publico, dict) or publico.get('erro')
