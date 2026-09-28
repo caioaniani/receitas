@@ -769,6 +769,21 @@ def excluir_conta():
         flash('Para confirmar, digite EXCLUIR exatamente.', 'warning')
         return redirect(url_for('loja.minha_conta'))
     cli = loja_auth.cliente_atual()
+    # Pedido PAGO ainda não entregue precisa do contato, do destinatário e do
+    # CPF (entrega e NF). Anonimizar agora deixava o motorista sem telefone e
+    # a NF sem documento (auditoria 27/09/2026). A LGPD permite reter os
+    # dados para executar o contrato (art. 16, II): a exclusão fica para
+    # depois da entrega.
+    em_andamento = [p.codigo for p in PedidoOnline.query.filter(
+        PedidoOnline.cliente_id == cli.id,
+        PedidoOnline.status.in_(('pago', 'em_preparo', 'a_caminho'))).all()]
+    if em_andamento:
+        from flask import flash
+        flash('Você tem pedido em andamento (' + ', '.join(em_andamento)
+              + '). Precisamos dos seus dados para entregar e emitir a nota '
+              'fiscal — a conta pode ser excluída depois da entrega. Se '
+              'preferir, fale com a gente.', 'warning')
+        return redirect(url_for('loja.minha_conta'))
     # Anonimiza os pedidos (mantém histórico fiscal)
     rotulo = f'[Conta excluída #{cli.id}]'
     # Mesmo tratamento dos dados pessoais antigos. NF autorizada permanece no ERP;
