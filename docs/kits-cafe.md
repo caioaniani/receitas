@@ -107,6 +107,14 @@ compõem o kit; não são apresentadas como foto da embalagem completa. A tela
 de agendamento organiza escolha do suco, datas, endereço e dados do cliente.
 O resumo reúne as entregas escolhidas e o total com fretes. Datas repetidas,
 sem disponibilidade ou sem horário impedem avançar para pagamento.
+Cada formulário gera uma única compra. Um duplo clique com os mesmos dados
+devolve a compra já criada, enquanto ela aguarda pagamento no prazo. Se o
+cliente voltar pelo histórico ou usar outra aba e enviar o formulário com
+outra data, horário, suco, adicional, contato ou endereço (ou se a compra
+anterior já foi paga, cancelada ou expirou), a tela reapresenta os dados
+enviados com o aviso "Este formulário já gerou a compra X" e um formulário
+novo; um novo envio consciente cria a nova compra. A compra anterior não é
+alterada.
 O estilo público usa a identidade da loja (Fraunces, Funnel Sans e fundo
 quente), em `loja/kits.css`, separado do visual da gestão.
 
@@ -117,9 +125,19 @@ exclusiva do owner e exige o valor da compra inteira.
 
 A capacidade de produção das datas fica reservada durante os 35 minutos
 do checkout. Pagamento aprovado mantém essas reservas; expiração ou
-cancelamento da compra pendente libera todas. Se o gateway confirmar um
+cancelamento da compra pendente libera todas. Antes de expirar, o sistema
+consulta no Pagar.me as tentativas pendentes da compra, sem segurar travas
+durante a consulta: pagamento já recebido confirma a compra; QR do Pix ainda
+válido, cartão em análise ou gateway sem resposta adiam a expiração em
+5 minutos (o dono é avisado se a compra passar de 24 h nesse estado); sem
+nada vivo no gateway, a compra expira. Cada compra é resolvida e gravada
+separadamente. Se o gateway confirmar um
 pagamento depois da liberação e faltar capacidade, a demanda recebida é
 registrada e o painel destaca o excesso para o owner conferir a produção.
+Um segundo pagamento na mesma compra (outro QR, cartão depois de Pix,
+gateway depois de recebimento externo) e um pagamento recebido numa compra
+cancelada de propósito avisam o dono pelo WhatsApp; a compra cancelada
+continua cancelada e o estorno do valor a mais é feito no Pagar.me.
 
 O estoque físico é baixado somente na coleta de cada entrega. Repetir a
 confirmação da coleta não baixa novamente. O pagamento do mês não desconta
@@ -127,8 +145,15 @@ antecipadamente os produtos de todas as semanas.
 
 O owner pode reembolsar e cancelar uma entrega paga pelo gateway, devolvendo
 o valor dos itens e do frete daquela entrega; as outras datas permanecem.
-Se a resposta do gateway for incerta, o painel mostra a tentativa e bloqueia
-nova solicitação e coleta até a conferência no Pagar.me. Pagamentos externos
+Se a resposta do gateway for incerta (tempo esgotado, aceite pendente), o
+painel mostra a tentativa e bloqueia nova solicitação e coleta. Repetir
+**Reembolsar e cancelar esta entrega** não envia outro estorno: o sistema lê
+a cobrança no Pagar.me e confirma só quando o valor devolvido nela cobre todos
+os estornos confirmados e pendentes da compra (um estorno parcial mantém a
+cobrança como paga); com recusa explícita do gateway, libera uma nova
+solicitação; sem prova, mantém o bloqueio e registra a leitura. Uma entrega
+bloqueada não impede o motorista de iniciar a rota: as demais paradas saem
+normalmente e a bloqueada fica sem coleta, registrada no log. Pagamentos externos
 continuam sem estorno automático pelo gateway. A edição de logística permite
 corrigir contato/endereço, mas não trocar a agenda já reservada de um kit;
 para isso, é preciso cancelar a entrega e fazer uma nova compra.

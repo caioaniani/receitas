@@ -205,9 +205,24 @@ def kit_comprar(kit_id):
         agenda = json.loads(request.form.get('agenda_json') or '[]')
     except (ValueError, TypeError):
         agenda = []
-    compra, erros = compra_kits.criar_compra(
-        kit, request.form, agenda, checkout_token=token)
+    validos = agenda if isinstance(agenda, list) and len(agenda) <= 31 else []
+    try:
+        compra, erros = compra_kits.criar_compra(
+            kit, request.form, agenda, checkout_token=token)
+    except compra_kits.FormularioJaUsado as exc:
+        # Formulário alterado (histórico/duas abas) ou compra já encerrada:
+        # nonce novo e os dados enviados de volta, para o cliente conferir e
+        # enviar de novo conscientemente — nunca a compra antiga em silêncio.
+        _renovar_token(kit)
+        return _render_compra(kit, request.form, validos, [str(exc)]), 409
     if erros:
-        validos = agenda if isinstance(agenda, list) and len(agenda) <= 31 else []
         return _render_compra(kit, request.form, validos, erros), 400
     return redirect(url_for('loja.pedido_pagamento', codigo=compra.pedido_principal.codigo))
+
+
+def _renovar_token(kit):
+    tokens = dict(session.get('kits_checkout_tokens') or {})
+    tokens.pop(str(kit.id), None)
+    tokens[str(kit.id)] = secrets.token_hex(32)
+    # Mesmo limite de `_contexto`: a sessão continua pequena.
+    session['kits_checkout_tokens'] = dict(list(tokens.items())[-10:])
