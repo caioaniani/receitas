@@ -849,9 +849,27 @@ def _reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
     aviso_nf = (' A NF já foi emitida — CORRIJA MANUALMENTE no Tiny (o '
                 'sistema não cancela NF autorizada).'
                 if pedido.tiny_nota_fiscal_id else '')
+    # Comprovante do estorno PARCIAL ao cliente (auditoria 27/09/2026 — só o
+    # reembolso total mandava; o cliente não sabia do dinheiro de volta).
+    # Best-effort: e-mail ruim nunca desfaz o estorno já commitado.
+    avisado = ''
+    try:
+        from app.services import email as email_svc
+        if email_svc.disponivel():
+            env = email_svc.enviar_reembolso_confirmado(
+                pedido, valor=delta_valor, metodo=pago.metodo,
+                detalhe=(f'Estorno parcial: "{item.nome}" passou de {atual} '
+                         f'para {nova} unidade(s). O frete e os demais itens '
+                         f'foram mantidos.'))
+            if (env or {}).get('ok'):
+                avisado = ' Cliente avisado por e-mail.'
+    except Exception:  # noqa: BLE001
+        logger.exception('reduzir item %s: email de estorno parcial falhou',
+                         pedido.codigo)
+    forma = 'no Pix' if pago.metodo == 'pix' else 'no cartão'
     return True, (f'"{item.nome}" reduzido de {atual} para {nova}. Estornei '
-                  f'R$ {delta_valor:.2f} no cartão e devolvi {delta} ao '
-                  f'estoque e ao plano do dia.{aviso_nf}')
+                  f'R$ {delta_valor:.2f} {forma} e devolvi {delta} ao '
+                  f'estoque e ao plano do dia.{avisado}{aviso_nf}')
 
 
 def _marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None):
@@ -1127,9 +1145,15 @@ def _reembolsar_pedido(pedido):
     try:
         from app.services import email as email_svc
         if email_svc.disponivel():
+            # Valor desta operação: depois de um estorno PARCIAL (redução de
+            # item) o total do pedido já foi recalculado e é o que volta
+            # agora — o pago.valor original faria o cliente somar em dobro.
+            valor = pago.valor if pago else pedido.valor_total
+            if (pago and pedido.valor_total is not None
+                    and pedido.valor_total < pago.valor):
+                valor = pedido.valor_total
             email_svc.enviar_reembolso_confirmado(
-                pedido,
-                valor=(pago.valor if pago else pedido.valor_total),
+                pedido, valor=valor,
                 metodo=(pago.metodo if pago else None))
     except Exception:  # noqa: BLE001
         logger.exception('reembolso %s: email de estorno falhou',

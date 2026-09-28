@@ -229,12 +229,15 @@ def enviar_pedido_entregue(pedido):
     return enviar(destinatario, assunto, html, texto=texto)
 
 
-def enviar_reembolso_confirmado(pedido, valor=None, metodo=None):
+def enviar_reembolso_confirmado(pedido, valor=None, metodo=None, detalhe=None):
     """Comprovante de ESTORNO pro cliente (dono 12/08/2026, caso 131B16EA:
     "quando for estornado o cliente recebesse o e-mail com o comprovante").
-    Disparado pelo reembolso ADMIN (`loja_pagamento.reembolsar_pedido`) —
-    não pelo webhook, pra estorno iniciado no painel do gateway não gerar
-    e-mail duplicado. Best-effort — falha silente."""
+    Disparado pelo reembolso ADMIN (`loja_pagamento.reembolsar_pedido`) e
+    pela redução de item de pedido pago (estorno PARCIAL, com `detalhe`
+    dizendo o que mudou — auditoria 27/09/2026) — não pelo webhook, pra
+    estorno iniciado no painel do gateway não gerar e-mail duplicado.
+    Best-effort — falha silente."""
+    from html import escape
     destinatario = (pedido.email_cliente or '').strip()
     if not destinatario:
         return {'ok': False, 'erro': 'pedido sem email'}
@@ -254,6 +257,8 @@ def enviar_reembolso_confirmado(pedido, valor=None, metodo=None):
     else:
         prazo = 'O valor volta pela mesma forma de pagamento da compra.'
         met_label = 'mesma forma de pagamento'
+    detalhe_html = (f'<p style="margin:10px 0 0;font-size:14px;">'
+                    f'{escape(detalhe)}</p>' if detalhe else '')
     html = f"""\
 <!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
 font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
@@ -266,14 +271,16 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
     <p style="margin:0;font-size:26px;font-weight:700;color:#8b5a2b;">{v}</p>
     <p style="margin:8px 0 0;font-size:14px;color:#6b5f54;">
       Forma: {met_label}<br>{prazo}</p>
+    {detalhe_html}
   </div>
   <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
     Qualquer dúvida, chame no WhatsApp
     <a href="https://wa.me/5511971097090" style="color:#8b5a2b;">(11) 97109-7090</a>.</p>
 </div></body></html>"""
     texto = (f'Estorno confirmado — pedido {pedido.codigo}.\n\n'
-             f'Valor estornado: {v}\nForma: {met_label}\n{prazo}\n\n'
-             'Dúvidas? WhatsApp (11) 97109-7090.')
+             f'Valor estornado: {v}\nForma: {met_label}\n{prazo}\n'
+             + (f'{detalhe}\n' if detalhe else '') +
+             '\nDúvidas? WhatsApp (11) 97109-7090.')
     return enviar(destinatario, assunto, html, texto=texto)
 
 

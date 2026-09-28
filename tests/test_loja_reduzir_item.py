@@ -451,3 +451,46 @@ def test_cancelar_412_gateway_fora_trava(app):
         assert ok is False
         db.session.refresh(p)
         assert p.status == 'pago'
+
+
+# ── Comprovante do estorno parcial (auditoria 27/09/2026) ──────────────
+
+def test_reducao_manda_comprovante_do_estorno_parcial(app):
+    from app.extensions import db
+    from app.services import loja_pagamento
+    loja = _site_loja(db)
+    prod = _produto(db, preco=50.0)
+    _estoque(db, loja, prod, 10)
+    p = _pedido_pago(db, loja, prod, 2, codigo='PARC0001', preco=50.0)
+    with patch('app.services.pagarme.cancelar_charge',
+               return_value={'ok': True}), \
+            patch('app.services.email.disponivel', return_value=True), \
+            patch('app.services.email.enviar',
+                  return_value={'ok': True}) as enviar:
+        ok, msg = loja_pagamento.reduzir_item_pedido_pago(p, p.itens[0].id, 1)
+    assert ok, msg
+    assert 'Cliente avisado por e-mail' in msg
+    enviar.assert_called_once()
+    _dest, assunto, html = enviar.call_args.args[:3]
+    assert 'Estorno confirmado' in assunto
+    assert 'R$ 50,00' in html and 'Estorno parcial' in html
+
+
+def test_reembolso_total_depois_da_reducao_informa_so_o_restante(app):
+    from app.extensions import db
+    from app.services import loja_pagamento
+    loja = _site_loja(db)
+    prod = _produto(db, preco=50.0)
+    _estoque(db, loja, prod, 10)
+    p = _pedido_pago(db, loja, prod, 2, codigo='PARC0002', preco=50.0)
+    with patch('app.services.pagarme.cancelar_charge',
+               return_value={'ok': True}), \
+            patch('app.services.email.disponivel', return_value=True), \
+            patch('app.services.email.enviar',
+                  return_value={'ok': True}) as enviar:
+        loja_pagamento.reduzir_item_pedido_pago(p, p.itens[0].id, 1)
+        ok, msg = loja_pagamento.reembolsar_pedido(p)
+    assert ok, msg
+    # pago 115 (2x50 + 15 frete); parcial 50; o total devolve 65.
+    html_total = enviar.call_args_list[-1].args[2]
+    assert 'R$ 65,00' in html_total
