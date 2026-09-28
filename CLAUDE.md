@@ -1,5 +1,16 @@
 # Convenções de trabalho (Claude)
 
+## Publicação após testes (autorização do dono, 28/09/2026)
+
+Para alterações do sistema explicitamente solicitadas ou aprovadas pelo dono,
+publicar em produção depois dos testes e da revisão, sem pedir novamente a
+mesma autorização de publicação. Conferir CI, deploy e as telas afetadas antes
+de afirmar que está disponível. Mudanças de schema continuam em duas etapas,
+com confirmação das colunas reais antes de publicar os models.
+Esta autorização não amplia o escopo do pedido nem autoriza emitir documentos,
+enviar/reenviar cobranças reais, mudar destinatários ou alterar permissões por
+conta própria; essas ações continuam exigindo solicitação específica.
+
 ## Fermentação da Ribeiro (decisão do dono, 25/09/2026)
 
 Na lista diária de fermentação (`app/services/fermentacao.py`), Ribeiro do
