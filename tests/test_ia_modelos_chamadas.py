@@ -72,7 +72,7 @@ def api(monkeypatch):
 
 
 _SEM_RACIOCINIO_5_5 = {'thinking': {'type': 'between_tools'},
-                       'output_config': {'effort': 'high'}}
+                       'output_config': {'effort': 'medium'}}
 
 
 # ── Copilot (Slack e WhatsApp do dono) ──────────────────────
@@ -94,7 +94,7 @@ def test_copilot_5_5_pede_notas_de_progresso(app, admin_user, api):
     assert kw['thinking'] == {'type': 'adaptive', 'display': 'updates'}
     assert kw['extra_headers'] == {
         'anthropic-beta': 'thinking-display-updates-2026-08-18'}
-    assert kw['output_config'] == {'effort': 'high'}
+    assert kw['output_config'] == {'effort': 'medium'}
 
 
 def test_copilot_explicacao_vem_da_nota_de_progresso(app, admin_user, api):
@@ -121,7 +121,7 @@ def test_copilot_override_antigo_nao_recebe_parametro_do_5_5(app, admin_user,
     assert kw['model'] == 'claude-opus-4-8'
     assert 'thinking' not in kw
     assert 'extra_headers' not in kw
-    assert 'output_config' not in kw
+    assert kw['output_config'] == {'effort': 'medium'}   # modo medio
 
 
 def test_copilot_recusa_vira_erro_sem_executar(app, admin_user, api):
@@ -225,7 +225,7 @@ def test_ocr_nf_env_antiga_recebe_disabled(app, api, monkeypatch):
     with app.app_context():
         conta_pagar_ia.extrair_documento(b'img', 'image/jpeg')
     assert fake.chamadas[0]['thinking'] == {'type': 'disabled'}
-    assert 'output_config' not in fake.chamadas[0]
+    assert fake.chamadas[0]['output_config'] == {'effort': 'medium'}
 
 
 def test_cadastro_ia_recusa(app, api):
@@ -469,6 +469,50 @@ def test_sonda_de_deploy_mostra_o_modelo_por_funcao(app):
     ia = resp.get_json()['ia']
     assert ia['padrao'] == 'claude-sonnet-5-5'
     assert ia['fora_do_padrao'] == []
+    assert ia['effort'] == 'medium'
+
+
+# Modo medio visivel por funcao (decisao do dono, 28/09/2026).
+
+
+def test_debug_ia_mostra_o_modo_medio_de_cada_funcao(app, owner_user,
+                                                      monkeypatch):
+    def _nao_chame(*a, **k):
+        raise AssertionError('sem ?testar=1 nao chama a API')
+    monkeypatch.setattr('anthropic.Anthropic', _nao_chame)
+    app.config['ZAPI_BOT_MODELO'] = ''
+    client = app.test_client()
+    _login(client, owner_user)
+    d = client.get('/admin/debug-ia').get_json()
+    assert d['effort'] == 'medium'
+    assert set(d['effort_por_funcao']) == set(d['por_funcao'])
+    assert set(d['effort_por_funcao'].values()) == {'medium'}
+
+
+def test_effort_por_funcao_segue_o_modelo_da_env(app, monkeypatch):
+    """Env que troca o modelo: o effort mostrado e o que a chamada daquele
+    modelo leva — Opus 5.5 sem ferramentas fica no low (nao desliga o
+    raciocinio); Haiku nao recebe o parametro."""
+    monkeypatch.setenv('GOOGLE_REVIEWS_IA_MODELO', 'claude-opus-5-5')
+    with app.app_context():
+        app.config['ZAPI_BOT_MODELO'] = 'claude-haiku-4-5'
+        info = ia_modelos.modelos_por_funcao()
+    ef = info['effort_por_funcao']
+    assert ef['avaliacao_google'] == 'low'
+    assert ef['copilot_whatsapp'] is None
+    assert ef['vigia'] == 'medium'
+    assert ef['copilot_slack'] == 'medium'
+
+
+def test_opus_5_5_com_ferramentas_vai_no_medio(app, api):
+    fake = api(_texto('ok', model='claude-opus-5-5'))
+    with app.app_context():
+        ia_modelos.criar(fake(), 'teste_ef', ferramentas=True,
+                         model='claude-opus-5-5', max_tokens=10,
+                         messages=[{'role': 'user', 'content': 'x'}])
+    kw = fake.chamadas[0]
+    assert kw['thinking'] == {'type': 'adaptive', 'display': 'updates'}
+    assert kw['output_config'] == {'effort': 'medium'}
 
 
 # ── Revisão 1: ponto único de chamada e fallback de recusa ───
@@ -496,7 +540,8 @@ def test_criar_refaz_recusa_cyber_no_sonnet_5_com_os_parametros_dele(app,
     assert primeira['thinking'] == {'type': 'between_tools'}
     assert segunda['model'] == 'claude-sonnet-5'
     assert segunda['thinking'] == {'type': 'disabled'}   # nunca between_tools
-    assert 'output_config' not in segunda
+    # o modo medio vale tambem na tentativa refeita
+    assert segunda['output_config'] == {'effort': 'medium'}
     # as DUAS tentativas vao para o custo, cada uma com o seu modelo
     assert modelos == ['claude-sonnet-5', 'claude-sonnet-5-5']
 
@@ -510,6 +555,7 @@ def test_criar_com_ferramentas_no_fallback_nao_pede_display(app, api):
     segunda = fake.chamadas[1]
     assert segunda['model'] == 'claude-sonnet-5'
     assert 'thinking' not in segunda and 'extra_headers' not in segunda
+    assert segunda['output_config'] == {'effort': 'medium'}
 
 
 @pytest.mark.parametrize('categoria', ['general_harms', 'bio',

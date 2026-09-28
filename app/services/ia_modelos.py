@@ -19,8 +19,11 @@ VAI RODAR.
 Regras (guia oficial de migração, skill claude-api):
 - Sonnet 5.5: `between_tools` é o nível mais baixo de raciocínio; só vale com
   effort `high` ou abaixo e sem nenhum outro campo dentro de `thinking`.
-  Effort continua `high` por padrão, mas os níveis foram recalibrados — fica
-  explícito aqui para a escolha não mudar sozinha.
+- Effort (decisão do dono, 28/09/2026: "modo médio"): `medium` explícito em
+  toda família que aceita o parâmetro, com e sem ferramentas — inclusive o
+  Sonnet 5 do fallback de recusa e os modelos que uma env põe no lugar. O
+  padrão da API seria `high`; no 5.5 os níveis foram recalibrados e o guia
+  indica `medium` como ponto de partida para uso de ferramentas.
 - Sonnet 5.5, Opus 5.5 e Fable: o texto que o modelo escreve junto de uma
   chamada de ferramenta (mais de uma ou duas frases) volta como bloco
   `thinking` — vazio no padrão. O copilot usa esse texto como explicação do
@@ -45,10 +48,11 @@ logger = logging.getLogger(__name__)
 
 MODELO_PADRAO = 'claude-sonnet-5-5'
 
-# Nível de effort do Sonnet 5.5. `high` é o padrão da API e o que o sistema já
-# rodava no Sonnet 5 (nenhuma chamada fixava effort). Sem avaliação medida no
-# tráfego real, a escolha segura é não mudar o nível nominal.
-EFFORT_PADRAO = 'high'
+# Nível de effort de toda chamada (decisão do dono, 28/09/2026: "modo médio").
+# Vale para toda família com `aceita_effort` — o 5.5, o Sonnet 5 do fallback
+# de recusa e os modelos de env. Precisa ficar em `high` ou abaixo: acima
+# disso o `between_tools` das rotas sem ferramentas do 5.5 dá 400.
+EFFORT_PADRAO = 'medium'
 
 BETA_PROGRESSO = 'thinking-display-updates-2026-08-18'
 
@@ -58,30 +62,34 @@ BETA_PROGRESSO = 'thinking-display-updates-2026-08-18'
 #             None = omitir (o modelo já roda sem raciocínio).
 #   progresso: o modelo devolve o texto entre ferramentas em blocos thinking
 #              e aceita `display: "updates"`.
-#   effort: `output_config.effort` explícito nas rotas deste modelo.
+#   aceita_effort: o modelo aceita `output_config.effort`; recebe
+#                  EFFORT_PADRAO (o `low` de quem não desliga o raciocínio,
+#                  nas rotas sem ferramentas, vem antes).
 _FAMILIAS = {
     'claude-sonnet-5-5': {'desligar': {'type': 'between_tools'},
-                          'progresso': True, 'effort': EFFORT_PADRAO},
+                          'progresso': True, 'aceita_effort': True},
     'claude-sonnet-5': {'desligar': {'type': 'disabled'},
-                        'progresso': False, 'effort': None},
+                        'progresso': False, 'aceita_effort': True},
     'claude-opus-5-5': {'desligar': 'nao_desliga',
-                        'progresso': True, 'effort': None},
+                        'progresso': True, 'aceita_effort': True},
     'claude-opus-5': {'desligar': {'type': 'disabled'},
-                      'progresso': False, 'effort': None},
+                      'progresso': False, 'aceita_effort': True},
     'claude-fable-5': {'desligar': 'nao_desliga',
-                       'progresso': True, 'effort': None},
+                       'progresso': True, 'aceita_effort': True},
     'claude-opus-4-8': {'desligar': {'type': 'disabled'},
-                        'progresso': False, 'effort': None},
+                        'progresso': False, 'aceita_effort': True},
     'claude-opus-4-7': {'desligar': {'type': 'disabled'},
-                        'progresso': False, 'effort': None},
+                        'progresso': False, 'aceita_effort': True},
     'claude-opus-4-6': {'desligar': {'type': 'disabled'},
-                        'progresso': False, 'effort': None},
+                        'progresso': False, 'aceita_effort': True},
     'claude-sonnet-4-6': {'desligar': {'type': 'disabled'},
-                          'progresso': False, 'effort': None},
+                          'progresso': False, 'aceita_effort': True},
+    # Sonnet 4.5 e Haiku 4.5: effort não é garantido — omitir é o lado
+    # seguro (qualquer modelo aceita a chamada sem o parâmetro).
     'claude-sonnet-4-5': {'desligar': None, 'progresso': False,
-                          'effort': None},
+                          'aceita_effort': False},
     'claude-haiku-4-5': {'desligar': None, 'progresso': False,
-                         'effort': None},
+                         'aceita_effort': False},
 }
 
 
@@ -157,9 +165,9 @@ def opcoes_sem_raciocinio(modelo):
     opcoes = {}
     if fam['desligar']:
         opcoes['thinking'] = dict(fam['desligar'])
-    if fam['effort']:
+    if fam['aceita_effort']:
         # between_tools só é aceito com effort high ou abaixo.
-        opcoes['output_config'] = {'effort': fam['effort']}
+        opcoes['output_config'] = {'effort': EFFORT_PADRAO}
     return opcoes
 
 
@@ -175,8 +183,8 @@ def opcoes_com_ferramentas(modelo):
     if fam['progresso']:
         opcoes['thinking'] = {'type': 'adaptive', 'display': 'updates'}
         opcoes['extra_headers'] = {'anthropic-beta': BETA_PROGRESSO}
-    if fam['effort']:
-        opcoes['output_config'] = {'effort': fam['effort']}
+    if fam['aceita_effort']:
+        opcoes['output_config'] = {'effort': EFFORT_PADRAO}
     return opcoes
 
 
@@ -366,10 +374,27 @@ def criar(client, funcao, *, model, ferramentas=False, canal=None,
 # ── Visibilidade e verificação ─────────────────────────────────────────
 
 
+# Funções cujas chamadas levam ferramentas (`criar(..., ferramentas=True)`):
+# o bot de atendimento e o copilot. Só servem para a visão por função mostrar
+# o effort da rota certa; um teste por AST trava que nenhum outro arquivo
+# passe a chamar com ferramentas sem entrar aqui.
+FUNCOES_COM_FERRAMENTAS = frozenset({'bot_atendimento', 'copilot_slack',
+                                     'copilot_whatsapp'})
+
+
+def effort_da_chamada(modelo, ferramentas):
+    """O `output_config.effort` que a chamada do `modelo` leva nesta rota, ou
+    None quando o parâmetro é omitido (vale o padrão do modelo). Sai das
+    MESMAS opções que `criar` envia — a visão nunca diverge da chamada."""
+    return (_opcoes(modelo, ferramentas).get('output_config') or {}).get(
+        'effort')
+
+
 def modelos_por_funcao():
     """Modelo EFETIVO de cada função no processo que está rodando (envs do
-    Railway incluídas). Read-only e sem chamada à API: é o que diz, de fora,
-    se alguma função ficou fora do padrão por uma env antiga."""
+    Railway incluídas) e o effort que cada uma envia. Read-only e sem chamada
+    à API: é o que diz, de fora, se alguma função ficou fora do padrão por
+    uma env antiga."""
     from flask import current_app, has_app_context
 
     from app.services import (
@@ -406,6 +431,13 @@ def modelos_por_funcao():
         'por_funcao': modelos,
         'fora_do_padrao': sorted(f for f, m in modelos.items()
                                  if m != MODELO_PADRAO),
+        'effort': EFFORT_PADRAO,
+        # None = o modelo daquela função não recebe o parâmetro (Sonnet 4.5,
+        # Haiku, desconhecido); 'low' = rota sem ferramentas de um modelo que
+        # não desliga o raciocínio (Opus 5.5, Fable).
+        'effort_por_funcao': {
+            f: effort_da_chamada(m, f in FUNCOES_COM_FERRAMENTAS)
+            for f, m in modelos.items()},
         # Funções migradas que hoje não chamam a API em produção (decisão de
         # 24/09/2026, atendimento restrito): o modelo vale se forem religadas.
         'desligadas_nos_canais': {
