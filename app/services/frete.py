@@ -10,9 +10,13 @@ O valor daqui é ESTIMATIVA pro atendimento (bot/equipe) — o valor que
 vale é o do checkout do site. Se o dono redesenhar o mapa, atualizar as
 constantes abaixo (e o teste de faixas).
 
-Geocodificação (sem chave de API):
-  1. CEP -> BrasilAPI v2 (devolve lat/lng pra maioria dos CEPs urbanos);
-  2. fallback/endereço livre -> Nominatim (OpenStreetMap).
+Geocodificação (ordem completa em `_geocodificar_impl`):
+  1. Google (preciso, com teto diário POR CANAL e cache — o preview anônimo
+     tem sub-teto próprio);
+  2. BrasilAPI v2 pelo CEP — só os metadados oficiais (logradouro, bairro,
+     cidade) pra re-tentar o Google e validar o Nominatim; a coordenada do
+     CEP é só o ÚLTIMO recurso, marcada imprecisa;
+  3. Nominatim (OpenStreetMap) com guards de homônimo.
 """
 import logging
 import re
@@ -154,7 +158,17 @@ def _geocodificar_texto(texto, ref=None, cep_ref=None, postcode_estrito=False):
                          headers=_UA, timeout=_TIMEOUT)
         if r.status_code != 200:
             return None
-        for h in r.json():
+        candidatos = r.json()
+        if not isinstance(candidatos, list):
+            # Resposta de erro em JSON (objeto) no lugar da lista: iterar as
+            # chaves estourava AttributeError fora do except — o checkout
+            # virava 500 em vez de seguir pra próxima tentativa da cadeia.
+            logger.warning('Nominatim devolveu resposta inesperada pra %r',
+                           texto[:80])
+            return None
+        for h in candidatos:
+            if not isinstance(h, dict):
+                continue
             addr = h.get('address') or {}
             nome = (h.get('display_name') or '')[:120]
             cand_cidade = _norm_cidade(
