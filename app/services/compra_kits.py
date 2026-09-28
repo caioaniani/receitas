@@ -228,6 +228,36 @@ def validar_agenda(agenda):
     return sorted(out, key=lambda item: item['data']), []
 
 
+def _composicao_da_compra(kit, form, base):
+    """(raw, itens, erros) da escolha do cliente: suco, opções e adicionais.
+
+    Só leitura. Chamada sem trava (antes de cotar o frete) e de novo sob a
+    trava do kit, onde o resultado é o que vale."""
+    from app.services import kits_adicionais, kits_cafe, loja_checkout
+
+    suco_id, escolhas, erros = _ler_escolhas(kit, form)
+    if erros:
+        return None, None, erros
+    try:
+        # Captura o produto escolhido antes de qualquer cotação externa.
+        raw = kits_cafe.itens_do_kit(kit, suco_id, escolhas)
+    except ValueError as exc:
+        return None, None, [str(exc)]
+    itens, erros = kits_cafe.montar(kit, suco_id, escolhas)
+    if erros or not itens:
+        return None, None, erros or ['Este kit está indisponível.']
+    adicionais, erros = kits_adicionais.ler(form)
+    if erros:
+        return None, None, erros
+    raw.extend(adicionais)
+    if adicionais:
+        itens, erros = loja_checkout.montar_itens(
+            raw, dias_disponibilidade=DIAS_AGENDA_KITS, base=base)
+        if erros or len(itens) != len(raw):
+            return None, None, erros or ['Revise os produtos adicionais do kit.']
+    return raw, itens, []
+
+
 def criar_compra(kit, form, agenda, *, checkout_token, base=None):
     """Reutiliza as validações do checkout para cada data sem commits parciais.
 
@@ -239,7 +269,7 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
     ela ainda aguarda pagamento no prazo (duplo clique). Caso contrário
     levanta `FormularioJaUsado`, sem cotar frete nem gravar nada.
     """
-    from app.services import kits_adicionais, kits_cafe, loja_checkout, loja_plano_dia
+    from app.services import loja_checkout, loja_plano_dia
 
     if not re.fullmatch(r'[0-9a-f]{64}', str(checkout_token or '')):
         return None, ['Reabra o kit para iniciar uma nova compra.']
@@ -247,6 +277,34 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
     if erros:
         return None, erros
     base = base or agora()
+    # O frete (rede: Google/BrasilAPI/Nominatim, segundos) é cotado ANTES de
+    # travar o kit — cotado sob o FOR UPDATE, prendia as outras compras e a
+    # edição do dono durante toda a rede (revisão 28/09/2026). Só cota quando
+    # a composição já passa numa conferência SEM trava (escolha inválida não
+    # gasta cotação); sob a trava tudo é conferido de novo, e é essa conferência
+    # que vale. Reenvio do mesmo formulário não cota (a compra existente é
+    # decidida sob a trava).
+    frete_validado = None
+    snapshot_previo = None
+    if not CompraKit.query.filter_by(checkout_token=checkout_token).first():
+        # Relê o kit do banco: relações carregadas antes (outra aba, edição
+        # do dono) não podem aprovar uma cotação que a trava depois recusa.
+        db.session.refresh(kit)
+        db.session.expire(kit, ['itens', 'sucos', 'opcoes'])
+        if not kit.ativo:
+            return None, ['Este kit não está disponível para compra.']
+        _, itens_previos, erros = _composicao_da_compra(kit, form, base)
+        if erros:
+            return None, erros
+        snapshot_previo = _snapshot_composicao(itens_previos)
+        geo, cep_invalido = loja_checkout.texto_de_geocode(form)
+        if not cep_invalido:
+            contato = ' · '.join(p for p in (
+                (form.get('nome') or '').strip(),
+                (form.get('telefone') or '').strip(),
+                (form.get('email') or '').strip()) if p)
+            frete_validado = loja_checkout._frete_para(
+                'agendada', geo, base=base, contato=contato)
     try:
         db.session.refresh(kit, with_for_update=True)
         # A relação pode ter sido carregada antes de aguardar o lock do owner.
@@ -263,29 +321,17 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
             raise FormularioJaUsado(codigo)
         if not kit.ativo:
             return None, ['Este kit não está disponível para compra.']
-        suco_id, escolhas, erros = _ler_escolhas(kit, form)
+        raw, itens, erros = _composicao_da_compra(kit, form, base)
         if erros:
             return None, erros
-        try:
-            # Captura o produto escolhido antes de qualquer cotação externa.
-            raw = kits_cafe.itens_do_kit(kit, suco_id, escolhas)
-        except ValueError as exc:
-            return None, [str(exc)]
-        itens, erros = kits_cafe.montar(kit, suco_id, escolhas)
-        if erros or not itens:
-            return None, erros or ['Este kit está indisponível.']
-        adicionais, erros = kits_adicionais.ler(form)
-        if erros:
-            return None, erros
-        raw.extend(adicionais)
-        if adicionais:
-            itens, erros = loja_checkout.montar_itens(
-                raw, dias_disponibilidade=DIAS_AGENDA_KITS, base=base)
-            if erros or len(itens) != len(raw):
-                return None, erros or ['Revise os produtos adicionais do kit.']
         snapshot = _snapshot_composicao(itens)
+        if snapshot_previo is not None and snapshot != snapshot_previo:
+            # Preço/composição mudou enquanto o frete era cotado: o cliente
+            # reabre o kit e vê o total novo antes de pagar.
+            db.session.rollback()
+            return None, ['O preço ou a composição do kit mudou durante a compra. '
+                          'Reabra o kit para conferir os itens e o total atualizados.']
         pedidos = []
-        frete_validado = None
         for agendamento in agenda:
             dados = dict(form)
             dados.update(modo_entrega='agendada', data_entrega=agendamento['data'],
