@@ -234,7 +234,7 @@
 {% block scripts %}
 {% if ga_purchase %}
 {# GA4 + Meta Pixel: evento purchase — fecha o funil. 1x por pedido (guarda no
-   sessionStorage pra não duplicar num refresh).
+   localStorage pra não duplicar num refresh nem numa nova visita).
    PRECISA estar no block scripts: o block content renderiza ANTES do
    carrinho.js (que define window.lojaGA) no _base.html — no content, a guarda
    `!window.lojaGA` engolia o evento em silêncio e o GA4 mostrava purchase=0
@@ -247,14 +247,19 @@
       var p = el ? JSON.parse(el.textContent || 'null') : null;
       if (!p || !p.transaction_id || !window.lojaGA) return;
       var k = 'ga_purchase_' + p.transaction_id;
-      if (sessionStorage.getItem(k)) return;
+      // localStorage (sobrevive a nova aba/visita), com sessionStorage de
+      // reserva quando o navegador bloqueia o primeiro.
+      var st;
+      try { st = window.localStorage; st.getItem(k); }
+      catch (e2) { st = window.sessionStorage; }
+      if (st.getItem(k)) return;
       window.lojaGA('purchase', p);
       if (typeof window.fbq === 'function') {
         window.fbq('track', 'Purchase',
                    { value: p.value, currency: p.currency },
                    { eventID: p.transaction_id });
       }
-      sessionStorage.setItem(k, '1');
+      st.setItem(k, '1');
     } catch (e) { /* analytics best-effort */ }
   })();
 </script>

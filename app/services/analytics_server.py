@@ -53,6 +53,17 @@ def ga_client_id_do_cookie(cookie_ga):
     return None
 
 
+def _epoch_brt(momento):
+    """Epoch (s) de um datetime do banco. As colunas guardam horário de
+    Brasília SEM fuso (`app.utils.agora`); `.timestamp()` direto num naive
+    usa o fuso do servidor (UTC no Railway) e jogava o Purchase da Meta 3h
+    no passado (auditoria 27/09/2026)."""
+    from app.utils import BRT
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=BRT)
+    return int(momento.timestamp())
+
+
 def _sha256(s):
     return hashlib.sha256(s.encode()).hexdigest()
 
@@ -98,7 +109,7 @@ def _payload_meta(pedido):
     return {
         'data': [{
             'event_name': 'Purchase',
-            'event_time': int(pedido.pago_em.timestamp()),
+            'event_time': _epoch_brt(pedido.pago_em),
             'event_id': pedido.codigo,
             'action_source': 'website',
             'user_data': user_data,

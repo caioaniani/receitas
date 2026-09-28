@@ -1298,8 +1298,19 @@ def pedido_confirmado(codigo):
     # checkout → COMPRA). Só conta como venda quando o pagamento aconteceu —
     # Pix pendente/cancelado NÃO dispara (no Pix, a página recarrega ao
     # confirmar e aí o evento sobe). Disparado no template, 1x por pedido.
+    # Divulgação (cortesia) NUNCA é venda — a FLAG, não o status, porque ela
+    # avança para a_caminho/entregue. E só nas primeiras 24h após o
+    # pagamento: o link é reaberto dias depois (e-mail, bot, quem recebe o
+    # presente) e cada navegador novo contava a compra de novo (auditoria
+    # 27/09/2026). O servidor já reporta o purchase no pagamento.
     ga_purchase = None
-    if pedido.status not in ('aguardando_pagamento', 'cancelado'):
+    from datetime import timedelta
+
+    from app.utils import agora
+    recente = (pedido.pago_em is None
+               or agora() - pedido.pago_em <= timedelta(hours=24))
+    if (pedido.status not in ('aguardando_pagamento', 'cancelado')
+            and not pedido.divulgacao and recente):
         ga_purchase = {
             'transaction_id': pedido.codigo,
             'value': float(pedido.valor_total or 0),

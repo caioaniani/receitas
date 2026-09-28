@@ -2,6 +2,7 @@
 (27-28/09/2026). Núcleo (checkout, pagamento, e-mails, admin); frete, CNPJ e
 kits têm os próprios arquivos."""
 import logging
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -91,3 +92,38 @@ def test_log_de_http_de_erro_mostra_so_os_campos(app, caplog):
     assert res['ok'] is False
     assert 'customer.document' in caplog.text
     assert '52998224725' not in caplog.text
+
+
+# ── 40. Analytics: purchase só de venda, 1x, com horário certo ──────────
+
+def test_divulgacao_nao_dispara_purchase_em_nenhum_status(app, monkeypatch):
+    from app.extensions import db
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    ped = _pedido(db, _produto(db), status='divulgacao', divulgacao=True)
+    for status in ('divulgacao', 'entregue'):
+        ped.status = status
+        db.session.commit()
+        h = app.test_client().get(f'/loja/pedido/{ped.codigo}').get_data(as_text=True)
+        assert 'id="ga-purchase"' not in h, status
+
+
+def test_purchase_so_nas_primeiras_24h_do_pagamento(app, monkeypatch):
+    from app.extensions import db
+    from app.utils import agora
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    ped = _pedido(db, _produto(db), status='pago', pago_em=agora())
+    h = app.test_client().get(f'/loja/pedido/{ped.codigo}').get_data(as_text=True)
+    assert 'id="ga-purchase"' in h and 'localStorage' in h
+    ped.pago_em = agora() - timedelta(days=2)
+    db.session.commit()
+    h = app.test_client().get(f'/loja/pedido/{ped.codigo}').get_data(as_text=True)
+    assert 'id="ga-purchase"' not in h
+
+
+def test_event_time_da_meta_usa_o_fuso_de_brasilia():
+    from datetime import datetime, timezone
+
+    from app.services.analytics_server import _epoch_brt
+    # 10:00 em Brasília = 13:00 UTC.
+    esperado = int(datetime(2026, 9, 28, 13, 0, tzinfo=timezone.utc).timestamp())
+    assert _epoch_brt(datetime(2026, 9, 28, 10, 0)) == esperado
