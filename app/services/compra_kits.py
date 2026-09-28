@@ -77,11 +77,42 @@ class FormularioJaUsado(Exception):
     com os dados enviados e esta mensagem.
     """
 
-    def __init__(self, codigo):
+    MENSAGENS = {
+        # Paga: a rota leva à página do pedido — nunca convida a comprar de
+        # novo (cliente voltando pelo histórico criava outra cobrança,
+        # revisão 28/09/2026).
+        'paga': ('A compra {codigo} deste formulário já foi paga. Acompanhe '
+                 'as entregas nesta página; para comprar outro kit, abra o '
+                 'kit de novo.'),
+        'cancelada': ('A compra {codigo} deste formulário foi cancelada. Para '
+                      'fazer uma nova compra, confira os dados e envie de novo.'),
+        # Prazo vencido não prova que não houve pagamento (webhook atrasado):
+        # o texto não afirma que "nada foi cobrado".
+        'expirada': ('O prazo de pagamento da compra {codigo} deste formulário '
+                     'terminou. Se você já pagou, não envie de novo: a '
+                     'confirmação chega por e-mail. Para fazer uma nova compra, '
+                     'confira os dados e envie de novo.'),
+        'pendente': ('Este formulário já gerou a compra {codigo}. Confira os '
+                     'dados e envie de novo para criar uma nova compra.'),
+    }
+
+    def __init__(self, codigo, situacao='pendente'):
         self.codigo = codigo
-        super().__init__(
-            f'Este formulário já gerou a compra {codigo}. Confira os dados e '
-            'envie de novo para criar uma nova compra.')
+        self.situacao = situacao if situacao in self.MENSAGENS else 'pendente'
+        super().__init__(self.MENSAGENS[self.situacao].format(codigo=codigo))
+
+
+def _situacao_da_compra(compra, base):
+    """'paga' | 'cancelada' | 'expirada' | 'pendente' — para a mensagem do
+    formulário reenviado com o nonce de uma compra que não será devolvida."""
+    pedidos = [entrega.pedido for entrega in compra.entregas]
+    if compra.pago_em is not None or any(p.pago_em for p in pedidos):
+        return 'paga'
+    if any(p.status == 'cancelado' for p in pedidos):
+        return 'cancelada'
+    if compra.expira_em <= base:
+        return 'expirada'
+    return 'pendente'
 
 
 def _valores_do_campo(form, campo):
@@ -316,9 +347,10 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
             if _pode_devolver_existente(existente, kit, form, agenda, base):
                 return existente, []
             codigo = existente.pedido_principal.codigo
+            situacao = _situacao_da_compra(existente, base)
             # Solta a trava do kit antes de a rota reapresentar o formulário.
             db.session.rollback()
-            raise FormularioJaUsado(codigo)
+            raise FormularioJaUsado(codigo, situacao)
         if not kit.ativo:
             return None, ['Este kit não está disponível para compra.']
         raw, itens, erros = _composicao_da_compra(kit, form, base)

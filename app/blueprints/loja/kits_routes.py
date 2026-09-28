@@ -4,7 +4,7 @@ import re
 import secrets
 from itertools import product
 
-from flask import abort, redirect, render_template, request, session, url_for
+from flask import abort, flash, redirect, render_template, request, session, url_for
 from sqlalchemy.orm import selectinload
 
 from app.blueprints.loja import loja_bp
@@ -217,9 +217,16 @@ def kit_comprar(kit_id):
         compra, erros = compra_kits.criar_compra(
             kit, request.form, agenda, checkout_token=token)
     except compra_kits.FormularioJaUsado as exc:
-        # Formulário alterado (histórico/duas abas) ou compra já encerrada:
-        # nonce novo e os dados enviados de volta, para o cliente conferir e
-        # enviar de novo conscientemente — nunca a compra antiga em silêncio.
+        if exc.situacao == 'paga':
+            # Compra já paga (cliente voltou pelo histórico): a página do
+            # pedido, sem nonce novo nem convite a comprar de novo — um novo
+            # envio aqui criava outra cobrança (revisão 28/09/2026).
+            flash(str(exc), 'info')
+            return redirect(url_for('loja.pedido_confirmado', codigo=exc.codigo))
+        # Formulário alterado (histórico/duas abas) ou compra cancelada/
+        # expirada: nonce novo e os dados enviados de volta, para o cliente
+        # conferir e enviar de novo conscientemente — nunca a compra antiga
+        # em silêncio.
         _renovar_token(kit)
         return _render_compra(kit, request.form, validos, [str(exc)]), 409
     if erros:

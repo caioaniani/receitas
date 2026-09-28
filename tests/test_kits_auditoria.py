@@ -169,6 +169,37 @@ def test_duplo_clique_com_mesmo_conteudo_devolve_a_mesma_compra(kit_escolhas, fr
     frete.assert_called_once()
 
 
+def _form_pj(cenario, **mudancas):
+    dados = _form_escolhas(
+        cenario, cpf='12.ABC.345/01DE-35', fiscal_checkout='1', fiscal_confirmado='1',
+        fiscal_situacao_ie='nao_contribuinte', fiscal_nome='Empresa Teste Ltda',
+        fiscal_endereco='Rua Fiscal', fiscal_numero='100', fiscal_complemento='',
+        fiscal_bairro='Centro', fiscal_cidade='São Paulo', fiscal_uf='SP',
+        fiscal_cep='01001000', fiscal_ie='')
+    dados.update(mudancas)
+    return dados
+
+
+@pytest.mark.parametrize('mudanca', [
+    {'fiscal_nome': 'Empresa Teste Eireli'},
+    {'fiscal_numero': '200'},
+    {'fiscal_situacao_ie': 'isento'},
+    # Só uma letra do CNPJ alfanumérico: `digitos` via os dois iguais.
+    {'cpf': '12.ABC.345/01DF-16'},
+], ids=['razao-social', 'endereco-fiscal', 'situacao-ie', 'letra-do-cnpj'])
+def test_reenvio_pj_com_dado_fiscal_alterado_nao_devolve_a_compra(
+        kit_escolhas, frete, checkout, mudanca):
+    """Revisão 28/09/2026: a correção fiscal era descartada em silêncio e a
+    NF saía com os dados antigos."""
+    compra, erros = _criar(kit_escolhas, _form_pj(kit_escolhas))
+    assert not erros and compra is not None
+    mesma, erros = _criar(kit_escolhas, _form_pj(kit_escolhas))
+    assert not erros and mesma.id == compra.id          # duplo clique legítimo
+    with pytest.raises(compra_kits.FormularioJaUsado):
+        _criar(kit_escolhas, _form_pj(kit_escolhas, **mudanca))
+    assert CompraKit.query.count() == 1
+
+
 def test_frete_e_cotado_antes_da_trava_do_kit(kit_escolhas, frete, checkout, monkeypatch):
     """Revisão 28/09/2026: a cotação (rede, segundos) não pode rodar com o kit
     travado — prendia as outras compras e a edição do dono."""
@@ -214,8 +245,40 @@ def test_mesmo_conteudo_com_compra_encerrada_exige_novo_envio(
     else:
         assert compra_kits.cancelar_pendentes(compra.pedido_principal)[0]
     db.session.commit()
-    with pytest.raises(compra_kits.FormularioJaUsado):
+    with pytest.raises(compra_kits.FormularioJaUsado) as exc:
         _criar(kit_escolhas)
+    assert exc.value.situacao == situacao
+    codigo = compra.pedido_principal.codigo
+    esperado = {
+        'expirada': f'O prazo de pagamento da compra {codigo} deste formulário terminou. '
+                    'Se você já pagou, não envie de novo',
+        'paga': f'A compra {codigo} deste formulário já foi paga.',
+        'cancelada': f'A compra {codigo} deste formulário foi cancelada.'}[situacao]
+    assert str(exc.value).startswith(esperado)
+    assert CompraKit.query.count() == 1
+
+
+@pytest.mark.loja_host
+def test_compra_paga_reenviada_pelo_historico_leva_ao_pedido_sem_nonce_novo(
+        app, kit, frete, checkout):
+    """Revisão 28/09/2026: a tela convidava a reenviar e o reenvio criava
+    outra compra com outra cobrança."""
+    cliente, token, _ = _abrir(app, kit)
+    assert _post(cliente, kit, token).status_code == 302
+    compra = CompraKit.query.one()
+    compra.pago_em = BASE
+    for entrega in compra.entregas:
+        entrega.pedido.status, entrega.pedido.pago_em = 'pago', BASE
+    db.session.commit()
+    resposta = _post(cliente, kit, token)
+    assert resposta.status_code == 302
+    assert resposta.location.endswith(f'/loja/pedido/{compra.pedido_principal.codigo}')
+    with cliente.session_transaction() as sessao:
+        assert sessao['kits_checkout_tokens'][str(kit.id)] == token
+        avisos = [m for _, m in sessao.get('_flashes', [])]
+    assert any('já foi paga' in m for m in avisos)
+    # Reenviar de novo continua levando ao pedido: nenhuma compra nova.
+    assert _post(cliente, kit, token).status_code == 302
     assert CompraKit.query.count() == 1
 
 
