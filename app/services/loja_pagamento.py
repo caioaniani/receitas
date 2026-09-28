@@ -250,6 +250,16 @@ def _reservar_no_plano_do_dia(pedido):
         _alertar_acima_do_plano(pedido, it.nome, qtd)
 
 
+def _alertar_acima_do_plano(pedido, nome_item, qtd):
+    from app.services import loja_alerta
+    data_fmt = pedido.data_entrega.strftime('%d/%m/%Y')
+    loja_alerta.alertar_pedido_pago(
+        f'⚠️ Pedido do site {pedido.codigo} PAGO acima do limite do Plano do '
+        f'dia: {qtd}x {nome_item} para {data_fmt}. A reserva foi feita mesmo '
+        'assim (o cliente já pagou) — confira a produção desse dia.',
+        f'acima_plano|{pedido.codigo}|{nome_item}')
+
+
 def _devolver_ao_plano_do_dia(pedido, *, commit=True):
     """Espelho do `_reservar_no_plano_do_dia`: cancelamento/reembolso devolve
     a reserva pra o saldo daquele dia. Idempotente: pode rodar varias vezes
