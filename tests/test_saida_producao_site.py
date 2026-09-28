@@ -302,7 +302,11 @@ def test_nova_confirmacao_de_rota_processa_nova_atribuicao(app):
     assert RotaInicio.query.count() == 1
 
 
-def test_falha_no_inicio_automatico_nao_vaza_baixa_para_commit_seguinte(app):
+def test_falha_de_uma_parada_no_inicio_automatico_nao_vaza_nem_derruba_as_outras(app):
+    # Contrato de 28/09/2026 (auditoria do checkout, kits): uma parada
+    # bloqueada não derruba o início da rota das demais. Antes a rota inteira
+    # falhava; agora cada parada tem SAVEPOINT próprio e a que falha não deixa
+    # nenhuma baixa pendente para o commit seguinte.
     from app.blueprints.driver.routes import _auto_iniciar_rota
     p, loja, menu, _ = _cenario()
     d = _driver(p)
@@ -314,13 +318,14 @@ def test_falha_no_inicio_automatico_nao_vaza_baixa_para_commit_seguinte(app):
                                     data_entrega=hoje(), ordem=2))
     db.session.commit()
     atrib = AtribuicaoEntrega.query.filter_by(pedido_code=p.codigo).one()
-    _auto_iniciar_rota(d, atrib)
-    # Outra operação logo depois não pode efetivar parte de uma rota que falhou.
+    with patch('app.services.rastreio_entrega._enviar_emails_saida', return_value=0):
+        _auto_iniciar_rota(d, atrib)
+    # Outra operação logo depois não pode efetivar parte da parada que falhou.
     AppConfig.set('operacao_seguinte', 'ok')
     db.session.commit()
-    assert _saldos() == [50, 50, 50]
-    assert SaidaProducaoSite.query.count() == 0
-    assert RotaInicio.query.count() == 0
+    assert _saldos() == [40, 47, 48]   # só a parada válida saiu da indústria
+    assert [s.pedido_id for s in SaidaProducaoSite.query.all()] == [p.id]
+    assert RotaInicio.query.count() == 1
 
 
 def test_cesta_fixa_baixa_receita_e_materia_prima(app):
