@@ -72,7 +72,7 @@
   <strong>Reembolso desta entrega: {{ reembolso_kit.status }}.</strong>
   Valor: R$ {{ '%.2f'|format(reembolso_kit.valor)|replace('.', ',') }}. Cobrança: <code>{{ reembolso_kit.pagarme_charge_id }}</code>.
   {% if reembolso_kit.erro %}<p class="mb-0">{{ reembolso_kit.erro }}</p>{% endif %}
-  {% if reembolso_kit.status == 'solicitado' %}<p class="mb-0">A resposta do Pagar.me foi incerta. Use <strong>Reembolsar e cancelar esta entrega</strong> de novo para o sistema consultar a cobrança, sem enviar outro estorno: com a devolução confirmada, a entrega é cancelada; com recusa do gateway, uma nova solicitação fica liberada. Enquanto não houver confirmação, a coleta desta entrega e um novo estorno continuam bloqueados.</p>{% endif %}
+  {% if reembolso_kit.status == 'solicitado' %}<p class="mb-0">A resposta do Pagar.me foi incerta. Use <strong>Reembolsar e cancelar esta entrega</strong> de novo para o sistema consultar a cobrança, sem enviar outro estorno: com a devolução confirmada, a entrega é cancelada; com recusa do gateway, uma nova solicitação fica liberada. Enquanto não houver confirmação, o sistema bloqueia nova solicitação e coleta desta entrega para evitar duplicidade.</p>{% endif %}
   {% if reembolso_kit.status == 'recusado' %}<p class="mb-0">O Pagar.me não devolveu este valor. A entrega continua ativa; solicite o estorno de novo, se ainda for o caso.</p>{% endif %}
 </div>
 {% endif %}
