@@ -407,7 +407,13 @@ def test_pagamento_em_compra_cancelada_de_proposito_avisa_e_mantem_cancelada(com
     gateway.alerta.assert_called_once()
     texto, chave = gateway.alerta.call_args.args
     assert 'CANCELADA e recebeu pagamento' in texto and compra.pedido_principal.codigo in texto
+    assert 'R$ 105,00' in texto
     assert chave == f'kit_cancelado_pago|{compra.id}|{tentativa.id}'
+    # charge.paid da mesma tentativa chega em seguida: o aviso não se repete.
+    loja_pagamento.processar_webhook(
+        {'id': 'evt_charge_cancelada', 'type': 'charge.paid', 'data': {'id': 'ch_mes'}})
+    gateway.alerta.assert_called_once()
+    assert all(p.status == 'cancelado' for p in _pedidos(compra))
     gateway.confirmacao.assert_not_called()
 
 
