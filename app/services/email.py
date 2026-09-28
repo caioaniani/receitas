@@ -313,6 +313,22 @@ def _entrega_linha(pedido):
     return onde, quando
 
 
+def _entrega_linha_html(pedido):
+    """`_entrega_linha` com escape de HTML: o endereço (complemento livre) e
+    o nome da loja vão pro HTML do e-mail. Sem escape, um complemento como
+    '<a href=...>PAGUE AQUI</a>' virava link no e-mail que a padaria manda
+    a QUALQUER endereço digitado no checkout (auditoria 27/09/2026). A
+    versão texto (`_texto_*`) continua com o texto cru."""
+    from html import escape
+    onde, quando = _entrega_linha(pedido)
+    return escape(onde), escape(quando)
+
+
+def _nome_item_html(it):
+    from html import escape
+    return escape(it.nome or '')
+
+
 def _comp_html(it):
     """Composicao escolhida num MENU CONFIGURAVEL (26/07/2026), pra o cliente
     conferir no e-mail o que ele montou. Vazio em item comum."""
@@ -336,11 +352,11 @@ def _comp_texto(it):
 
 def _template_confirmacao(pedido, base):
     itens = ''.join(
-        f'<tr><td style="padding:4px 0;">{it.quantidade}× {it.nome}'
+        f'<tr><td style="padding:4px 0;">{it.quantidade}× {_nome_item_html(it)}'
         f'{" (fatiado)" if it.fatiado else ""}{_comp_html(it)}</td>'
         f'<td style="padding:4px 0;text-align:right;">{_fmt_brl(it.subtotal)}</td></tr>'
         for it in pedido.itens)
-    onde, quando = _entrega_linha(pedido)
+    onde, quando = _entrega_linha_html(pedido)
     link = f'{base}/loja/pedido/{pedido.codigo}' if base else ''
     link_html = (f'<a href="{link}" style="color:#8b5a2b;">Acompanhar pedido</a>'
                  if link else '')
@@ -404,11 +420,11 @@ def _texto_confirmacao(pedido):
 
 def _template_pedido_recebido(pedido, base):
     itens = ''.join(
-        f'<tr><td style="padding:4px 0;">{it.quantidade}× {it.nome}'
+        f'<tr><td style="padding:4px 0;">{it.quantidade}× {_nome_item_html(it)}'
         f'{" (fatiado)" if it.fatiado else ""}{_comp_html(it)}</td>'
         f'<td style="padding:4px 0;text-align:right;">{_fmt_brl(it.subtotal)}</td></tr>'
         for it in pedido.itens)
-    onde, quando = _entrega_linha(pedido)
+    onde, quando = _entrega_linha_html(pedido)
     link = f'{base}/loja/pedido/{pedido.codigo}/pagamento' if base else ''
     link_html = (f'<a href="{link}" style="display:inline-block;background:#8b5a2b;'
                  f'color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;'
@@ -457,7 +473,7 @@ def _texto_pedido_recebido(pedido, base):
 
 
 def _template_a_caminho(pedido, base, rastreio_url=None):
-    onde, quando = _entrega_linha(pedido)
+    onde, quando = _entrega_linha_html(pedido)
     link = f'{base}/loja/conta/pedidos/{pedido.codigo}' if base else ''
     link_html = (f'<a href="{link}" style="color:#8b5a2b;">Ver detalhes</a>'
                  if link else '')
@@ -700,6 +716,7 @@ def enviar_boas_vindas(destinatario, nome, login, senha, *, com_chatwoot=True):
 
 
 def _template_boas_vindas(nome, login, senha, base, chatwoot):
+    from html import escape
     login_url = f'{base}/auth/login' if base else '(link do sistema)'
     chatwoot_bloco = f"""\
 <div style="background:#f5efe5;border-radius:12px;padding:18px 22px;">
@@ -716,7 +733,7 @@ def _template_boas_vindas(nome, login, senha, base, chatwoot):
 font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
 <div style="max-width:540px;margin:0 auto;padding:32px 24px;">
   <h1 style="font-size:22px;font-weight:700;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
-  <p style="color:#6b5f54;margin:0 0 24px;">Bem-vindo(a), {nome}! 👋</p>
+  <p style="color:#6b5f54;margin:0 0 24px;">Bem-vindo(a), {escape(nome or '')}! 👋</p>
 
   <div style="background:#fff;border-radius:12px;padding:20px 22px;
   box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:20px;">
