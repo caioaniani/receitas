@@ -901,45 +901,86 @@ nao usa mapa (FK do `PedidoOnlineItem`).
 
 Flask 3 + SQLAlchemy + Bootstrap 5 + Postgres em prod / SQLite local.
 Padaria Opão: receitas, pedidos, entregas, PDV, estoque, RH, copilot
-(motor unico — Sonnet 5 em todos os canais desde 05/08/2026).
+(motor unico — Sonnet 5.5 em todos os canais desde 28/09/2026).
 
-### Modelos Anthropic em uso (atualizado 05/08/2026)
+### Modelos Anthropic em uso (atualizado 28/09/2026)
 
-**PADRONIZACAO DO DONO (05/08/2026, "pode trocar todos para sonnet 5")**:
-TODAS as funcoes de IA rodam **`claude-sonnet-5`** — bot Chatwoot, WhatsApp
-do dono, copilot Slack, vigia, auditor, follow-up, OCRs (NF/boleto e
-cupom), SEO, cadastro IA, planejamento IA, Google reviews, treino.
-Substituiu a regra de 25/06 ("Sonnet 4.6 exceto bot/WhatsApp/OCRs =
-Opus 4.8"). Motivacao: custo (Sonnet 5 = $3/$15 tabela, promo $2/$10 ate
-31/08/2026; Opus 4.8 = $5/$25) com qualidade de geracao mais nova.
-Testes que travam: `test_uso_ia.py::test_modelos_por_funcao` (+ os pinos
-em test_chatbot_faq_pilar_b/test_copilot/test_conta_pagar_ia/
-test_copilot_fork_canais).
+**PADRONIZACAO DO DONO (28/09/2026, "aplicar o sonnet 5.5 em toda ia e
+bot do sistema")**: TODAS as funcoes de IA rodam **`claude-sonnet-5-5`**
+— bot Chatwoot, WhatsApp do dono, copilot Slack, vigia, auditor,
+follow-up, OCRs (NF/boleto e cupom), SEO, cadastro IA, planejamento IA,
+Google reviews, treino. Substituiu o Sonnet 5 de 05/08/2026 (que
+substituira a regra de 25/06 "Sonnet 4.6 exceto bot/WhatsApp/OCRs = Opus
+4.8"). Preco: $2/$10 por MTok (cache read $0,20), igual ao Sonnet 5.
+O bot de atendimento e o follow-up foram migrados, mas desde 24/09/2026
+(atendimento restrito) so rodam em teste offline.
 
-**Regras da migracao pro Sonnet 5 (nao regredir)**:
-- **Thinking**: o Sonnet 5 liga thinking ADAPTATIVO por padrao (omitir o
-  param = pensa; o teto `max_tokens` cobre thinking + texto juntos).
-  Politica adotada: chamadas COM tools (bot Chatwoot `chatbot.py`, copilot
-  `copilot.py`) ficam com adaptativo (ajuda a usar tools; o bot subiu o
-  teto pra 4000/retry 8000); chamadas SEM tools (vigia, auditor, followup,
-  OCRs, SEO, reviews, treino, cadastro, planejamento) levam
-  `thinking={'type': 'disabled'}` EXPLICITO — sao classificadores/
-  extratores de teto curto onde thinking so comeria teto e custo.
-- **Sampling**: `temperature`/`top_p`/`top_k` nao-default = 400 no
-  Sonnet 5. Nenhum call site usa — NAO introduzir.
-- **Tokenizador novo** (~30% mais tokens pro mesmo texto): tetos justos
-  truncam; ao criar chamada nova, dar folga.
+**FONTE UNICA: `app/services/ia_modelos.py`** — `MODELO_PADRAO` e os
+parametros que DEPENDEM DO MODELO. NUNCA escrever `thinking=`/
+`output_config=` nem id `'claude-...'` numa chamada (ha trava por AST em
+`tests/test_ia_modelos.py`: toda `messages.create` expande
+`**ia_modelos.opcoes_*`, trata recusa e nao tem id literal fora de
+`ia_modelos`/`uso_ia`). Chamada nova = usar os helpers.
+- **Sem ferramentas** (vigia, auditor, follow-up, OCRs, SEO, reviews,
+  treino, cadastro, planejamento): `opcoes_sem_raciocinio(modelo)`. No
+  5.5 = `thinking={'type': 'between_tools'}` + `output_config.effort
+  'high'` (`disabled` da 400 no 5.5; `between_tools` so o 5.5 aceita e so
+  com effort <= high, sem outro campo). Sonnet 5/Opus 5/4.x = `disabled`;
+  Opus 5.5/Fable = effort `low` (nao desligam); Haiku/desconhecido = nada.
+- **Com ferramentas** (copilot, bot): `opcoes_com_ferramentas(modelo)` =
+  adaptativo + `display: 'updates'` + beta
+  `thinking-display-updates-2026-08-18` + effort `high`. MOTIVO: no 5.5 o
+  texto escrito junto de uma tool (mais de uma frase) volta como bloco
+  THINKING (vazio sem o display) — era a explicacao do preview do copilot.
+  Ler com `ia_modelos.textos_visiveis(resp, progresso=...)`. Blocos
+  thinking voltam INALTERADOS no loop de tools (preserved thinking: o
+  historico e append-only; mover `cache_control` pode).
+- **Familia pelo PREFIXO MAIS LONGO** (`casar_prefixo`, com fronteira '-'
+  ou '@' e prefixo `anthropic.` do Bedrock): `claude-sonnet-5-5` comeca
+  com `claude-sonnet-5`; casar pelo primeiro prefixo mandava `disabled` ao
+  5.5 e cobrava $3/$15 no `uso_ia`.
+- **Recusa** (`stop_reason='refusal'`, HTTP 200, `stop_details.category`
+  cyber/bio/frontier_llm/reasoning_extraction/general_harms — esta pega
+  trabalho benigno): conteudo vazio ou PARCIAL, nunca ler como resposta.
+  `ia_modelos.recusa()`/`exigir_resposta()` em TODA chamada; cada funcao
+  usa o caminho de falha que ja tinha (bot = handoff para a equipe, nunca
+  turno vazio; copilot = `tipo 'erro'`; OCR/cadastro/planejamento/treino/
+  reviews = mensagem "a IA recusou..."; SEO = None). Fallback do servidor
+  (`fallbacks`) NAO foi ligado.
+- **Erro da API**: `ia_modelos.registrar_falha` — 400/401/403/404 (nao se
+  resolve tentando de novo: parametro, chave, modelo) = ERROR (Sentry);
+  rede/timeout/429/5xx = WARNING (politica de ruido). Fecha a classe do
+  incidente de 05-17/08 nas funcoes que so logavam WARNING.
+- **Envs do Railway MANDAM** (`ia_modelos.modelo_do_ambiente`; vazia =
+  padrao): OCR_MODELO_OPUS, CADASTRO_IA_MODELO, PLANEJAMENTO_IA_MODELO,
+  GOOGLE_REVIEWS_IA_MODELO, TREINO_IA_MODELO, ZAPI_BOT_MODELO. Os
+  parametros saem do modelo EFETIVO — env antiga recebe `disabled`, nunca
+  `between_tools`. Conferir em `GET /admin/debug-ia` (owner;
+  `fora_do_padrao`) ou no bloco `ia` da sonda `/api/claude/deploy`.
+- **Verificacao REAL depois de deploy que mexa na IA**:
+  `/admin/debug-ia?testar=1` (duas chamadas minimas com os mesmos
+  parametros do sistema, centavos, UsoIA 'verificacao_ia'). A suite mocka
+  a Anthropic — so esta rota prova que a API aceita os parametros. Os
+  testes `test_sdk_*` provam so que o SDK INSTALADO serializa os campos.
+- **Effort**: `EFFORT_PADRAO='high'` explicito (os niveis do 5.5 foram
+  recalibrados; sem eval medida no trafego real, manteve-se o nominal).
+  Varredura de effort contra eval = decisao/projeto separado.
+- **Sampling**: `temperature`/`top_p`/`top_k` nao-default = 400 desde o
+  Sonnet 5. Nenhum call site usa — NAO introduzir. `tool_choice` forcado
+  (`any`/`tool`) = 400 no 5.5 — nenhum call site usa, NAO introduzir.
 - **Extracao de resposta**: SEMPRE iterar `resp.content` filtrando
-  `type == 'text'` (com adaptativo o primeiro bloco pode ser thinking —
-  `content[0]` quebra). Todos os call sites ja fazem isso.
-- **`uso_ia._PRECOS` tem a linha do sonnet-5 ($3/$15 tabela cheia de
-  proposito — superestima ~30% ate 31/08, direcao segura pro vigia de
-  custo)**. Modelo novo SEM linha na tabela = custo some do /admin/uso-ia
-  (ha teste travando).
-- **Envs do Railway MANDAM sobre os defaults**: OCR_MODELO_OPUS,
-  CADASTRO_IA_MODELO, PLANEJAMENTO_IA_MODELO, GOOGLE_REVIEWS_IA_MODELO,
-  TREINO_IA_MODELO, ZAPI_BOT_MODELO — se setadas com modelo antigo, a
-  troca de default nao vale; conferir/limpar no painel.
+  `type == 'text'` (ou `textos_visiveis`) — `content[0]` pode ser thinking.
+- **`uso_ia._PRECOS`**: linha propria do 5.5 ($2/$10), Opus 5.5 ($4/$20),
+  Fable ($10/$50). A linha do Sonnet 5 ficou em $3/$15 (a tabela atual lista
+  $2/$10; ajustar e decisao do dono — so afeta env que volte ao 5). Modelo
+  novo SEM linha = custo some do /admin/uso-ia (ha teste travando).
+- Prompts NAO afirmam o modelo ("Voce roda em Opus 4.8" ficou falso a
+  cada troca — removido do bot e do copilot, ha teste).
+- Testes: `tests/test_ia_modelos.py` (unidades, SDK, trava AST) e
+  `tests/test_ia_modelos_chamadas.py` (parametros e recusa por funcao,
+  nivel de log, /admin/debug-ia, sonda); pinos em test_uso_ia/
+  test_chatbot_faq_pilar_b/test_copilot/test_conta_pagar_ia/
+  test_copilot_fork_canais.
 
 **INCIDENTE do SDK velho (17/08/2026)**: o pin `anthropic==0.40.0`
 (11/2024) NAO conhecia o param `thinking` — as 6 chamadas com
@@ -4049,7 +4090,7 @@ incluso).
 
 ## Copilot (servico) — canais: Slack + WhatsApp do dono. SEM interface web
 
-`app/services/copilot.py` orquestra tools com Claude Sonnet 4.6 (Anthropic API).
+`app/services/copilot.py` orquestra tools com o modelo de `ia_modelos` (Sonnet 5.5).
 Prompt caching ativo: `system` + ultima tool com `cache_control: ephemeral`
 (cache breakpoint cobre ~95% dos tokens de input — custo cai ~90% apos o
 primeiro request da janela de 5min).
