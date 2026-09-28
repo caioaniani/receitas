@@ -127,3 +127,38 @@ def test_event_time_da_meta_usa_o_fuso_de_brasilia():
     # 10:00 em Brasília = 13:00 UTC.
     esperado = int(datetime(2026, 9, 28, 13, 0, tzinfo=timezone.utc).timestamp())
     assert _epoch_brt(datetime(2026, 9, 28, 10, 0)) == esperado
+
+
+# ── 46/47. Express: re-render e prazo gravado ───────────────────────────
+
+def test_rerender_com_express_fechado_volta_para_agendada(app, monkeypatch):
+    import re
+
+    from app.extensions import db
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    app.config['WTF_CSRF_ENABLED'] = False
+    prod = _produto(db)
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['carrinho'] = [{'kind': 'produto', 'id': prod.id, 'qtd': 1}]
+    with patch('app.services.loja_checkout.express_disponivel',
+               return_value=False):
+        r = c.post('/loja/checkout', data={'nome': 'Maria Silva',
+                                           'email': 'm@x.com',
+                                           'modo_entrega': 'express'})
+    h = r.get_data(as_text=True)
+    assert r.status_code == 400
+    radios = re.findall(r'<input type="radio" name="modo_entrega"[^>]*>', h)
+    express = [x for x in radios if 'value="express"' in x][0]
+    agendada = [x for x in radios if 'value="agendada"' in x][0]
+    assert 'checked' not in express and 'disabled' in express
+    assert 'checked' in agendada
+
+
+def test_confirmacao_do_express_usa_o_prazo_gravado(app, monkeypatch):
+    from app.extensions import db
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    ped = _pedido(db, _produto(db), status='pago', modo='express',
+                  janela_entrega='em até 2h', endereco_entrega='Rua A, 10')
+    h = app.test_client().get(f'/loja/pedido/{ped.codigo}').get_data(as_text=True)
+    assert 'Express — em até 2h' in h and 'em até 1h' not in h

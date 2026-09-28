@@ -1,5 +1,9 @@
 {% extends 'loja/_base.html' %}
 {% set modo_sel = form.get('modo_entrega', 'agendada') %}
+{# Re-render com o express fechado (passou do horário entre montar e enviar):
+   o rádio desabilitado não é enviado no POST — volta pra agendada, com o
+   bloco de data à vista (auditoria 27/09/2026). #}
+{% if modo_sel == 'express' and not express_ok %}{% set modo_sel = 'agendada' %}{% endif %}
 
 {% block title %}Finalizar pedido — O Pão Padaria Artesanal{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{{ url_for('loja.static', filename='fiscal-cnpj.css') }}?v={{ static_v['loja/fiscal-cnpj.css'] }}">{% endblock %}

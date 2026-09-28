@@ -46,7 +46,7 @@
         {% if pedido.data_entrega %}{{ pedido.data_entrega.strftime('%d/%m/%Y') }}
         · {{ pedido.janela_entrega }}{% endif %}</p>
     {% elif pedido.modo_entrega == 'express' %}
-      <p><strong>Express — em até 1h</strong><br>
+      <p><strong>Express — {{ pedido.janela_entrega or 'em até 1h' }}</strong><br>
         {{ pedido.endereco_entrega }}<br>
         Valor do frete é estimado; a equipe confirma.</p>
     {% else %}

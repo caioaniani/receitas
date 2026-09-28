@@ -11,7 +11,7 @@
 } %}
 {% set modo_label = {
   'agendada': 'Entrega agendada', 'retirada': 'Retirada na loja',
-  'express': 'Express (em até 1h)',
+  'express': 'Express',
 } %}
 
 {% block content %}
@@ -261,7 +261,7 @@
     </div>
 
     <div class="card mb-3">
-      <div class="card-header py-2 fw-bold">{{ modo_label.get(p.modo_entrega, p.modo_entrega) }}</div>
+      <div class="card-header py-2 fw-bold">{{ modo_label.get(p.modo_entrega, p.modo_entrega) }}{% if p.modo_entrega == 'express' %} — {{ p.janela_entrega or 'em até 1h' }}{% endif %}</div>
       <div class="card-body">
         {% if p.nome_destinatario %}
         <div class="alert alert-warning py-2 px-3 mb-2 small">
