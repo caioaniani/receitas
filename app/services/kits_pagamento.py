@@ -1,6 +1,8 @@
 """Cobrança única de kits, com efeitos financeiros por entrega real."""
 import logging
 
+import requests
+
 from app.extensions import db
 from app.models import EntregaKit
 from app.services.compra_kits import grupo_do_pedido, pedidos_do_grupo, reler_entregas
@@ -143,6 +145,103 @@ def cancelar_entrega_paga(pedido):
     liberar_entregas([registro])
 
 
+# Leitura da cobrança (GET /charges/{id}) para resolver um estorno incerto.
+# `pagarme.py` só tem `consultar_order`, que não traz valores estornados.
+_CHARGE_TOTALMENTE_ESTORNADA = frozenset({'refunded', 'canceled', 'cancelled', 'voided'})
+# Transação que só existe como estorno concluído. Os status parciais ficam de
+# fora: podem ser a transação do PAGAMENTO com o valor cheio, o que faria um
+# refund de outra entrega parecer ter coberto esta.
+_TRANSACAO_ESTORNADA = frozenset({'refunded', 'voided'})
+# Falha explícita do cancelamento/estorno no adquirente.
+_TRANSACAO_ESTORNO_FALHOU = frozenset({'error_on_refunding', 'error_on_voiding'})
+
+
+def _ler_charge(charge_id):
+    """Cobrança crua do Pagar.me, ou None quando não dá pra confiar na leitura.
+
+    Fail-closed: sem chave, rede/HTTP com falha, corpo sem JSON ou de outra
+    cobrança = None (o estorno continua 'solicitado')."""
+    from app.services import pagarme
+    if not pagarme.disponivel() or not charge_id:
+        return None
+    try:
+        r = requests.get(f'{pagarme._BASE}/charges/{charge_id}',
+                         headers=pagarme._headers(), timeout=pagarme._TIMEOUT)
+    except requests.RequestException as exc:
+        logger.warning('Estorno de kit: leitura da cobrança %s falhou: %s', charge_id, exc)
+        return None
+    if r.status_code != 200:
+        logger.warning('Estorno de kit: cobrança %s respondeu HTTP %s', charge_id, r.status_code)
+        return None
+    try:
+        corpo = r.json()
+    except ValueError:
+        return None
+    if not isinstance(corpo, dict) or corpo.get('id') != charge_id:
+        return None
+    return corpo
+
+
+def _centavos_ou_none(valor):
+    return valor if type(valor) is int and valor >= 0 else None
+
+
+def _estornado_na_charge(charge):
+    """Menor valor comprovadamente devolvido na cobrança (centavos) ou None.
+
+    `canceled_amount` é o total devolvido. Refund PARCIAL mantém a cobrança
+    'paid', então o status sozinho não prova nada; cobrança inteira estornada
+    vale o valor pago; na falta dos dois, a última transação de estorno
+    concluído é um piso (nunca soma um valor que o gateway não mostrou)."""
+    evidencias = []
+    cancelado = _centavos_ou_none(charge.get('canceled_amount'))
+    if cancelado is not None:
+        evidencias.append(cancelado)
+    if str(charge.get('status') or '').lower() in _CHARGE_TOTALMENTE_ESTORNADA:
+        total = (_centavos_ou_none(charge.get('paid_amount'))
+                 or _centavos_ou_none(charge.get('amount')))
+        if total is not None:
+            evidencias.append(total)
+    transacao = charge.get('last_transaction') or {}
+    if (isinstance(transacao, dict)
+            and str(transacao.get('status') or '').lower() in _TRANSACAO_ESTORNADA
+            and transacao.get('success') is not False):
+        valor = _centavos_ou_none(transacao.get('amount'))
+        if valor is not None:
+            evidencias.append(valor)
+    return max(evidencias) if evidencias else None
+
+
+def _decidir_estorno_incerto(registro, charge):
+    """('confirmado'|'recusado'|'duvida', detalhe) para um estorno 'solicitado'.
+
+    Confirma só se o valor devolvido na cobrança cobre TODOS os estornos
+    confirmados e pendentes dela (inclusive este): com duas entregas incertas
+    e só uma devolvida, não dá pra saber qual — as duas seguem pendentes."""
+    from app.models.kits_cafe import ReembolsoKit
+    from app.services import pagarme
+    if charge is None:
+        return 'duvida', 'não foi possível consultar a cobrança no Pagar.me agora'
+    registros = ReembolsoKit.query.filter(
+        ReembolsoKit.pagarme_charge_id == registro.pagarme_charge_id,
+        ReembolsoKit.status.in_(('confirmado', 'solicitado'))).all()
+    confirmados = sum(pagarme._centavos(r.valor) for r in registros if r.status == 'confirmado')
+    necessario = sum(pagarme._centavos(r.valor) for r in registros)
+    estornado = _estornado_na_charge(charge)
+    if estornado is not None and estornado >= necessario:
+        return 'confirmado', 'estorno concluído no Pagar.me'
+    transacao = charge.get('last_transaction') or {}
+    status_transacao = (str(transacao.get('status') or '').lower()
+                        if isinstance(transacao, dict) else '')
+    if (status_transacao in _TRANSACAO_ESTORNO_FALHOU
+            and (estornado is None or estornado <= confirmados)):
+        return 'recusado', f'estorno não realizado pelo Pagar.me ({status_transacao})'
+    if estornado is None:
+        return 'duvida', 'o Pagar.me ainda não mostra o valor devolvido'
+    return 'duvida', (f'o Pagar.me mostra {fmt_brl(estornado / 100)} devolvido(s), '
+                      f'menos que os {fmt_brl(necessario / 100)} solicitados nesta cobrança')
+
+
 def reembolsar_entrega(pedido):
     """Serializa o reembolso com emissão/envio da NF desta entrega."""
     from app.services.tiny_nf import _trava_nf_kit
@@ -181,8 +280,36 @@ def _reembolsar_entrega(pedido):
             return False, 'Compra sem cobrança paga no Pagar.me; confira o pagamento.'
         registro = db.session.get(ReembolsoKit, pedido.id)
         if registro and registro.status == 'solicitado':
-            return False, ('Já existe uma solicitação de estorno desta entrega sem '
-                           'conclusão confirmada. Confira no Pagar.me antes de qualquer novo estorno.')
+            # Resposta incerta de uma tentativa anterior (timeout, 202,
+            # pending_refund). Nunca reenvia o DELETE: consulta a cobrança no
+            # gateway SEM segurar as travas de linha (a trava fiscal desta
+            # entrega continua) e só decide com prova. Sem prova, mantém.
+            charge_id = registro.pagarme_charge_id
+            db.session.commit()
+            leitura = _ler_charge(charge_id)
+            compra, pedidos = travar(pedido, todos=True)
+            db.session.refresh(registro, with_for_update=True)
+            if registro.status == 'solicitado':
+                decisao, detalhe = _decidir_estorno_incerto(registro, leitura)
+                if decisao == 'recusado':
+                    registro.status = 'recusado'
+                    registro.erro = detalhe[:2000]
+                    db.session.commit()
+                    return False, (f'O Pagar.me recusou o estorno anterior desta entrega: {detalhe}. '
+                                   'Nenhum valor foi devolvido e a entrega continua ativa. '
+                                   'Solicite o estorno de novo, se ainda for o caso.')
+                if decisao != 'confirmado':
+                    registro.erro = f'{agora():%d/%m/%Y %H:%M}: {detalhe}'[:2000]
+                    db.session.commit()
+                    return False, ('Já existe uma solicitação de estorno desta entrega sem '
+                                   f'conclusão confirmada ({detalhe}). Confira no Pagar.me '
+                                   'antes de qualquer novo estorno.')
+                registro.status = 'confirmado'
+                registro.confirmado_em = agora()
+                registro.erro = None
+                db.session.commit()
+                compra, pedidos = travar(pedido, todos=True)
+                db.session.refresh(registro, with_for_update=True)
         if not registro or registro.status == 'recusado':
             if not registro:
                 registro = ReembolsoKit(pedido_id=pedido.id, valor=pedido.valor_total,
