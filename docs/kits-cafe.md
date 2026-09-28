@@ -125,9 +125,19 @@ exclusiva do owner e exige o valor da compra inteira.
 
 A capacidade de produção das datas fica reservada durante os 35 minutos
 do checkout. Pagamento aprovado mantém essas reservas; expiração ou
-cancelamento da compra pendente libera todas. Se o gateway confirmar um
+cancelamento da compra pendente libera todas. Antes de expirar, o sistema
+consulta no Pagar.me as tentativas pendentes da compra, sem segurar travas
+durante a consulta: pagamento já recebido confirma a compra; QR do Pix ainda
+válido, cartão em análise ou gateway sem resposta adiam a expiração em
+5 minutos (o dono é avisado se a compra passar de 24 h nesse estado); sem
+nada vivo no gateway, a compra expira. Cada compra é resolvida e gravada
+separadamente. Se o gateway confirmar um
 pagamento depois da liberação e faltar capacidade, a demanda recebida é
 registrada e o painel destaca o excesso para o owner conferir a produção.
+Um segundo pagamento na mesma compra (outro QR, cartão depois de Pix,
+gateway depois de recebimento externo) e um pagamento recebido numa compra
+cancelada de propósito avisam o dono pelo WhatsApp; a compra cancelada
+continua cancelada e o estorno do valor a mais é feito no Pagar.me.
 
 O estoque físico é baixado somente na coleta de cada entrega. Repetir a
 confirmação da coleta não baixa novamente. O pagamento do mês não desconta
