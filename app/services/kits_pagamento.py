@@ -6,7 +6,7 @@ import requests
 from app.extensions import db
 from app.models import EntregaKit
 from app.services.compra_kits import grupo_do_pedido, pedidos_do_grupo, reler_entregas
-from app.utils import agora, fmt_brl
+from app.utils import agora, fmt_brl, para_brt
 
 logger = logging.getLogger(__name__)
 
@@ -217,12 +217,35 @@ def _estornado_na_charge(charge):
     return max(evidencias) if evidencias else None
 
 
+def _transacao_depois_de(transacao, momento):
+    """A transação do gateway foi criada a partir de `momento` (BRT naive)?
+
+    False quando não dá para provar: sem data, data ilegível ou sem fuso."""
+    from datetime import datetime
+    bruto = transacao.get('created_at') if isinstance(transacao, dict) else None
+    if not isinstance(bruto, str) or momento is None:
+        return False
+    try:
+        criada = datetime.fromisoformat(bruto.strip().replace('Z', '+00:00'))
+    except ValueError:
+        return False
+    if criada.tzinfo is None:
+        return False
+    return para_brt(criada) >= momento
+
+
 def _decidir_estorno_incerto(registro, charge):
     """('confirmado'|'recusado'|'duvida', detalhe) para um estorno 'solicitado'.
 
     Confirma só se o valor devolvido na cobrança cobre TODOS os estornos
     confirmados e pendentes dela (inclusive este): com duas entregas incertas
-    e só uma devolvida, não dá pra saber qual — as duas seguem pendentes."""
+    e só uma devolvida, não dá pra saber qual — as duas seguem pendentes.
+
+    'recusado' libera um NOVO estorno, então exige prova de que a falha é
+    DESTA entrega: ela é a única pendente na cobrança e a transação falha é
+    posterior ao pedido de estorno. Sem isso, a falha do estorno de outra
+    entrega (a última transação da cobrança) marcava esta como recusada e o
+    dono pedia de novo um estorno que pode já ter saído (revisão 28/09/2026)."""
     from app.models.kits_cafe import ReembolsoKit
     from app.services import pagarme
     if charge is None:
@@ -238,13 +261,73 @@ def _decidir_estorno_incerto(registro, charge):
     transacao = charge.get('last_transaction') or {}
     status_transacao = (str(transacao.get('status') or '').lower()
                         if isinstance(transacao, dict) else '')
-    if (status_transacao in _TRANSACAO_ESTORNO_FALHOU
-            and (estornado is None or estornado <= confirmados)):
-        return 'recusado', f'estorno não realizado pelo Pagar.me ({status_transacao})'
+    if status_transacao in _TRANSACAO_ESTORNO_FALHOU:
+        pendentes = [r for r in registros if r.status == 'solicitado']
+        if ((estornado is None or estornado <= confirmados)
+                and len(pendentes) == 1 and pendentes[0].pedido_id == registro.pedido_id
+                and _transacao_depois_de(transacao, registro.criado_em)):
+            return 'recusado', f'estorno não realizado pelo Pagar.me ({status_transacao})'
+        return 'duvida', ('o Pagar.me mostra uma falha de estorno nesta cobrança, mas não '
+                          'dá para saber se é a desta entrega')
     if estornado is None:
         return 'duvida', 'o Pagar.me ainda não mostra o valor devolvido'
     return 'duvida', (f'o Pagar.me mostra {fmt_brl(estornado / 100)} devolvido(s), '
                       f'menos que os {fmt_brl(necessario / 100)} solicitados nesta cobrança')
+
+
+RESOLUCOES_MANUAIS = ('confirmado', 'recusado')
+
+
+def resolver_estorno_manual(pedido, decisao, motivo, usuario):
+    """O dono decide um estorno 'solicitado' que o gateway não esclarece.
+
+    Caso típico: duas entregas pendentes na mesma cobrança e só uma devolvida
+    — nenhuma é decidida sozinha e as duas coletas ficam bloqueadas. Depois
+    de conferir no painel do Pagar.me, o dono marca:
+      - 'confirmado': o valor desta entrega voltou ao cliente → a entrega é
+        cancelada pelos mesmos efeitos locais do estorno confirmado;
+      - 'recusado': nada foi devolvido → a entrega segue ativa e um novo
+        estorno pode ser pedido.
+    Nunca chama o gateway. O motivo fica no registro (e no /audit)."""
+    from app.models.kits_cafe import ReembolsoKit
+    from app.services.tiny_nf import _trava_nf_kit
+
+    motivo = ' '.join(str(motivo or '').split())
+    if decisao not in RESOLUCOES_MANUAIS:
+        return False, 'Escolha se o valor foi devolvido ou não.'
+    if len(motivo) < 10:
+        return False, ('Descreva o que você conferiu no Pagar.me (pelo menos 10 '
+                       'caracteres) — fica registrado junto do estorno.')
+    with _trava_nf_kit(pedido.id) as adquirido:
+        if not adquirido:
+            return False, ('A nota fiscal desta entrega está sendo processada. '
+                           'Aguarde e tente novamente.')
+        try:
+            travar(pedido, todos=True)
+            registro = db.session.get(ReembolsoKit, pedido.id)
+            if registro is not None:
+                db.session.refresh(registro, with_for_update=True)
+            if registro is None or registro.status != 'solicitado':
+                db.session.rollback()
+                return False, 'Esta entrega não tem estorno pendente de conferência.'
+            nome = getattr(usuario, 'nome', None) or getattr(usuario, 'login', None) or 'dono'
+            nota = (f'Conferido manualmente por {nome} em {agora():%d/%m/%Y %H:%M} '
+                    f'({"valor devolvido" if decisao == "confirmado" else "nada devolvido"}): '
+                    f'{motivo}')[:2000]
+            registro.status = decisao
+            registro.erro = nota
+            if decisao == 'confirmado':
+                registro.confirmado_em = agora()
+            db.session.commit()
+        except Exception:  # noqa: BLE001
+            db.session.rollback()
+            logger.exception('Falha na conferência manual do estorno %s', pedido.id)
+            return False, 'Não foi possível registrar a conferência. Tente novamente.'
+        if decisao == 'recusado':
+            return True, ('Registrado: nenhum valor foi devolvido. A entrega continua ativa '
+                          'e um novo estorno pode ser pedido, se ainda for o caso.')
+        # Mesmos efeitos locais do estorno confirmado pelo gateway.
+        return _reembolsar_entrega(pedido)
 
 
 def reembolsar_entrega(pedido):

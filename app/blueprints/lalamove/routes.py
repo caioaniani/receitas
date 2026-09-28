@@ -147,7 +147,16 @@ def webhook():
         status = (ordem.get('status') or '').upper()
         if status in ('PICKED_UP', 'COMPLETED'):
             from app.services.saida_producao_site import registrar_por_codigo
-            registrar_por_codigo(e.pedido_code, 'lalamove_' + status.lower())
+            try:
+                with db.session.begin_nested():
+                    registrar_por_codigo(e.pedido_code, 'lalamove_' + status.lower())
+            except ValueError as exc:
+                # O motoboy JÁ coletou (fato físico): o webhook registra o
+                # status e a equipe confere a saída bloqueada (estorno de kit,
+                # composição sem vínculo). Recusar só faria a Lalamove
+                # reenviar para sempre.
+                logger.error('lalamove: saída do pedido %s não registrada (%s): %s',
+                             e.pedido_code, status, exc)
         if status:
             e.status = status
     if ordem.get('shareLink'):

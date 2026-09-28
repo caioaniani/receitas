@@ -6388,6 +6388,22 @@ def _expedicao_com_pedido(p):
     return None
 
 
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/estorno-kit/conferir', methods=['POST'])
+@owner_required
+def loja_online_pedido_estorno_kit_conferir(codigo):
+    """Dono resolve um estorno de entrega de kit que o Pagar.me não esclarece
+    (ex.: duas entregas pendentes na mesma cobrança e só uma devolvida).
+    Nunca chama o gateway — só registra o que o dono conferiu no painel dele
+    e aplica os efeitos locais (revisão 28/09/2026)."""
+    from app.models import PedidoOnline
+    from app.services import kits_pagamento
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    ok, msg = kits_pagamento.resolver_estorno_manual(
+        p, request.form.get('decisao'), request.form.get('motivo'), current_user)
+    flash(msg, 'success' if ok else 'danger')
+    return _detalhe_redirect(codigo)
+
+
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/cancelar', methods=['POST'])
 @owner_required
 def loja_online_pedido_cancelar(codigo):

@@ -20,6 +20,22 @@ def ja_coletado(pedido_id):
                     EntregaKit.coletado_em.isnot(None)).first() is not None)
 
 
+def motivo_bloqueio_coleta(pedido):
+    """Mensagem de bloqueio da coleta desta entrega de kit, ou None.
+
+    Fonte única da regra: a coleta (`registrar_coleta`) recusa e a tela do
+    motorista avisa pelo mesmo motivo — estorno pedido ou confirmado."""
+    from app.models.kits_cafe import ReembolsoKit
+    if EntregaKit.query.filter_by(pedido_id=pedido.id).first() is None:
+        return None
+    reembolso = (ReembolsoKit.query.filter_by(pedido_id=pedido.id)
+                 .populate_existing().first())
+    if reembolso and reembolso.status in ('solicitado', 'confirmado'):
+        return (f'Pedido {pedido.codigo}: há um reembolso em andamento ou confirmado; '
+                'a coleta deste kit está bloqueada.')
+    return None
+
+
 def registrar_coleta(pedido, *, usuario_id=None, acertado=False):
     """Baixa itens comuns uma vez, com o pedido já travado pelo caller.
 
@@ -32,12 +48,9 @@ def registrar_coleta(pedido, *, usuario_id=None, acertado=False):
     if (entrega is None or pedido.divulgacao
             or pedido.status not in ('pago', 'em_preparo', 'a_caminho')):
         return None
-    from app.models.kits_cafe import ReembolsoKit
-    reembolso = (ReembolsoKit.query.filter_by(pedido_id=pedido.id)
-                 .populate_existing().first())
-    if reembolso and reembolso.status in ('solicitado', 'confirmado'):
-        raise ValueError(f'Pedido {pedido.codigo}: há um reembolso em andamento ou confirmado; '
-                         'a coleta deste kit está bloqueada.')
+    motivo = motivo_bloqueio_coleta(pedido)
+    if motivo:
+        raise ValueError(motivo)
     if entrega.coletado_em is not None:
         return None
 
@@ -76,12 +89,21 @@ def expirar_compras(*, base=None, max_lote=200):
     com erro não derruba o lote. Devolve os códigos das entregas canceladas.
     """
     base = base or agora()
+    # Só compra com TODAS as entregas aguardando pagamento: a fase 2 pula a de
+    # status misto, e selecioná-la fazia a fase 1 consultar o Pagar.me a cada
+    # ciclo, para sempre (revisão 28/09/2026).
+    fora_de_espera = (db.session.query(EntregaKit.compra_id)
+                      .join(PedidoOnline, PedidoOnline.id == EntregaKit.pedido_id)
+                      .filter(EntregaKit.compra_id == CompraKit.id,
+                              (PedidoOnline.status != 'aguardando_pagamento')
+                              | PedidoOnline.pago_em.isnot(None))
+                      .exists())
     ids = [cid for (cid,) in (
         db.session.query(CompraKit.id)
         .join(EntregaKit, EntregaKit.compra_id == CompraKit.id)
         .join(PedidoOnline, PedidoOnline.id == EntregaKit.pedido_id)
         .filter(CompraKit.pago_em.is_(None), CompraKit.expira_em < base,
-                PedidoOnline.status == 'aguardando_pagamento')
+                PedidoOnline.status == 'aguardando_pagamento', ~fora_de_espera)
         .group_by(CompraKit.id, CompraKit.expira_em)
         .order_by(CompraKit.expira_em, CompraKit.id)
         .limit(max_lote).all())]
@@ -107,6 +129,13 @@ def _expirar_compra(compra_id, base):
     # Fase 1 — sem travas: o que o gateway diz das tentativas pendentes.
     compra = db.session.get(CompraKit, compra_id)
     if compra is None or compra.pago_em is not None or compra.expira_em >= base:
+        db.session.commit()
+        return []
+    # Mesma conferência da fase 2, sem trava: entrega fora de espera = nada a
+    # expirar, e o gateway nem é consultado.
+    if any(entrega.pedido.pago_em is not None
+           or entrega.pedido.status != 'aguardando_pagamento'
+           for entrega in reler_entregas(compra)):
         db.session.commit()
         return []
     principal = compra.pedido_principal

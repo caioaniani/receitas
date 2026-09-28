@@ -304,6 +304,11 @@
                 (st === 'pendente' && p.pulado_em
                     ? '<span class="badge bg-warning text-dark mt-1" style="font-size:10px;">⏭️ pulado às ' + escapeHtml(p.pulado_em) + ' — voltar depois</span>'
                     : '') +
+                // Parada bloqueada (estorno de kit em andamento, composição
+                // sem vínculo): o motorista não leva sem falar com a equipe.
+                (st === 'pendente' && p.bloqueio
+                    ? '<div class="alert alert-danger py-1 px-2 mt-2 mb-0 small"><strong>⛔ Não entregar — conferir com a equipe.</strong><br>' + escapeHtml(p.bloqueio) + '</div>'
+                    : '') +
                 '<div class="mt-2 d-flex gap-2">' +
                     '<button class="btn btn-sm btn-outline-primary flex-grow-1 btn-detalhe" data-idx="' + i + '">' +
                         '<i class="bi bi-eye"></i> Abrir</button>' +
@@ -329,7 +334,15 @@
                     if (r.body && r.body.ok) {
                         if (atual === data) {
                             rotaInfo = {iniciada: true, iniciada_em: r.body.iniciado_em};
-                            renderPedidos();
+                            var bloq = r.body.bloqueados || [];
+                            if (bloq.length) {
+                                // Recarrega para as paradas bloqueadas aparecerem marcadas.
+                                carregarPedidos();
+                                alert('Atenção: ' + bloq.length + (bloq.length === 1 ? ' parada NÃO deve' : ' paradas NÃO devem') +
+                                      ' ser entregue(s) — confira com a equipe antes (marcadas em vermelho).');
+                            } else {
+                                renderPedidos();
+                            }
                         }
                     } else {
                         ir.disabled = false;
@@ -369,6 +382,9 @@
         }
         var enderecoEnc = encodeURIComponent(p.endereco || '');
         var html =
+            ((p.status || 'pendente') === 'pendente' && p.bloqueio
+                ? '<div class="alert alert-danger py-2 small"><strong>⛔ Não entregar — conferir com a equipe.</strong><br>' + escapeHtml(p.bloqueio) + '</div>'
+                : '') +
             '<div class="text-muted small mb-2"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>' +
             (p.sem_telefone_destinatario
                 ? '<div class="mb-2 small text-danger"><i class="bi bi-telephone-x"></i> Quem recebe não informou telefone.' + (p.telefone_comprador ? ' Comprador (dúvidas): <a href="tel:' + escapeHtml(p.telefone_comprador) + '">' + escapeHtml(p.telefone_comprador) + '</a>' : '') + '</div>'

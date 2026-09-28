@@ -44,7 +44,11 @@ def iniciar_rota(driver, dia=None):
     segundo clique devolve o marco existente sem reenviar nada.
 
     Devolve (rota_inicio, emails_enviados). E-mail é best-effort POR PEDIDO:
-    um endereço quebrado não pode impedir os outros avisos nem o marco."""
+    um endereço quebrado não pode impedir os outros avisos nem o marco.
+
+    Parada BLOQUEADA (estorno de kit em andamento, composição sem vínculo)
+    não recebe "saiu para entrega"; a tela do motorista a marca como "não
+    entregar — conferir com a equipe" (`motivos_bloqueio_por_codigo`)."""
     dia = dia or hoje()
     ri = RotaInicio.query.filter_by(driver_id=driver.id, data=dia).first()
     from app.services.saida_producao_site import registrar
@@ -53,17 +57,20 @@ def iniciar_rota(driver, dia=None):
     # confirmação de saída da mesma rota. Registro por item deduplica.
     pedidos = (PedidoOnline.query.filter(PedidoOnline.codigo.in_(codes))
                .order_by(PedidoOnline.id).all())
+    bloqueados = set()
     for pedido in pedidos:
         codigo = pedido.codigo
         # Uma parada bloqueada (estorno de kit em andamento, composição sem
         # vínculo de estoque) não pode derrubar a saída das outras: cada uma
-        # num SAVEPOINT; a que falha desfaz só a própria baixa e fica no log
-        # (erro) para a equipe conferir. A próxima confirmação da mesma rota
-        # tenta de novo — o registro por item deduplica o que já saiu.
+        # num SAVEPOINT; a que falha desfaz só a própria baixa, fica no log
+        # (erro), fora dos e-mails de saída e marcada na tela do motorista
+        # ("não entregar — conferir com a equipe"). A baixa dela acontece
+        # quando a equipe resolver e a entrega for confirmada.
         try:
             with db.session.begin_nested():
                 registrar(pedido, 'inicio_rota')
         except ValueError as exc:
+            bloqueados.add(codigo)
             logger.error('rastreio: saída do pedido %s não registrada no início da rota '
                          '(motorista %s, %s): %s', codigo, driver.id, dia, exc)
     if ri is None:
@@ -89,7 +96,7 @@ def iniciar_rota(driver, dia=None):
     db.session.commit()
     if ganhou:
         try:
-            enviados = _enviar_emails_saida(driver, dia)
+            enviados = _enviar_emails_saida(driver, dia, excluir=bloqueados)
         except Exception:
             ri.emails_em = None
             db.session.commit()
@@ -98,7 +105,7 @@ def iniciar_rota(driver, dia=None):
     return ri, enviados
 
 
-def _enviar_emails_saida(driver, dia):
+def _enviar_emails_saida(driver, dia, excluir=()):
     """"Seu pedido saiu para entrega" pra cada pedido do SITE na rota do
     driver. Só pedidos ainda não entregues; sem e-mail = pula em silêncio.
 
@@ -110,7 +117,8 @@ def _enviar_emails_saida(driver, dia):
     from app.services import email as email_svc
     atribs = [a for a in _rota_do_driver(driver.id, dia)
               if (a.status or 'pendente') == 'pendente']
-    codes = [a.pedido_code for a in atribs if a.pedido_code]
+    codes = [a.pedido_code for a in atribs
+             if a.pedido_code and a.pedido_code not in set(excluir or ())]
     if not codes:
         return 0
     # Só quem vai MESMO receber a entrega: cancelado depois de a rota ser

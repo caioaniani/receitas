@@ -378,13 +378,19 @@ def test_estorno_incerto_sem_prova_segue_solicitado(compra, gateway, monkeypatch
     delete.assert_called_once()
 
 
+def _utc_iso(momento_brt):
+    """Data de transação do gateway (UTC, 'Z') a partir de um horário BRT."""
+    return (momento_brt + timedelta(hours=3)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
 def test_recusa_explicita_do_gateway_libera_nova_solicitacao(compra, gateway, monkeypatch):
     _pagar(compra)
     segundo = _pedidos(compra)[1]
     delete = _estorno_incerto(segundo, monkeypatch)
     _cobranca(monkeypatch, {'id': 'ch_mes', 'status': 'paid', 'canceled_amount': 0,
-                            'last_transaction': {'status': 'error_on_refunding',
-                                                 'success': False}})
+                            'last_transaction': {
+                                'status': 'error_on_refunding', 'success': False,
+                                'created_at': _utc_iso(agora() + timedelta(minutes=1))}})
     ok, mensagem = loja_pagamento.reembolsar_pedido(segundo)
     assert not ok and 'recusou o estorno anterior' in mensagem
     assert db.session.get(ReembolsoKit, segundo.id).status == 'recusado'
@@ -394,6 +400,87 @@ def test_recusa_explicita_do_gateway_libera_nova_solicitacao(compra, gateway, mo
     ok, mensagem = loja_pagamento.reembolsar_pedido(segundo)
     assert ok, mensagem
     assert delete.call_count == 2 and segundo.status == 'cancelado'
+
+
+@pytest.mark.parametrize('cenario', ['sem-data', 'anterior-ao-pedido', 'outra-entrega-pendente'])
+def test_falha_de_estorno_sem_prova_de_ser_desta_entrega_fica_em_duvida(
+        compra, gateway, monkeypatch, cenario):
+    """Revisão 28/09/2026: a falha do estorno de OUTRA entrega (última
+    transação da cobrança) marcava esta como recusada e o dono pedia de novo
+    um estorno que podia já ter saído."""
+    _pagar(compra)
+    primeiro, segundo = _pedidos(compra)
+    delete = _estorno_incerto(segundo, monkeypatch)
+    transacao = {'status': 'error_on_refunding', 'success': False}
+    if cenario == 'anterior-ao-pedido':
+        transacao['created_at'] = _utc_iso(agora() - timedelta(hours=2))
+    elif cenario == 'outra-entrega-pendente':
+        transacao['created_at'] = _utc_iso(agora() + timedelta(minutes=1))
+        _estorno_incerto(primeiro, monkeypatch)
+    _cobranca(monkeypatch, {'id': 'ch_mes', 'status': 'paid', 'canceled_amount': 0,
+                            'last_transaction': transacao})
+    ok, mensagem = loja_pagamento.reembolsar_pedido(segundo)
+    assert not ok and 'não dá para saber se é a desta entrega' in mensagem
+    assert db.session.get(ReembolsoKit, segundo.id).status == 'solicitado'
+    assert segundo.status == 'pago'
+    delete.assert_called_once()            # nenhum estorno foi reenviado
+
+
+def test_dono_resolve_estorno_que_o_gateway_nao_esclarece(compra, gateway, monkeypatch,
+                                                         owner_user):
+    """Duas entregas pendentes e só uma devolvida: nenhuma se decide sozinha
+    e as duas coletas ficam bloqueadas — o dono registra o que conferiu."""
+    from app.services import kits_pagamento
+    pagamento = _pagar(compra)
+    primeiro, segundo = _pedidos(compra)
+    delete = _estorno_incerto(segundo, monkeypatch)
+    _estorno_incerto(primeiro, monkeypatch)
+    ok, msg = kits_pagamento.resolver_estorno_manual(segundo, 'confirmado', 'curto', owner_user)
+    assert not ok and '10 caracteres' in msg
+    ok, msg = kits_pagamento.resolver_estorno_manual(
+        segundo, 'confirmado', 'Painel do Pagar.me: R$ 55,00 devolvidos em 28/09', owner_user)
+    assert ok, msg
+    registro = db.session.get(ReembolsoKit, segundo.id)
+    assert registro.status == 'confirmado' and 'R$ 55,00 devolvidos' in registro.erro
+    assert segundo.status == 'cancelado' and primeiro.status == 'pago'
+    ok, _ = kits_pagamento.resolver_estorno_manual(
+        primeiro, 'recusado', 'Painel do Pagar.me: só um estorno aparece', owner_user)
+    assert ok and db.session.get(ReembolsoKit, primeiro.id).status == 'recusado'
+    assert primeiro.status == 'pago' and pagamento.status == 'pago'
+    delete.assert_called_once()            # nada foi reenviado ao gateway
+    # Sem pendência não há o que registrar.
+    ok, msg = kits_pagamento.resolver_estorno_manual(
+        primeiro, 'confirmado', 'Painel do Pagar.me: conferido de novo', owner_user)
+    assert not ok and 'não tem estorno pendente' in msg
+
+
+def _conferir_pela_rota(app, compra, monkeypatch, usuario):
+    app.config['LOJA_HOSTS'] = 'opao.online'      # o teste roda no host da gestão
+    _pagar(compra)
+    segundo = _pedidos(compra)[1]
+    _estorno_incerto(segundo, monkeypatch)
+    cliente = app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao['_user_id'] = str(usuario.id)
+        sessao['_fresh'] = True
+    resposta = cliente.post(
+        f'/admin/loja-online/pedidos/{segundo.codigo}/estorno-kit/conferir',
+        data={'decisao': 'recusado', 'motivo': 'Painel do Pagar.me sem devolução'})
+    return resposta, db.session.get(ReembolsoKit, segundo.id)
+
+
+# Um usuário por teste: o `g` do Flask-Login é compartilhado entre requests
+# do mesmo teste (armadilha documentada do conftest).
+def test_rota_de_conferencia_do_estorno_registra_para_o_dono(
+        app, compra, gateway, monkeypatch, owner_user):
+    resposta, registro = _conferir_pela_rota(app, compra, monkeypatch, owner_user)
+    assert resposta.status_code == 302 and registro.status == 'recusado'
+
+
+def test_rota_de_conferencia_do_estorno_recusa_admin(
+        app, compra, gateway, monkeypatch, admin_user):
+    resposta, registro = _conferir_pela_rota(app, compra, monkeypatch, admin_user)
+    assert resposta.status_code == 403 and registro.status == 'solicitado'
 
 
 def test_duas_entregas_incertas_so_confirmam_quando_a_cobranca_cobre_as_duas(
@@ -437,7 +524,8 @@ def test_parada_bloqueada_nao_derruba_o_inicio_da_rota(app, admin_user, caplog):
                                         data_entrega=hoje(), ordem=ordem))
     db.session.commit()
     caplog.set_level(logging.ERROR, logger='app.services.rastreio_entrega')
-    with patch('app.services.rastreio_entrega._enviar_emails_saida', return_value=0):
+    with patch('app.services.rastreio_entrega._enviar_emails_saida',
+               return_value=0) as emails:
         marco, _ = rastreio_entrega.iniciar_rota(motorista, hoje())
     assert marco.id and RotaInicio.query.count() == 1
     # A parada com estorno pendente fica sem coleta; a outra sai normalmente.
@@ -446,6 +534,51 @@ def test_parada_bloqueada_nao_derruba_o_inicio_da_rota(app, admin_user, caplog):
     assert estoque.quantidade == 17
     assert any(pedidos[0].codigo in r.getMessage() and 'bloqueada' in r.getMessage()
                for r in caplog.records)
+    # Revisão 28/09/2026: a bloqueada não recebe "saiu para entrega".
+    assert emails.call_args.kwargs['excluir'] == {pedidos[0].codigo}
+
+
+def test_parada_bloqueada_aparece_na_tela_do_motorista_e_nao_e_entregue(
+        app, admin_user):
+    """Revisão 28/09/2026: o bloqueio ficava só no log — o motorista via
+    "rota iniciada" e entregava o kit com estorno em andamento."""
+    from app.models import EntregaFoto
+    _, pedidos, _, _ = _ciclo(admin_user, datas=2)
+    for pedido in pedidos:
+        pedido.data_entrega = hoje()
+        pedido.modo_entrega = 'agendada'     # a tela do motorista não lista retirada
+    db.session.add(ReembolsoKit(pedido_id=pedidos[0].id, valor=30,
+                               pagarme_charge_id='ch_kit', status='solicitado'))
+    motorista = Driver(nome='Motorista dos kits', ativo=True, token='kits-tela')
+    db.session.add(motorista)
+    db.session.flush()
+    atribs = []
+    for ordem, pedido in enumerate(pedidos, 1):
+        a = AtribuicaoEntrega(driver_id=motorista.id, pedido_code=pedido.codigo,
+                              data_entrega=hoje(), ordem=ordem)
+        db.session.add(a)
+        atribs.append(a)
+    db.session.flush()
+    db.session.add(EntregaFoto(atribuicao_id=atribs[0].id, url='https://x.example/f.jpg',
+                               tirada_em=agora()))
+    db.session.commit()
+    cliente = app.test_client()
+    with patch('app.services.rastreio_entrega._enviar_emails_saida', return_value=0):
+        r = cliente.post(f'/driver/api/{motorista.token}/iniciar-rota?data={hoje().isoformat()}')
+    assert r.status_code == 200 and r.get_json()['bloqueados'] == [pedidos[0].codigo]
+    with patch('app.services.vnda.buscar_pedidos_do_dia', return_value={'pedidos': []}):
+        lista = cliente.get(f'/driver/api/{motorista.token}/pedidos?data={hoje().isoformat()}')
+    por_codigo = {p['code']: p for p in lista.get_json()['pedidos']}
+    assert 'reembolso em andamento' in por_codigo[pedidos[0].codigo]['bloqueio']
+    assert por_codigo[pedidos[1].codigo]['bloqueio'] is None
+    # Marcar entregue a bloqueada: 409 com o motivo, nada muda (antes: 500).
+    r = cliente.post(f'/driver/api/{motorista.token}/status',
+                     json={'atribuicao_id': atribs[0].id, 'status': 'entregue'})
+    assert r.status_code == 409 and r.get_json()['bloqueado'] is True
+    assert 'confira com a equipe' in r.get_json()['erro']
+    db.session.refresh(atribs[0])
+    assert atribs[0].status in (None, 'pendente')
+    assert not kits_estoque.ja_coletado(pedidos[0].id)
 
 
 # ── 3. Pagamento em dobro, compra cancelada e expiração ──────────────────────
@@ -595,8 +728,14 @@ def test_compra_presa_no_gateway_ha_mais_de_24h_avisa_o_dono(compra, gateway, mo
     assert gateway.alerta.call_args.kwargs == {'critico': False, 'cooldown': 86400}
 
 
-def test_erro_numa_compra_fica_isolado_e_volta_no_ciclo_seguinte(compra, gateway, monkeypatch):
+def test_erro_numa_compra_fica_isolado_e_volta_no_ciclo_seguinte(
+        compra, gateway, monkeypatch, owner_user):
     _vencida(compra, pix_expira_em=None)
+    # Segunda compra vencida no MESMO lote: o erro da primeira não a segura
+    # (revisão 28/09/2026 — com uma compra só, o teste não provava isso).
+    outra, outros_pedidos, _, _ = _ciclo(owner_user, pago=False)
+    outra.expira_em = compra.expira_em + timedelta(seconds=1)
+    db.session.commit()
     original = loja_pagamento.situacao_no_gateway
     chamadas = []
 
@@ -609,10 +748,25 @@ def test_erro_numa_compra_fica_isolado_e_volta_no_ciclo_seguinte(compra, gateway
     monkeypatch.setattr(loja_pagamento, 'situacao_no_gateway', falhar_uma_vez)
     monkeypatch.setattr(pagarme, 'consultar_order', Mock(return_value={
         'ok': True, 'pago': False, 'status': 'failed', 'charge_status': 'failed'}))
-    assert kits_estoque.expirar_compras() == []
+    assert kits_estoque.expirar_compras() == [p.codigo for p in outros_pedidos]
+    assert chamadas[0] == compra.pedido_principal_id
     assert all(p.status == 'aguardando_pagamento' for p in _pedidos(compra))
-    # Ciclo seguinte: a mesma compra é resolvida normalmente.
-    assert len(kits_estoque.expirar_compras()) == 2
+    assert all(p.status == 'cancelado' for p in outros_pedidos)
+    # Ciclo seguinte: a compra que falhou é resolvida normalmente.
+    assert kits_estoque.expirar_compras() == [p.codigo for p in _pedidos(compra)]
+
+
+def test_compra_com_entrega_fora_de_espera_nao_consulta_o_gateway(compra, gateway, monkeypatch):
+    """Revisão 28/09/2026: compra com status misto era selecionada a cada
+    ciclo, consultava o Pagar.me e era pulada na fase 2 — para sempre."""
+    _vencida(compra, pix_expira_em=None)
+    _pedidos(compra)[1].status = 'cancelado'
+    db.session.commit()
+    consulta = Mock(side_effect=AssertionError('não deveria consultar o gateway'))
+    monkeypatch.setattr(loja_pagamento, 'situacao_no_gateway', consulta)
+    assert kits_estoque.expirar_compras() == []
+    assert kits_estoque._expirar_compra(compra.id, agora()) == []
+    consulta.assert_not_called()
 
 
 # ── Entrada malformada (auditoria, item 34) ─────────────────────────────────

@@ -74,6 +74,26 @@
   {% if reembolso_kit.erro %}<p class="mb-0">{{ reembolso_kit.erro }}</p>{% endif %}
   {% if reembolso_kit.status == 'solicitado' %}<p class="mb-0">A resposta do Pagar.me foi incerta. Use <strong>Reembolsar e cancelar esta entrega</strong> de novo para o sistema consultar a cobrança, sem enviar outro estorno: com a devolução confirmada, a entrega é cancelada; com recusa do gateway, uma nova solicitação fica liberada. Enquanto não houver confirmação, o sistema bloqueia nova solicitação e coleta desta entrega para evitar duplicidade.</p>{% endif %}
   {% if reembolso_kit.status == 'recusado' %}<p class="mb-0">O Pagar.me não devolveu este valor. A entrega continua ativa; solicite o estorno de novo, se ainda for o caso.</p>{% endif %}
+  {% if reembolso_kit.status == 'solicitado' %}
+  <details class="mt-2">
+    <summary>O Pagar.me não esclarece? Registrar o que você conferiu no painel dele</summary>
+    <p class="small mb-2 mt-2">Use quando o sistema não consegue decidir sozinho (por exemplo, duas entregas pendentes na mesma cobrança e só uma devolvida). Nada é enviado ao Pagar.me: o registro só vale para esta entrega e fica no histórico.</p>
+    <form method="POST" action="{{ url_for('main.loja_online_pedido_estorno_kit_conferir', codigo=p.codigo) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="decisao" value="confirmado" id="estorno-kit-conf" required>
+        <label class="form-check-label" for="estorno-kit-conf">O valor desta entrega <strong>voltou</strong> ao cliente — cancelar a entrega</label>
+      </div>
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="radio" name="decisao" value="recusado" id="estorno-kit-rec">
+        <label class="form-check-label" for="estorno-kit-rec"><strong>Nada</strong> foi devolvido — a entrega continua ativa</label>
+      </div>
+      <label class="form-label small mb-1" for="estorno-kit-motivo">O que você conferiu (obrigatório)</label>
+      <textarea class="form-control form-control-sm mb-2" name="motivo" id="estorno-kit-motivo" rows="2" minlength="10" maxlength="1000" required></textarea>
+      <button type="submit" class="btn btn-sm btn-outline-dark">Registrar conferência</button>
+    </form>
+  </details>
+  {% endif %}
 </div>
 {% endif %}
 

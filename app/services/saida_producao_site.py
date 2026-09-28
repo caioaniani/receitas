@@ -54,6 +54,70 @@ def composicao_item(item, *, estrita=False):
         receita_id=item.receita_id, produto_id=item.produto_id)
 
 
+def _planejar_saida(pedido, itens, feitos):
+    """[(item, [(col, id, nome, qtd)])] dos itens sob encomenda ainda não
+    baixados. Só leitura; levanta ValueError quando a saída não pode ser
+    registrada (composição sem vínculo, quantidade fracionária)."""
+    from app.services.loja_estoque_reserva import item_sob_encomenda
+
+    planos = []
+    for item in itens:
+        if item.id in feitos or not item_sob_encomenda(item) or (item.quantidade or 0) <= 0:
+            continue
+        componentes = composicao_item(item, estrita=True)
+        if not componentes:
+            raise ValueError(f'Pedido {pedido.codigo}: {item.nome} sem composição de estoque vinculada.')
+        linhas = []
+        for col, cid, nome, por_unidade in componentes:
+            qtd = Decimal(str(item.quantidade)) * Decimal(str(por_unidade))
+            if qtd <= 0:
+                continue
+            if col != 'materia_prima_id' and qtd != qtd.to_integral_value():
+                raise ValueError(f'Pedido {pedido.codigo}: {nome} possui quantidade fracionária na indústria.')
+            linhas.append((col, cid, nome, qtd))
+        if not linhas:
+            raise ValueError(f'Pedido {pedido.codigo}: {item.nome} sem componentes para baixar.')
+        planos.append((item, linhas))
+    return planos
+
+
+def motivo_bloqueio(pedido):
+    """Por que a saída deste pedido seria recusada AGORA, ou None (pode sair).
+
+    Só leitura, sem trava: é o que a tela do motorista mostra antes de ele
+    levar a parada ("não entregar — conferir com a equipe"). A decisão que
+    vale continua sendo a de `registrar`, sob as travas."""
+    from app.services.acerto_despacho import _codigos_acertados
+    from app.services.kits_estoque import motivo_bloqueio_coleta
+
+    if pedido.status not in ('pago', 'em_preparo', 'a_caminho') or pedido.divulgacao:
+        return None
+    motivo = motivo_bloqueio_coleta(pedido)
+    if motivo:
+        return motivo
+    if pedido.data_entrega and pedido.codigo in _codigos_acertados(pedido.data_entrega):
+        return None
+    itens = sorted(pedido.itens, key=lambda item: item.id)
+    try:
+        _planejar_saida(pedido, itens, itens_baixados(pedido.id))
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
+def motivos_bloqueio_por_codigo(codigos):
+    """{codigo: motivo} dos pedidos do site bloqueados entre `codigos`."""
+    codigos = [c for c in set(codigos or ()) if c]
+    if not codigos:
+        return {}
+    out = {}
+    for pedido in PedidoOnline.query.filter(PedidoOnline.codigo.in_(codigos)).all():
+        motivo = motivo_bloqueio(pedido)
+        if motivo:
+            out[pedido.codigo] = motivo
+    return out
+
+
 def registrar_por_codigo(codigo, origem, usuario_id=None):
     pedido = PedidoOnline.query.filter_by(codigo=codigo).first()
     if pedido is None:
@@ -69,7 +133,6 @@ def registrar(pedido, origem, usuario_id=None):
     """
     from app.services.acerto_despacho import _LOCK_ACERTO, _codigos_acertados
     from app.services.estoque_congelados import obter_linha_producao
-    from app.services.loja_estoque_reserva import item_sob_encomenda
 
     # Ordem compartilhada com acerto manual: global -> pedido -> estoque.
     with db.session.no_autoflush:
@@ -88,28 +151,11 @@ def registrar(pedido, origem, usuario_id=None):
     if acertado:
         return []
     feitos = itens_baixados(pedido.id)
-    planos = []
     # Recarrega também quantidades/snapshot que possam ter sido lidos antes
     # de aguardar a trava (ex.: redução administrativa concorrente).
     itens = (PedidoOnlineItem.query.filter_by(pedido_id=pedido.id)
              .populate_existing().order_by(PedidoOnlineItem.id).all())
-    for item in itens:
-        if item.id in feitos or not item_sob_encomenda(item) or (item.quantidade or 0) <= 0:
-            continue
-        componentes = composicao_item(item, estrita=True)
-        if not componentes:
-            raise ValueError(f'Pedido {pedido.codigo}: {item.nome} sem composição de estoque vinculada.')
-        linhas = []
-        for col, cid, nome, por_unidade in componentes:
-            qtd = Decimal(str(item.quantidade)) * Decimal(str(por_unidade))
-            if qtd <= 0:
-                continue
-            if col != 'materia_prima_id' and qtd != qtd.to_integral_value():
-                raise ValueError(f'Pedido {pedido.codigo}: {nome} possui quantidade fracionária na indústria.')
-            linhas.append((col, cid, nome, qtd))
-        if not linhas:
-            raise ValueError(f'Pedido {pedido.codigo}: {item.nome} sem componentes para baixar.')
-        planos.append((item, linhas))
+    planos = _planejar_saida(pedido, itens, feitos)
 
     faltas = []
     # Ordem única entre pedidos com vários componentes; saldo relido sob FOR UPDATE.

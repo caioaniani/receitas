@@ -880,7 +880,14 @@ def api_painel_status(code):
     uid = current_user.id if current_user.is_authenticated else None
     if novo_status == 'entregue':
         from app.services.saida_producao_site import registrar_por_codigo
-        registrar_por_codigo(code, 'painel_entregas', uid)
+        try:
+            with db.session.begin_nested():
+                registrar_por_codigo(code, 'painel_entregas', uid)
+        except ValueError as exc:
+            # Saída recusada (estorno de kit em andamento, composição sem
+            # vínculo): nada é marcado — antes era 500 na tela.
+            db.session.rollback()
+            return jsonify(ok=False, bloqueado=True, erro=str(exc)), 409
     s = PainelPedidoStatus.query.filter_by(pedido_code=code).first()
     if s:
         # Nao regride de pronto/entregue pra visto por um clique acidental de
@@ -1990,7 +1997,12 @@ def marcar_entrega_staff(code):
     if (atrib.status or 'pendente') == 'entregue':
         return jsonify(ok=True, ja_estava=True)
     from app.services.saida_producao_site import registrar_por_codigo
-    registrar_por_codigo(code, 'entrega_admin', current_user.id)
+    try:
+        with db.session.begin_nested():
+            registrar_por_codigo(code, 'entrega_admin', current_user.id)
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify(ok=False, bloqueado=True, erro=str(exc)), 409
     atrib.status = 'entregue'
     atrib.entregue_em = agora()
     atrib.motivo_falha = None

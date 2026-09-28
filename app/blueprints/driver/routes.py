@@ -286,6 +286,13 @@ def api_pedidos(token):
         pedidos_driver.append(_enriquecer_pedido(p, a))
 
     pedidos_driver.sort(key=lambda x: ((x.get('atribuicao_id') and atribs_por_code[x['code']].ordem) or 0, x.get('periodo') or ''))
+    # Parada que a saída recusaria agora (estorno de kit em andamento,
+    # composição sem vínculo): o motorista vê "não entregar — conferir com a
+    # equipe" antes de levar (revisão 28/09/2026).
+    from app.services.saida_producao_site import motivos_bloqueio_por_codigo
+    bloqueios = motivos_bloqueio_por_codigo([p['code'] for p in pedidos_driver])
+    for p in pedidos_driver:
+        p['bloqueio'] = bloqueios.get(p['code'])
 
     from app.services import rotas as rotas_svc
     return jsonify(
@@ -329,7 +336,15 @@ def api_status(token):
 
     if novo_status == 'entregue':
         from app.services.saida_producao_site import registrar_por_codigo
-        registrar_por_codigo(a.pedido_code, 'entrega_motorista')
+        try:
+            with db.session.begin_nested():
+                registrar_por_codigo(a.pedido_code, 'entrega_motorista')
+        except ValueError as exc:
+            # Parada bloqueada (estorno de kit, composição sem vínculo): a
+            # entrega não é registrada — antes estourava 500 na tela.
+            db.session.rollback()
+            return jsonify(ok=False, bloqueado=True,
+                           erro=f'Não entregue — confira com a equipe. {exc}'), 409
     a.status = novo_status
     a.nota = (body.get('nota') or '')[:500] or None
     if novo_status == 'entregue':
@@ -629,6 +644,10 @@ def api_iniciar_rota(token):
                   f'no próprio dia (hoje é '
                   f'{hoje_brt().strftime("%d/%m")}).')), 422
     ri, enviados = rastreio_entrega.iniciar_rota(driver, dia)
+    from app.services.saida_producao_site import motivos_bloqueio_por_codigo
+    codigos = [a.pedido_code for a in AtribuicaoEntrega.query.filter_by(
+        driver_id=driver.id, data_entrega=dia).all()]
     return jsonify(ok=True, iniciado_em=ri.iniciado_em.strftime('%H:%M'),
                    emails_enviados=enviados,
-                   ja_iniciada=(enviados == 0 and ri.emails_em is not None))
+                   ja_iniciada=(enviados == 0 and ri.emails_em is not None),
+                   bloqueados=sorted(motivos_bloqueio_por_codigo(codigos)))
