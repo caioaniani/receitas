@@ -228,6 +228,14 @@ def create_app(config_class=None):
         from app.services.acesso_pedidos_loja import loja_liberada
         from app.services.busca_navegacao import itens_para_usuario
 
+        if current_user.is_authenticated and current_user.is_gestao_rh():
+            # Nem páginas de erro/senha devem carregar custos ou catálogo.
+            return dict(
+                sidebar_categorias={}, mp_info={}, mp_nomes=[],
+                receita_nomes=[], produto_nomes=[], funcionarios=[],
+                busca_navegacao=itens_para_usuario(current_user, {}),
+            )
+
         loja_individual = (loja_liberada(current_user)
                            if current_user.is_authenticated else None)
         if (current_user.is_authenticated and loja_individual
@@ -525,6 +533,19 @@ def create_app(config_class=None):
             return None
         if getattr(current_user, 'senha_provisoria', False):
             return redirect(url_for('auth.minha_senha'))
+        if current_user.is_gestao_rh() and not current_user.is_dono():
+            from app.services.acesso_gestao_rh import endpoint_permitido
+            if current_user.somente_treino and not ep.startswith('treino.'):
+                return redirect(url_for('treino.home'))
+            if ep in {'main.index', 'auth.login'}:
+                return redirect(url_for('rh.dashboard'))
+            if ep in {'main.ui_classica', 'main.ui_nova'}:
+                return None
+            if ep == 'main.area' and request.view_args.get('slug') == 'rh':
+                return None
+            if not endpoint_permitido(ep):
+                abort(403)
+            return None
         if current_user.is_relatorio_loja():
             # Perfil fixo: não herda telas nem operações de gerente/observador.
             from app.services.acesso_relatorio_loja import loja_permitida

@@ -22,20 +22,20 @@
                    placeholder="000.000.000-00">
         </div>
         <div class="col-md-3">
-            <label for="cargo-id" class="form-label fw-bold">{{ 'Função e salário' if current_user.is_owner else 'Função' }} *</label>
+            <label for="cargo-id" class="form-label fw-bold">{{ 'Função e salário' if current_user.pode_gerir_rh() else 'Função' }} *</label>
             <select id="cargo-id" name="cargo_id" class="form-select" required>
                 <option value="">Selecione a função</option>
                 {% for cargo in cargos %}
-                <option value="{{ cargo.id }}" {% if current_user.is_owner %}data-salario="{{ '%.2f' % cargo.salario_base }}"{% endif %}
-                        {% if func and func.cargo_id == cargo.id %}selected{% endif %}>{{ cargo.nome }}{% if current_user.is_owner %} — R$ {{ '{:,.2f}'.format(cargo.salario_base).replace(',', 'X').replace('.', ',').replace('X', '.') }}{% endif %}</option>
+                <option value="{{ cargo.id }}" {% if current_user.pode_gerir_rh() %}data-salario="{{ '%.2f' % cargo.salario_base }}"{% endif %}
+                        {% if func and func.cargo_id == cargo.id %}selected{% endif %}>{{ cargo.nome }}{% if current_user.pode_gerir_rh() %} — R$ {{ '{:,.2f}'.format(cargo.salario_base).replace(',', 'X').replace('.', ',').replace('X', '.') }}{% endif %}</option>
                 {% endfor %}
             </select>
             {% if not cargos %}<p class="small text-muted mt-1">Nenhuma função ativa cadastrada.</p>{% endif %}
-            {% if current_user.is_owner %}<a class="small" href="{{ url_for('rh.cargos') }}" target="_blank" rel="noopener">Gerenciar funções e salários</a>{% endif %}
+            {% if current_user.pode_gerir_rh() %}<a class="small" href="{{ url_for('rh.cargos') }}" target="_blank" rel="noopener">Gerenciar funções e salários</a>{% endif %}
         </div>
     </div>
 
-    {% if current_user.is_owner %}
+    {% if current_user.pode_gerir_rh() %}
     <div class="row g-3 mt-1">
         <div class="col-md-3">
             <label for="salario-base" class="form-label fw-bold">Salário Base</label>
@@ -118,7 +118,7 @@
         <a href="{{ url_for('rh.funcionarios') }}" class="btn btn-outline-secondary btn-sm">Cancelar</a>
     </div>
 </form>
-{% if current_user.is_owner %}
+{% if current_user.pode_gerir_rh() %}
 <script>
 (function () {
     const cargo = document.getElementById('cargo-id');

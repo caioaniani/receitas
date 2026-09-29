@@ -57,6 +57,8 @@ def login():
                 return redirect(url_for('pedidos.relatorio'))
             if usuario.somente_treino:
                 return redirect(url_for('treino.home'))
+            if usuario.is_gestao_rh():
+                return redirect(url_for('rh.dashboard'))
             if usuario.is_padeiro():
                 return redirect(url_for('padeiro.index'))
             return redirect(next_page or url_for('main.index'))
@@ -249,6 +251,8 @@ def delegar_pedidos_industria(id):
 def delegar_nf_b2b(id):
     from app.models import DelegacaoFiscalB2B
     u = Usuario.query.get_or_404(id)
+    if u.is_gestao_rh() and not current_user.is_dono():
+        abort(403)
     permitir = request.form.get('permitir')
     if permitir not in ('0', '1'):
         abort(400)
@@ -277,6 +281,12 @@ def novo_usuario():
     from app.constants import PAPEIS_VALIDOS
     if papel not in PAPEIS_VALIDOS:
         papel = 'funcionario'
+
+    if papel == 'gestao_rh':
+        if not current_user.is_dono():
+            abort(403)
+        if request.form.get('somente_treino'):
+            abort(400, description='Gestão de RH não pode ser cadastrada como somente treinamento.')
 
     if not nome or not login_val:
         flash('Preencha nome e login.', 'warning')
@@ -331,7 +341,7 @@ def novo_usuario():
         from app.services import email as email_svc
         res = email_svc.enviar_boas_vindas(
             email, nome, login_val, senha,
-            com_chatwoot=(not somente_treino and papel not in ('observador', 'relatorio_loja')))
+            com_chatwoot=(not somente_treino and papel not in ('observador', 'relatorio_loja', 'gestao_rh')))
         if res.get('ok'):
             flash(f'Usuario "{nome}" criado! Senha enviada para {email}.',
                   'success')
@@ -350,6 +360,8 @@ def novo_usuario():
 @admin_required
 def excluir_usuario(id):
     u = Usuario.query.get_or_404(id)
+    if u.is_gestao_rh() and not current_user.is_dono():
+        abort(403)
     if u.id == current_user.id:
         flash('Voce nao pode excluir a si mesmo.', 'warning')
         return redirect(url_for('auth.usuarios'))
@@ -379,6 +391,8 @@ def excluir_usuario(id):
 @admin_required
 def alterar_papel(id):
     u = Usuario.query.get_or_404(id)
+    if u.is_gestao_rh() and not current_user.is_dono():
+        abort(403)
     if u.is_owner:
         flash('Owner nao pode ter o papel alterado.', 'warning')
         return _voltar_ao_usuario(u)
@@ -389,6 +403,11 @@ def alterar_papel(id):
         flash('Papel invalido.', 'warning')
         return _voltar_ao_usuario(u)
 
+    if papel == 'gestao_rh':
+        if not current_user.is_dono():
+            abort(403)
+        if u.somente_treino:
+            abort(400, description='Retire a restrição de somente treinamento antes de conceder Gestão de RH.')
     if papel == 'relatorio_loja':
         from app.services.acesso_relatorio_loja import loja_operacional
         loja = loja_operacional(request.form.get('loja_id', type=int))
@@ -416,6 +435,8 @@ def toggle_somente_treino(id):
     """Liga/desliga o acesso SÓ TREINAMENTO da conta (por pessoa — decisão do
     dono 23/07/2026). Owner nunca é restrito."""
     u = Usuario.query.get_or_404(id)
+    if u.is_gestao_rh() and not current_user.is_dono():
+        abort(403)
     if u.is_owner:
         flash('Owner não pode ser restrito a treinamento.', 'warning')
         return _voltar_ao_usuario(u)
@@ -440,6 +461,8 @@ def toggle_somente_treino(id):
 @admin_required
 def reset_senha(id):
     u = Usuario.query.get_or_404(id)
+    if u.is_gestao_rh() and not current_user.is_dono():
+        abort(403)
     # Owner nao pode ter senha resetada por admin nao-owner. Owner trocando
     # a propria senha usa /auth/minha-senha (que exige senha atual).
     if u.is_owner and not current_user.is_owner:
@@ -557,7 +580,8 @@ def minha_senha():
         # Conta só-treino vai direto pro treino (senão o gate rebateria de
         # main.index pra lá num salto extra).
         destino = ('pedidos.relatorio' if current_user.is_relatorio_loja()
-                   else 'treino.home' if so_treino else 'main.index')
+                   else 'treino.home' if so_treino
+                   else 'rh.dashboard' if current_user.is_gestao_rh() else 'main.index')
         return redirect(url_for(destino))
 
     return render_template('auth/minha_senha.html',

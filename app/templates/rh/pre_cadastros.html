@@ -44,7 +44,7 @@
                 {# Caso comum: a pessoa JÁ existe no RH (veio da folha) e
                    preencheu o QR pra informar o e-mail — vincular leva
                    e-mail/telefone pra ficha e pode já liberar o curso. #}
-                <form method="POST" action="{{ url_for('rh.pre_cadastro_vincular', id=p.id) }}"
+                {% if current_user.is_dono() %}<form method="POST" action="{{ url_for('rh.pre_cadastro_vincular', id=p.id) }}"
                       class="d-flex flex-column gap-1 mb-1">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <div class="d-flex gap-1">
@@ -77,6 +77,7 @@
                     gerar acesso ao treinamento (ignorado se escolher conta existente)
                   </label>
                 </form>
+                {% else %}<p class="small">Para vincular a uma pessoa ou conta existente, solicite ao proprietário.</p>{% endif %}
                 <div class="d-flex gap-1">
                   <form method="POST" action="{{ url_for('rh.pre_cadastro_promover', id=p.id) }}" class="d-flex gap-1">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

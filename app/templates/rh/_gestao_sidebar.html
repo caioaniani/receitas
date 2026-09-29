@@ -1,0 +1,13 @@
+<div class="ui-v2-nav-group" aria-label="Gestão de RH">
+  <span class="ui-v2-nav-label">Gestão de RH</span>
+  {% if current_user.pode_gerir_rh() %}
+  {% import 'rh/_navigation.html' as rhnav with context %}
+  {{ rhnav.principal('sidebar') }}
+  <a class="sidebar-link" href="{{ url_for('rh.plano_carreira') }}">Cargos e carreira</a>
+  <a class="sidebar-link" href="{{ url_for('rh.cargos') }}">Funções e salários</a>
+  <a class="sidebar-link" href="{{ url_for('rh.folha') }}">Folha de pagamento</a>
+  <a class="sidebar-link" href="{{ url_for('treino.admin_home') }}">Gerenciar cursos</a>
+  {% endif %}
+  <a class="sidebar-link" href="{{ url_for('treino.home') }}">Meu treinamento</a>
+  <a class="sidebar-link" href="{{ url_for('auth.minha_senha') }}">Trocar minha senha</a>
+</div>

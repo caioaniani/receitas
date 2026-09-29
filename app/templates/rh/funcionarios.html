@@ -270,14 +270,14 @@ document.querySelectorAll('.acesso-form').forEach(function(form) {
                 <th scope="col">Cargo e função</th>
                 <th scope="col">Unidade e período</th>
                 <th scope="col">Contato e admissão</th>
-                {% if current_user.is_owner %}<th scope="col">Salário</th><th scope="col">Ações</th>{% endif %}
+                {% if current_user.pode_gerir_rh() %}<th scope="col">Salário</th><th scope="col">Ações</th>{% endif %}
             </tr>
         </thead>
         <tbody>
             {% for f in funcionarios %}
             <tr data-rh-person="{{ f.nome }} {{ f.cargo.nome if f.cargo else (f.funcao or '') }} {{ f.funcao or '' }} {{ f.lojas|map(attribute='nome')|join(' ') }}">
                 <th scope="row" data-label="Pessoa">
-                    {% if current_user.is_owner %}<a class="rh-equipe-person" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}">{{ f.nome }}</a>{% else %}{{ f.nome }}{% endif %}
+                    {% if current_user.pode_gerir_rh() %}<a class="rh-equipe-person" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}">{{ f.nome }}</a>{% else %}{{ f.nome }}{% endif %}
                     <div class="rh-pessoas-statuses"><span class="rh-pessoas-status{{ ' is-inactive' if not f.ativo }}">{{ 'Ativo' if f.ativo else 'Inativo' }}</span>{% if f.cadastro_pendente %}<span class="rh-pessoas-status is-pending">Cadastro pendente</span>{% endif %}</div>
                 </th>
                 <td data-label="Cargo e função"><strong>{{ f.cargo.nome if f.cargo else (f.funcao or 'Cargo não definido') }}</strong>{% if f.cargo and f.funcao and f.funcao != f.cargo.nome %}<small class="rh-equipe-muted">{{ f.funcao }}</small>{% endif %}<small class="rh-equipe-muted">{{ f.funcao_operacional or 'Função operacional não definida' }}</small></td>
@@ -289,14 +289,14 @@ document.querySelectorAll('.acesso-form').forEach(function(form) {
                     <small class="rh-equipe-muted">{{ f.periodo or 'Período não definido' }}</small>
                 </td>
                 <td data-label="Contato e admissão">{{ f.telefone or 'Telefone não informado' }}<small class="rh-equipe-muted">{% if f.data_admissao %}Admissão <time datetime="{{ f.data_admissao.isoformat() }}">{{ f.data_admissao.strftime('%d/%m/%Y') }}</time>{% else %}Admissão não informada{% endif %}</small></td>
-                {% if current_user.is_owner %}
+                {% if current_user.pode_gerir_rh() %}
                 <td data-label="Salário" class="rh-pessoas-salary">{{ f.salario_base | brl }}</td>
                 <td class="rh-equipe-history"><div class="rh-equipe-row-actions"><a class="rh-equipe-text-link" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}" aria-label="Abrir ficha de {{ f.nome }}">Abrir ficha <i class="bi bi-arrow-right" aria-hidden="true"></i></a><a class="rh-equipe-text-link" href="{{ url_for('rh.detalhe_funcionario', id=f.id, aba='cadastro', _anchor='feedback') }}" aria-label="Registrar feedback para {{ f.nome }}">Registrar feedback</a></div></td>
                 {% endif %}
             </tr>
             {% endfor %}
             {% if not funcionarios %}
-            <tr><td colspan="{{ 6 if current_user.is_owner else 4 }}"><div class="rh-equipe-empty"><i class="bi bi-people" aria-hidden="true"></i><h3>Nenhum funcionário encontrado.</h3><p>Altere a unidade ou adicione uma pessoa à equipe.</p><a class="rh-equipe-button" href="{{ url_for('rh.novo_funcionario') }}">Novo funcionário</a></div></td></tr>
+            <tr><td colspan="{{ 6 if current_user.pode_gerir_rh() else 4 }}"><div class="rh-equipe-empty"><i class="bi bi-people" aria-hidden="true"></i><h3>Nenhum funcionário encontrado.</h3><p>Altere a unidade ou adicione uma pessoa à equipe.</p><a class="rh-equipe-button" href="{{ url_for('rh.novo_funcionario') }}">Novo funcionário</a></div></td></tr>
             {% endif %}
         </tbody>
     </table>

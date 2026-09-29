@@ -16,7 +16,7 @@
     </h1>
     <div class="d-flex gap-2 flex-wrap">
     {% if current_user.is_dono() and func.usuario_id %}<a href="{{ url_for('auth.usuarios', usuario=func.usuario_id) }}" class="btn btn-primary"><i class="bi bi-shield-lock" aria-hidden="true"></i> Permissões de acesso</a>{% endif %}
-    {% if current_user.is_dono() %}<a href="{{ url_for('rh.carreira_funcionario', id=func.id) }}" class="btn-pill">Histórico de carreira</a>{% endif %}
+    {% if current_user.pode_gerir_rh() %}<a href="{{ url_for('rh.carreira_funcionario', id=func.id) }}" class="btn-pill">Histórico de carreira</a>{% endif %}
     {{ ui.botao_voltar(url_for('rh.funcionarios')) }}
     </div>
 </div>
@@ -78,22 +78,22 @@
         </div>
         <div class="col-md-4">
             <label class="form-label fw-bold">Cargo</label>
-            <select name="cargo_id" class="form-select input-blue" {% if not current_user.is_owner %}disabled{% endif %}>
+            <select name="cargo_id" class="form-select input-blue" {% if not current_user.pode_gerir_rh() %}disabled{% endif %}>
                 <option value="">— sem cargo —</option>
                 {% for c in cargos_disponiveis %}
                 <option value="{{ c.id }}" {% if func.cargo_id == c.id %}selected{% endif %}>
-                    {{ c.nome }}{% if current_user.is_owner %} (R$ {{ '%.2f'|format(c.salario_base)|replace('.', ',') }}){% endif %}
+                    {{ c.nome }}{% if current_user.pode_gerir_rh() %} (R$ {{ '%.2f'|format(c.salario_base)|replace('.', ',') }}){% endif %}
                 </option>
                 {% endfor %}
             </select>
-            {% if current_user.is_owner %}
+            {% if current_user.pode_gerir_rh() %}
             <small class="text-muted"><a href="{{ url_for('rh.cargos') }}">Gerenciar cargos →</a></small>
             {% endif %}
         </div>
     </div>
 
     <div class="row g-3 mt-1">
-        {% if current_user.is_owner %}
+        {% if current_user.pode_gerir_rh() %}
         <div class="col-md-2">
             <label class="form-label fw-bold">Salário Base
                 <small class="text-muted fw-normal">(do cargo)</small>
@@ -171,7 +171,8 @@
         </div>
         <div class="col-md-2">
             <label class="form-label fw-bold">Email</label>
-            <input type="email" name="email" class="form-control input-blue" value="{{ func.email or '' }}">
+            <input type="email" name="email" {% if current_user.is_gestao_rh() and not current_user.is_dono() and func.usuario_id %}readonly aria-describedby="email-conta-protegido"{% endif %} class="form-control input-blue" value="{{ func.email or '' }}">
+            {% if current_user.is_gestao_rh() and not current_user.is_dono() and func.usuario_id %}<small id="email-conta-protegido">Conta vinculada: solicite alterações deste e-mail ao proprietário.</small>{% endif %}
         </div>
     </div>
 
@@ -199,7 +200,7 @@
         </div>
     </div>
 
-    {% if current_user.is_owner %}
+    {% if current_user.pode_gerir_rh() %}
     <!-- Resumo Financeiro — só super admin -->
     <div class="card border-0 shadow-sm mt-3 mb-3" style="background:#f5f5f5;">
         <div class="card-body">
@@ -293,7 +294,7 @@
 {% endif %}
 
 <!-- Histórico Folhas — só super admin -->
-{% if folhas and current_user.is_owner %}
+{% if folhas and current_user.pode_gerir_rh() %}
 <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-file-earmark-text"></i> Últimas Folhas</h6>
 <div class="table-responsive mb-4">
     <table class="table table-sm table-bordered bg-white">

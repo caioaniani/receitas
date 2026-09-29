@@ -45,6 +45,7 @@
                         <option value="producao">Produção</option>
                         <option value="padeiro">Padeiro</option>
                         <option value="rh">RH</option>
+                        {% if current_user.is_dono() %}<option value="gestao_rh">Gestão de RH — salários e promoções</option>{% endif %}
                         <option value="marketing">Marketing</option>
                         <option value="observador">Observador — somente leitura</option>
                         <option value="relatorio_loja">Relatório de uma loja — somente leitura</option>
@@ -180,6 +181,8 @@
                 <td>
                     {% if u.is_owner %}
                         <span class="badge bg-dark">Owner</span>
+                    {% elif u.is_gestao_rh() and not current_user.is_dono() %}
+                        <span class="badge bg-dark">Gestão de RH — acesso protegido</span>
                     {% else %}
                         <form method="POST" action="{{ url_for('auth.alterar_papel', id=u.id) }}" class="d-flex gap-1 flex-wrap">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -190,6 +193,7 @@
                                 <option value="producao" {% if u.papel == 'producao' %}selected{% endif %}>Produção</option>
                                 <option value="padeiro" {% if u.papel == 'padeiro' %}selected{% endif %}>Padeiro</option>
                                 <option value="rh" {% if u.papel == 'rh' %}selected{% endif %}>RH</option>
+                                {% if current_user.is_dono() or u.is_gestao_rh() %}<option value="gestao_rh" {% if u.is_gestao_rh() %}selected{% endif %}>Gestão de RH — salários e promoções</option>{% endif %}
                                 <option value="marketing" {% if u.papel == 'marketing' %}selected{% endif %}>Marketing</option>
                                 <option value="observador" {% if u.papel == 'observador' %}selected{% endif %}>Observador — leitura</option>
                                 <option value="relatorio_loja" {% if u.is_relatorio_loja() %}selected{% endif %}>Relatório de uma loja — leitura</option>
@@ -242,8 +246,8 @@
                 <td>
                     {% if u.id == current_user.id %}
                         <span class="text-muted small">(você)</span>
-                    {% elif u.is_owner and not current_user.is_owner %}
-                        <span class="text-muted small">(owner — protegido)</span>
+                    {% elif (u.is_owner or u.is_gestao_rh()) and not current_user.is_owner %}
+                        <span class="text-muted small">(acesso protegido pelo proprietário)</span>
                     {% else %}
                     <!-- Reset senha -->
                     <form method="POST" action="{{ url_for('auth.reset_senha', id=u.id) }}" class="d-inline">

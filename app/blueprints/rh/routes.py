@@ -10,7 +10,7 @@ from sqlalchemy.orm import defer, joinedload, selectinload
 from werkzeug.utils import secure_filename
 
 from app.blueprints.rh import rh_bp
-from app.decorators import owner_required, rh_required
+from app.decorators import gestao_rh_required, owner_required, rh_required
 from app.extensions import db
 from app.models import (
     Atestado,
@@ -39,8 +39,8 @@ ALLOWED_MIMETYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'appl
 
 @rh_bp.before_request
 def _rh_restrito_ao_owner():
-    # RH temporariamente acessivel apenas ao owner. Reverter: remover este
-    # guard + trocar is_owner por pode_rh() na sidebar (base.html).
+    # Owner e chefia de RH. O gate global restringe o perfil gestao_rh aos
+    # endpoints aprovados; as delegações estreitas anteriores permanecem.
     if not current_user.is_authenticated:
         return current_app.login_manager.unauthorized()
     if (request.endpoint in {
@@ -55,7 +55,7 @@ def _rh_restrito_ao_owner():
     if (request.endpoint in {'rh.funcionarios', 'rh.novo_funcionario'}
             and current_user.pode_cadastrar_funcionarios()):
         return None
-    if not current_user.is_dono():
+    if not current_user.pode_gerir_rh():
         abort(403)
 
 
@@ -72,7 +72,7 @@ def dashboard():
 
 @rh_bp.route('/administrativo')
 @login_required
-@owner_required
+@gestao_rh_required
 def administrativo():
     # Eager load de cargo + lojas evita N+1 ao calcular custo_total() e
     # custo por loja (cada Funcionario acessa cargo.salario_base e lojas).
@@ -748,10 +748,10 @@ def novo_funcionario():
             cargo = db.session.get(Cargo, int(cargo_id))
             if cargo is None or not cargo.ativo:
                 abort(400)
-        # Dados de remuneração só são aceitos do owner. A tela simplificada do
+        # Dados de remuneração só são aceitos do dono/chefia. A tela simplificada do
         # Dakson não exibe esses campos e o servidor também ignora uma eventual
         # tentativa de enviá-los manualmente.
-        pode_remuneracao = current_user.is_dono()
+        pode_remuneracao = current_user.pode_gerir_rh()
         salario_in = (parse_float_br(
             request.form.get('salario_base', ''), default=0)
             if pode_remuneracao else 0)
@@ -810,7 +810,7 @@ def novo_funcionario():
         rh_cargos.associar_funcionario(func)
         db.session.commit()
         flash(f'Funcionário "{func.nome}" cadastrado!', 'success')
-        if not current_user.is_dono():
+        if not current_user.pode_gerir_rh():
             return redirect(url_for('rh.funcionarios'))
         return redirect(url_for('rh.detalhe_funcionario', id=func.id))
 
@@ -1161,6 +1161,13 @@ def plano_carreira_decisao(id):
 def salvar_funcionario(id):
     from app.services import rh_movimentacao
     func = Funcionario.query.get_or_404(id)
+    # Contato da ficha é usado no reenvio de acesso. RH não muda identidade
+    # de contas vinculadas; isso permanece sob controle do proprietário.
+    if (current_user.is_gestao_rh() and not current_user.is_dono()
+            and func.usuario_id
+            and (request.form.get('email') or '').strip().casefold()
+            != (func.email or '').strip().casefold()):
+        abort(403, description='Peça ao proprietário para alterar o e-mail de uma conta vinculada.')
     cargo_antes = rh_movimentacao.snapshot(func)
 
     func.nome = request.form.get('nome', '').strip() or func.nome
@@ -1287,7 +1294,7 @@ def lojas():
 
 @rh_bp.route('/cargos')
 @login_required
-@owner_required
+@gestao_rh_required
 def cargos():
     lista = Cargo.query.order_by(Cargo.nome).all()
     return render_template('rh/cargos.html', cargos=lista)
@@ -1295,7 +1302,7 @@ def cargos():
 
 @rh_bp.route('/cargos/salvar', methods=['POST'])
 @login_required
-@owner_required
+@gestao_rh_required
 def salvar_cargos():
     ids = request.form.getlist('cargo_id[]')
     nomes = request.form.getlist('cargo_nome[]')
@@ -1331,7 +1338,7 @@ def salvar_cargos():
 
 @rh_bp.route('/cargos/<int:id>/excluir', methods=['POST'])
 @login_required
-@owner_required
+@gestao_rh_required
 def excluir_cargo(id):
     c = Cargo.query.get_or_404(id)
     if c.funcionarios:
@@ -1454,7 +1461,7 @@ def excluir_loja(id):
 
 @rh_bp.route('/folha')
 @login_required
-@owner_required
+@gestao_rh_required
 def folha():
     mes = request.args.get('mes', type=int, default=agora().month)
     ano = request.args.get('ano', type=int, default=agora().year)
@@ -1470,7 +1477,7 @@ def folha():
 
 @rh_bp.route('/folha/gerar', methods=['POST'])
 @login_required
-@owner_required
+@gestao_rh_required
 def gerar_folha():
     mes = int(request.form.get('mes', agora().month))
     ano = int(request.form.get('ano', agora().year))
@@ -1504,7 +1511,7 @@ def gerar_folha():
 
 @rh_bp.route('/folha/<int:folha_id>/salvar', methods=['POST'])
 @login_required
-@owner_required
+@gestao_rh_required
 def salvar_folha_item(folha_id):
     f = FolhaPagamento.query.get_or_404(folha_id)
     f.dias_trabalhados = int(request.form.get('dias_trabalhados', '26') or 26)
@@ -1629,7 +1636,7 @@ def excluir_posicao(pos_id):
 
 @rh_bp.route('/folha/<int:folha_id>/pdf')
 @login_required
-@owner_required
+@gestao_rh_required
 def holerite_pdf(folha_id):
     from app.services.pdf import gerar_holerite
     folha = FolhaPagamento.query.get_or_404(folha_id)
@@ -1641,7 +1648,7 @@ def holerite_pdf(folha_id):
 
 @rh_bp.route('/folha/<int:folha_id>/excluir', methods=['POST'])
 @login_required
-@owner_required
+@gestao_rh_required
 def excluir_folha_item(folha_id):
     f = FolhaPagamento.query.get_or_404(folha_id)
     mes, ano = f.mes, f.ano

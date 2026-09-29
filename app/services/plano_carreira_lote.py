@@ -204,8 +204,8 @@ def confirmar(ids, estado_esperado, actor_id):
     """Revalida todo o lote, aplica e audita; o chamador faz commit ou rollback."""
     with db.session.no_autoflush:
         actor = db.session.get(Usuario, actor_id) if actor_id else None
-        if not actor or not actor.is_dono():
-            raise ValueError('Somente o dono pode aprovar o lote.')
+        if not actor or not actor.pode_gerir_rh():
+            raise ValueError('Somente o dono ou a Gestão de RH pode aprovar o lote.')
         if (not isinstance(estado_esperado, str) or len(estado_esperado) != 64
                 or any(c not in '0123456789abcdef' for c in estado_esperado)):
             raise ValueError('Revise o lote antes de confirmar a aprovação.')

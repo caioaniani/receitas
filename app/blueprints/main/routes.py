@@ -154,7 +154,7 @@ def area(slug):
     if not meta['pode'](current_user):
         abort(403)
     from app.ui_v2 import ui_v2_ativo
-    if slug == 'rh' and ui_v2_ativo() and current_user.is_dono():
+    if slug == 'rh' and ui_v2_ativo() and current_user.pode_gerir_rh():
         return redirect(url_for('rh.dashboard'))
     template = ('main/area_v2.html' if ui_v2_ativo()
                 else 'main/area.html')

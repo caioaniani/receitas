@@ -5,14 +5,14 @@ from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.rh import rh_bp
-from app.decorators import owner_required
+from app.decorators import gestao_rh_required
 from app.extensions import db
 from app.models import Funcionario
 
 
 @rh_bp.route('/equipe')
 @login_required
-@owner_required
+@gestao_rh_required
 def equipe():
     from app.services.rh_equipe import carregar_visao
     filtros = {k: (request.args.get(k) or '').strip() for k in
@@ -23,7 +23,7 @@ def equipe():
 
 @rh_bp.route('/equipe/lojas')
 @login_required
-@owner_required
+@gestao_rh_required
 def equipe_lojas():
     from app.services.rh_equipe_lojas import carregar_lojas
 
@@ -43,7 +43,7 @@ def equipe_lojas():
 
 @rh_bp.route('/funcionarios/<int:id>/carreira', methods=['GET', 'POST'])
 @login_required
-@owner_required
+@gestao_rh_required
 def carreira_funcionario(id):
     from app.models import RhMovimentacao
     from app.services import rh_movimentacao
@@ -73,7 +73,7 @@ def carreira_funcionario(id):
 
 @rh_bp.route('/cargos/unificar-atendentes', methods=['GET', 'POST'])
 @login_required
-@owner_required
+@gestao_rh_required
 def unificar_atendentes():
     from app.services import rh_cargos
     if request.method == 'POST':

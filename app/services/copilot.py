@@ -1050,7 +1050,7 @@ def papel_efetivo(user):
     # Observador e um perfil fixo e deliberadamente fora da matriz editavel.
     # Mantemos o papel real aqui para ele nao herdar as ferramentas do
     # funcionario por meio do fallback abaixo (inclusive no Slack/Copilot).
-    if papel in ('observador', 'relatorio_loja'):
+    if papel in ('observador', 'relatorio_loja', 'gestao_rh'):
         return papel
     if papel == 'gerente':
         return 'gerente'
@@ -1061,7 +1061,7 @@ def pode_usar(tool_name, user):
     papel = papel_efetivo(user)
     if not papel:
         return False
-    if papel == 'relatorio_loja':
+    if papel in ('relatorio_loja', 'gestao_rh'):
         return False
     permitidos = PAPEIS_POR_TOOL.get(tool_name, {'admin'})
     # Owner/admin sempre full — nao entram na matriz editavel (sem lockout).
@@ -5056,6 +5056,8 @@ _EXEC_HANDLERS = {
 
 def _executar_read(tool_name, params, user):
     """Dispatch unico das tools de leitura."""
+    if papel_efetivo(user) == 'gestao_rh':
+        return {'erro': 'A Gestão de RH não tem acesso às ferramentas operacionais.'}
     handler = _READ_HANDLERS.get(tool_name)
     if not handler:
         return {'erro': f'tool de leitura desconhecida: {tool_name}'}
@@ -5068,6 +5070,8 @@ def _executar_read(tool_name, params, user):
 
 def executar(tipo_acao, params, user):
     """Dispatch unico das tools de escrita. Chamado apos aprovacao."""
+    if papel_efetivo(user) == 'gestao_rh':
+        return {'ok': False, 'erro': 'A Gestão de RH não tem acesso às ferramentas operacionais.'}
     # receber_pedido reusa o executor de mudar_status_pedido
     if tipo_acao == 'receber_pedido':
         return executar_mudar_status_pedido(

@@ -134,12 +134,13 @@ STATUS_PEDIDO_ABAS = (
 # Validos pra Usuario.papel. Centralizado aqui (estava duplicado em
 # auth/routes.py). 'padeiro' = chao de fabrica: tela touchscreen dedicada
 # (separar pedido + gerar QR de saida), sem acesso ao resto do sistema.
-PAPEIS_VALIDOS = ('admin', 'gerente', 'producao', 'padeiro', 'rh',
+PAPEIS_VALIDOS = ('admin', 'gerente', 'producao', 'padeiro', 'rh', 'gestao_rh',
                   'marketing', 'observador', 'relatorio_loja', 'funcionario')
 
 PAPEL_LABEL = {
     'admin': 'Admin', 'gerente': 'Gerente', 'producao': 'Producao',
     'padeiro': 'Padeiro', 'rh': 'RH', 'marketing': 'Marketing',
+    'gestao_rh': 'Gestão de RH — salários e promoções',
     'observador': 'Observador - somente leitura',
     'relatorio_loja': 'Relatório de uma loja - somente leitura',
     'funcionario': 'Funcionario',

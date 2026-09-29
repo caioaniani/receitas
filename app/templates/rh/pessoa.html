@@ -25,7 +25,7 @@
     <div><dt>E-mail da ficha</dt><dd>{{ func.email or 'Não informado' }}</dd></div>
     <div><dt>Senha</dt><dd>{{ ('Provisória: troca pendente' if func.usuario.senha_provisoria else 'Sem troca pendente') if func.usuario else 'Sem conta' }}</dd></div>
   </dl><p class="rh-hub-notice">O vínculo e a troca da senha não comprovam a entrega de um e-mail. Não há histórico de entrega disponível nesta ficha.</p><p>Atividade nas aulas: {% if treino_resumo.ultima_atividade %}{{ treino_resumo.ultima_atividade|brt('%d/%m/%Y às %H:%M') }}{% else %}nenhuma registrada{% endif %}.</p>
-  <a class="rh-equipe-button rh-equipe-button-primary" href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', ativos='0', pessoa=func.id) }}">{{ 'Gerenciar acesso desta pessoa' if func.usuario else 'Criar ou vincular conta' }}</a>
+  {% if current_user.is_dono() %}<a class="rh-equipe-button rh-equipe-button-primary" href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', ativos='0', pessoa=func.id) }}">{{ 'Gerenciar acesso desta pessoa' if func.usuario else 'Criar ou vincular conta' }}</a>{% else %}<p>Contas, senhas e alterações de e-mail de acesso são administradas pelo proprietário.</p>{% endif %}
   </section>
   {% elif aba == 'treinamento' %}
   <section class="rh-equipe-panel rh-person-overview"><h2>Aulas, avaliações e prática</h2><p>{{ acompanhamento.percentual_assistido }}% das aulas assistidas · {{ acompanhamento.aulas_concluidas }} de {{ acompanhamento.aulas_total }} aulas concluídas.</p><p class="rh-hub-secondary">Assistir ao vídeo é uma etapa. A avaliação e a observação do líder são acompanhadas separadamente.</p>{% if not temporada %}<p class="rh-hub-notice">Sem ciclo ativo para registrar observação prática.</p>{% endif %}

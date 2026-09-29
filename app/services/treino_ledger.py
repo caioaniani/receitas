@@ -39,7 +39,9 @@ def papel_treino(usuario):
     (§5). admin/dono -> ADMIN; gerente -> GESTOR; resto -> FUNCIONARIO."""
     if usuario is None:
         return 'FUNCIONARIO'
-    if usuario.is_admin():          # admin ou dono
+    if usuario.is_gestao_rh() and usuario.somente_treino:
+        return 'FUNCIONARIO'
+    if usuario.pode_administrar_treino():
         return 'ADMIN'
     if usuario.is_gerente() or usuario.lidera_equipe():
         return 'GESTOR'
