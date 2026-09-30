@@ -42,6 +42,27 @@ que chega junto com o código continua disponível para atendimento.
 - Testes históricos do motor anterior são avaliações offline; os testes
   `test_atendimento_restrito*` verificam a política que atende clientes.
 
+### Mensagem que o WhatsApp não entregou ("This message is unavailable.")
+
+Quando o cliente manda algo que a API do WhatsApp não suporta (mensagem
+temporária, enquete, conteúdo de visualização única e similares), a Meta
+entrega o evento como `type: unsupported` e o Chatwoot grava só um
+placeholder — "This message is unavailable." — com
+`content_attributes.is_unsupported`. Ninguém recebe o conteúdo: nem o bot,
+nem a equipe. O sistema reconhece o placeholder (`chatwoot.
+mensagem_indisponivel`) e:
+
+- responde ao cliente, uma vez por episódio, que a mensagem chegou sem
+  conteúdo e pede o reenvio como texto comum;
+- encaminha a conversa à equipe com o marcador `[mensagem indisponível…]`
+  no lugar do texto em inglês e o motivo na nota privada;
+- mostra o mesmo marcador na fila de espera e nos avisos ao dono.
+
+O que a equipe faz: esperar o reenvio ou, se o número for conhecido,
+ligar. Não adianta responder "pode escrever?" — o cliente provavelmente já
+escreveu. Caso de referência: conversa 2339 (15 a 29/09/2026), sete
+mensagens do mesmo contato sem conteúdo.
+
 As seções de implantação abaixo descrevem a infraestrutura. Orientações
 anteriores de autonomia do robô ficam substituídas por esta política.
 

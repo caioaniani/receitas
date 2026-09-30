@@ -115,7 +115,9 @@ def _mensagem_indisponivel(texto):
     webhook juntou com quebras de linha) é o marcador de conteúdo não
     entregue. Texto real misturado segue o fluxo normal."""
     from app.services.chatwoot import MARCADOR_MENSAGEM_INDISPONIVEL
-    linhas = [ln.strip() for ln in (texto or '').splitlines() if ln.strip()]
+    if not isinstance(texto, str):
+        return False   # conteúdo estruturado segue o fluxo normal (equipe)
+    linhas = [ln.strip() for ln in texto.splitlines() if ln.strip()]
     return bool(linhas) and all(ln == MARCADOR_MENSAGEM_INDISPONIVEL for ln in linhas)
 
 
