@@ -1,5 +1,27 @@
 # Convenções de trabalho (Claude)
 
+## Chefia de RH (decisão do dono, 29/09/2026)
+
+Perfil novo `gestao_rh` (Gestão de RH — salários e promoções), concedido
+somente pelo proprietário. Pode gerir pessoas, unidades/turnos da equipe,
+cargos, remuneração, folha, carreira/promoções e conteúdo/acompanhamento de
+treinamento em todas as lojas. Não é admin/owner e não amplia o papel `rh`
+legado. O dono autorizou também alterar salários e realizar promoções.
+
+O gate global limita o perfil aos endpoints revisados em
+`acesso_gestao_rh.py`; financeiro da empresa, pedidos, produção, catálogo,
+integrações e Copilot/Slack operacional permanecem bloqueados. Cadastro
+fiscal/PIN das lojas e credenciais (contas, senhas, vínculo de acesso,
+importação de contatos) não entram no escopo. RH não altera e-mail da ficha
+que já possui conta, pois ele é usado em reenvios. Admin comum não concede,
+redefine senha, remove nem altera o perfil protegido; só o proprietário.
+
+Sem mudança de schema, sem alteração de usuários existentes ou dados de RH
+no deploy. Entrada após login/troca de senha em `/rh/`; promoção continua
+com revisão assinada, confirmação e histórico do autor. Documento operacional:
+`docs/rh-gestao-pessoas.md`. Esta decisão substitui as menções históricas
+de RH exclusivamente owner para o novo perfil, não para os demais.
+
 ## Publicação após testes (autorização do dono, 28/09/2026)
 
 Para alterações do sistema explicitamente solicitadas ou aprovadas pelo dono,

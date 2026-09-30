@@ -27,7 +27,7 @@ AREAS = [
      'pode': lambda u: u.is_admin()},
     {'slug': 'rh', 'titulo': 'RH', 'icone': '👥', 'cor': '#d63384',
      'desc': 'Pessoas, equipes por loja, treinamento e rotinas administrativas',
-     'pode': lambda u: u.is_dono()},
+     'pode': lambda u: u.pode_gerir_rh()},
     {'slug': 'relatorios', 'titulo': 'Relatórios', 'icone': '📈',
      'cor': '#fd7e14', 'desc': 'Dashboards, custos e previsão de demanda',
      'pode': lambda u: u.is_admin()},
@@ -36,7 +36,7 @@ AREAS = [
      'pode': lambda u: u.is_admin()},
     {'slug': 'fichas', 'titulo': 'Fichas Técnicas', 'icone': '📖',
      'cor': '#0dcaf0', 'desc': 'Receitas e modo de preparo',
-     'pode': lambda u: u.is_authenticated},
+     'pode': lambda u: u.is_authenticated and not u.is_gestao_rh()},
 ]
 
 _POR_SLUG = {a['slug']: a for a in AREAS}

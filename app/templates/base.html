@@ -30,7 +30,7 @@
     <link href="{{ url_for('static', filename='css/style.css') }}?v={{ static_v['css/style.css'] }}" rel="stylesheet">
     {% if ui_v2 %}
     <link href="{{ url_for('static', filename='css/ui-v2.css') }}?v={{ static_v['css/ui-v2.css'] }}" rel="stylesheet">
-    {% if request.blueprint in ('rh', 'treino') and current_user.is_authenticated and current_user.is_dono() %}
+    {% if request.blueprint in ('rh', 'treino') and current_user.is_authenticated and current_user.pode_gerir_rh() %}
     <link href="{{ url_for('static', filename='css/rh-equipe.css') }}?v={{ static_v.get('css/rh-equipe.css', '1') }}" rel="stylesheet">
     {% endif %}
     {% if request.path.startswith('/treino') or request.path.startswith('/rh/funcionarios/') or request.path.startswith('/rh/lideranca') %}
@@ -137,7 +137,8 @@
             Pedidos — somente leitura
         </a>
         {% endif %}
-        {% if not so_treino and not so_observador %}
+        {% if current_user.is_gestao_rh() %}{% include 'rh/_gestao_sidebar.html' %}{% endif %}
+        {% if not so_treino and not so_observador and not current_user.is_gestao_rh() %}
         <button type="button" onclick="window.abrirCommandPalette && window.abrirCommandPalette()"
                 class="sidebar-link" style="border:0; background:transparent; text-align:left; width:100%;
                        justify-content:space-between; color:var(--text-muted);">
@@ -158,7 +159,7 @@
             Notas (memória do agente)
         </a>
         {% endif %}
-        {% if not so_observador %}
+        {% if not so_observador and not current_user.is_gestao_rh() %}
         {% if loja_pedidos_industria %}
         <a href="{{ url_for('pedidos.lista') }}" class="sidebar-link {{ 'active' if request.path.startswith('/pedidos') }}">Pedidos para a indústria</a>
         {% endif %}
@@ -188,7 +189,7 @@
         </a>
         {% endif %}
         {% endif %}{# links comuns escondidos do observador #}
-        {% if not so_treino and not so_observador %}
+        {% if not so_treino and not so_observador and not current_user.is_gestao_rh() %}
         {# Loja Online: liberada a todos os usuários logados (22/06/2026), porém
            o DASHBOARD (com faturamento) e a config de logo seguem owner-only.
            Por isso o link "🥐 Loja Online" só aparece pro dono. #}
@@ -310,7 +311,7 @@
         {% endif %}{# fim: nav escondida pra conta só-treino #}
         {% endif %}
 
-        {% if not (current_user.is_authenticated and (current_user.somente_treino or current_user.is_observador() or current_user.is_relatorio_loja())) %}
+        {% if not (current_user.is_authenticated and (current_user.somente_treino or current_user.is_observador() or current_user.is_relatorio_loja() or current_user.is_gestao_rh())) %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Fichas Técnicas</div>
         {{ areanav.fichas('sidebar') }}
@@ -408,7 +409,7 @@
         {% if current_user.is_authenticated and (request.blueprint == 'checklist' or request.endpoint in ['rh.lideranca_preenchimento', 'rh.lideranca_organograma', 'rh.escala']) %}
         {% include '_rotina_loja_nav.html' %}
         {% endif %}
-        {% if ui_v2 and not embed and current_user.is_authenticated and current_user.is_dono() and (request.blueprint == 'rh' or request.path.startswith(('/treino/gestor', '/treino/admin'))) %}
+        {% if ui_v2 and not embed and current_user.is_authenticated and current_user.pode_gerir_rh() and (request.blueprint == 'rh' or request.path.startswith(('/treino/gestor', '/treino/admin'))) %}
           {% import 'rh/_navigation.html' as rhnav with context %}{{ rhnav.principal() }}
           {% if request.blueprint == 'treino' %}<nav class="rh-hub-nav" aria-label="Ferramentas do treinamento"><a href="{{ url_for('treino.gestor_home') }}">Acompanhar equipe</a><a href="{{ url_for('treino.admin_home') }}">Gerenciar cursos</a><a href="{{ url_for('treino.home') }}">Meu treinamento</a></nav>{% endif %}
         {% elif ui_v2 and not embed and current_user.is_authenticated and

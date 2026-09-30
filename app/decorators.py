@@ -93,7 +93,27 @@ def rh_required(f):
     """Ponto / Férias / Cargos. Capacidade editável: web_rh."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not _pode_cap('web_rh'):
+        if not current_user.pode_gerir_rh() and not _pode_cap('web_rh'):
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
+def gestao_rh_required(f):
+    """Salários e gestão de pessoas: dono ou chefia de RH explicitamente concedida."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.pode_gerir_rh():
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
+def treino_admin_required(f):
+    """Administração do treinamento, sem conceder gestão de contas."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.pode_administrar_treino():
             abort(403)
         return f(*args, **kwargs)
     return decorated

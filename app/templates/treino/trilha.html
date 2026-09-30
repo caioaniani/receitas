@@ -46,6 +46,60 @@
 var CSRF='{{ csrf_token() }}';
 function post(u,b){return fetch(u,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:b||''}).then(function(r){return r.json();});}
 document.querySelectorAll('.iniciar-quiz').forEach(function(btn){btn.onclick=function(){post('/treino/api/quiz/'+btn.dataset.id+'/iniciar').then(function(j){if(!j.ok){alert(j.erro==='cooldown'?('Aguarde até '+j.liberado_em):j.erro);return;}renderQuiz(j);});};});
-function renderQuiz(j){var box=document.getElementById('quizbox');var h='<div class="treino-quiz-box"><input type="hidden" id="tid" value="'+j.tentativa_id+'"><h2>Avaliação</h2>';j.questoes.forEach(function(q,qi){h+='<div class="treino-question" data-q="'+q.questao_id+'" data-t="'+Date.now()+'"><strong>'+(qi+1)+'. '+q.enunciado+'</strong>';q.alternativas.forEach(function(a){h+='<label><input type="radio" name="q'+q.questao_id+'" value="'+a.id+'"> '+a.texto+'</label>';});h+='</div>';});h+='<button class="treino-primary-action" id="enviar">Enviar respostas</button><div id="qres"></div></div>';box.innerHTML=h;box.scrollIntoView({behavior:'smooth'});document.getElementById('enviar').onclick=function(){var tid=document.getElementById('tid').value;var proms=[];box.querySelectorAll('[data-q]').forEach(function(d){var sel=d.querySelector('input:checked');var seg=Math.round((Date.now()-d.dataset.t)/1000);if(sel)proms.push(post('/treino/api/tentativas/'+tid+'/responder','questao_id='+d.dataset.q+'&alternativa_id='+sel.value+'&segundos='+seg));});Promise.all(proms).then(function(){return post('/treino/api/tentativas/'+tid+'/finalizar');}).then(function(j){document.getElementById('qres').innerHTML='<div class="treino-notice '+(j.aprovada?'treino-notice-success':'treino-notice-warning')+'">'+j.acertos+'/'+j.total+' — '+(j.aprovada?'Você passou.':'Você ainda não atingiu a nota mínima.')+'</div>';});};}
+function renderQuiz(j) {
+  var box = document.getElementById('quizbox');
+  var panel = document.createElement('div');
+  panel.className = 'treino-quiz-box';
+  var tentativa = document.createElement('input');
+  tentativa.type = 'hidden'; tentativa.id = 'tid'; tentativa.value = j.tentativa_id;
+  panel.appendChild(tentativa);
+  var heading = document.createElement('h2');
+  heading.textContent = 'Avaliação'; panel.appendChild(heading);
+  j.questoes.forEach(function(q, qi) {
+    var question = document.createElement('div');
+    question.className = 'treino-question';
+    question.dataset.q = q.questao_id; question.dataset.t = Date.now();
+    var title = document.createElement('strong');
+    // Conteúdo editável pelo RH é texto, nunca HTML executável.
+    title.textContent = (qi + 1) + '. ' + q.enunciado;
+    question.appendChild(title);
+    q.alternativas.forEach(function(a) {
+      var label = document.createElement('label');
+      var radio = document.createElement('input');
+      radio.type = 'radio'; radio.name = 'q' + q.questao_id; radio.value = a.id;
+      label.appendChild(radio);
+      label.appendChild(document.createTextNode(' ' + a.texto));
+      question.appendChild(label);
+    });
+    panel.appendChild(question);
+  });
+  var send = document.createElement('button');
+  send.className = 'treino-primary-action'; send.id = 'enviar';
+  send.textContent = 'Enviar respostas'; panel.appendChild(send);
+  var result = document.createElement('div');
+  result.id = 'qres'; panel.appendChild(result);
+  box.replaceChildren(panel);
+  box.scrollIntoView({behavior: 'smooth'});
+  send.onclick = function() {
+    var tid = tentativa.value;
+    var proms = [];
+    box.querySelectorAll('[data-q]').forEach(function(d) {
+      var sel = d.querySelector('input:checked');
+      var seg = Math.round((Date.now() - d.dataset.t) / 1000);
+      if (sel) proms.push(post('/treino/api/tentativas/' + tid + '/responder',
+        'questao_id=' + encodeURIComponent(d.dataset.q) +
+        '&alternativa_id=' + encodeURIComponent(sel.value) + '&segundos=' + seg));
+    });
+    return Promise.all(proms).then(function() {
+      return post('/treino/api/tentativas/' + tid + '/finalizar');
+    }).then(function(resposta) {
+      var notice = document.createElement('div');
+      notice.className = 'treino-notice ' + (resposta.aprovada ? 'treino-notice-success' : 'treino-notice-warning');
+      notice.textContent = resposta.acertos + '/' + resposta.total + ' — ' +
+        (resposta.aprovada ? 'Você passou.' : 'Você ainda não atingiu a nota mínima.');
+      result.replaceChildren(notice);
+    });
+  };
+}
 </script>
 {% endblock %}

@@ -67,11 +67,11 @@ class Usuario(UserMixin, db.Model):
     def pode_organizar_equipe(self):
         """Acesso estreito ao cadastro de estrutura da equipe.
 
-        O RH completo continua exclusivo do dono. Dakson recebeu apenas a
+        O RH completo é do dono e da chefia de RH. Dakson recebeu apenas a
         tarefa operacional de informar líder, unidade principal e período;
         nenhum salário, documento ou dado financeiro é exposto por essa rota.
         """
-        if self.is_dono():
+        if self.pode_gerir_rh():
             return True
         try:
             return bool(
@@ -85,10 +85,10 @@ class Usuario(UserMixin, db.Model):
     def pode_cadastrar_funcionarios(self):
         """Acesso estreito do responsável de RH ao cadastro básico.
 
-        O restante do RH continua exclusivo do dono. Dakson pode consultar a
+        O restante do RH é do dono e da chefia de RH. Dakson pode consultar a
         lista e incluir pessoas, mas não vê fichas, salários, folha ou acessos.
         """
-        if self.is_dono():
+        if self.pode_gerir_rh():
             return True
         try:
             return bool(
@@ -108,6 +108,16 @@ class Usuario(UserMixin, db.Model):
 
     def is_rh(self):
         return self.papel == 'rh'
+
+    def is_gestao_rh(self):
+        return self.papel == 'gestao_rh'
+
+    def pode_gerir_rh(self):
+        """Chefia de RH com remuneração; não concede administração do ERP."""
+        return self.is_dono() or (self.is_gestao_rh() and not self.somente_treino)
+
+    def pode_administrar_treino(self):
+        return self.is_admin() or self.pode_gerir_rh()
 
     def is_marketing(self):
         """Marketing (21/07/2026): papel enxuto criado pra LANCAR DIVULGACAO
@@ -155,7 +165,7 @@ class Usuario(UserMixin, db.Model):
 
     def pode_rh(self):
         """RH (ponto/ferias/cargos sem salario)."""
-        return self.is_admin() or self.is_rh()
+        return self.is_admin() or self.is_rh() or self.pode_gerir_rh()
 
     def pode_pdv(self):
         """PDV, Seru, VNDA, Mapeamentos."""

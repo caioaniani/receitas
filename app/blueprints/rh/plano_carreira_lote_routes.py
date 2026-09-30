@@ -5,7 +5,7 @@ from itsdangerous import BadData, URLSafeTimedSerializer
 from sqlalchemy.exc import DBAPIError
 
 from app.blueprints.rh import rh_bp
-from app.decorators import owner_required
+from app.decorators import gestao_rh_required
 from app.extensions import db
 from app.services import plano_carreira_lote
 
@@ -24,7 +24,7 @@ def _filtros(dados):
 
 @rh_bp.route('/plano-carreira/aprovar-lote', methods=['POST'])
 @login_required
-@owner_required
+@gestao_rh_required
 def plano_carreira_aprovar_lote():
     ids = request.form.getlist('enquadramento_ids')
     filtros = _filtros(request.form)

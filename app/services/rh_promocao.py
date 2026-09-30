@@ -90,8 +90,8 @@ def aplicar(funcionario, cargo, data_efetiva, *, actor_id, observacao=None):
     """Aplica a promoção confirmada e registra seu histórico, sem commit."""
     with db.session.no_autoflush:
         actor = db.session.get(Usuario, actor_id) if actor_id else None
-        if not actor or not actor.is_dono():
-            raise ValueError('Somente o dono pode confirmar uma promoção.')
+        if not actor or not actor.pode_gerir_rh():
+            raise ValueError('Somente o dono ou a Gestão de RH pode confirmar uma promoção.')
         previa = prever(funcionario, cargo, data_efetiva, observacao=observacao)
         funcionario.cargo = cargo
         funcionario.cargo_id = cargo.id

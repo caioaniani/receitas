@@ -1,5 +1,51 @@
 # Gestão de pessoas — reorganização do RH
 
+## Chefia de RH — acesso individual
+
+Em **Usuários**, o proprietário pode escolher **Gestão de RH — salários e
+promoções** para a conta da chefia. Não usar Admin ou Owner para este fim.
+O perfil `gestao_rh` é novo e fixo: os usuários com `rh` antigo não ganham
+acesso, e a matriz de permissões operacionais não amplia seu alcance.
+
+A entrada é `/rh/`, após a troca obrigatória da senha provisória. A chefia
+consulta e altera cadastros, cargos/salários, folha, carreira e promoções;
+organiza liderança, unidade/período, ponto, férias, escalas e documentos;
+administra cursos e acompanha o treinamento de toda a equipe. Para registrar
+observação prática, permanece necessária a identificação em uma ficha de
+funcionário. Promoção exige revisar e confirmar: o histórico guarda autor e
+data, e não recalcula folhas anteriores.
+
+Não recebe acesso ao financeiro da empresa, vendas, pedidos, produção,
+catálogo, integrações, PIN/configuração fiscal de lojas ou ferramentas
+operacionais no Slack/Copilot. A interface clássica e a nova exibem somente
+os caminhos permitidos; o servidor também bloqueia URLs/POSTs diretos.
+Custos e catálogo não são carregados no HTML das páginas, inclusive erros.
+
+Contas, vínculos de acesso, senhas e importação de contatos continuam com o
+proprietário. A chefia pode conferir o estado do acesso, mas não gerar/redefinir
+senhas nem mudar o e-mail de uma ficha que já tem conta. O formulário explica
+esse bloqueio. Pré-cadastro permite criar uma nova ficha; vincular a uma ficha
+ou conta existente é tarefa do proprietário.
+
+Somente o proprietário concede/remove este papel ou administra suas
+credenciais; administradores comuns não podem assumir a conta por reset.
+O cadastro não convida a chefia para o Chatwoot. Para uma pessoa com conta
+existente, reutilizar a identidade conferida pelo proprietário, sem duplicar.
+
+### Publicação e retorno seguro
+
+Não há migração de banco. Testar salário/folha/promoção, autoria e replay,
+isolamento GET/POST, navegação clássica/nova e preservação dos perfis antigos.
+Após CI/deploy, conferir o seletor em Usuários e as telas RH por leitura;
+nunca usar folha, promoção ou envio real como teste. A publicação não cria
+conta nem muda salário, cargo, senha ou vínculo de ninguém.
+
+Se houver falha de isolamento após conceder uma conta, o proprietário deve
+revogar o perfil antes de voltar o código. Não fazer rollback simples para
+uma versão que desconhece `gestao_rh`, pois ela não contém seu gate restritivo.
+
+## Fluxo original do proprietário
+
 O dono entra em **Equipe → Visão geral** ou `/rh/`; o cartão RH da Home
 também leva a esse painel. Uma única navegação liga Visão geral, Lojas e
 equipes, Pessoas, Treinamento e Administrativo. A interface clássica conserva

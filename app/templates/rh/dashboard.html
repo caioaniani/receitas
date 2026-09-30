@@ -4,10 +4,10 @@
 
 {% block content %}
 <h1 class="page-title mb-3"><i class="bi bi-people-fill"></i> Administrativo do RH</h1>
-<p class="text-muted">Folha, cargos, documentos e registros administrativos. Área restrita ao proprietário.</p>
+<p class="text-muted">Folha, cargos, documentos e registros administrativos. Área restrita ao proprietário e à Gestão de RH.</p>
 {% import '_area_nav.html' as areanav with context %}
 <details class="card p-3 mb-4"><summary>Folha, cargos e outras ferramentas</summary><div class="d-grid gap-2 mt-3">{{ areanav.rh('area') }}</div></details>
-{% if current_user.is_dono() %}<a class="btn-pill btn-pill-primary mb-3" href="{{ url_for('rh.equipe') }}">Visão da equipe · cargos, níveis e líderes</a>{% endif %}
+{% if current_user.pode_gerir_rh() %}<a class="btn-pill btn-pill-primary mb-3" href="{{ url_for('rh.equipe') }}">Visão da equipe · cargos, níveis e líderes</a>{% endif %}
 
 <!-- Resumo Geral -->
 <div class="row g-3 mb-4">
@@ -20,7 +20,7 @@
             </div>
         </div>
     </div>
-    {% if current_user.is_owner %}
+    {% if current_user.pode_gerir_rh() %}
     <div class="col-md-4">
         <div class="card border-0 shadow-sm">
             <div class="card-body text-center">
@@ -134,7 +134,7 @@
 </div>
 
 <!-- Custo por Loja (so super admin) -->
-{% if current_user.is_owner %}
+{% if current_user.pode_gerir_rh() %}
 <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-shop"></i> Custo por Loja</h6>
 <div class="row g-3 mb-4">
     {% for nome_loja, dados in custo_por_loja.items() %}
@@ -150,7 +150,7 @@
     {% endfor %}
     {% if not custo_por_loja %}
     <div class="col-12">
-        <p class="text-muted small">Nenhuma loja cadastrada. <a href="{{ url_for('rh.lojas') }}">Cadastrar lojas</a>.</p>
+        <p class="text-muted small">Nenhuma loja cadastrada. {% if current_user.is_dono() %}<a href="{{ url_for('rh.lojas') }}">Cadastrar lojas</a>.{% else %}Solicite o cadastro ao proprietário.{% endif %}</p>
     </div>
     {% endif %}
 </div>
@@ -284,9 +284,9 @@
     <a href="{{ url_for('rh.escala') }}" class="btn btn-outline-info btn-sm">
         <i class="bi bi-diagram-3"></i> Escala Operacional
     </a>
-    <a href="{{ url_for('rh.lojas') }}" class="btn btn-outline-secondary btn-sm">
+    {% if current_user.is_dono() %}<a href="{{ url_for('rh.lojas') }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-shop"></i> Gerenciar Lojas
-    </a>
+    </a>{% endif %}
 </div>
 {% endblock %}
 

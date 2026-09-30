@@ -31,6 +31,19 @@ def itens_para_usuario(usuario, categorias_receitas):
     adicionar('Sair', 'auth.logout', 'Minha conta', 'box-arrow-right')
     if usuario.senha_provisoria:
         return itens
+    if usuario.is_gestao_rh():
+        adicionar('Meu treinamento', 'treino.home', 'Equipe', 'mortarboard')
+        if usuario.pode_gerir_rh():
+            for titulo, endpoint in (
+                ('Visão geral do RH', 'rh.dashboard'),
+                ('Funcionários', 'rh.funcionarios'), ('Lojas e equipes', 'rh.equipe_lojas'),
+                ('Cargos e salários', 'rh.cargos'), ('Plano de carreira', 'rh.plano_carreira'),
+                ('Folha de pagamento', 'rh.folha'), ('Organizar equipe', 'rh.lideranca_preenchimento'),
+                ('Acompanhar treinamento', 'treino.gestor_home'),
+                ('Gerenciar cursos', 'treino.admin_home'),
+            ):
+                adicionar(titulo, endpoint, 'Gestão de RH', principal=True)
+        return itens
     if usuario.is_relatorio_loja():
         adicionar('Pedidos recebidos da loja', 'pedidos.relatorio', principal=True)
         return itens

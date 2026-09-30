@@ -9,7 +9,7 @@ from itsdangerous import BadData, URLSafeTimedSerializer
 from sqlalchemy.exc import DBAPIError
 
 from app.blueprints.rh import rh_bp
-from app.decorators import owner_required
+from app.decorators import gestao_rh_required
 from app.extensions import db
 from app.models import (
     Cargo,
@@ -76,7 +76,7 @@ def _bloquear_dependencias(pessoa, cargo_id):
 
 @rh_bp.route('/funcionarios/<int:id>/promover', methods=['GET', 'POST'])
 @login_required
-@owner_required
+@gestao_rh_required
 def promover_funcionario(id):
     pessoa = Funcionario.query.get_or_404(id)
     if not pessoa.ativo:

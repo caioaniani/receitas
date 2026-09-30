@@ -107,7 +107,7 @@
           {% elif item.status == 'inativo' %}Inativo no RH
           {% else %}Em andamento{% endif %}
         </div>
-        <div>{% if item.pode_ver_progresso %}<a class="treino-observe-action" href="{{ url_for('treino.gestor_progresso', func_id=item.funcionario.id) }}" aria-label="Ver progresso de {{ item.funcionario.nome }}"><i class="bi bi-bar-chart" aria-hidden="true"></i> Ver progresso</a>{% endif %}{% if current_user.is_dono() %}<a class="treino-observe-action" href="{{ url_for('rh.detalhe_funcionario', id=item.funcionario.id) }}"><i class="bi bi-person-lines-fill" aria-hidden="true"></i><span>{{ 'Vincular cargo' if not item.progresso.cargo else 'Ver no RH' }}</span></a>{% endif %}</div>
+        <div>{% if item.pode_ver_progresso %}<a class="treino-observe-action" href="{{ url_for('treino.gestor_progresso', func_id=item.funcionario.id) }}" aria-label="Ver progresso de {{ item.funcionario.nome }}"><i class="bi bi-bar-chart" aria-hidden="true"></i> Ver progresso</a>{% endif %}{% if current_user.pode_gerir_rh() %}<a class="treino-observe-action" href="{{ url_for('rh.detalhe_funcionario', id=item.funcionario.id) }}"><i class="bi bi-person-lines-fill" aria-hidden="true"></i><span>{{ 'Vincular cargo' if not item.progresso.cargo else 'Ver no RH' }}</span></a>{% endif %}</div>
       </article>
       {% else %}
       <div class="treino-empty">Nenhuma pessoa corresponde aos filtros selecionados.</div>

@@ -22,7 +22,7 @@ from flask_login import current_user, login_required
 from sqlalchemy.orm import selectinload
 
 from app.blueprints.treino import treino_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, treino_admin_required
 from app.extensions import db
 from app.models import (
     Funcionario,
@@ -323,7 +323,7 @@ def gestor_home():
                            unidade=unidade, painel=visao_equipe,
                            linhas=linhas, busca=busca, filtro_status=status,
                            is_admin=is_admin,
-                           can_open_rh=current_user.is_dono())
+                           can_open_rh=current_user.pode_gerir_rh())
 
 
 @treino_bp.route('/gestor/progresso/<int:func_id>')
@@ -496,7 +496,7 @@ def gestor_decidir(id):
 # ── Admin (autoria + gestão) ────────────────────────────────────────────
 @treino_bp.route('/admin/')
 @login_required
-@admin_required
+@treino_admin_required
 def admin_home():
     from app.models import Cargo, TreinoTemporada, TreinoTrilhaCargo
     from app.services import treino_acessos as acessos
@@ -532,12 +532,12 @@ def admin_home():
         contas_livres=contas_livres,
         funcionarios=funcionarios, quizzes_por_trilha=quizzes_por_trilha,
         painel=painel.resumo_admin(trilhas, funcionarios),
-        can_open_rh=current_user.is_dono())
+        can_open_rh=current_user.pode_gerir_rh())
 
 
 @treino_bp.route('/admin/aplicacoes/<int:id>/estornar', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_estornar_aplicacao(id):
     a = db.session.get(TreinoAplicacaoPratica, id) or abort(404)
     ap.estornar(a, criado_por_id=current_user.id)
@@ -555,7 +555,7 @@ def _int(v, d=0):
 
 @treino_bp.route('/admin/temporada', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_temporada():
     from datetime import date
 
@@ -577,7 +577,7 @@ def admin_temporada():
 
 @treino_bp.route('/admin/trilha', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_trilha():
     nome = (request.form.get('nome') or '').strip()
     if not nome:
@@ -594,7 +594,7 @@ def admin_trilha():
 
 @treino_bp.route('/admin/roteiros/importar', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_importar_roteiros():
     """Importa o PLANO DE CONTEÚDO (xlsx de roteiros) — 13/08/2026.
 
@@ -638,7 +638,7 @@ def admin_importar_roteiros():
 
 @treino_bp.route('/admin/trilha/<int:id>/video', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_video_novo(id):
     t = db.session.get(TreinoTrilha, id) or abort(404)
     ordem = _int(db.session.query(db.func.max(TreinoVideo.ordem)).filter_by(
@@ -657,7 +657,7 @@ def admin_video_novo(id):
 
 @treino_bp.route('/admin/video/<int:id>/titulo', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_video_titulo(id):
     """Renomeia a aula (o titulo do video). So havia como setar na criacao;
     aula criada com nome em branco ficava sem titulo e sem edicao."""
@@ -694,7 +694,7 @@ def _garantir_duracao(v):
 
 @treino_bp.route('/admin/video/<int:id>')
 @login_required
-@admin_required
+@treino_admin_required
 def admin_video_editar(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
     from app.services import treinamento_stream as ts
@@ -708,7 +708,7 @@ def admin_video_editar(id):
 
 @treino_bp.route('/admin/video/<int:id>/upload-url', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_video_upload_url(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
     from app.services import treinamento_stream as ts
@@ -723,7 +723,7 @@ def admin_video_upload_url(id):
 
 @treino_bp.route('/admin/video/<int:id>/salvar', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_video_salvar(id):
     import re as _re
     v = db.session.get(TreinoVideo, id) or abort(404)
@@ -811,7 +811,7 @@ def _checkpoint_erro(v, ajax, erro):
 
 @treino_bp.route('/admin/video/<int:id>/checkpoint', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_checkpoint(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
     ajax = request.form.get('ajax') == '1'   # salvar sem recarregar a página
@@ -831,7 +831,7 @@ def admin_checkpoint(id):
 
 @treino_bp.route('/admin/checkpoint/<int:id>/editar', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_checkpoint_editar(id):
     """Edita momento, pergunta e alternativas sem recriar o checkpoint."""
     cp = db.session.get(TreinoCheckpoint, id) or abort(404)
@@ -852,7 +852,7 @@ def admin_checkpoint_editar(id):
 
 @treino_bp.route('/admin/video/<int:id>/ia-gerar', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_video_ia(id):
     """v2 §16.2 no CHECKPOINT: a IA PROPÕE pergunta + alternativas. Duas fontes:
     `fonte=video` usa a TRANSCRIÇÃO com tempo do Cloudflare (a IA também sugere
@@ -887,7 +887,7 @@ def admin_video_ia(id):
 
 @treino_bp.route('/admin/quiz', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_quiz_novo():
     trilha_id = _int(request.form.get('trilha_id')) or None
     video_id = _int(request.form.get('video_id')) or None
@@ -906,7 +906,7 @@ def admin_quiz_novo():
 
 @treino_bp.route('/admin/quiz/<int:id>')
 @login_required
-@admin_required
+@treino_admin_required
 def admin_quiz_editar(id):
     q = db.session.get(TreinoQuiz, id) or abort(404)
     return render_template('treino/admin_quiz.html', q=q,
@@ -915,7 +915,7 @@ def admin_quiz_editar(id):
 
 @treino_bp.route('/admin/quiz/<int:id>/questao', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_questao(id):
     from app.models import TreinoAlternativa, TreinoQuestao
     q = db.session.get(TreinoQuiz, id) or abort(404)
@@ -939,7 +939,7 @@ def admin_questao(id):
 
 @treino_bp.route('/admin/quiz/<int:id>/ia-gerar', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_quiz_ia(id):
     """v2 §16.2: a IA PROPÕE perguntas a partir do conteúdo colado. Devolve as
     propostas pra revisão humana na tela — NÃO grava nada aqui (o admin edita e
@@ -955,7 +955,7 @@ def admin_quiz_ia(id):
 
 @treino_bp.route('/admin/recompensa', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_recompensa():
     nome = (request.form.get('nome') or '').strip()
     if not nome:
@@ -973,7 +973,7 @@ def admin_recompensa():
 
 @treino_bp.route('/admin/ajuste', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_ajuste():
     f = db.session.get(Funcionario, _int(request.form.get('funcionario_id')))
     temp = _temp()
@@ -999,7 +999,7 @@ def _voltar():
 
 @treino_bp.route('/admin/trilha/<int:id>/toggle', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_trilha_toggle(id):
     t = db.session.get(TreinoTrilha, id) or abort(404)
     if not t.ativa and not tt.videos_publicados(t):
@@ -1015,7 +1015,7 @@ def admin_trilha_toggle(id):
 
 @treino_bp.route('/admin/trilha/<int:id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_trilha_excluir(id):
     from sqlalchemy.exc import IntegrityError
 
@@ -1052,7 +1052,7 @@ def admin_trilha_excluir(id):
 
 @treino_bp.route('/admin/trilha/<int:id>/editar', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_trilha_editar(id):
     """Edita nome/descrição da trilha."""
     t = db.session.get(TreinoTrilha, id) or abort(404)
@@ -1069,7 +1069,7 @@ def admin_trilha_editar(id):
 
 @treino_bp.route('/admin/video/<int:id>/toggle', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_video_toggle(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
     acao = (request.form.get('acao') or '').strip()
@@ -1102,7 +1102,7 @@ def admin_video_toggle(id):
 
 @treino_bp.route('/admin/video/<int:id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_video_excluir(id):
     from sqlalchemy.exc import IntegrityError
 
@@ -1138,7 +1138,7 @@ def admin_video_excluir(id):
 
 @treino_bp.route('/admin/checkpoint/<int:id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_checkpoint_excluir(id):
     c = db.session.get(TreinoCheckpoint, id) or abort(404)
     db.session.delete(c)
@@ -1148,7 +1148,7 @@ def admin_checkpoint_excluir(id):
 
 @treino_bp.route('/admin/quiz/<int:id>/toggle', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_quiz_toggle(id):
     q = db.session.get(TreinoQuiz, id) or abort(404)
     if not q.ativo and not tq.pode_publicar(q):
@@ -1162,7 +1162,7 @@ def admin_quiz_toggle(id):
 
 @treino_bp.route('/admin/questao/<int:id>/excluir', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_questao_excluir(id):
     from app.models import TreinoQuestao
     quest = db.session.get(TreinoQuestao, id) or abort(404)
@@ -1173,7 +1173,7 @@ def admin_questao_excluir(id):
 
 @treino_bp.route('/admin/recompensa/<int:id>/toggle', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_recompensa_toggle(id):
     r = db.session.get(TreinoRecompensa, id) or abort(404)
     r.ativa = not r.ativa
@@ -1292,7 +1292,7 @@ def admin_vincular_acesso(func_id):
 
 @treino_bp.route('/admin/trilha/<int:id>/cargos', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_trilha_cargos(id):
     """v2 §16.1: liga a trilha a cargos (onboarding automático por cargo).
     Suporta ajax=1 (auto-salvar ao marcar, sem recarregar) — devolve JSON."""
@@ -1377,7 +1377,7 @@ def gestor_progressao():
 
 @treino_bp.route('/admin/temporada/<int:id>/status', methods=['POST'])
 @login_required
-@admin_required
+@treino_admin_required
 def admin_temporada_status(id):
     from app.models import TreinoTemporada
     t = db.session.get(TreinoTemporada, id) or abort(404)
