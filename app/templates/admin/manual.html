@@ -73,10 +73,12 @@
                 <strong>Pedidos, preços, quantidades, complementos, cartões, reclamações,
                 áudios e imagens vão para a equipe</strong>, com o contexto da conversa.
                 Mensagem que chega como <em>"This message is unavailable."</em> é conteúdo que o
-                WhatsApp não entregou (mensagem temporária, enquete, visualização única): o
-                robô avisa o cliente e pede o reenvio em texto comum, e a conversa vai para a
-                equipe com o marcador <em>[mensagem indisponível…]</em> — a equipe espera o
-                reenvio ou liga para o cliente; não adianta pedir "escreva em texto".
+                WhatsApp não entregou ao Chatwoot (o tipo original não chega; pode ser formato
+                que a API não entrega ou número em coexistência com o aplicativo WhatsApp
+                Business): o robô avisa o cliente e pede o reenvio em texto comum, e a conversa
+                vai para a equipe com o marcador <em>[mensagem indisponível…]</em> — a equipe
+                espera o reenvio, confere a mensagem no aparelho se o número também estiver no
+                aplicativo, ou liga para o cliente; não adianta pedir "escreva em texto".
                 Um pedido de 15 lanches e 15 croissants é encaminhado para atendimento;
                 o robô não manda o cliente comprar no site. Ele não consulta nem confirma
                 entrega, não monta carrinho e não encerra a conversa sozinho.</li>

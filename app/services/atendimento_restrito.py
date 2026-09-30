@@ -96,18 +96,32 @@ def _encaminhar(motivo):
 # Mensagem que o WhatsApp não entregou (`type: unsupported` — o Chatwoot
 # grava só um placeholder; ver `chatwoot.MARCADOR_MENSAGEM_INDISPONIVEL`).
 # Aqui "vou passar sua mensagem" seria mentira: não há mensagem. O cliente
-# recebe o motivo e o gesto que resolve (reenviar como texto comum); a
-# equipe recebe a conversa com o marcador e o motivo na nota do handoff.
+# recebe o fato e o gesto que resolve (reenviar como texto comum) — SEM
+# diagnóstico da causa: o tipo original não chega no evento, e "mensagem
+# temporária" nem gera o placeholder (o Chatwoot descarta `ephemeral`
+# antes). A equipe recebe a conversa com o marcador e o motivo na nota.
 TEXTO_MENSAGEM_INDISPONIVEL = (
-    'Sua mensagem chegou sem conteúdo aqui no nosso atendimento — isso '
-    'costuma acontecer com mensagens temporárias, enquetes ou conteúdo de '
-    'visualização única. Pode reenviar como mensagem de texto comum? Nossa '
-    'equipe continua o atendimento por aqui.')
+    'Sua mensagem chegou sem conteúdo aqui no nosso atendimento. Pode '
+    'reenviar como mensagem de texto comum? Nossa equipe continua o '
+    'atendimento por aqui.')
+# Fora do horário o prefixo genérico ("Vou registrar sua mensagem") também
+# mentiria — não há mensagem a registrar. Texto próprio, mesma janela.
+TEXTO_MENSAGEM_INDISPONIVEL_FORA_HORARIO = (
+    'Estamos fora do nosso horário de atendimento aqui no chat '
+    '({ini:02d}:00 às {fim:02d}:00). Sua mensagem chegou sem conteúdo aqui '
+    'no nosso atendimento. Pode reenviar como mensagem de texto comum? '
+    'Nossa equipe segue o atendimento por aqui a partir das {ini:02d}:00.')
 MOTIVO_MENSAGEM_INDISPONIVEL = (
-    'mensagem indisponível: o WhatsApp não entregou o conteúdo (tipo não '
-    'suportado pela API — mensagem temporária, enquete, visualização única '
-    'ou similar). O cliente foi orientado a reenviar em texto; se o número '
-    'for conhecido, ligar.')
+    'mensagem indisponível: o WhatsApp entregou a mensagem como tipo não '
+    'suportado e o Chatwoot não recebeu o conteúdo (o tipo original não '
+    'chega; causas conhecidas: formato que a API não entrega, ou número em '
+    'coexistência com o app WhatsApp Business — nesse caso conferir a '
+    'mensagem no aparelho). O cliente foi orientado a reenviar em texto; se '
+    'o número for conhecido, ligar.')
+MOTIVO_ANEXO_COM_INDISPONIVEL = (
+    'atendimento restrito: anexo ou mensagem não textual; na mesma rajada '
+    'uma mensagem chegou sem conteúdo (mensagem indisponível — o WhatsApp '
+    'não entregou; o anexo chegou e está na conversa)')
 
 
 def _mensagem_indisponivel(texto):
@@ -122,9 +136,12 @@ def _mensagem_indisponivel(texto):
 
 
 def _encaminhar_indisponivel():
-    from app.services.chatbot import _texto_handoff_com_horario
-    return _resultado('handoff', _texto_handoff_com_horario(TEXTO_MENSAGEM_INDISPONIVEL),
-                      MOTIVO_MENSAGEM_INDISPONIVEL)
+    from app.services.chatbot import HORARIO_CHAT_FIM, HORARIO_CHAT_INICIO, _fora_horario_chat
+    texto = TEXTO_MENSAGEM_INDISPONIVEL
+    if _fora_horario_chat():
+        texto = TEXTO_MENSAGEM_INDISPONIVEL_FORA_HORARIO.format(
+            ini=HORARIO_CHAT_INICIO, fim=HORARIO_CHAT_FIM)
+    return _resultado('handoff', texto, MOTIVO_MENSAGEM_INDISPONIVEL)
 
 
 def _enderecos(unidade=None):
@@ -168,11 +185,19 @@ def responder(historico, *, telefone_contato=None, conversa_id=None):
     if not clientes:
         return _encaminhar('atendimento restrito: mensagem sem contexto suficiente')
     # Conteúdo que o WhatsApp não entregou: o texto genérico ("vou passar
-    # sua mensagem") não serve — vem ANTES da continuidade com a equipe,
-    # porque o cliente precisa saber o que fazer mesmo numa conversa já
-    # encaminhada (caso 2339: sete vezes o mesmo placeholder em 15 dias).
+    # sua mensagem") não serve. Vem ANTES da regra do `handoff_em` do
+    # store: num episódio NOVO (conversa resolvida e reaberta pelo Chatwoot)
+    # de contato já encaminhado antes, o cliente recebe o texto próprio em
+    # vez de "vou passar sua mensagem"; dentro do MESMO episódio o webhook
+    # nem chama este serviço (silêncio, a conversa é da equipe). Caso 2339:
+    # sete vezes o mesmo placeholder em 15 dias. Com ANEXO na mesma rajada
+    # (foto sem legenda + placeholder no debounce) o anexo chegou: não se
+    # diz ao cliente que "chegou sem conteúdo" — segue o encaminhamento de
+    # anexo, com o fato registrado no motivo para a equipe.
     if (_mensagem_indisponivel(clientes[-1].get('content'))
             or clientes[-1].get('indisponivel')):
+        if _tem_anexo(clientes[-1]):
+            return _encaminhar(MOTIVO_ANEXO_COM_INDISPONIVEL)
         return _encaminhar_indisponivel()
     # Uma saudação/agradecimento não apaga venda, ajuste ou dúvida pendente.
     for m in atuais:

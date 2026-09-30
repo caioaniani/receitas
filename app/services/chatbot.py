@@ -1477,9 +1477,27 @@ def carregar_historico(conv_id):
         return []
     try:
         h = json.loads(conv.mensagens_json or '[]')
-        return h if isinstance(h, list) else []
+        return _normalizar_store(h) if isinstance(h, list) else []
     except (ValueError, TypeError):
         return []
+
+
+def _normalizar_store(mensagens):
+    """Store gravado ANTES de 30/09/2026 ainda carrega o placeholder cru
+    "This message is unavailable." como fala do cliente (conv 2339: sete
+    entradas). Na leitura ele vira `MARCADOR_MENSAGEM_INDISPONIVEL`, a
+    mesma fonte única do webhook e de `buscar_historico` — sem isso a fila
+    de espera (`registrar_encaminhamento` grava as 3 últimas falas) e o
+    WhatsApp do dono repetiam o texto em inglês. Só fala do cliente; o
+    próximo `salvar_historico` persiste o marcador."""
+    from app.services.chatwoot import MARCADOR_MENSAGEM_INDISPONIVEL, texto_indisponivel
+    out = []
+    for m in mensagens:
+        if (isinstance(m, dict) and m.get('role') == 'user'
+                and texto_indisponivel(m.get('content'))):
+            m = dict(m, content=MARCADOR_MENSAGEM_INDISPONIVEL, indisponivel=True)
+        out.append(m)
+    return out
 
 
 # Memoria cross-conversa (19/07/2026, auditor "bot perdendo contexto e
@@ -1540,7 +1558,7 @@ def contexto_do_contato(contato_key, *, excluir_conv=None):
                  'herdada': True,
                  **({'handoff_em': m['handoff_em']}
                     if m.get('handoff_em') else {})}
-                for m in brutas
+                for m in _normalizar_store(brutas)
                 if isinstance(m, dict)
                 and m.get('role') in ('user', 'assistant')
                 and (m.get('content') or '').strip()

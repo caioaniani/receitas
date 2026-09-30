@@ -282,6 +282,8 @@ def _e_story_mention_instagram(payload, conv):
     negativo (deixou passar) ja era o comportamento antigo — sem regressao.
     """
     content_attrs = payload.get('content_attributes') or {}
+    if not isinstance(content_attrs, dict):
+        content_attrs = {}   # payload torto: 500 aqui perderia a mensagem
     msg_type = (content_attrs.get('message_type') or '').lower()
     if 'story_mention' in msg_type or 'story-mention' in msg_type:
         return f'content_attributes.message_type={msg_type}'

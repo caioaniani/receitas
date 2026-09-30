@@ -44,23 +44,34 @@ que chega junto com o código continua disponível para atendimento.
 
 ### Mensagem que o WhatsApp não entregou ("This message is unavailable.")
 
-Quando o cliente manda algo que a API do WhatsApp não suporta (mensagem
-temporária, enquete, conteúdo de visualização única e similares), a Meta
-entrega o evento como `type: unsupported` e o Chatwoot grava só um
-placeholder — "This message is unavailable." — com
-`content_attributes.is_unsupported`. Ninguém recebe o conteúdo: nem o bot,
-nem a equipe. O sistema reconhece o placeholder (`chatwoot.
-mensagem_indisponivel`) e:
+Quando a Meta entrega um evento como `type: unsupported`, o Chatwoot grava
+só um placeholder — "This message is unavailable." — com
+`content_attributes.is_unsupported`. O tipo original da mensagem não chega
+no evento (o Chatwoot só loga o título do erro e o contato, quando o array
+`errors` vem). Duas origens documentadas: formato que a API não entrega
+(erro 131051 — enquete, visualização única, mensagem apagada) e número em
+coexistência com o aplicativo WhatsApp Business (erro 131060 — a mensagem
+pode estar visível no aparelho). Mensagem temporária e reação não geram o
+placeholder: o Chatwoot as descarta antes. O Chatwoot não recebe o
+conteúdo — nem o bot, nem a equipe pelo painel. O sistema reconhece o
+placeholder (`chatwoot.mensagem_indisponivel`) e:
 
 - responde ao cliente, uma vez por episódio, que a mensagem chegou sem
-  conteúdo e pede o reenvio como texto comum;
+  conteúdo e pede o reenvio como texto comum — sem diagnosticar a causa;
 - encaminha a conversa à equipe com o marcador `[mensagem indisponível…]`
-  no lugar do texto em inglês e o motivo na nota privada;
-- mostra o mesmo marcador na fila de espera e nos avisos ao dono.
+  no lugar do texto em inglês e o motivo (com as causas conhecidas) na
+  nota privada;
+- mostra o mesmo marcador na fila de espera, na lista de conversas do
+  painel e nos avisos ao dono (o marcador cabe nos 120 caracteres do
+  aviso); o histórico antigo gravado com o texto em inglês é lido já com
+  o marcador.
 
-O que a equipe faz: esperar o reenvio ou, se o número for conhecido,
-ligar. Não adianta responder "pode escrever?" — o cliente provavelmente já
-escreveu. Caso de referência: conversa 2339 (15 a 29/09/2026), sete
+O que a equipe faz: esperar o reenvio; se o número da inbox também estiver
+no aplicativo WhatsApp Business (coexistência), conferir a mensagem no
+aparelho; se o número for conhecido, ligar. Não adianta responder "pode
+escrever?" — o cliente provavelmente já escreveu. Foto sem legenda que
+chega na mesma rajada de um placeholder vai para a equipe como anexo (a
+foto chegou). Caso de referência: conversa 2339 (15 a 29/09/2026), sete
 mensagens do mesmo contato sem conteúdo.
 
 As seções de implantação abaixo descrevem a infraestrutura. Orientações

@@ -424,29 +424,45 @@ _MAX_PAGINAS_HISTORICO = 20
 
 MARCADOR_ANEXO_CLIENTE = '[Cliente enviou áudio/anexo para a equipe]'
 
-# Mensagem que o WhatsApp (Cloud API) entregou como `type: unsupported`
-# (erro 131051, "Unsupported message type": mensagem temporária, enquete,
-# conteúdo de visualização única e afins). O Chatwoot não recebe o conteúdo
-# e grava um placeholder no lugar — `create_unsupported_message` em
+# Mensagem que o WhatsApp (Cloud API) entregou como `type: unsupported`.
+# O Chatwoot não recebe o conteúdo e grava um placeholder no lugar —
+# `create_unsupported_message` em
 # app/services/whatsapp/incoming_message_base_service.rb (v4.17.1): content
 # = I18n `conversations.messages.whatsapp.unsupported_message` e
-# `content_attributes.is_unsupported = true`. Caso real (conv 2339,
-# 15-29/09/2026): sete mensagens de um mesmo contato chegaram assim e o bot
-# as tratou como fala do cliente ("pode me contar em texto?"); depois do
-# atendimento restrito, a equipe recebia a conversa sem saber o que era.
-# Este marcador substitui o placeholder em TODO caminho que lê a mensagem
-# (webhook e `buscar_historico`): o store, o atendimento restrito, a fila
-# de espera e o WhatsApp do dono passam a dizer o que aconteceu.
+# `content_attributes.is_unsupported = true`. O TIPO ORIGINAL não chega:
+# a Meta manda só `unsupported` (+ `errors`, que o Chatwoot apenas loga —
+# título do erro e contato, quando o array vem). Duas origens documentadas
+# para o mesmo evento: 131051 "Unsupported message type" (formato que a
+# API não entrega — enquete, visualização única, mensagem apagada) e
+# 131060 (número em COEXISTÊNCIA com o app WhatsApp Business: a mensagem
+# pode estar visível no aparelho — o exemplo do próprio comentário do
+# Chatwoot). Mensagem temporária (`ephemeral`) e reação NÃO geram o
+# placeholder: o Chatwoot as descarta antes (`unprocessable_message_type?`).
+# Caso real (conv 2339, 15-29/09/2026): sete mensagens de um mesmo contato
+# chegaram assim e o bot as tratou como fala do cliente ("pode me contar em
+# texto?"); depois do atendimento restrito, a equipe recebia a conversa sem
+# saber o que era. Este marcador substitui o placeholder em TODO caminho
+# que lê a mensagem (webhook, `buscar_historico`, `listar_conversas` e o
+# store legado via `chatbot.carregar_historico`): store, atendimento
+# restrito, fila de espera e o WhatsApp do dono dizem o que aconteceu.
+# Cabe nos 120 caracteres do aviso ao dono (`chatbot_vigia`), com a ação
+# primeiro; a causa fica no MOTIVO da nota privada.
 MARCADOR_MENSAGEM_INDISPONIVEL = (
-    '[mensagem indisponível: o WhatsApp não entregou o conteúdo (tipo não '
-    'suportado — mensagem temporária, enquete, visualização única ou '
-    'similar); pedir ao cliente que reenvie em texto, ou ligar]')
+    '[mensagem indisponível — o WhatsApp não entregou o conteúdo; '
+    'pedir reenvio em texto ou ligar]')
 # Texto do placeholder nos idiomas do Chatwoot (en e pt_BR, config/locales)
 # — só como segundo sinal: o atributo é o contrato, o texto pode mudar.
 _TEXTOS_MENSAGEM_INDISPONIVEL = frozenset({
     'this message is unavailable.',
     'esta mensagem não está disponível.',
 })
+
+
+def texto_indisponivel(content):
+    """True quando `content` é exatamente o placeholder do Chatwoot (sem
+    caixa/espaços). Fonte única para o texto cru — o store legado (gravado
+    antes de 30/09/2026) ainda carrega o texto em inglês."""
+    return isinstance(content, str) and content.strip().lower() in _TEXTOS_MENSAGEM_INDISPONIVEL
 
 
 def mensagem_indisponivel(m):
@@ -462,7 +478,7 @@ def mensagem_indisponivel(m):
     ca = m.get('content_attributes') or {}
     if isinstance(ca, dict) and ca.get('is_unsupported'):
         return True
-    return (m.get('content') or '').strip().lower() in _TEXTOS_MENSAGEM_INDISPONIVEL
+    return texto_indisponivel(m.get('content'))
 
 
 def anexos_exigem_equipe(anexos):
@@ -1103,14 +1119,19 @@ def listar_conversas(status='open', limite=40, *, estrito=False):
         sender = meta.get('sender') or {}
         # Preview da ultima mensagem: last_non_activity_message, senao a ultima
         # do array `messages` que tenha texto (a API varia por versao).
+        # Placeholder do WhatsApp `unsupported` vira o marcador também
+        # aqui: a coluna Atendimento do painel e a sonda atendimento-painel
+        # leem esta lista, não a thread.
         preview = ''
         ultima = c.get('last_non_activity_message')
         if isinstance(ultima, dict):
-            preview = (ultima.get('content') or '').strip()
+            preview = (MARCADOR_MENSAGEM_INDISPONIVEL if mensagem_indisponivel(ultima)
+                       else (ultima.get('content') or '').strip())
         if not preview:
             for m in reversed(c.get('messages') or []):
                 if isinstance(m, dict) and (m.get('content') or '').strip():
-                    preview = m['content'].strip()
+                    preview = (MARCADOR_MENSAGEM_INDISPONIVEL if mensagem_indisponivel(m)
+                               else m['content'].strip())
                     break
         out.append({
             'id': c.get('id'),

@@ -56,23 +56,41 @@ do bot abaixo; o motor anterior só pode executar em testes offline.
 Detalhes: `docs/atendimento-chatwoot.md`.
 
 **Mensagem que o WhatsApp não entregou (caso conv 2339, 30/09/2026)**: a
-Cloud API entrega como `type: unsupported` (erro 131051 — mensagem
-temporária, enquete, visualização única e afins) e o Chatwoot grava só o
+Cloud API entrega o evento como `type: unsupported` e o Chatwoot grava só o
 placeholder "This message is unavailable." (`content_attributes.
 is_unsupported`; `create_unsupported_message` em
-`app/services/whatsapp/incoming_message_base_service.rb`, v4.17.1). O
-tipo real NÃO fica gravado — só no log Rails do Chatwoot. Sete mensagens
-de um mesmo contato chegaram assim em 15 dias e o sistema tratou o texto
-em inglês como fala do cliente. Fonte única `chatwoot.mensagem_indisponivel`
-(atributo OU texto exato, en/pt_BR, só mensagem do cliente) +
-`MARCADOR_MENSAGEM_INDISPONIVEL`: o webhook (`crm/routes.bot_webhook`) e
-`buscar_historico` trocam o placeholder pelo marcador, então store, fila
-de espera e o WhatsApp do dono dizem o que aconteceu; o atendimento
-restrito responde `TEXTO_MENSAGEM_INDISPONIVEL` (motivo + "reenvie como
-texto comum") e encaminha com `MOTIVO_MENSAGEM_INDISPONIVEL` na nota
-privada. Texto real misturado na rajada segue o fluxo normal; segundo
-placeholder no mesmo episódio fica em silêncio (a conversa é da equipe).
-Testes: `tests/test_mensagem_indisponivel.py`.
+`app/services/whatsapp/incoming_message_base_service.rb`, v4.17.1). O TIPO
+ORIGINAL NÃO CHEGA em lugar nenhum: a Meta manda só `unsupported` (+ um
+array `errors`, que o Chatwoot apenas loga — título do erro e contato,
+quando vem). Duas origens documentadas para o mesmo evento: 131051
+"Unsupported message type" (formato que a API não entrega — enquete,
+visualização única, mensagem apagada) e 131060 (número em COEXISTÊNCIA
+com o app WhatsApp Business — a mensagem pode estar visível no aparelho;
+é o exemplo do próprio comentário do Chatwoot). Mensagem temporária
+(`ephemeral`) e reação NÃO geram o placeholder (o Chatwoot as descarta
+antes, `unprocessable_message_type?`). Qual foi a origem do caso 2339
+não é verificável daqui. Sete mensagens de um mesmo contato chegaram
+assim em 15 dias e o sistema tratou o texto em inglês como fala do
+cliente. Fonte única `chatwoot.mensagem_indisponivel` (atributo OU texto
+exato, en/pt_BR, só mensagem do cliente; `texto_indisponivel` para o
+texto cru) + `MARCADOR_MENSAGEM_INDISPONIVEL` (≤ 120 caracteres, ação
+primeiro — o aviso ao dono corta em 120): o webhook (`crm/routes.
+bot_webhook`), `buscar_historico`, o preview de `listar_conversas` e o
+store legado na leitura (`chatbot.carregar_historico`/`contexto_do_
+contato` — a conv 2339 já tinha sete placeholders crus gravados) trocam o
+placeholder pelo marcador, então store, fila de espera, painel e o
+WhatsApp do dono dizem o que aconteceu. O atendimento restrito responde
+`TEXTO_MENSAGEM_INDISPONIVEL` (o fato + "reenvie como texto comum", SEM
+diagnosticar a causa; fora do horário, texto próprio sem "vou registrar
+sua mensagem") e encaminha com `MOTIVO_MENSAGEM_INDISPONIVEL` (causas
+conhecidas + "conferir no aparelho" na coexistência) na nota privada.
+Texto real misturado na rajada segue o fluxo normal; foto sem legenda +
+placeholder no mesmo debounce vai como ANEXO (a foto chegou —
+`MOTIVO_ANEXO_COM_INDISPONIVEL`); segundo placeholder no mesmo episódio
+fica em silêncio (a conversa é da equipe). Revisão de 30/09 (18 achados
+aplicados): store legado, corte de 120, preview da lista, causa afirmada
+sem prova, fora do horário e rajada com foto. Testes:
+`tests/test_mensagem_indisponivel.py`.
 
 ## Kits de café da manhã (decisão do dono, 14/09/2026)
 
