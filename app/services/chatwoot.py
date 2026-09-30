@@ -424,6 +424,46 @@ _MAX_PAGINAS_HISTORICO = 20
 
 MARCADOR_ANEXO_CLIENTE = '[Cliente enviou áudio/anexo para a equipe]'
 
+# Mensagem que o WhatsApp (Cloud API) entregou como `type: unsupported`
+# (erro 131051, "Unsupported message type": mensagem temporária, enquete,
+# conteúdo de visualização única e afins). O Chatwoot não recebe o conteúdo
+# e grava um placeholder no lugar — `create_unsupported_message` em
+# app/services/whatsapp/incoming_message_base_service.rb (v4.17.1): content
+# = I18n `conversations.messages.whatsapp.unsupported_message` e
+# `content_attributes.is_unsupported = true`. Caso real (conv 2339,
+# 15-29/09/2026): sete mensagens de um mesmo contato chegaram assim e o bot
+# as tratou como fala do cliente ("pode me contar em texto?"); depois do
+# atendimento restrito, a equipe recebia a conversa sem saber o que era.
+# Este marcador substitui o placeholder em TODO caminho que lê a mensagem
+# (webhook e `buscar_historico`): o store, o atendimento restrito, a fila
+# de espera e o WhatsApp do dono passam a dizer o que aconteceu.
+MARCADOR_MENSAGEM_INDISPONIVEL = (
+    '[mensagem indisponível: o WhatsApp não entregou o conteúdo (tipo não '
+    'suportado — mensagem temporária, enquete, visualização única ou '
+    'similar); pedir ao cliente que reenvie em texto, ou ligar]')
+# Texto do placeholder nos idiomas do Chatwoot (en e pt_BR, config/locales)
+# — só como segundo sinal: o atributo é o contrato, o texto pode mudar.
+_TEXTOS_MENSAGEM_INDISPONIVEL = frozenset({
+    'this message is unavailable.',
+    'esta mensagem não está disponível.',
+})
+
+
+def mensagem_indisponivel(m):
+    """True quando a mensagem do CLIENTE é o placeholder do Chatwoot para
+    conteúdo que o WhatsApp não entregou (`type: unsupported`). Vale para o
+    payload do webhook e para a listagem da API (mesmo formato):
+    `content_attributes.is_unsupported` OU o texto exato do placeholder.
+    Mensagem nossa (outgoing) nunca conta."""
+    if not isinstance(m, dict):
+        return False
+    if m.get('message_type') not in ('incoming', 0):
+        return False
+    ca = m.get('content_attributes') or {}
+    if isinstance(ca, dict) and ca.get('is_unsupported'):
+        return True
+    return (m.get('content') or '').strip().lower() in _TEXTOS_MENSAGEM_INDISPONIVEL
+
 
 def anexos_exigem_equipe(anexos):
     """Legenda não substitui áudio, vídeo ou arquivo que a equipe deve abrir."""
@@ -521,7 +561,13 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
                    if a.get('file_type') == 'image' and a.get('data_url')]
         anexos_humanos = (mt in ('incoming', 0)
                          and anexos_exigem_equipe(m.get('attachments')))
-        if anexos_humanos:
+        indisponivel = mensagem_indisponivel(m)
+        if indisponivel:
+            # Placeholder do Chatwoot (WhatsApp `unsupported`): o texto em
+            # inglês não é fala do cliente — vassoura, follow-up e espera
+            # humana leem o marcador, o mesmo que o webhook grava no store.
+            content = MARCADOR_MENSAGEM_INDISPONIVEL
+        elif anexos_humanos:
             # O store e a recuperação mesclam conteúdo textual. Gravar só
             # a legenda ("bom dia", "qual o link?") descartava o pedido
             # contido no áudio/documento e liberava uma resposta de FAQ.
@@ -539,7 +585,9 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
             ts = None
         if mt in ('incoming', 0):
             item = {'role': 'user', 'content': content, 'created_at': ts}
-            if anexos_humanos:
+            if indisponivel:
+                item['indisponivel'] = True
+            elif anexos_humanos:
                 item['anexos'] = True
             if imagens:
                 item['imagens'] = imagens

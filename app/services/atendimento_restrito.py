@@ -93,6 +93,38 @@ def _encaminhar(motivo):
     return _resultado('handoff', _texto_handoff_com_horario(texto), motivo)
 
 
+# Mensagem que o WhatsApp não entregou (`type: unsupported` — o Chatwoot
+# grava só um placeholder; ver `chatwoot.MARCADOR_MENSAGEM_INDISPONIVEL`).
+# Aqui "vou passar sua mensagem" seria mentira: não há mensagem. O cliente
+# recebe o motivo e o gesto que resolve (reenviar como texto comum); a
+# equipe recebe a conversa com o marcador e o motivo na nota do handoff.
+TEXTO_MENSAGEM_INDISPONIVEL = (
+    'Sua mensagem chegou sem conteúdo aqui no nosso atendimento — isso '
+    'costuma acontecer com mensagens temporárias, enquetes ou conteúdo de '
+    'visualização única. Pode reenviar como mensagem de texto comum? Nossa '
+    'equipe continua o atendimento por aqui.')
+MOTIVO_MENSAGEM_INDISPONIVEL = (
+    'mensagem indisponível: o WhatsApp não entregou o conteúdo (tipo não '
+    'suportado pela API — mensagem temporária, enquete, visualização única '
+    'ou similar). O cliente foi orientado a reenviar em texto; se o número '
+    'for conhecido, ligar.')
+
+
+def _mensagem_indisponivel(texto):
+    """True quando TODA a fala do cliente (uma mensagem, ou a rajada que o
+    webhook juntou com quebras de linha) é o marcador de conteúdo não
+    entregue. Texto real misturado segue o fluxo normal."""
+    from app.services.chatwoot import MARCADOR_MENSAGEM_INDISPONIVEL
+    linhas = [ln.strip() for ln in (texto or '').splitlines() if ln.strip()]
+    return bool(linhas) and all(ln == MARCADOR_MENSAGEM_INDISPONIVEL for ln in linhas)
+
+
+def _encaminhar_indisponivel():
+    from app.services.chatbot import _texto_handoff_com_horario
+    return _resultado('handoff', _texto_handoff_com_horario(TEXTO_MENSAGEM_INDISPONIVEL),
+                      MOTIVO_MENSAGEM_INDISPONIVEL)
+
+
 def _enderecos(unidade=None):
     """Cadastro das lojas, sem assumir horário ou habilitação para retirada."""
     from app.models import Loja
@@ -133,6 +165,13 @@ def responder(historico, *, telefone_contato=None, conversa_id=None):
     clientes = [m for m in atuais if m.get('role') == 'user']
     if not clientes:
         return _encaminhar('atendimento restrito: mensagem sem contexto suficiente')
+    # Conteúdo que o WhatsApp não entregou: o texto genérico ("vou passar
+    # sua mensagem") não serve — vem ANTES da continuidade com a equipe,
+    # porque o cliente precisa saber o que fazer mesmo numa conversa já
+    # encaminhada (caso 2339: sete vezes o mesmo placeholder em 15 dias).
+    if (_mensagem_indisponivel(clientes[-1].get('content'))
+            or clientes[-1].get('indisponivel')):
+        return _encaminhar_indisponivel()
     # Uma saudação/agradecimento não apaga venda, ajuste ou dúvida pendente.
     for m in atuais:
         if m.get('handoff_em'):

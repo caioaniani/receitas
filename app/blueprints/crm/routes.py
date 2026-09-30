@@ -466,6 +466,15 @@ def bot_webhook():
     if not conv_id:
         return jsonify({'ok': True, 'ignorado': 'sem-conversa'})
     content = (payload.get('content') or '').strip()
+    from app.services import chatwoot as _cw_indisp
+    if _cw_indisp.mensagem_indisponivel(payload):
+        # WhatsApp entregou `type: unsupported` e o Chatwoot gravou o
+        # placeholder "This message is unavailable." (caso conv 2339,
+        # 15-29/09/2026). Não é fala do cliente: vira o marcador canônico,
+        # que o atendimento restrito reconhece (texto próprio ao cliente +
+        # equipe) e a fila de espera mostra ao dono.
+        logger.info('crm/bot: conv %s mensagem indisponivel (unsupported)', conv_id)
+        content = _cw_indisp.MARCADOR_MENSAGEM_INDISPONIVEL
 
     # Idempotencia: Chatwoot reenvia message_created se o webhook demora
     # (bot precisa de Claude + tools, passa de 5s as vezes). Sem isso,
