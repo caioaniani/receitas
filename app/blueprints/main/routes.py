@@ -3817,8 +3817,15 @@ def pedidos_revenda():
     pulados_corte = svc.publicas(li for li in candidatos if li['sob_corte'])
     removidos, cancelados = 0, []
     if executar:
-        removidos, cancelados = svc.remover(candidatos)
-        db.session.commit()
+        from app.services.pedido_corte import salvar_no_prazo
+        removidos, cancelados, datas = svc.remover(candidatos)
+        # Reconfere o corte ANTES de gravar (decisão de 24/09/2026): uma
+        # execução iniciada 11:59 não pode terminar depois das 12h tocando
+        # o pedido de amanhã.
+        erro_corte = salvar_no_prazo(datas)
+        if erro_corte:
+            return jsonify(ok=False, erro=erro_corte, dry_run=False,
+                           removidos=0), 409
 
     return jsonify({
         'ok': True,
