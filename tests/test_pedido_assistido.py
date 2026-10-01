@@ -406,9 +406,12 @@ def test_gate_da_tela(app, cliente, papel, esperado):
     _loja_site()
     u = _usuario(papel, 'u_' + papel)
     _login(cliente, u)
-    assert cliente.get('/admin/loja-online/pedido-assistido').status_code == esperado
+    # Papéis de consulta fixa (observador) são desviados pelo gate global
+    # (302 pras telas deles) antes do decorator — barrado de qualquer jeito.
+    aceitos = {esperado} if esperado == 200 else {403, 302}
+    assert cliente.get('/admin/loja-online/pedido-assistido').status_code in aceitos
     assert cliente.get('/admin/loja-online/pedido-assistido/cotacao'
-                       '?modo=retirada').status_code == esperado
+                       '?modo=retirada').status_code in aceitos
     assert u.pode_pedido_assistido() is (esperado == 200)
 
 
