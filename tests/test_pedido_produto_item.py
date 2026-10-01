@@ -1,7 +1,12 @@
 """Pedido pode ter Produto como item, nao so receita/MP. Bug: o picker de
 /pedidos/novo e /pedidos/<id>/editar so listava receitas e materias-primas
 (o POST tambem zerava produto_id), entao nao dava pra pedir um produto
-cadastrado pra industria entregar."""
+cadastrado pra industria entregar.
+
+Desde 01/10/2026 (dono) o Produto so entra se a industria o FORNECE: cesta
+montada de receita/MP liberada. O `catalogo['produto']` do conftest e um
+Produto simples (revenda) — a fixture `cesta` o transforma em cesta de
+receita pra estes testes continuarem cobrindo o caminho do produto."""
 from datetime import timedelta
 
 import pytest
@@ -10,6 +15,18 @@ import pytest
 @pytest.fixture
 def cliente(app):
     return app.test_client()
+
+
+@pytest.fixture
+def cesta(app, catalogo):
+    """Transforma o Produto do catalogo numa cesta montada da receita."""
+    from app.extensions import db
+    from app.models import ProdutoItem
+    p, r = catalogo['produto'], catalogo['receita']
+    db.session.add(ProdutoItem(produto_id=p.id, tipo='receita', receita_id=r.id,
+                               item_nome=r.nome, quantidade=1))
+    db.session.commit()
+    return p
 
 
 def _login(cliente):
