@@ -88,6 +88,11 @@ def itens_para_usuario(usuario, categorias_receitas):
     if capacidade('web_estoque_loja'):
         adicionar('Pedidos do site', 'main.loja_online_pedidos', 'Site', 'bag',
                   aliases=['pedido online', 'compras do site'], principal=True)
+        adicionar('Criar pedido para cliente', 'main.loja_online_pedido_assistido',
+                  'Site', 'receipt-cutoff',
+                  aliases=['pedido assistido', 'link de pagamento',
+                           'pedido por whatsapp', 'pedido por telefone',
+                           'cobrar cliente'])
         adicionar('Estoque das lojas', 'pedidos.estoque_loja', 'Lojas', 'box',
                   aliases=['estoque da loja'])
         adicionar('Conferência de estoque', 'pedidos.conferencia', 'Lojas',
