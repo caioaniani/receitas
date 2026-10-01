@@ -64,8 +64,11 @@ sozinho na re-sincronização (item fora da grade vai a zero); pedido com
 carimbo humano é protegido — limpeza pelo dono em
 `GET /admin/pedidos-revenda` (owner; dry-run; `?executar=1` remove os itens
 de pedidos pendente/confirmado com entrega a partir de amanhã, respeita o
-corte das 12h, cancela pedido que ficar vazio, NÃO carimba
-`modificado_por_id`; AuditLog registra as exclusões). Serviço
+corte das 12h e o reconfere antes do commit (`salvar_no_prazo`), cancela
+pedido que ficar vazio LIMPANDO o carimbo humano — cancelado com carimbo
+protegeria o dia e a loja ficaria sem o rascunho do cron —, nos demais
+NÃO carimba `modificado_por_id`; AuditLog registra as exclusões; a loja
+NÃO é avisada da remoção — decisão separada). Serviço
 `app/services/pedidos_revenda.py` (`listar`/`remover`); a sonda read-only
 `GET /api/claude/pedidos-revenda` devolve a mesma lista para conferir de
 fora (o assistente não tem login de owner).
