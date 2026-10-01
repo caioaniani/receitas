@@ -3901,6 +3901,22 @@ def sugerir_pedido(loja_id):
             'materia_prima_id': it['id'] if it['tipo'] == 'mp' else None,
             'quantidade': it['quantidade'], 'estado': None, 'observacao': None,
         } for it in itens]
+        # Mesmas travas do /pedidos/novo: MP só liberada; Produto só se a
+        # indústria o fornece (dono 01/10/2026) — a tela já filtra, isto
+        # barra POST forjado.
+        from app.services.itens_industria import (
+            mensagem_produtos_nao_pediveis,
+            produtos_nao_pediveis,
+        )
+        mps_bloqueadas = _mps_nao_pediveis(itens_norm)
+        prod_bloqueados = produtos_nao_pediveis(itens_norm)
+        if mps_bloqueadas or prod_bloqueados:
+            if mps_bloqueadas:
+                flash('Matéria(s)-prima(s) não liberada(s) pra pedido de loja: '
+                      + ', '.join(mps_bloqueadas) + '.', 'warning')
+            if prod_bloqueados:
+                flash(mensagem_produtos_nao_pediveis(prod_bloqueados), 'warning')
+            return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
 
         from app.services.pedido_merge import (
             absorver_rascunho_automatico,
