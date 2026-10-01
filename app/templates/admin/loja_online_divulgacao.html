@@ -133,28 +133,8 @@
     </div>
 </form>
 
-<template id="tpl-item">
-    <div class="row g-2 mb-2 align-items-start item-row">
-        <div class="col-8">
-            <div class="combo position-relative">
-                <input type="text" class="form-control form-control-sm combo-input"
-                       placeholder="digite pra buscar…" autocomplete="off">
-                <input type="hidden" name="item_alvo[]" class="combo-val">
-                <div class="combo-menu list-group position-absolute w-100 shadow-sm"
-                     style="display:none; z-index:1050; max-height:240px; overflow-y:auto;"></div>
-            </div>
-        </div>
-        <div class="col-3">
-            <input type="number" class="form-control form-control-sm" name="item_qtd[]"
-                   min="1" step="1" value="1" placeholder="qtd">
-        </div>
-        <div class="col-1">
-            <button type="button" class="btn btn-sm btn-outline-danger rm-item" title="Remover">&times;</button>
-        </div>
-        <input type="hidden" name="item_comp[]" class="menu-comp-val" value="">
-        <div class="col-12 menu-box border rounded p-2 bg-light" style="display:none;"></div>
-    </div>
-</template>
+{# Montador de itens + CEP compartilhados com o pedido assistido (01/10/2026). #}
+{% include 'admin/_pedido_itens_js.html' %}
 
 <script>
 (function () {
