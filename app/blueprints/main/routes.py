@@ -6540,7 +6540,17 @@ def loja_online_pedido_reenviar_emails(codigo):
     # Monta a lista de e-mails a reenviar conforme o status atual.
     envios = []
     if p.status == 'aguardando_pagamento':
-        envios.append(('Recebemos seu pedido', email_svc.enviar_pedido_recebido))
+        from app.services import pedido_assistido
+        reg = pedido_assistido.registro_de(p)
+        if reg is not None:
+            # Pedido ASSISTIDO: o e-mail certo é o do link montado pela
+            # equipe (o "recebemos seu pedido" diria que o cliente fez).
+            envios.append(('Link de pagamento',
+                           lambda pedido: pedido_assistido.enviar_email_link(
+                               pedido, reg)))
+        else:
+            envios.append(('Recebemos seu pedido',
+                           email_svc.enviar_pedido_recebido))
     pago_ou_alem = p.status in ('pago', 'em_preparo', 'a_caminho', 'entregue')
     if pago_ou_alem:
         envios.append(('Pedido confirmado', email_svc.enviar_confirmacao_pedido))
