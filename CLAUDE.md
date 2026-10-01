@@ -65,7 +65,10 @@ carimbo humano é protegido — limpeza pelo dono em
 `GET /admin/pedidos-revenda` (owner; dry-run; `?executar=1` remove os itens
 de pedidos pendente/confirmado com entrega a partir de amanhã, respeita o
 corte das 12h, cancela pedido que ficar vazio, NÃO carimba
-`modificado_por_id`; AuditLog registra as exclusões).
+`modificado_por_id`; AuditLog registra as exclusões). Serviço
+`app/services/pedidos_revenda.py` (`listar`/`remover`); a sonda read-only
+`GET /api/claude/pedidos-revenda` devolve a mesma lista para conferir de
+fora (o assistente não tem login de owner).
 
 ACHADO PRÉ-EXISTENTE, decisão separada do dono: cesta pedida à indústria
 é debitada/creditada na linha do PRÓPRIO Produto (`pedido_estoque.
