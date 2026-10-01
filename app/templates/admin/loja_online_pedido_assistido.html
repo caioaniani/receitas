@@ -407,7 +407,11 @@
       erroBox.textContent = 'Faltou preencher: ' + faltas.join(', ') + '.';
       erroBox.style.display = '';
       erroBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
     }
+    // Anti duplo clique (o servidor ainda recusa repetição em 30 s).
+    var btn = form.querySelector('button[type="submit"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Criando pedido…'; }
   });
 
   syncPresente();
