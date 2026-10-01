@@ -89,6 +89,28 @@ def test_post_da_grade_recusa_produto_de_revenda_e_nao_toca_receita(
         (receita.id, None, 5)]
 
 
+def test_post_da_grade_aceita_cesta_montada_pela_industria(
+        app, admin_user, loja, pedidos_antes_do_corte):
+    """Token 'prod:<id>' de CESTA fornecida pela indústria (form antigo/
+    forjado) passa pela validação da grade — a régua é a mesma do /novo."""
+    receita, _ = _receita(loja)
+    cesta, _ = _produto(loja, 'Cesta de pão')
+    db.session.add(ProdutoItem(produto_id=cesta.id, tipo='receita',
+                               receita_id=receita.id, item_nome=receita.nome,
+                               quantidade=2))
+    db.session.commit()
+    dia = (hoje() + timedelta(days=1)).isoformat()
+    client = app.test_client()
+    _login(client, admin_user)
+    response = client.post('/producao/pedidos-semana/gerar', data={
+        'origem': 'estoque', 'so_loja': str(loja.id),
+        f'qtd|{loja.id}|{dia}|prod:{cesta.id}': '3',
+    })
+    assert response.status_code == 302
+    pedido = PedidoLoja.query.one()
+    assert [(i.produto_id, i.quantidade) for i in pedido.itens] == [(cesta.id, 3)]
+
+
 def test_estoque_loja_explica_revenda_e_cesta_e_nao_grava_regra(app, admin_user, loja):
     revenda, saldo_revenda = _produto(loja)
     receita, saldo_receita = _receita(loja)
