@@ -83,8 +83,10 @@ def marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None):
         return False
     # Cancelamento deliberado não pode ser revertido por um webhook atrasado.
     # QR expirado é diferente: o gateway ainda pode confirmar dinheiro recebido.
+    from app.models.loja_online import MOTIVOS_EXPIRACAO_AUTOMATICA
     if any(p.pago_em or p.divulgacao or p.status not in ('aguardando_pagamento', 'cancelado')
-           or (p.status == 'cancelado' and p.motivo_cancelamento != 'pix_expirado')
+           or (p.status == 'cancelado'
+               and p.motivo_cancelamento not in MOTIVOS_EXPIRACAO_AUTOMATICA)
            for p in pedidos):
         logger.error('Pagamento recebido para kit %s com entrega incompatível; '
                      'requer conferência do owner.', compra.id)
