@@ -282,9 +282,13 @@ def cancelar(pedido, *, usuario_id=None):
     (`loja_pagamento.cancelar_aguardando_pelo_admin`). Só pedido assistido
     em `aguardando_pagamento` — pago/cancelado/comum ficam com os botões de
     sempre (reembolso é do dono). Devolve (ok, mensagem)."""
-    from app.services import loja_pagamento
+    from app.services import kits_pagamento, loja_pagamento
     if registro_de(pedido) is None:
         return False, f'Pedido {pedido.codigo} não é um pedido assistido.'
+    # Trava o pedido ANTES de decidir (mesma ordem de locks do cancelar do
+    # dono): dois cliques, ou clique + webhook de pagamento, ficam em fila e
+    # o segundo lê o status já mudado.
+    kits_pagamento.travar(pedido, todos=True)
     if pedido.status != 'aguardando_pagamento':
         return False, (f'Pedido {pedido.codigo} não está aguardando pagamento '
                        f'({pedido.status}) — use os botões de sempre do pedido.')
