@@ -2310,6 +2310,10 @@ def _resolver_item_pedido(nome, mp_ids_extras=None, produto_ids_extras=None):
                 liberados.add(p.id)
         matches = [m for m in matches
                    if m['tipo'] != 'produto' or m['id'] in liberados]
+        if not matches:
+            # So revenda casou (ex.: match EXATO num Produto, que encerra o
+            # resolver antes do fuzzy): procura de novo so entre receitas.
+            matches = _resolver_produto(nome, apenas_receita=True)
     mps = _resolver_mp(nome)
     if mps:
         liberadas = {mid for (mid,) in MateriaPrima.query
