@@ -83,6 +83,12 @@ CAP_DEFAULT = {
     # Checklist de abertura/troca/fechamento (03/08/2026): quem o dono pediu
     # foi "gerente ou atendente chefe do turno" — gerente + funcionario.
     'web_checklist': {'gerente', 'funcionario'},
+    # Pedido ASSISTIDO (01/10/2026): montar o pedido do site em nome do
+    # cliente e mandar o link de pagamento. Gerente por padrão (quem já opera
+    # Pedidos do site); o dono libera 'funcionario' (atendente) aqui sem
+    # deploy. Capacidade PRÓPRIA de propósito: liberar via web_estoque_loja
+    # abriria também estoque/relatório/preços.
+    'web_pedido_assistido': {'gerente'},
     # ── Copilot/Slack — nivel gerente ──
     'criar_pedido': {'gerente'},
     'editar_pedido': {'gerente'},
