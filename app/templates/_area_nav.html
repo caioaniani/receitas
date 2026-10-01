@@ -118,7 +118,9 @@
 {% macro vendas(variant) %}
 {% if variant != 'sidebar' and (current_user.is_admin() or current_user.is_gerente()) %}
 {{ _lnk(variant, url_for('main.loja_online_pedidos'), 'Pedidos do site', request.path.startswith('/admin/loja-online/pedidos'), icon='bi-bag', title='Consultar compras, pagamentos e entregas', primary=true) }}
+{% if current_user.pode_pedido_assistido() %}
 {{ _lnk(variant, url_for('main.loja_online_pedido_assistido'), 'Criar pedido para cliente', request.path.startswith('/admin/loja-online/pedido-assistido'), icon='bi-receipt-cutoff', title='Montar o pedido do cliente e enviar o link de pagamento (Pix/cartão)') }}
+{% endif %}
 {% endif %}
 {% if current_user.pode_pdv() %}
 {{ _lnk(variant, url_for('pdv.index'), 'Vendas do Caixa (PDV)', request.path in ['/pdv/', '/pdv'], primary=true, title='Acompanhe as vendas registradas no caixa', icon='bi-receipt') }}
