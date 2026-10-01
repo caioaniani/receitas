@@ -148,6 +148,15 @@ def test_prazo_tem_piso_de_2h_para_entrega_hoje():
         tarde + timedelta(hours=2)
 
 
+def test_prazo_express_e_curto():
+    """Express 'sai agora': a janela é calculada na criação — link pago horas
+    depois seria um express vencido. 30 min fixos."""
+    from app.services import pedido_assistido as svc
+    base = datetime(2026, 10, 6, 10, 0)
+    assert svc.prazo_pagamento(base, base.date(), modo_entrega='express') == \
+        base + timedelta(minutes=svc.PRAZO_EXPRESS_MIN)
+
+
 # ── Serviço ─────────────────────────────────────────────────────────────────
 
 def test_criar_retirada_nasce_aguardando_com_registro_e_prazo(app, admin_user):
