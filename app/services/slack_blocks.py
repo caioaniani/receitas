@@ -133,7 +133,10 @@ def _preview_editar_pedido(p, token):
             nome = render_item_com_estado(nome_base, it.get('estado'))
             base = f"- {it.get('quantidade')}x {nome}"
             obs = (it.get('observacao') or '').strip()
-            return f"{base} _({obs})_" if obs else base
+            txt = f"{base} _({obs})_" if obs else base
+            if not it.get('resolvido'):
+                txt += ' ⚠ _sem match no catalogo — nao entra_'
+            return txt
         itens_txt = '\n'.join(_fmt_novo(it) for it in itens_novos) or '(vazio)'
         itens_header = '*Itens NOVOS (substituem os atuais):*'
     else:
