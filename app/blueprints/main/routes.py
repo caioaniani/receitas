@@ -5755,12 +5755,10 @@ def _cotacao_endereco(modo, data, args):
     valor = None
     fora_area = False
     if modo in ('agendada', 'express'):
-        partes = [args.get('logradouro'), args.get('numero'),
-                  args.get('bairro'), args.get('cidade')]
-        geo = ', '.join(p.strip() for p in partes if (p or '').strip())
-        cep = (args.get('cep') or '').strip()
-        if cep and cep not in geo:
-            geo = ('%s, %s' % (geo, cep)) if geo else cep
+        # MESMA string que `criar_pedido` geocodifica (`texto_de_geocode`:
+        # rua + número + bairro + cidade + UF + CEP, sem complemento) — com
+        # strings diferentes o frete mostrado podia divergir do gravado.
+        geo, _cep_invalido = loja_checkout.texto_de_geocode(args)
         if geo:
             try:
                 from app.services import frete
