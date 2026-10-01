@@ -38,14 +38,24 @@ def test_buscar_itens_receitas(app, admin_user):
 
 
 def test_buscar_itens_produtos(app, admin_user):
+    """Produto só entra se a indústria o fornece: cesta montada de receita
+    aparece; Produto sem composição (revenda) fica fora — dono 01/10/2026,
+    ver tests/test_pedido_so_industria.py."""
     from app.extensions import db
-    from app.models import Produto
+    from app.models import Produto, ProdutoItem, Receita
 
     with app.app_context():
+        r = Receita(nome='Pão da Cesta', rendimento_qtd=1,
+                    rendimento_unidade='un', peso_base=100)
         p = Produto(nome='Cesta Especial', ativo=True)
-        db.session.add(p)
+        revenda = Produto(nome='Cesta Coca-Cola', ativo=True)
+        db.session.add_all([r, p, revenda])
+        db.session.flush()
+        db.session.add(ProdutoItem(produto_id=p.id, tipo='receita',
+                                   receita_id=r.id, item_nome=r.nome,
+                                   quantidade=2))
         db.session.commit()
-        pid = p.id
+        pid, rid_revenda = p.id, revenda.id
 
     client = app.test_client()
     _login(client, admin_user)
@@ -54,8 +64,10 @@ def test_buscar_itens_produtos(app, admin_user):
     data = resp.get_json()
     nomes = [item['nome'] for item in data['itens']]
     assert 'Cesta Especial' in nomes
+    assert 'Cesta Coca-Cola' not in nomes
     ids = [item['id'] for item in data['itens']]
     assert f'p_{pid}' in ids
+    assert f'p_{rid_revenda}' not in ids
 
 
 def test_buscar_itens_materias_primas(app, admin_user):
