@@ -452,7 +452,11 @@ def _expirar_um(pedido_id, base, _loja_baixa, _marcar_pago,
         return None
     liberar(p, loja_id=loja.id)
     p.status = 'cancelado'
-    p.motivo_cancelamento = 'pix_expirado'
+    # Pedido ASSISTIDO (01/10/2026): o prazo era o do LINK enviado pela
+    # equipe, nunca houve Pix — motivo próprio (mesma classe de expiração
+    # automática: pagamento tardio reabre, ver MOTIVOS_EXPIRACAO_AUTOMATICA).
+    p.motivo_cancelamento = ('link_expirado' if getattr(p, 'assistido', None)
+                             else 'pix_expirado')
     p.cancelado_em = base
     db.session.commit()
     return p.codigo
