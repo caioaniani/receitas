@@ -6268,8 +6268,22 @@ def loja_online_pedido_detalhe(codigo):
     # A tela avisa que a NF pode estar desatualizada (o Tiny não cancela por
     # aqui — correção é manual).
     estoque_reduzido = loja_pagamento._versao_estoque_atual(p) > 0
+    # Pedido ASSISTIDO (01/10/2026): bloco com o link de pagamento pronto
+    # pra copiar/WhatsApp/e-mail enquanto o cliente não paga.
+    from app.services import pedido_assistido
+    assistido = pedido_assistido.registro_de(p)
+    assistido_ctx = {}
+    if assistido is not None:
+        texto_wa = pedido_assistido.texto_whatsapp(p, assistido)
+        assistido_ctx = dict(
+            assistido=assistido,
+            link_pagamento=pedido_assistido.link_pagamento(p),
+            whatsapp_texto=texto_wa,
+            whatsapp_url=pedido_assistido.url_whatsapp(p, texto_wa),
+            assistido_vencido=pedido_assistido.vencido(assistido))
     return render_template('admin/loja_online_pedido_detalhe.html',
                            p=p, labels=_STATUS_PEDIDO_ONLINE_LABEL,
+                           **assistido_ctx,
                            fiscal=fiscal_online.contexto(p),
                            lojas=loja_checkout.lojas_retirada(),
                            modos=_MODOS_ENTREGA,
