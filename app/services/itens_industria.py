@@ -108,7 +108,8 @@ def produtos_nao_pediveis(itens_norm, produto_ids_extras=()):
                   if it.get('produto_id') and int(it['produto_id']) not in extras})
     if not ids:
         return []
-    produtos = {p.id: p for p in Produto.query.filter(Produto.id.in_(ids)).all()}
+    produtos = {p.id: p for p in Produto.query.filter(Produto.id.in_(ids))
+                .options(*opcoes_composicao()).all()}
     bloqueados = []
     for pid in ids:
         p = produtos.get(pid)
