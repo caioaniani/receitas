@@ -46,8 +46,6 @@ from app.extensions import db
 from app.models import CANAIS_PEDIDO_ASSISTIDO, PedidoOnlineAssistido
 from app.utils import agora, fmt_brl, telefone_e164_whatsapp
 
-MOTIVO_LINK_EXPIRADO = 'link_expirado'   # gravado pelo cron (loja_estoque_reserva)
-
 logger = logging.getLogger(__name__)
 
 # Quanto tempo o link de pagamento vale, a partir da criação.
