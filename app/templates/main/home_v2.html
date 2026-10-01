@@ -135,6 +135,7 @@
             <div class="home-v2-sales-split">
                 <div><span>PDV</span><strong>R$ {{ '{:,.0f}'.format(vendas_hoje.pdv_total).replace(',', '.') }}</strong><small>{{ vendas_hoje.n_pedidos }} pedido{{ 's' if vendas_hoje.n_pedidos != 1 }}</small></div>
                 <div><span>Site</span><strong>R$ {{ '{:,.0f}'.format(vendas_hoje.site_total).replace(',', '.') }}</strong><small>{{ vendas_hoje.site_qtd }} pago{{ 's' if vendas_hoje.site_qtd != 1 }}</small></div>
+                <div class="home-v2-sales-b2b"><span>B2B</span><strong>R$ {{ '{:,.0f}'.format(vendas_hoje.b2b_total).replace(',', '.') }}</strong><small>{{ vendas_hoje.b2b_qtd }} venda{{ 's' if vendas_hoje.b2b_qtd != 1 }} · pela data da venda, inclusive a prazo</small></div>
             </div>
             <button type="button" class="home-v2-detail-link abrir-cd"
                     data-dia="{{ vendas_hoje.hoje }}" data-rotulo="hoje ({{ vendas_hoje.label }})">
@@ -150,6 +151,8 @@
                     Ver detalhes
                 </button>
             </div>
+
+            <p class="home-v2-detail-link small text-muted">B2B de ontem: <strong>R$ {{ '{:,.0f}'.format(vendas.b2b_total).replace(',', '.') }}</strong> · {{ vendas.b2b_qtd }} venda{{ 's' if vendas.b2b_qtd != 1 }} pela data da venda, inclusive a prazo. Já incluído no total.</p>
 
             {% if not vendas.snapshot_ok %}
             <p class="home-v2-warning"><i class="bi bi-exclamation-triangle"></i> O resumo de ontem pode estar incompleto.</p>

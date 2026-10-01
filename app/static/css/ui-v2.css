@@ -731,6 +731,11 @@
 
 .ui-v2 .home-v2-sales-split > div { padding: 10px 12px; display: grid; }
 .ui-v2 .home-v2-sales-split > div + div { border-left: 1px solid var(--v2-line); }
+.ui-v2 .home-v2-sales-split > .home-v2-sales-b2b {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--v2-line);
+}
 .ui-v2 .home-v2-sales-split span { color: var(--v2-muted); font-size: 9px; text-transform: uppercase; }
 .ui-v2 .home-v2-sales-split strong { margin-top: 3px; font-size: 12px; }
 .ui-v2 .home-v2-sales-split small { color: #929b96; font-size: 9px; }

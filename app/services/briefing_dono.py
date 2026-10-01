@@ -290,8 +290,26 @@ def _vendas_tiny(dia):
     return {nomes.get(lid, 'PDV Tiny'): d for lid, d in por_loja_id.items()}
 
 
+def _vendas_b2b(dia):
+    """Vendas B2B pela data da venda, inclusive a prazo e em conta mensal.
+
+    Cada venda entra uma vez, pelo total já com frete. Parcelas, recebimentos,
+    notas e faturas não são novas vendas. Canceladas e divulgação/cortesia
+    dispensada de cobrança ficam fora do faturamento.
+    """
+    from app.models import VendaB2B
+
+    qtd, total = (db.session.query(
+        func.count(VendaB2B.id),
+        func.coalesce(func.sum(VendaB2B.valor_total), 0))
+        .filter(VendaB2B.data_venda == dia,
+                VendaB2B.status == 'ativa',
+                VendaB2B.dispensa_cobranca.is_(None)).one())
+    return {'qtd': int(qtd or 0), 'total': float(total or 0)}
+
+
 def vendas_ontem(capturar=True):
-    """Vendas de ONTEM: PDV por loja (vs a SEMANA PASSADA) + site.
+    """Vendas de ONTEM: PDV por loja (vs a SEMANA PASSADA) + site + B2B.
 
     A comparação é contra o MESMO dia-da-semana 7 dias antes ("sexta vs sexta
     passada" — decisão do dono 23/07/2026): `comparado_com` traz a data-base,
@@ -306,6 +324,7 @@ def vendas_ontem(capturar=True):
     ATENÇÃO: `cancelados_*`/`desconto` continuam sendo SÓ do Seru — o Tiny
     não expõe esses eixos.
     Site soma `PedidoOnline.valor_total` dos PAGOS ontem (por pago_em).
+    B2B soma as vendas ativas de ontem (por data_venda), mesmo a prazo.
 
     `capturar=False` lê SÓ o snapshot do banco, sem chance de bater na API
     Seru — é o modo do bloco da home do admin (carrega a cada visita; o cron
@@ -375,6 +394,7 @@ def vendas_ontem(capturar=True):
                 # guard explicito pra documentar/blindar).
                 PedidoOnline.divulgacao.is_(False)).one())
     site_total = float(site_rows[1] or 0)
+    b2b = _vendas_b2b(ontem)
     return {
         'ontem': ontem,
         'label': '%s %s' % (_DOW_PT[ontem.weekday()], ontem.strftime('%d/%m')),
@@ -392,7 +412,9 @@ def vendas_ontem(capturar=True):
         'tiny_total': round(tiny_total, 2),
         'site_qtd': int(site_rows[0] or 0),
         'site_total': site_total,
-        'total_geral': round(total + site_total, 2),
+        'b2b_qtd': b2b['qtd'],
+        'b2b_total': b2b['total'],
+        'total_geral': round(total + site_total + b2b['total'], 2),
         'cancelados_n': cd['cancelados_n'],
         'cancelados_valor': cd['cancelados_valor'],
         'desconto': cd['desconto'],
@@ -401,7 +423,7 @@ def vendas_ontem(capturar=True):
 
 
 def vendas_hoje(capturar=False):
-    """Vendas de HOJE até agora (parciais): PDV do snapshot + site pago hoje.
+    """Vendas de HOJE: PDV do snapshot + site pago hoje + B2B por data_venda.
 
     O cron do Seru recaptura ontem+hoje a cada ~15 min, então o snapshot de
     hoje fica no máximo esse tanto atrasado. O PDV do Tiny (Cantina) entra
@@ -439,6 +461,7 @@ def vendas_hoje(capturar=False):
         .filter(PedidoOnline.pago_em >= ini,
                 PedidoOnline.divulgacao.is_(False)).one())
     site_total = float(site_rows[1] or 0)
+    b2b = _vendas_b2b(hoje_d)
     return {
         'hoje': hoje_d,
         'label': '%s %s' % (_DOW_PT[hoje_d.weekday()], hoje_d.strftime('%d/%m')),
@@ -448,7 +471,9 @@ def vendas_hoje(capturar=False):
         'tiny_total': round(tiny_total, 2),
         'site_qtd': int(site_rows[0] or 0),
         'site_total': site_total,
-        'total_geral': round(total + site_total, 2),
+        'b2b_qtd': b2b['qtd'],
+        'b2b_total': b2b['total'],
+        'total_geral': round(total + site_total + b2b['total'], 2),
         'cancelados_n': cd['cancelados_n'],
         'cancelados_valor': cd['cancelados_valor'],
         'desconto': cd['desconto'],
@@ -568,7 +593,9 @@ def montar_texto(dados=None):
                                        comp))
     linhas.append('Site: %d pagos · %s' % (v['site_qtd'],
                                            _fmt_brl(v['site_total'])))
-    linhas.append('*Total: %s* (PDV + site)' % _fmt_brl(v['total_geral']))
+    linhas.append('B2B: %d vendas · %s (pela data da venda, inclusive a prazo)'
+                  % (v['b2b_qtd'], _fmt_brl(v['b2b_total'])))
+    linhas.append('*Total: %s* (PDV + site + B2B)' % _fmt_brl(v['total_geral']))
     linhas.append('')
     pend = d['pendencias']
     if pend:

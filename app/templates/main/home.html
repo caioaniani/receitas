@@ -152,6 +152,8 @@
             {% endif %}
             &nbsp;|&nbsp; Site: <strong>R$ {{ '{:,.0f}'.format(vendas_hoje.site_total).replace(',', '.') }}</strong>
             · {{ vendas_hoje.site_qtd }} pago{{ 's' if vendas_hoje.site_qtd != 1 }}
+            &nbsp;|&nbsp; B2B: <strong>R$ {{ '{:,.0f}'.format(vendas_hoje.b2b_total).replace(',', '.') }}</strong>
+            · {{ vendas_hoje.b2b_qtd }} venda{{ 's' if vendas_hoje.b2b_qtd != 1 }} pela data da venda, inclusive a prazo
         </p>
         {# Cancelamentos e descontos do dia (PDV Seru) — cockpit do dono.
            Clicável: abre o detalhe pedido-a-pedido AO VIVO (só no clique). #}
@@ -195,6 +197,8 @@
             {% endif %}
             &nbsp;|&nbsp; Site: <strong>R$ {{ '{:,.0f}'.format(vendas.site_total).replace(',', '.') }}</strong>
             · {{ vendas.site_qtd }} pago{{ 's' if vendas.site_qtd != 1 }}
+            &nbsp;|&nbsp; B2B: <strong>R$ {{ '{:,.0f}'.format(vendas.b2b_total).replace(',', '.') }}</strong>
+            · {{ vendas.b2b_qtd }} venda{{ 's' if vendas.b2b_qtd != 1 }} pela data da venda, inclusive a prazo
         </p>
         {# Cancelamentos e descontos de ontem (PDV Seru). Clicável = detalhe ao vivo. #}
         <button type="button" title="Só do PDV Seru — o PDV do Tiny (Cantina) não expõe cancelamento/desconto."
