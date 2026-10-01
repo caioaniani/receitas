@@ -439,6 +439,10 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   notas lidas com itens; boleto sem itens, leitura falha e compra sem nota
   postada ficam fora. Loja pelo `conta_pagar.mapa_lojas_nf(consultar_slack=
   False)` — fonte única, movida da tela de Contas a Pagar, sem rede.
+- `GET /api/claude/pedidos-revenda` (01/10/2026): a lista do dry-run de
+  `/admin/pedidos-revenda` (Produto que a indústria não fornece em pedido
+  loja→indústria pendente/confirmado com entrega a partir de amanhã, com
+  `sob_corte`). Só leitura; a remoção é gesto do dono na rota admin.
 - Testes: `tests/test_claude_api.py`.
 
 ## Cockpit do dono — briefing diario + home + manual (16/07/2026)
