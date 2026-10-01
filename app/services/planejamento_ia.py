@@ -226,7 +226,8 @@ def sugerir_pedido_loja_ia(loja_id, *, horizonte_dias=7, janela_semanas=6,
 
     def _chave(p):
         # 'media': linhas so de receita (int); 'venda': item_key str
-        # ('<receita_id>', 'mp:<id>' ou 'prod:<id>').
+        # ('<receita_id>' ou 'mp:<id>' — Produto nao entra no motor desde
+        # 01/10/2026; token 'prod:' proposto pela IA cai na sanitizacao).
         return p['item_key'] if id_campo == 'item_key' else p['receita_id']
 
     # Contraprova do OUTRO motor, casada por receita_id (MP/produto so existe na
