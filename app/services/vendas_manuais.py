@@ -240,7 +240,12 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
         if chave:
             estoque_por_item[chave] = el.quantidade or 0
 
-    # 4. Resolve nomes
+    # 4. Resolve nomes. Produto so entra se a industria o fornece (cesta
+    # montada de receita/MP liberada); revenda vendida na loja (agua,
+    # refrigerante, adicional) tem venda mas NAO vira sugestao de pedido pra
+    # industria (dono 01/10/2026 — regra em itens_industria). O POST da tela
+    # recusa de qualquer jeito; filtrar aqui evita mostrar o que nao se pede.
+    from app.services.itens_industria import produto_fornecido_pela_industria
     nome_por_chave = {}
     receitas_ids = [k[1] for k in vendas_por_item if k[0] == 'receita']
     produtos_ids = [k[1] for k in vendas_por_item if k[0] == 'produto']
@@ -250,7 +255,8 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
             nome_por_chave[('receita', r.id)] = r.nome
     if produtos_ids:
         for p in Produto.query.filter(Produto.id.in_(produtos_ids)).all():
-            nome_por_chave[('produto', p.id)] = p.nome
+            if produto_fornecido_pela_industria(p):
+                nome_por_chave[('produto', p.id)] = p.nome
     if mps_ids:
         for m in MateriaPrima.query.filter(MateriaPrima.id.in_(mps_ids)).all():
             nome_por_chave[('mp', m.id)] = m.nome
@@ -259,6 +265,8 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
     out = []
     for chave, total_vendas in vendas_por_item.items():
         tipo, item_id = chave
+        if tipo == 'produto' and chave not in nome_por_chave:
+            continue
         media = total_vendas / dias_periodo
         estoque_atual = estoque_por_item.get(chave, 0)
         ideal = math.ceil(media * dias_cobertura)
