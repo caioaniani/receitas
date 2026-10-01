@@ -411,6 +411,30 @@ def test_sonda_pedidos_revenda_e_so_leitura(app, owner_user, loja, relogio_11h):
     assert client.get('/api/claude/pedidos-revenda').status_code in (401, 403)
 
 
+def test_admin_pedidos_revenda_reconfere_o_corte_antes_de_gravar(
+        app, owner_user, loja, monkeypatch):
+    """Execução iniciada antes das 12h que termina depois: nada é gravado."""
+    from app.services import pedido_corte
+    agua = _produto('Água com gás')
+    amanha = _pedido(loja, owner_user, dias=1, itens=[('p', agua, 1)])
+    relogio = {'hora': 11}
+    monkeypatch.setattr(pedido_corte, 'agora',
+                        lambda: datetime.combine(hoje(), time(relogio['hora'])))
+    original = pedido_corte.salvar_no_prazo
+
+    def _vira_meio_dia(datas, *a, **k):
+        relogio['hora'] = 13
+        return original(datas, *a, **k)
+
+    monkeypatch.setattr(pedido_corte, 'salvar_no_prazo', _vira_meio_dia)
+    client = _login_owner(app, owner_user)
+    r = client.get('/admin/pedidos-revenda?executar=1')
+    assert r.status_code == 409
+    assert r.get_json()['ok'] is False
+    assert PedidoItem.query.filter_by(pedido_id=amanha.id).count() == 1
+    assert db.session.get(PedidoLoja, amanha.id).status == 'confirmado'
+
+
 def test_admin_pedidos_revenda_e_owner_only(app, admin_user):
     client = app.test_client()
     _login(client, admin_user)
