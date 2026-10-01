@@ -189,12 +189,17 @@ def _ctx_pagamento(pedido, erros=None):
                 and 'expirado' not in (ult.erro or '')):
             erros = [loja_pagamento._MSG_CARTAO_RECUSADO
                      if ult.metodo == 'cartao' else _MSG_PIX_FALHOU]
+    from app.services import pedido_assistido
     from app.services.compra_kits import grupo_do_pedido
     return dict(pedido=pedido, compra_kit=grupo_do_pedido(pedido),
                 pubkey=pubkey, pix_pendente=pix_pendente,
                 pix=pix, erros=erros or None, em_teste=_em_teste(),
                 cartao_confirmando=(pedido.status == 'aguardando_pagamento'
-                                    and _cartao_confirmando(pedido)))
+                                    and _cartao_confirmando(pedido)),
+                # Pedido ASSISTIDO (01/10/2026): o cliente nunca viu o
+                # carrinho — a página lista itens e entrega pra ele conferir
+                # antes de pagar, e diz que pagar = concordar com os termos.
+                assistido=pedido_assistido.registro_de(pedido))
 
 
 @loja_bp.route('/pedido/<codigo>/pagamento', methods=['GET'])
