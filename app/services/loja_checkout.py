@@ -693,9 +693,14 @@ def texto_de_geocode(form):
     return geo, invalido
 
 
-def _frete_para(modo, endereco, base=None, contato=None):
+def _frete_para(modo, endereco, base=None, contato=None, *, alertar=True,
+                origem_sensor='checkout'):
     """Calcula o frete no servidor (autoritativo). Devolve
-    (valor:Decimal, distancia_km, endereco_norm, erro|None)."""
+    (valor:Decimal, distancia_km, endereco_norm, erro|None).
+
+    `alertar=False` (pedido ASSISTIDO, 01/10/2026): quem digita é a EQUIPE —
+    o WhatsApp "cliente prestes a comprar foi barrado" seria falso alarme;
+    o sensor continua registrando, com `origem_sensor` próprio."""
     if modo == 'retirada':
         return Decimal('0.00'), None, None, None
     if not endereco:
@@ -706,8 +711,9 @@ def _frete_para(modo, endereco, base=None, contato=None):
         if r.get('erro') == 'nao_encontrado':
             # Cliente prestes a comprar e barrado por endereço não localizado:
             # alerta o dono COM o contato pra chamar e fechar a venda + sensor.
-            loja_alerta.alertar_endereco_falho(endereco, contato=contato)
-            frete_sensor.registrar('checkout', 'barrado', endereco=endereco,
+            if alertar:
+                loja_alerta.alertar_endereco_falho(endereco, contato=contato)
+            frete_sensor.registrar(origem_sensor, 'barrado', endereco=endereco,
                                    contato=contato)
         return None, None, None, frete_svc.mensagem_erro(r.get('erro'))
     if r.get('fora_area'):
@@ -716,10 +722,10 @@ def _frete_para(modo, endereco, base=None, contato=None):
         # OU quando o km é INCERTO (impreciso = veio do centroide do CEP, pode
         # estar dentro da área na verdade — decisão do dono 09/07 pós-revisão).
         km = r.get('distancia_km')
-        frete_sensor.registrar('checkout', 'fora_area', endereco=endereco,
+        frete_sensor.registrar(origem_sensor, 'fora_area', endereco=endereco,
                                contato=contato, fonte=r.get('fonte'), km=km)
         perto = km is not None and km <= frete_svc.RAIO_MAX_KM + frete_svc.MARGEM_ALERTA_FORA_KM
-        if perto or r.get('impreciso'):
+        if alertar and (perto or r.get('impreciso')):
             loja_alerta.alertar_endereco_falho(endereco, contato=contato,
                                                motivo='fora_area')
         return None, km, r.get('endereco'), \
@@ -728,15 +734,16 @@ def _frete_para(modo, endereco, base=None, contato=None):
     if r.get('impreciso'):
         # Cotou só pelo centroide do CEP: a venda passa, mas o frete pode
         # estar errado — alerta o dono COM o contato pra conferir/ajustar.
-        loja_alerta.alertar_endereco_falho(endereco, contato=contato,
-                                           motivo='impreciso')
-        frete_sensor.registrar('checkout', 'impreciso', endereco=endereco,
+        if alertar:
+            loja_alerta.alertar_endereco_falho(endereco, contato=contato,
+                                               motivo='impreciso')
+        frete_sensor.registrar(origem_sensor, 'impreciso', endereco=endereco,
                                contato=contato, fonte=r.get('fonte'),
                                km=r.get('distancia_km'), valor=r.get('valor'))
     elif r.get('fonte') == 'google':
         # Google resolveu um pedido REAL (baixo volume no checkout) — registra
         # pro dono ver o Google enabling vendas.
-        frete_sensor.registrar('checkout', 'resolvido_google', endereco=endereco,
+        frete_sensor.registrar(origem_sensor, 'resolvido_google', endereco=endereco,
                                contato=contato, fonte='google',
                                km=r.get('distancia_km'), valor=r.get('valor'))
     valor = Decimal(str(r.get('valor') or 0))
