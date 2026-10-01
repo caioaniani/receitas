@@ -74,8 +74,14 @@ def remover(linhas):
     """Apaga os PedidoItem das linhas que NÃO estão sob o corte, carimba
     `modificado_em` (nunca `modificado_por_id`: rascunho do cron segue
     re-sincronizável; carimbo humano existente fica) e cancela o pedido que
-    ficar sem item. NÃO commita — o chamador decide. Devolve
-    (removidos, ids_dos_pedidos_cancelados)."""
+    ficar sem item. O pedido cancelado por ficar vazio tem o carimbo humano
+    LIMPO de propósito: cancelado com carimbo é "palavra da loja" e protege
+    o dia contra o cron (`pedido_lock.protegido_do_motor`) — aqui o pedido
+    nunca teve nada a entregar, então a loja deve voltar a receber o
+    rascunho automático do dia (achado da revisão de 01/10/2026). NÃO
+    commita — o chamador decide. Devolve (removidos, ids_dos_pedidos_
+    cancelados, datas_tocadas) — as datas servem para reconferir o corte
+    antes de gravar."""
     pedidos = {}
     removidos = 0
     for li in linhas:
@@ -92,5 +98,7 @@ def remover(linhas):
         p.modificado_em = agora()
         if not p.itens:
             p.status = 'cancelado'
+            p.modificado_por_id = None
             cancelados.append(p.id)
-    return removidos, cancelados
+    datas = sorted({p.data_entrega for p in pedidos.values() if p.data_entrega})
+    return removidos, cancelados, datas
