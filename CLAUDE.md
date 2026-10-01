@@ -1,5 +1,75 @@
 # Convenções de trabalho (Claude)
 
+## Pedido assistido — a equipe cria o pedido do site e o cliente paga pelo link (dono, 01/10/2026)
+
+Dono: "preciso criar um 'criar pedido' no sistema que o operador faz o
+pedido para o cliente e envia para ele a parte que ele insere os dados
+para pagamento ou pix". Tela `/admin/loja-online/pedido-assistido`
+(botão em Pedidos do site, sidebar, área Vendas, busca do menu e pane de
+Atendimento do painel). Serviço `app/services/pedido_assistido.py`;
+marcador `PedidoOnlineAssistido` (tabela NOVA via create_all: operador,
+canal, prazo, e-mail enviado, observação interna — sem ALTER em
+`pedido_online`).
+
+- **MOTOR = o do checkout** (`loja_checkout.criar_pedido`, mesmos campos
+  do site; `commit=False` como os kits): o pedido nasce `aguardando_
+  pagamento`, reserva estoque, cota frete pelo servidor, aplica plano do
+  dia, data especial, janelas, retirada só na loja permitida (com endereço
+  do cliente para a NF). NUNCA montar `PedidoOnline` à mão nem copiar a
+  divulgação (sem Cliente, sem pagamento, baixa na hora). Só o publicado
+  no site, ao preço do site. Kwargs novos do motor, defaults = site byte a
+  byte: `registrar_aceite=False` (quem marcou "informei o cliente" foi o
+  operador — `Cliente.aceite_lgpd_em` não é carimbado; a página de
+  pagamento diz que pagar = concordar com os termos), `atualizar_cadastro=
+  False` (a equipe nunca reescreve cadastro existente), `origem_cliente=
+  'balcao'`, `alertar_dono=False` (os WhatsApps "cliente ia comprar e foi
+  barrado" por endereço/esgotado NÃO saem quando quem digita é a equipe;
+  `frete_sensor` registra com origem `'assistido'`). Erro do OPERADOR
+  (checkbox, canal, duplo clique em 30 s pelo mesmo e-mail) curto-circuita
+  ANTES do motor (sem cota do Google, sem alerta).
+- **"A parte em que ele paga" JÁ EXISTIA**: `/loja/pedido/<codigo>/
+  pagamento` (allowlist do `_gate_acesso`, anônima pelo código). Link =
+  `LOJA_BASE_URL` + esse caminho (`pedido_assistido.link_pagamento`; nunca
+  `url_for(_external=True)`). A página ganhou o bloco "montado pela nossa
+  equipe" (itens, entrega, prazo, termos) só para pedido assistido.
+- **Envio ao cliente**: e-mail PRÓPRIO `email.enviar_link_pagamento_
+  assistido` (não o "recebemos seu pedido", que diria que o cliente fez)
+  + mensagem pronta e botão `wa.me` (`texto_whatsapp`/`url_whatsapp`, só
+  celular BR via `telefone_e164_whatsapp`; fixo/internacional = copiar).
+  O wa.me sai do WhatsApp de quem clica, não do número oficial do
+  Chatwoot (template da Meta com link = decisão separada). "Reenviar
+  e-mails" do detalhe manda o do link quando o pedido é assistido.
+- **PRAZO do link** (`prazo_pagamento`, função pura): 24 h, nunca depois
+  da véspera da entrega às 23:59, piso 2 h; express = 30 min. Vira
+  `PedidoOnline.reserva_expira_em` — o MESMO cron de expiração do site
+  (`loja_estoque_reserva.liberar_expirados`) cancela, com motivo NOVO
+  `link_expirado` (nunca houve Pix). `MOTIVOS_EXPIRACAO_AUTOMATICA =
+  ('pix_expirado', 'link_expirado')` é a fonte única da regra "pagamento
+  tardio reabre como pago / dono pode confirmar recebimento externo"
+  (`_marcar_pago`, `kits_pagamento.marcar_pago`, `conciliar_pedido`,
+  `pagamento_externo.pode_confirmar`) — nunca comparar com a string
+  solta. A reserva física é contábil (não barra venda): segurar por
+  horas não trava ninguém.
+- **PERMISSÃO**: capacidade PRÓPRIA `web_pedido_assistido` (gerente por
+  padrão; admin/owner sempre; o dono libera `funcionario`/atendente em
+  `/admin/permissoes` sem deploy) — decorator `pedido_assistido_required`
+  + `Usuario.pode_pedido_assistido()` nos templates. Não reusar
+  `web_estoque_loja` (abriria estoque/relatório/preços) nem
+  `divulgacao_required`. Depois de criar, a tela volta com `?criado=` e o
+  bloco do link (atendente liberado só aqui não abre o detalhe, que é
+  gerente_required); "Desfazer pedido (não pago)" trava o pedido
+  (`kits_pagamento.travar`) e usa `cancelar_aguardando_pelo_admin`.
+- Montador de itens/CEP das telas admin é um PARTIAL único
+  (`admin/_pedido_itens_js.html`, `PedidoForm.montarItens/cepAutofill`)
+  usado pela divulgação e pelo pedido assistido; o parse `item_alvo[]/
+  item_qtd[]/item_comp[]/item_fatiado[]` é `_itens_do_form`, e a cotação
+  de janelas/frete das duas telas é `_cotacao_endereco` (geocodifica a
+  MESMA string do `criar_pedido`, `texto_de_geocode`, na cota do preview).
+- LIMITAÇÕES ACEITAS: e-mail e CPF/CNPJ obrigatórios (Pagar.me e NF);
+  o purchase server-side (GA4/Meta) sai como em qualquer pedido pago; a
+  página pública pelo código segue o achado pendente de 21/09.
+  Testes: `tests/test_pedido_assistido.py` (31). Manual (QUANDO PRECISAR).
+
 ## Chefia de RH (decisão do dono, 29/09/2026)
 
 Perfil novo `gestao_rh` (Gestão de RH — salários e promoções), concedido
