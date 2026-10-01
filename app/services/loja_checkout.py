@@ -756,7 +756,7 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
                  dias_agenda=DIAS_AGENDA, reservar_estoque=True, frete_validado=None,
                  itens_estritos=False, dias_disponibilidade=None,
                  registrar_aceite=True, atualizar_cadastro=True,
-                 origem_cliente='site'):
+                 origem_cliente='site', alertar_dono=True):
     """Valida tudo e cria o PedidoOnline. Devolve (pedido|None, erros:list).
 
     `form`: dict-like (request.form). `itens_raw`: lista de {kind,id,qtd}.
@@ -767,9 +767,12 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     (quem marcou "ciente" foi o operador, não o cliente — o
     `Cliente.aceite_lgpd_em` fica como está), `atualizar_cadastro=False`
     (a equipe nunca reescreve o cadastro de uma conta existente, mesmo que
-    o operador esteja logado como esse cliente no mesmo navegador) e
+    o operador esteja logado como esse cliente no mesmo navegador),
     `origem_cliente='balcao'` (o cadastro nasceu pela equipe, não pelo
-    site). Os defaults preservam o checkout do site byte a byte.
+    site) e `alertar_dono=False` (os WhatsApps "cliente ia comprar e foi
+    barrado" por endereço/esgotado são falso alarme quando quem digita é a
+    equipe — o sensor de frete segue registrando, com origem 'assistido').
+    Os defaults preservam o checkout do site byte a byte.
     """
     base = base or agora()
     erros = []
