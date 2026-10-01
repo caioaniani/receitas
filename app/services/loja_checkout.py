@@ -1127,11 +1127,12 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
             # Mesmo alerta do esgotado: o cliente ia comprar e foi barrado.
             try:
                 from app.services import loja_alerta
-                loja_alerta.alertar_esgotado(
-                    nome, telefone, email,
-                    [f'{n} (pediu mais que os {s} disponíveis)'
-                     for n, s in insuficientes],
-                    data_entrega)
+                if alertar_dono:
+                    loja_alerta.alertar_esgotado(
+                        nome, telefone, email,
+                        [f'{n} (pediu mais que os {s} disponíveis)'
+                         for n, s in insuficientes],
+                        data_entrega)
             except Exception:  # noqa: BLE001
                 pass
         if esgotados:
