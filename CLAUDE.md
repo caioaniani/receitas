@@ -22,6 +22,61 @@ com revisão assinada, confirmação e histórico do autor. Documento operaciona
 `docs/rh-gestao-pessoas.md`. Esta decisão substitui as menções históricas
 de RH exclusivamente owner para o novo perfil, não para os demais.
 
+## Pedido loja→indústria só do que a indústria produz (decisão do dono, 01/10/2026)
+
+Dono: "os pedidos das lojas para a indústria devem ser somente do que a
+indústria produz, está vindo de tudo até coca cola e adicional de morango".
+Caso provado pela sonda `/api/claude/pedidos-itens` (180 dias): treze
+Produtos de revenda (Água São Lourenço, sucos, Café Latte Gelado, Salada de
+Frutas, Adicional de Morangos/Requeijão, Leite em Pó) entraram SÓ pelos
+rascunhos automáticos do cron (`criado_por None`) e as lojas confirmaram;
+humanos pediram Produto simples duas vezes em 180 dias (1 Coca-Cola em
+junho, 1 Salada de Frutas 100g em agosto). A porta era o contrato
+"Produto simples participa da reposição" (motor venda+estoque com
+`produtos_diretos`/token `prod:<id>` via `cestas.produto_reposicao_direta`),
+que esta decisão SUBSTITUI.
+
+Régua canônica em `app/services/itens_industria.py` (fonte única de todas
+as camadas): **Receita** ativa entra; **MP** só a liberada no checkbox
+"sugerir pedido loja" (regra de 07/07/2026, intocada); **Produto** só CESTA
+cuja composição tem pelo menos uma receita ativa ou MP liberada (direto ou
+por produto-componente, com guarda de ciclo) — em prod, Granola 50g/100g/
+500g, Iogurte 200/600ml e Croissant de nutella são cestas de receita e
+seguem pedíveis; Produto SEM composição é revenda comprada pronta e NUNCA
+entra. Não há coluna nova (a regra deriva da composição); se um dia a
+indústria enviar um Produto simples de verdade, o gesto canônico é uma
+flag opt-in em `Produto` (2 commits), não afrouxar a regra.
+
+Camadas: motor venda+estoque (`previsao_producao.sugerir_pedidos_por_venda`
+— `_token` devolve None para produto; venda, mínimo, piso diário e modo
+fresco em linha de Produto são ignorados), validação da grade
+(`pedidos_semana._validar_lotes_da_grade` recusa `prod:<id>` de revenda),
+typeahead `buscar_itens`, POST novo/editar/sugerir-pedido
+(`produtos_nao_pediveis`, GRANDFATHER no editar via `produto_ids_extras`
+— produto que JÁ está no pedido segue válido, mesmo padrão das MPs),
+copilot (`_resolver_item_pedido` + executores criar/editar + enricher do
+editar; descrição da tool diz ao modelo que revenda não entra; B2B/
+desperdício/`_resolver_item_qualquer` intocados), tela `/pedidos/
+estoque-loja` (toda linha de Produto fica sem regra de reposição, com o
+motivo: revenda/cesta/inativo) e `vendas_manuais.sugerir_pedido` (a tela
+por loja não mostra revenda). Rascunho PENDENTE do próprio cron se corrige
+sozinho na re-sincronização (item fora da grade vai a zero); pedido com
+carimbo humano é protegido — limpeza pelo dono em
+`GET /admin/pedidos-revenda` (owner; dry-run; `?executar=1` remove os itens
+de pedidos pendente/confirmado com entrega a partir de amanhã, respeita o
+corte das 12h, cancela pedido que ficar vazio, NÃO carimba
+`modificado_por_id`; AuditLog registra as exclusões).
+
+ACHADO PRÉ-EXISTENTE, decisão separada do dono: cesta pedida à indústria
+é debitada/creditada na linha do PRÓPRIO Produto (`pedido_estoque.
+baixar_industria_pedido`, `_executar_recebimento_pedido`), enquanto a
+venda baixa os COMPONENTES — pedir "Granola 500g" cria saldo da cesta na
+loja que a venda nunca consome e débito numa linha de Produto na indústria
+que nenhuma ordem credita. Nada mudou nisso aqui. Testes:
+`tests/test_pedido_so_industria.py`, `tests/test_pedidos_por_venda_
+produtos.py` e `tests/test_reposicao_produtos_interfaces.py` (os dois
+últimos reescritos para o contrato novo).
+
 ## Publicação após testes (autorização do dono, 28/09/2026)
 
 Para alterações do sistema explicitamente solicitadas ou aprovadas pelo dono,
