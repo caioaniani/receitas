@@ -495,16 +495,22 @@ def test_post_cria_e_redireciona_para_o_detalhe(app, cliente, admin_user):
         r = cliente.post('/admin/loja-online/pedido-assistido', data=form)
     assert r.status_code == 302, r.get_data(as_text=True)[:800]
     p = PedidoOnline.query.one()
-    assert r.headers['Location'].endswith(f'/admin/loja-online/pedidos/{p.codigo}')
+    assert r.headers['Location'].endswith(
+        f'/admin/loja-online/pedido-assistido?criado={p.codigo}')
     assert p.itens[0].quantidade == 3
     reg = PedidoOnlineAssistido.query.one()
     assert reg.operador_id == admin_user.id and reg.canal == 'telefone'
-    # Detalhe mostra o bloco com o link + WhatsApp + selo na lista
+    # A tela volta com o bloco do link (+ atalho pro detalhe, que o admin abre)
     html = cliente.get(r.headers['Location']).get_data(as_text=True)
-    assert 'Pedido criado pela equipe' in html
+    assert 'criado pela equipe' in html
     assert f'/loja/pedido/{p.codigo}/pagamento' in html
     assert 'wa.me/5511999998888' in html
     assert 'Desfazer pedido' in html
+    assert f'Abrir o pedido {p.codigo}' in html
+    # Detalhe mostra o mesmo bloco + selo na lista
+    det = cliente.get(f'/admin/loja-online/pedidos/{p.codigo}').get_data(as_text=True)
+    assert 'criado pela equipe' in det and 'wa.me/5511999998888' in det
+    assert 'onsubmit="return confirm(\'' not in det     # dado externo nunca inline
     lista = cliente.get('/admin/loja-online/pedidos?status=aguardando_pagamento'
                         ).get_data(as_text=True)
     assert '🧾 equipe' in lista
