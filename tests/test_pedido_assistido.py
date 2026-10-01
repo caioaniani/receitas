@@ -651,8 +651,30 @@ def test_cron_nao_cancela_antes_do_prazo_e_cancela_depois(app, admin_user):
     assert pedido.codigo in codigos
     db.session.refresh(pedido)
     assert pedido.status == 'cancelado'
-    assert pedido.motivo_cancelamento == 'pix_expirado'
+    assert pedido.motivo_cancelamento == 'link_expirado'      # nunca houve Pix
+    assert 'Link de pagamento' in pedido.motivo_cancelamento_label
     assert svc.vencido(reg, base=reg.prazo_pagamento + timedelta(minutes=1))
+    # Expiração AUTOMÁTICA: pagamento tardio REABRE como pago (regra do Pix
+    # expirado) e o dono pode confirmar recebimento externo.
+    from app.services import loja_pagamento, pagamento_externo
+    assert pagamento_externo.pode_confirmar(pedido) is True
+    with patch('app.services.loja_pagamento._baixar_estoque'), \
+         patch('app.services.loja_pagamento._reservar_no_plano_do_dia'), \
+         patch('app.services.loja_fiscal.agendar'), \
+         patch('app.services.loja_pagamento._enviar_confirmacao'):
+        assert loja_pagamento._marcar_pago(pedido, None) is True
+    assert pedido.status == 'pago' and pedido.motivo_cancelamento is None
+    # Cancelamento DELIBERADO continua intocável
+    outro, _, _ = svc.criar(
+        _form_retirada(loja, email='outra@x.com'),
+        [{'kind': 'produto', 'id': prod.id, 'qtd': 1}],
+        operador_id=admin_user.id, base=_base(), enviar_email=False)
+    ok, _ = svc.cancelar(outro)
+    assert ok and outro.motivo_cancelamento == 'cancelado_admin'
+    assert pagamento_externo.pode_confirmar(outro) is False
+    with patch('app.services.loja_pagamento._alertar_pedido_pago'):
+        assert loja_pagamento._marcar_pago(outro, None) is False
+    assert outro.status == 'cancelado'
 
 
 # ── Página pública de pagamento ─────────────────────────────────────────────
