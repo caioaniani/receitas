@@ -34,6 +34,19 @@ def gerente_required(f):
     return decorated
 
 
+def pedido_assistido_required(f):
+    """Criar pedido do site em nome do cliente + link de pagamento (01/10/2026).
+    Capacidade editável: web_pedido_assistido (gerente por padrão; admin/owner
+    sempre; 'funcionario' quando o dono liberar em /admin/permissoes). Mesmo
+    predicado de `Usuario.pode_pedido_assistido()` (templates)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not _pode_cap('web_pedido_assistido'):
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
 def relatorio_pedidos_required(f):
     """Preserva gestores; consulta externa exige uma loja operacional válida."""
     @wraps(f)
