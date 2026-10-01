@@ -1367,7 +1367,9 @@ def conciliar_pedido(codigo, aplicar=False):
     if pag is None:
         out['acao'] = 'nada — Pagar.me NÃO confirma pago'
         return out
-    if p.status == 'cancelado' and p.motivo_cancelamento != 'pix_expirado':
+    from app.models.loja_online import MOTIVOS_EXPIRACAO_AUTOMATICA
+    if (p.status == 'cancelado'
+            and p.motivo_cancelamento not in MOTIVOS_EXPIRACAO_AUTOMATICA):
         out['acao'] = ('PAGO no Pagar.me, mas o pedido foi CANCELADO de '
                        'propósito — não reativado; estorne ou reabra à mão')
         return out
