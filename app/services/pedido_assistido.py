@@ -120,10 +120,18 @@ def registro_de(pedido):
 
 
 def vencido(registro, base=None):
-    """O prazo do link já passou? (o cancelamento em si é do cron)."""
-    if registro is None or registro.prazo_pagamento is None:
+    """O prazo do link já passou? (o cancelamento em si é do cron). Lê o
+    relógio que o cron lê — `PedidoOnline.reserva_expira_em` — porque um Pix
+    gerado perto do fim ESTENDE a reserva até o fim do QR
+    (`loja_pagamento._acompanhar_validade_do_pix`); o `prazo_pagamento`
+    gravado é o fallback quando a reserva não existe."""
+    if registro is None:
         return False
-    return registro.prazo_pagamento <= (base or agora())
+    limite = (getattr(registro.pedido, 'reserva_expira_em', None)
+              or registro.prazo_pagamento)
+    if limite is None:
+        return False
+    return limite <= (base or agora())
 
 
 def criar(form, itens_raw, *, operador_id, canal=None, observacao=None,
