@@ -340,6 +340,8 @@ def test_admin_pedidos_revenda_dry_run_lista_e_executar_remove(
                     observacao='Gerado do histórico (rascunho)')
     so_agua = _pedido(loja, owner_user, dias=3, itens=[('p', agua, 2)],
                       criado_por=owner_user.id)
+    so_agua.modificado_por_id = owner_user.id       # loja confirmou
+    db.session.commit()
     separado = _pedido(loja, owner_user, dias=2, status='separado', itens=[('p', agua, 1)])
     passado = _pedido(loja, owner_user, dias=-1, itens=[('p', agua, 1)])
     hoje_ = _pedido(loja, owner_user, dias=0, itens=[('p', agua, 1)])
