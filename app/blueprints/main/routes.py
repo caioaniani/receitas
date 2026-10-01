@@ -5912,6 +5912,144 @@ def loja_online_divulgacao_cancelar(codigo):
     return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
 
 
+# ── Pedido ASSISTIDO (01/10/2026): a equipe monta o pedido do site em nome
+#    do cliente e manda o link em que ele paga (Pix/cartão). Motor =
+#    `loja_checkout.criar_pedido`; marcador em `PedidoOnlineAssistido`;
+#    serviço `app/services/pedido_assistido.py`. ─────────────────────────
+
+def _catalogo_pedido_assistido():
+    """Itens que o operador pode vender: SÓ o que está PUBLICADO no site
+    (`loja_catalogo.produtos_publicados` — site_ativo + preço + cadastro
+    válido; menu só com preço completo), ao preço publicado. É o mesmo
+    universo que `montar_itens` aceita; oferecer "todo ativo" (como a
+    divulgação) faria o motor recusar o pedido com `itens_estritos`."""
+    from app.services import loja_catalogo
+    out = []
+    for it in loja_catalogo.produtos_publicados():
+        out.append({
+            'kind': it['kind'], 'id': it['id'], 'nome': it['nome'],
+            'categoria': it.get('categoria') or '',
+            'preco': it.get('preco'),
+            'preco_a_partir': bool(it.get('preco_a_partir')),
+            'fatiavel': bool(it.get('fatiavel')),
+            'sob_encomenda': bool(it.get('sob_encomenda')),
+            'menu': bool(it.get('menu')),
+        })
+    out.sort(key=lambda i: i['nome'].lower())
+    return out
+
+
+def _form_pedido_assistido_ctx(form=None, erros=None, itens=None):
+    """Contexto da tela (GET e re-render de erro com os valores digitados)."""
+    from app.models import CANAIS_PEDIDO_ASSISTIDO
+    from app.services import loja_checkout, pedido_assistido
+    hoje_d = hoje_brt()
+    loja_permitida = loja_checkout.loja_retirada_permitida()
+    return dict(
+        catalogo=_catalogo_pedido_assistido(), menus=_menus_divulgacao(),
+        lojas=loja_checkout.lojas_retirada(),
+        loja_permitida_id=loja_permitida.id if loja_permitida else None,
+        express_ok=loja_checkout.express_disponivel(),
+        hoje=hoje_d.isoformat(),
+        data_max=(hoje_d + timedelta(days=loja_checkout.DIAS_AGENDA
+                                     + loja_checkout.ENCOMENDA_LEAD_DIAS)).isoformat(),
+        canais=CANAIS_PEDIDO_ASSISTIDO,
+        prazo_horas=pedido_assistido.PRAZO_PADRAO_HORAS,
+        form=form or {}, erros=erros or [], itens_iniciais=itens or [])
+
+
+@main_bp.route('/admin/loja-online/pedido-assistido', methods=['GET', 'POST'])
+@login_required
+@gerente_required
+def loja_online_pedido_assistido():
+    """Cria um pedido do site EM NOME do cliente (atendimento por WhatsApp/
+    telefone/balcão) e entrega ao operador o link público de pagamento. O
+    pedido nasce igual ao do checkout (`aguardando_pagamento`, reserva de
+    estoque, mesmas validações); o cliente paga pelo link (Pix/cartão) e
+    daí em diante é um pedido do site como outro qualquer. Gate = o mesmo
+    da lista de Pedidos do site (gerente/admin/owner)."""
+    from app.services import pedido_assistido
+    if request.method != 'POST':
+        return render_template('admin/loja_online_pedido_assistido.html',
+                               **_form_pedido_assistido_ctx())
+    itens = _itens_do_form(request.form)
+    pedido, erros, registro = pedido_assistido.criar(
+        request.form, itens, operador_id=current_user.id,
+        canal=request.form.get('canal'),
+        observacao=request.form.get('observacao'))
+    if erros:
+        # Re-render COM os valores digitados e TODOS os erros do motor (o
+        # operador corrige sem redigitar — padrão do checkout do site; um
+        # redirect+flash perderia o form inteiro).
+        return render_template(
+            'admin/loja_online_pedido_assistido.html',
+            **_form_pedido_assistido_ctx(form=request.form, erros=erros,
+                                         itens=itens)), 400
+    flash(f'Pedido {pedido.codigo} criado para {pedido.nome_cliente} — '
+          'envie o link de pagamento ao cliente (WhatsApp ou e-mail) pelo '
+          'bloco no topo do pedido.', 'success')
+    return redirect(url_for('main.loja_online_pedido_detalhe',
+                            codigo=pedido.codigo))
+
+
+@main_bp.route('/admin/loja-online/pedido-assistido/cotacao')
+@login_required
+@gerente_required
+def loja_online_pedido_assistido_cotacao():
+    """Janelas + frete + distância do endereço digitado (JSON pro form).
+    Mesma regra do site; cota do preview (ver `_cotacao_endereco`)."""
+    modo = (request.args.get('modo') or 'agendada').strip()
+    if modo not in ('agendada', 'retirada', 'express'):
+        modo = 'agendada'
+    data = (request.args.get('data') or '').strip() or None
+    return jsonify(**_cotacao_endereco(modo, data, request.args))
+
+
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/pedido-assistido/cancelar',
+               methods=['POST'])
+@login_required
+@gerente_required
+def loja_online_pedido_assistido_cancelar(codigo):
+    """Desfaz um pedido assistido ainda NÃO pago (cliente desistiu, pedido
+    montado errado): encerra a cobrança no gateway e libera a reserva pelo
+    mesmo caminho do admin. Pago/cancelado ficam com os botões de sempre."""
+    from app.models import PedidoOnline
+    from app.services import pedido_assistido
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    ok, msg = pedido_assistido.cancelar(p, usuario_id=current_user.id)
+    flash(msg, 'success' if ok else 'warning')
+    return _detalhe_redirect(codigo)
+
+
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/pedido-assistido/reenviar-email',
+               methods=['POST'])
+@login_required
+@gerente_required
+def loja_online_pedido_assistido_reenviar_email(codigo):
+    """Reenvia o e-mail com o link de pagamento (pedido assistido ainda
+    aguardando pagamento). Corrija o e-mail do cliente antes, se preciso."""
+    from app.models import PedidoOnline
+    from app.services import pedido_assistido
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    reg = pedido_assistido.registro_de(p)
+    if reg is None or p.status != 'aguardando_pagamento':
+        flash('Este pedido não está aguardando o pagamento de um link '
+              'enviado pela equipe.', 'warning')
+        return _detalhe_redirect(codigo)
+    if '@' not in (p.email_cliente or ''):
+        flash('Pedido sem e-mail válido — corrija o e-mail do cliente antes '
+              'de reenviar.', 'danger')
+        return _detalhe_redirect(codigo)
+    res = pedido_assistido.enviar_email_link(p, reg)
+    if res and res.get('ok'):
+        flash(f'E-mail com o link de pagamento reenviado para {p.email_cliente}.',
+              'success')
+    else:
+        flash('Não consegui reenviar o e-mail: '
+              f'{(res or {}).get("erro") or "verifique o Postmark"}.', 'danger')
+    return _detalhe_redirect(codigo)
+
+
 @main_bp.route('/admin/loja-online/estoque-vitrine')
 @login_required
 def loja_online_estoque_vitrine():
