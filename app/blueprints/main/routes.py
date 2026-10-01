@@ -6235,8 +6235,10 @@ def loja_online_pedidos_buscar():
             qry = qry.filter(PedidoOnline.data_entrega <= data_fim)
     pedidos = (qry.order_by(PedidoOnline.criado_em.desc())
                .limit(50).all())
+    from app.services import pedido_assistido
     return render_template('admin/_loja_online_pedidos_rows.html',
-                           pedidos=pedidos, labels=_STATUS_PEDIDO_ONLINE_LABEL)
+                           pedidos=pedidos, labels=_STATUS_PEDIDO_ONLINE_LABEL,
+                           assistidos=pedido_assistido.ids_assistidos(pedidos))
 
 
 # Modos de entrega editáveis (espelha loja_checkout.criar_pedido).
