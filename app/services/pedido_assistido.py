@@ -147,6 +147,15 @@ def criar(form, itens_raw, *, operador_id, canal=None, observacao=None,
     observacao = (observacao or '').strip() or None
     if observacao and len(observacao) > 500:
         erros.append('A observação interna deve ter no máximo 500 caracteres.')
+    anterior = _duplicata_recente(operador_id, form.get('email'), base)
+    if anterior is not None:
+        erros.append(f'Você acabou de criar o pedido {anterior.codigo} para '
+                     'este mesmo e-mail há menos de um minuto — abra-o em vez '
+                     'de criar outro (clique duplo?).')
+    if erros:
+        # Erro do OPERADOR: nem chama o motor — ele cotaria frete (Google) e
+        # dispararia alertas antes de o pedido ser recusado.
+        return None, erros, None
     # O aceite dos termos entra como "informado pelo operador" (o campo
     # `cliente_informado` acima é o que o operador marca); o motor exige
     # `aceite_lgpd`, e `registrar_aceite=False` impede carimbar o
@@ -157,20 +166,20 @@ def criar(form, itens_raw, *, operador_id, canal=None, observacao=None,
     pedido, erros_motor = loja_checkout.criar_pedido(
         dados, itens, base=base, commit=False, itens_estritos=True,
         registrar_aceite=False, atualizar_cadastro=False,
-        origem_cliente='balcao')
-    erros.extend(erros_motor)
-    if erros or pedido is None:
+        origem_cliente='balcao', alertar_dono=False)
+    if erros_motor or pedido is None:
         # Com `commit=False` o motor só deu flush: nada do pedido (nem o
         # Cliente criado por ele) sobrevive ao rollback.
         db.session.rollback()
-        return None, erros or ['Não foi possível criar o pedido.'], None
+        return None, erros_motor or ['Não foi possível criar o pedido.'], None
 
-    prazo = prazo_pagamento(base, pedido.data_entrega)
+    prazo = prazo_pagamento(base, pedido.data_entrega,
+                            modo_entrega=pedido.modo_entrega)
     # Mesmo relógio do site: o cron de expiração lê `reserva_expira_em`.
-    # Sem reserva (loja de origem não configurada) o campo fica NULL e o
-    # pedido nunca expira — `criar_pedido` já avisa no log nesse caso.
-    if pedido.reserva_expira_em is not None:
-        pedido.reserva_expira_em = prazo
+    # Gravado SEMPRE (mesmo sem reserva, por loja de origem não configurada)
+    # — a tela promete "sem pagamento o pedido é cancelado"; sem loja o cron
+    # avisa no log e zera o campo, como faz com qualquer pedido do site.
+    pedido.reserva_expira_em = prazo
     registro = PedidoOnlineAssistido(
         pedido_id=pedido.id, operador_id=operador_id,
         prazo_pagamento=prazo, canal=canal, observacao=observacao)
