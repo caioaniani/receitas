@@ -571,10 +571,10 @@ def test_pedido_comum_nao_ganha_bloco_nem_registro(app):
     assert pedido.assistido is None
     cli = Cliente.query.filter_by(email='maria@x.com').first()
     assert cli.origem == 'site' and cli.aceite_lgpd_em is not None
-    assert pedido.reserva_expira_em == _base() + timedelta(
-        minutes=loja_estoque_ttl())
-
-
-def loja_estoque_ttl():
+    # TTL do checkout (35 min a partir do relógio real da reserva), não o
+    # prazo de horas do pedido assistido.
     from app.services.loja_estoque_reserva import TTL_RESERVA_MIN
-    return TTL_RESERVA_MIN
+    from app.utils import agora
+    assert pedido.reserva_expira_em is not None
+    assert timedelta(0) <= (pedido.reserva_expira_em - agora()) <= \
+        timedelta(minutes=TTL_RESERVA_MIN)
