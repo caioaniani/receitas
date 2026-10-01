@@ -245,21 +245,82 @@ def test_criar_nao_altera_cadastro_existente(app, admin_user):
     assert pedido.nome_cliente == 'Maria Nova'        # snapshot do pedido
 
 
-def test_criar_exige_confirmacao_do_operador_e_nao_grava_nada(app, admin_user):
+def test_criar_exige_confirmacao_do_operador_e_nao_chama_o_motor(app, admin_user):
+    """Erro do OPERADOR curto-circuita ANTES do motor: sem isso o checkout
+    cotava frete (Google) e disparava alertas pra depois recusar."""
     from app.models import Cliente, PedidoOnline, PedidoOnlineAssistido
     from app.services import pedido_assistido as svc
     loja = _loja_site()
     prod = _produto()
-    pedido, erros, reg = svc.criar(
-        _form_retirada(loja, cliente_informado=''),
-        [{'kind': 'produto', 'id': prod.id, 'qtd': 1}],
-        operador_id=admin_user.id, base=_base())
+    with patch('app.services.loja_checkout.criar_pedido') as motor:
+        pedido, erros, reg = svc.criar(
+            _form_retirada(loja, cliente_informado=''),
+            [{'kind': 'produto', 'id': prod.id, 'qtd': 1}],
+            operador_id=admin_user.id, base=_base())
+    motor.assert_not_called()
     assert pedido is None and reg is None
     assert svc.MSG_CLIENTE_NAO_INFORMADO in erros
     assert not any('aceitar os termos' in e for e in erros)
     assert PedidoOnline.query.count() == 0
     assert PedidoOnlineAssistido.query.count() == 0
     assert Cliente.query.count() == 0
+
+
+def test_criar_nao_alerta_o_dono_como_cliente_barrado(app, admin_user):
+    """Quem digita é a equipe: endereço não localizado NÃO manda o WhatsApp
+    'cliente prestes a comprar foi barrado'; o sensor registra com origem
+    própria ('assistido'). O checkout do site segue alertando."""
+    from app.services import loja_checkout
+    from app.services import pedido_assistido as svc
+    _loja_site()
+    prod = _produto()
+    nao_achou = {'ok': False, 'erro': 'nao_encontrado'}
+    with patch('app.services.frete.consultar_frete', return_value=nao_achou), \
+         patch('app.services.loja_alerta.alertar_endereco_falho') as alerta, \
+         patch('app.services.frete_sensor.registrar') as sensor:
+        pedido, erros, _ = svc.criar(
+            _form_agendada(), [{'kind': 'produto', 'id': prod.id, 'qtd': 1}],
+            operador_id=admin_user.id, base=_base())
+    assert pedido is None and erros
+    alerta.assert_not_called()
+    assert sensor.call_args[0][0] == 'assistido'
+    # Site (default): alerta sai e o sensor registra 'checkout'
+    form = _form_agendada()
+    form['aceite_lgpd'] = '1'
+    with patch('app.services.frete.consultar_frete', return_value=nao_achou), \
+         patch('app.services.loja_alerta.alertar_endereco_falho') as alerta2, \
+         patch('app.services.frete_sensor.registrar') as sensor2:
+        loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': prod.id, 'qtd': 1}], base=_base())
+    alerta2.assert_called_once()
+    assert sensor2.call_args[0][0] == 'checkout'
+
+
+def test_criar_recusa_duplo_clique(app, admin_user):
+    from app.models import PedidoOnline
+    from app.services import pedido_assistido as svc
+    from app.utils import agora
+    loja = _loja_site()
+    prod = _produto()
+    base = agora()
+    from app.services import loja_checkout
+    data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
+    form = _form_retirada(loja, data_entrega=data, janela_entrega='12:00–13:00')
+    with patch('app.services.email.disponivel', return_value=False):
+        p1, erros, _ = svc.criar(form, [{'kind': 'produto', 'id': prod.id, 'qtd': 1}],
+                                 operador_id=admin_user.id, base=base)
+        assert erros == []
+        p2, erros2, _ = svc.criar(form, [{'kind': 'produto', 'id': prod.id, 'qtd': 1}],
+                                  operador_id=admin_user.id, base=base)
+    assert p2 is None
+    assert any(p1.codigo in e for e in erros2)
+    assert PedidoOnline.query.count() == 1
+    # Outro operador (ou outro cliente) não é duplicata
+    outro = _usuario('gerente', 'ger2')
+    with patch('app.services.email.disponivel', return_value=False):
+        p3, erros3, _ = svc.criar(form, [{'kind': 'produto', 'id': prod.id, 'qtd': 1}],
+                                  operador_id=outro.id, base=base)
+    assert erros3 == [] and p3 is not None
 
 
 def test_criar_devolve_erros_do_motor_sem_gravar(app, admin_user):
