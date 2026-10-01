@@ -20,7 +20,9 @@
            aria-label="Selecionar pedido {{ p.codigo }}">
   </td>
   <td><a href="{{ url_for('main.loja_online_pedido_detalhe', codigo=p.codigo) }}">
-    <code>{{ p.codigo }}</code></a></td>
+    <code>{{ p.codigo }}</code></a>
+    {# Pedido ASSISTIDO (01/10/2026): criado pela equipe, pago pelo link. #}
+    {% if assistidos and p.id in assistidos %}<br><span class="badge text-bg-light border" title="Pedido criado pela equipe em nome do cliente">🧾 equipe</span>{% endif %}</td>
   <td class="small text-muted">{{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em }}</td>
   <td>{{ p.nome_cliente }}<br><span class="small text-muted">{{ p.telefone_cliente or p.email_cliente }}</span></td>
   <td>{{ modo_label.get(p.modo_entrega, p.modo_entrega) }}</td>
