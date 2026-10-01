@@ -3798,72 +3798,26 @@ def pedidos_revenda():
     amanhã fechado fica de fora, listado em `pulados_corte`), só toca
     pedido pendente/confirmado com entrega a partir de amanhã e NÃO
     carimba `modificado_por_id` (rascunho do cron segue re-sincronizável;
-    pedido com carimbo humano continua com o carimbo que já tinha).
+    pedido com carimbo humano continua com o carimbo que já tinha). A sonda
+    read-only `/api/claude/pedidos-revenda` mostra a MESMA lista
+    (`pedidos_revenda.listar`) para conferir de fora.
     """
-
-    from app.constants import STATUS_PEDIDO_EDITAVEIS
-    from app.models import PedidoItem
-    from app.services.itens_industria import (
-        motivo_produto_nao_fornecido,
-        rotulo_motivo,
-    )
-    from app.services.pedido_corte import corte_ativo
+    from app.services import pedidos_revenda as svc
     from app.services.pedido_lock import travar_pedidos_lojas
 
     executar = request.args.get('executar') == '1'
-    hoje_d = hoje_brt()
-
-    def _candidatos():
-        rows = (PedidoItem.query.join(PedidoLoja)
-                .options(joinedload(PedidoItem.pedido).joinedload(PedidoLoja.loja),
-                         joinedload(PedidoItem.produto).selectinload(Produto.itens))
-                .filter(PedidoItem.produto_id.isnot(None),
-                        PedidoLoja.status.in_(STATUS_PEDIDO_EDITAVEIS),
-                        PedidoLoja.data_entrega > hoje_d)
-                .order_by(PedidoLoja.data_entrega, PedidoLoja.id, PedidoItem.id)
-                .all())
-        return [(it, motivo_produto_nao_fornecido(it.produto)) for it in rows
-                if motivo_produto_nao_fornecido(it.produto) is not None]
-
-    candidatos = _candidatos()
+    candidatos = svc.listar(hoje_brt())
     if executar and candidatos:
         # Mesma trava das edições humanas: relê sob a trava antes de apagar.
-        travar_pedidos_lojas(sorted({it.pedido.loja_id for it, _ in candidatos}))
+        travar_pedidos_lojas(sorted({li['_item'].pedido.loja_id for li in candidatos}))
         db.session.expire_all()
-        candidatos = _candidatos()
+        candidatos = svc.listar(hoje_brt())
 
-    usuarios = {u.id: u.nome for u in Usuario.query.all()}
-    linhas, pulados_corte = [], []
-    pedidos_tocados = {}
-    for it, motivo in candidatos:
-        p = it.pedido
-        info = {
-            'pedido_id': p.id,
-            'loja': p.loja.nome if p.loja else p.loja_id,
-            'data_entrega': p.data_entrega.isoformat(),
-            'status': p.status,
-            'criado_por': usuarios.get(p.criado_por) or 'automático',
-            'item': it.nome_item,
-            'quantidade': it.quantidade,
-            'motivo': rotulo_motivo(motivo),
-        }
-        if corte_ativo(p.data_entrega):
-            pulados_corte.append(info)
-            continue
-        linhas.append(info)
-        if executar:
-            pedidos_tocados[p.id] = p
-            db.session.delete(it)
-
-    cancelados = []
+    linhas = svc.publicas(li for li in candidatos if not li['sob_corte'])
+    pulados_corte = svc.publicas(li for li in candidatos if li['sob_corte'])
+    removidos, cancelados = 0, []
     if executar:
-        db.session.flush()
-        for p in pedidos_tocados.values():
-            db.session.expire(p, ['itens'])
-            p.modificado_em = agora()
-            if not p.itens:
-                p.status = 'cancelado'
-                cancelados.append(p.id)
+        removidos, cancelados = svc.remover(candidatos)
         db.session.commit()
 
     return jsonify({
@@ -3872,7 +3826,7 @@ def pedidos_revenda():
         'linhas': linhas,
         'pulados_corte': pulados_corte,
         'total_itens': len(linhas),
-        'removidos': len(linhas) if executar else 0,
+        'removidos': removidos,
         'pedidos_cancelados_por_ficarem_vazios': cancelados,
         'nota': ('Só pedidos pendente/confirmado com entrega a partir de amanhã; '
                  'o pedido de amanhã já fechado pelo corte das 12h não é tocado.'),
