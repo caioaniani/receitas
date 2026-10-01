@@ -1,0 +1,336 @@
+{# Montador de ITENS das telas admin que criam pedido "como o do site":
+   ⭐ Lançar divulgação e Criar pedido para cliente (pedido assistido,
+   01/10/2026). Fonte ÚNICA do typeahead sobre o catálogo embutido, do
+   montador de MENU configurável (Caixa de Mini: total exato, escolha viaja
+   como JSON em item_comp[]) e do autofill de CEP (reusa /loja/api/cep).
+
+   Uso:
+     {% include 'admin/_pedido_itens_js.html' %}
+     <script>
+       var itens = PedidoForm.montarItens({lista: el, addBtn: el, catalogo: [...],
+                                           menus: {...}, mostrarFatiado: bool,
+                                           mostrarPreco: bool, onChange: fn});
+       PedidoForm.cepAutofill({cep: el, status: el, campos: {...}, onPreenchido: fn});
+     </script>
+   O <template id="tpl-item"> abaixo é compartilhado; cada linha grava
+   item_alvo[] ("receita:12"), item_qtd[], item_comp[] (JSON ou '') e
+   item_fatiado[] ('1' ou '') — o servidor re-valida tudo (`_itens_do_form`
+   + os serviços). #}
+<template id="tpl-item">
+  <div class="row g-2 mb-2 align-items-start item-row">
+    <div class="col-7 col-md-7">
+      <div class="combo position-relative">
+        <input type="text" class="form-control form-control-sm combo-input"
+               placeholder="digite pra buscar…" autocomplete="off" aria-label="Item">
+        <input type="hidden" name="item_alvo[]" class="combo-val">
+        <div class="combo-menu list-group position-absolute w-100 shadow-sm"
+             style="display:none; z-index:1050; max-height:240px; overflow-y:auto;"></div>
+      </div>
+      <div class="form-check form-check-inline mt-1 item-fatiado-box" style="display:none;">
+        <input class="form-check-input item-fatiado" type="checkbox" value="1">
+        <input type="hidden" name="item_fatiado[]" class="item-fatiado-val" value="">
+        <label class="form-check-label small">🔪 fatiado</label>
+      </div>
+    </div>
+    <div class="col-3 col-md-2">
+      <input type="number" class="form-control form-control-sm item-qtd" name="item_qtd[]"
+             min="1" max="99" step="1" value="1" placeholder="qtd" aria-label="Quantidade">
+    </div>
+    <div class="col-2 col-md-2 text-end small text-muted item-subtotal pt-1"></div>
+    <div class="col-12 col-md-1">
+      <button type="button" class="btn btn-sm btn-outline-danger rm-item" title="Remover">&times;</button>
+    </div>
+    <input type="hidden" name="item_comp[]" class="menu-comp-val" value="">
+    <div class="col-12 menu-box border rounded p-2 bg-light" style="display:none;"></div>
+  </div>
+</template>
+<script>
+window.PedidoForm = (function () {
+  function fmtBrl(v) {
+    return 'R$ ' + (Math.round(v * 100) / 100).toFixed(2).replace('.', ',');
+  }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Itens: combobox typeahead + montador de menu + fatiado + subtotal ──
+  function montarItens(opts) {
+    var lista = opts.lista;
+    var tpl = document.getElementById('tpl-item');
+    var CATALOGO = opts.catalogo || [];
+    var MENUS = opts.menus || {};
+    var porAlvo = {};
+    CATALOGO.forEach(function (it) { porAlvo[it.kind + ':' + it.id] = it; });
+    var onChange = opts.onChange || function () {};
+
+    function precoLinha(row) {
+      var val = row.querySelector('.combo-val').value;
+      var qtd = parseInt(row.querySelector('.item-qtd').value, 10) || 0;
+      if (!val || qtd <= 0) return null;
+      var regras = MENUS[val];
+      if (regras) {
+        var soma = 0, ok = true;
+        row.querySelectorAll('.menu-slot').forEach(function (inp) {
+          var q = parseInt(inp.value, 10) || 0;
+          var preco = parseFloat(inp.getAttribute('data-preco'));
+          if (q > 0 && isNaN(preco)) ok = false;
+          soma += q * (isNaN(preco) ? 0 : preco);
+        });
+        return ok ? soma * qtd : null;
+      }
+      var it = porAlvo[val];
+      if (!it || it.preco == null) return null;
+      return it.preco * qtd;
+    }
+
+    function pintarSubtotal(row) {
+      var cel = row.querySelector('.item-subtotal');
+      if (!cel) return;
+      if (!opts.mostrarPreco) { cel.textContent = ''; return; }
+      var v = precoLinha(row);
+      cel.textContent = v == null ? '' : fmtBrl(v);
+    }
+
+    function syncFatiado(row, val) {
+      var box = row.querySelector('.item-fatiado-box');
+      var it = val && porAlvo[val];
+      var mostra = !!(opts.mostrarFatiado && it && it.fatiavel);
+      box.style.display = mostra ? '' : 'none';
+      if (!mostra) {
+        row.querySelector('.item-fatiado').checked = false;
+        row.querySelector('.item-fatiado-val').value = '';
+      }
+    }
+
+    function syncMenu(row, val) {
+      var box = row.querySelector('.menu-box');
+      var compVal = row.querySelector('.menu-comp-val');
+      var regras = val && MENUS[val];
+      if (!regras) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        compVal.value = '';
+        row.dataset.menuOk = '';
+        return;
+      }
+      var teto = regras.teto || regras.total;
+      box.innerHTML =
+        '<div class="small fw-semibold mb-1">Monte a caixa — exatamente ' +
+        regras.total + ' unidades <span class="menu-count badge bg-secondary"></span></div>' +
+        regras.slots.map(function (s) {
+          var preco = s.preco != null
+            ? ' <span class="text-muted">R$ ' + s.preco.toFixed(2).replace('.', ',') + '</span>' : '';
+          return '<div class="d-flex align-items-center gap-2 mb-1">' +
+            '<input type="number" class="form-control form-control-sm menu-slot" ' +
+            'style="width:5.5rem" min="0" max="' + teto + '" step="1" ' +
+            'value="' + (s.padrao || 0) + '" data-pi="' + s.pi_id + '"' +
+            (s.preco != null ? ' data-preco="' + s.preco + '"' : '') + '>' +
+            '<span class="small">' + esc(s.nome) + preco + '</span></div>';
+        }).join('');
+      box.style.display = '';
+      function recalc() {
+        var soma = 0, comp = {};
+        box.querySelectorAll('.menu-slot').forEach(function (inp) {
+          var q = parseInt(inp.value, 10) || 0;
+          soma += q;
+          if (q > 0) comp[inp.getAttribute('data-pi')] = q;
+        });
+        var badge = box.querySelector('.menu-count');
+        badge.textContent = soma + '/' + regras.total;
+        badge.className = 'menu-count badge ' +
+          (soma === regras.total ? 'bg-success' : 'bg-danger');
+        compVal.value = JSON.stringify(comp);
+        row.dataset.menuOk = (soma === regras.total) ? '1' : '';
+        row.dataset.menuNome = row.querySelector('.combo-input').value;
+        pintarSubtotal(row);
+        onChange();
+      }
+      box.addEventListener('input', recalc);
+      recalc();
+    }
+
+    function aplicarComp(row, comp) {
+      if (!comp) return;
+      var obj = comp;
+      if (typeof comp === 'string') {
+        try { obj = JSON.parse(comp); } catch (e) { return; }
+      }
+      row.querySelectorAll('.menu-slot').forEach(function (inp) {
+        var pi = inp.getAttribute('data-pi');
+        inp.value = obj && obj[pi] != null ? obj[pi] : 0;
+      });
+      row.querySelector('.menu-box').dispatchEvent(new Event('input'));
+    }
+
+    function montarCombo(row) {
+      var input = row.querySelector('.combo-input');
+      var hidden = row.querySelector('.combo-val');
+      var menu = row.querySelector('.combo-menu');
+      function fechar() { menu.style.display = 'none'; }
+      function abrir(termo) {
+        termo = (termo || '').trim().toLowerCase();
+        var achados = CATALOGO.filter(function (it) {
+          return !termo || it.nome.toLowerCase().indexOf(termo) !== -1;
+        }).slice(0, 40);
+        if (!achados.length) { fechar(); return; }
+        menu.innerHTML = achados.map(function (it) {
+          var preco = it.preco ? ' <span class="text-muted small">' +
+            (it.preco_a_partir ? 'a partir de ' : '') + 'R$ ' +
+            it.preco.toFixed(2).replace('.', ',') + '</span>' : '';
+          var selos = (it.sob_encomenda ? ' <span class="badge bg-light text-dark border">sob encomenda D+2</span>' : '');
+          return '<button type="button" class="list-group-item list-group-item-action py-1 combo-opt" ' +
+            'data-val="' + it.kind + ':' + it.id + '" data-nome="' + esc(it.nome) + '">' +
+            esc(it.nome) + preco + selos + '</button>';
+        }).join('');
+        menu.style.display = '';
+      }
+      function escolher(val, nome) {
+        hidden.value = val;
+        input.value = nome;
+        syncMenu(row, val);
+        syncFatiado(row, val);
+        pintarSubtotal(row);
+        onChange();
+      }
+      input.addEventListener('input', function () {
+        hidden.value = '';           // digitou = precisa RE-escolher (sem lixo)
+        syncMenu(row, '');
+        syncFatiado(row, '');
+        pintarSubtotal(row);
+        onChange();
+        abrir(input.value);
+      });
+      input.addEventListener('focus', function () { abrir(input.value); });
+      input.addEventListener('blur', function () { setTimeout(fechar, 150); });
+      menu.addEventListener('mousedown', function (e) {
+        var opt = e.target.closest('.combo-opt');
+        if (!opt) return;
+        e.preventDefault();
+        escolher(opt.getAttribute('data-val'), opt.getAttribute('data-nome'));
+        fechar();
+      });
+      row.querySelector('.item-qtd').addEventListener('input', function () {
+        pintarSubtotal(row);
+        onChange();
+      });
+      var fat = row.querySelector('.item-fatiado');
+      fat.addEventListener('change', function () {
+        row.querySelector('.item-fatiado-val').value = fat.checked ? '1' : '';
+        onChange();
+      });
+      return escolher;
+    }
+
+    function addLinha(valores) {
+      lista.appendChild(tpl.content.cloneNode(true));
+      var row = lista.lastElementChild;
+      var escolher = montarCombo(row);
+      if (valores) {
+        if (valores.qtd) row.querySelector('.item-qtd').value = valores.qtd;
+        var it = valores.alvo && porAlvo[valores.alvo];
+        if (it) {
+          escolher(valores.alvo, it.nome);
+          aplicarComp(row, valores.comp);
+          if (valores.fatiado && it.fatiavel) {
+            row.querySelector('.item-fatiado').checked = true;
+            row.querySelector('.item-fatiado-val').value = '1';
+          }
+        }
+      }
+      pintarSubtotal(row);
+      onChange();
+      return row;
+    }
+
+    if (opts.addBtn) {
+      opts.addBtn.addEventListener('click', function () { addLinha(); });
+    }
+    lista.addEventListener('click', function (e) {
+      if (e.target.classList.contains('rm-item')) {
+        var row = e.target.closest('.item-row');
+        if (row) { row.remove(); onChange(); }
+      }
+    });
+
+    return {
+      add: addLinha,
+      linhas: function () { return lista.querySelectorAll('.item-row'); },
+      temItem: function () {
+        return Array.prototype.some.call(
+          lista.querySelectorAll('.combo-val'), function (h) { return h.value; });
+      },
+      // Menus com total errado: o servidor recusaria igual, mas o operador
+      // merece saber antes de enviar.
+      menusInvalidos: function () {
+        var faltas = [];
+        lista.querySelectorAll('.item-row').forEach(function (row) {
+          var val = row.querySelector('.combo-val').value;
+          if (val && MENUS[val] && row.dataset.menuOk !== '1') {
+            faltas.push('a montagem de "' + (row.dataset.menuNome || val) +
+                        '" (tem que somar ' + MENUS[val].total + ')');
+          }
+        });
+        return faltas;
+      },
+      // Soma dos itens pelo preço PUBLICADO (estimativa de tela; o servidor
+      // recalcula). null quando alguma linha escolhida está sem preço.
+      subtotal: function () {
+        var total = 0, ok = true, algum = false;
+        lista.querySelectorAll('.item-row').forEach(function (row) {
+          if (!row.querySelector('.combo-val').value) return;
+          var v = precoLinha(row);
+          if (v == null) ok = false; else { total += v; algum = true; }
+        });
+        return (ok && algum) ? total : (algum ? null : 0);
+      },
+      fmtBrl: fmtBrl
+    };
+  }
+
+  // ── CEP → autofill (reusa /loja/api/cep, mesmo do checkout) ──────────
+  function cepAutofill(opts) {
+    var cep = opts.cep;
+    var status = opts.status;
+    var campos = opts.campos || {};
+    function set(nome, valor) {
+      var el = campos[nome];
+      if (el && valor) el.value = valor;
+    }
+    function buscar() {
+      var d = (cep.value || '').replace(/\D/g, '');
+      if (d.length !== 8) return;
+      if (status) { status.textContent = 'buscando…'; status.className = 'form-text text-muted'; }
+      fetch('/loja/api/cep/' + d).then(function (r) {
+        return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+      }).then(function (res) {
+        if (res.ok && res.j.ok) {
+          set('logradouro', res.j.logradouro);
+          set('bairro', res.j.bairro);
+          set('cidade', res.j.cidade);
+          set('uf', res.j.uf);
+          if (status) { status.textContent = 'endereço preenchido'; status.className = 'form-text text-success'; }
+          if (campos.numero) campos.numero.focus();
+          if (opts.onPreenchido) opts.onPreenchido();
+        } else if (status) {
+          status.textContent = res.j.erro || 'confira o CEP';
+          status.className = 'form-text text-warning';
+        }
+      }).catch(function () {
+        if (status) {
+          status.textContent = 'não deu pra consultar — preencha à mão';
+          status.className = 'form-text text-warning';
+        }
+      });
+    }
+    cep.addEventListener('input', function () {
+      var d = cep.value.replace(/\D/g, '').slice(0, 8);
+      cep.value = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
+      if (d.length === 8) buscar();
+    });
+    cep.addEventListener('blur', buscar);
+  }
+
+  return { montarItens: montarItens, cepAutofill: cepAutofill, fmtBrl: fmtBrl };
+})();
+</script>
