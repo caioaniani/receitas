@@ -76,7 +76,13 @@ def _preview_criar_pedido(p, token):
         nome = render_item_com_estado(nome_base, it.get('estado'))
         base = f"- {it.get('quantidade')}x {nome}"
         obs = (it.get('observacao') or '').strip()
-        return f"{base} _({obs})_" if obs else base
+        txt = f"{base} _({obs})_" if obs else base
+        # Item sem match (ex.: revenda, que a industria nao fornece —
+        # 01/10/2026) NAO entra no pedido; sem o aviso o preview parecia
+        # prometer a Coca-Cola.
+        if not it.get('resolvido'):
+            txt += ' ⚠ _sem match no catalogo — nao entra_'
+        return txt
     itens_txt = '\n'.join(_fmt_item(it) for it in (p.get('itens') or [])) or '(vazio)'
     blocks = [
         _header('Criar pedido'),
