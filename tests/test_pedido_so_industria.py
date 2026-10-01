@@ -349,9 +349,9 @@ def test_admin_pedidos_revenda_dry_run_lista_e_executar_remove(
     assert d2['removidos'] == 2
     assert d2['pedidos_cancelados_por_ficarem_vazios'] == [so_agua.id]
     misto = db.session.get(PedidoLoja, misto.id)
-    assert sorted((i.receita_id, i.produto_id) for i in misto.itens) == sorted(
-        [(receita.id, None), (None, cesta.id)])
-    assert misto.status == 'pendente' or misto.status == 'confirmado'
+    assert {(i.receita_id, i.produto_id) for i in misto.itens} == {
+        (receita.id, None), (None, cesta.id)}
+    assert misto.status == 'confirmado'
     assert misto.modificado_por_id is None          # rascunho segue do cron
     assert db.session.get(PedidoLoja, so_agua.id).status == 'cancelado'
     for pid in (separado.id, passado.id, hoje_.id):
