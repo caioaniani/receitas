@@ -17,7 +17,7 @@ from sqlalchemy.orm import joinedload
 
 from app.constants import STATUS_PEDIDO_EDITAVEIS
 from app.extensions import db
-from app.models import PedidoItem, PedidoLoja, Produto, Usuario
+from app.models import PedidoItem, PedidoLoja, Usuario
 from app.services.itens_industria import (
     motivo_produto_nao_fornecido,
     rotulo_motivo,
@@ -32,9 +32,12 @@ def listar(hoje_d=None):
     `sob_corte` (pedido de amanhã já fechado pelo corte das 12h — a limpeza
     não o toca) e `_item` (o PedidoItem, para `remover`)."""
     hoje_d = hoje_d or hoje()
+
+    from app.services.itens_industria import opcoes_composicao
+    prod = joinedload(PedidoItem.produto)
     rows = (PedidoItem.query.join(PedidoLoja)
             .options(joinedload(PedidoItem.pedido).joinedload(PedidoLoja.loja),
-                     joinedload(PedidoItem.produto).selectinload(Produto.itens))
+                     *[prod.options(o) for o in opcoes_composicao()])
             .filter(PedidoItem.produto_id.isnot(None),
                     PedidoLoja.status.in_(STATUS_PEDIDO_EDITAVEIS),
                     PedidoLoja.data_entrega > hoje_d)
