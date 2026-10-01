@@ -1181,9 +1181,9 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     dono_logado = False
     if not cliente:
         cliente = Cliente(nome=nome, email=email, telefone=telefone, cpf=cpf,
-                          origem='site')
+                          origem=origem_cliente)
         db.session.add(cliente)
-    else:
+    elif atualizar_cadastro:
         logado = _cliente_da_sessao()
         dono_logado = logado is not None and logado.id == cliente.id
     if dono_logado:
