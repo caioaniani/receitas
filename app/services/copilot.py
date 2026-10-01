@@ -2306,13 +2306,17 @@ def _resolver_item_pedido(nome, mp_ids_extras=None, produto_ids_extras=None):
     liberada — `itens_industria.produto_fornecido_pela_industria`); revenda
     comprada pronta (agua, Coca-Cola, adicional) nao resolve pra pedido de
     loja (dono 01/10/2026). `produto_ids_extras` = grandfather do editar."""
-    from app.services.itens_industria import produto_fornecido_pela_industria
+    from app.services.itens_industria import (
+        opcoes_composicao,
+        produto_fornecido_pela_industria,
+    )
 
     matches = _resolver_produto(nome)
     prod_ids = [m['id'] for m in matches if m['tipo'] == 'produto']
     if prod_ids:
         liberados = set(produto_ids_extras or ())
-        for p in Produto.query.filter(Produto.id.in_(prod_ids)).all():
+        for p in (Produto.query.filter(Produto.id.in_(prod_ids))
+                  .options(*opcoes_composicao()).all()):
             if produto_fornecido_pela_industria(p):
                 liberados.add(p.id)
         matches = [m for m in matches
