@@ -245,7 +245,13 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
     # refrigerante, adicional) tem venda mas NAO vira sugestao de pedido pra
     # industria (dono 01/10/2026 — regra em itens_industria). O POST da tela
     # recusa de qualquer jeito; filtrar aqui evita mostrar o que nao se pede.
-    from app.services.itens_industria import produto_fornecido_pela_industria
+    # MP segue a mesma regua da tela (so a liberada no Banco de MPs — o POST
+    # ja recusava, a lista mostrava).
+    from app.services.itens_industria import (
+        mp_fornecida_pela_industria,
+        opcoes_composicao,
+        produto_fornecido_pela_industria,
+    )
     nome_por_chave = {}
     receitas_ids = [k[1] for k in vendas_por_item if k[0] == 'receita']
     produtos_ids = [k[1] for k in vendas_por_item if k[0] == 'produto']
@@ -254,18 +260,20 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
         for r in Receita.query.filter(Receita.id.in_(receitas_ids)).all():
             nome_por_chave[('receita', r.id)] = r.nome
     if produtos_ids:
-        for p in Produto.query.filter(Produto.id.in_(produtos_ids)).all():
+        for p in (Produto.query.filter(Produto.id.in_(produtos_ids))
+                  .options(*opcoes_composicao()).all()):
             if produto_fornecido_pela_industria(p):
                 nome_por_chave[('produto', p.id)] = p.nome
     if mps_ids:
         for m in MateriaPrima.query.filter(MateriaPrima.id.in_(mps_ids)).all():
-            nome_por_chave[('mp', m.id)] = m.nome
+            if mp_fornecida_pela_industria(m):
+                nome_por_chave[('mp', m.id)] = m.nome
 
     # 5. Monta sugestao
     out = []
     for chave, total_vendas in vendas_por_item.items():
         tipo, item_id = chave
-        if tipo == 'produto' and chave not in nome_por_chave:
+        if tipo in ('produto', 'mp') and chave not in nome_por_chave:
             continue
         media = total_vendas / dias_periodo
         estoque_atual = estoque_por_item.get(chave, 0)
