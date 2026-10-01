@@ -42,6 +42,7 @@
             <summary>Como os pedidos entram no cálculo</summary>
             <ul class="mt-2 mb-0">
                 <li>Nas lojas, o motor considera estoque, consumo e entregas realmente previstas. Um dia cancelado pela equipe ou bloqueado pelo corte não simula uma reposição inexistente para os dias seguintes.</li>
+                <li>O pedido para a indústria só traz o que ela produz ou envia: receitas, cestas montadas pela indústria e matérias-primas liberadas no Banco de MPs. Item de revenda vendido na loja (água, refrigerante, suco de máquina, adicional) nunca entra, mesmo com venda ou mínimo cadastrado (decisão de 01/10/2026).</li>
                 <li>Na produção, a necessidade das lojas compara pedidos firmes e previsão. As encomendas do site e vendas B2B ainda pendentes são somadas e entram no calendário com suas datas e prazo de preparo. O estoque disponível é descontado da necessidade total.</li>
                 <li>A grade de pedidos respeita os múltiplos cadastrados para itens em gramas ou mililitros. Se houver um item fora do lote, o sistema informa o problema antes de salvar a seleção.</li>
             </ul>
