@@ -49,17 +49,21 @@ def _validar_lotes_da_grade(pedidos):
     erros = violacoes_por_ids(itens)
     if erros:
         raise PedidoLoteInvalidoError(' '.join(erros))
-    from app.models import Produto
-    from app.services.cestas import produto_reposicao_direta
+    # Produto so entra se a industria o fornece (cesta montada de receita/MP
+    # liberada) — regra canonica de app/services/itens_industria.py (dono
+    # 01/10/2026). O motor venda+estoque nao sugere Produto nenhum; isto
+    # barra POST forjado/aba velha com token 'prod:<id>' de revenda.
+    from app.services.itens_industria import (
+        mensagem_produtos_nao_pediveis,
+        produtos_nao_pediveis,
+    )
 
-    ids = {int(it['produto_id']) for ped in pedidos for it in (ped.get('itens') or [])
-           if it.get('produto_id') and int(it.get('qtd') or 0) > 0}
-    produtos = {p.id: p for p in Produto.query.filter(Produto.id.in_(ids)).all()} if ids else {}
-    for pid in ids:
-        if not produto_reposicao_direta(produtos.get(pid)):
-            raise PedidoLoteInvalidoError(
-                'A reposição direta exige produto ativo e sem composição. '
-                'Para cestas, configure a reposição dos componentes.')
+    candidatos = [{'produto_id': it['produto_id']}
+                  for ped in pedidos for it in (ped.get('itens') or [])
+                  if it.get('produto_id') and int(it.get('qtd') or 0) > 0]
+    bloqueados = produtos_nao_pediveis(candidatos)
+    if bloqueados:
+        raise PedidoLoteInvalidoError(mensagem_produtos_nao_pediveis(bloqueados))
 
 
 def criar_pedidos_rascunho(pedidos, user_id):
