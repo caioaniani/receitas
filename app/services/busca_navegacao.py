@@ -88,12 +88,6 @@ def itens_para_usuario(usuario, categorias_receitas):
     if capacidade('web_estoque_loja'):
         adicionar('Pedidos do site', 'main.loja_online_pedidos', 'Site', 'bag',
                   aliases=['pedido online', 'compras do site'], principal=True)
-    if capacidade('web_pedido_assistido'):
-        adicionar('Criar pedido para cliente', 'main.loja_online_pedido_assistido',
-                  'Site', 'receipt-cutoff',
-                  aliases=['pedido assistido', 'link de pagamento',
-                           'pedido por whatsapp', 'pedido por telefone',
-                           'cobrar cliente'])
         adicionar('Estoque das lojas', 'pedidos.estoque_loja', 'Lojas', 'box',
                   aliases=['estoque da loja'])
         adicionar('Conferência de estoque', 'pedidos.conferencia', 'Lojas',
@@ -103,6 +97,14 @@ def itens_para_usuario(usuario, categorias_receitas):
         adicionar('Desperdício', 'pedidos.desperdicio', 'Lojas', 'trash')
         adicionar('Relatório de pedidos', 'pedidos.relatorio', 'Lojas',
                   'file-text')
+    if capacidade('web_pedido_assistido'):
+        # Pedido ASSISTIDO (01/10/2026): capacidade própria — atendente
+        # liberado na matriz acha a tela pela busca sem ter estoque/relatório.
+        adicionar('Criar pedido para cliente', 'main.loja_online_pedido_assistido',
+                  'Site', 'receipt-cutoff',
+                  aliases=['pedido assistido', 'link de pagamento',
+                           'pedido por whatsapp', 'pedido por telefone',
+                           'cobrar cliente'])
     if capacidade('web_producao'):
         adicionar('Listas de compra da produção', 'producao.lista', 'Produção')
         adicionar('Estoque de congelados', 'pedidos.congelados', 'Produção',
