@@ -747,11 +747,22 @@ def _frete_para(modo, endereco, base=None, contato=None):
 
 def criar_pedido(form, itens_raw, *, base=None, commit=True,
                  dias_agenda=DIAS_AGENDA, reservar_estoque=True, frete_validado=None,
-                 itens_estritos=False, dias_disponibilidade=None):
+                 itens_estritos=False, dias_disponibilidade=None,
+                 registrar_aceite=True, atualizar_cadastro=True,
+                 origem_cliente='site'):
     """Valida tudo e cria o PedidoOnline. Devolve (pedido|None, erros:list).
 
     `form`: dict-like (request.form). `itens_raw`: lista de {kind,id,qtd}.
     Não faz commit parcial: ou cria o pedido inteiro, ou devolve erros.
+
+    Pedido ASSISTIDO (lançado pela equipe em nome do cliente, 01/10/2026 —
+    `app/services/pedido_assistido.py`) passa `registrar_aceite=False`
+    (quem marcou "ciente" foi o operador, não o cliente — o
+    `Cliente.aceite_lgpd_em` fica como está), `atualizar_cadastro=False`
+    (a equipe nunca reescreve o cadastro de uma conta existente, mesmo que
+    o operador esteja logado como esse cliente no mesmo navegador) e
+    `origem_cliente='balcao'` (o cadastro nasceu pela equipe, não pelo
+    site). Os defaults preservam o checkout do site byte a byte.
     """
     base = base or agora()
     erros = []
