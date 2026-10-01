@@ -1078,7 +1078,9 @@ def _marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None)
             f'({pagamento.metodo}). Confira no Pagar.me se não houve estorno '
             'ou cobrança em dobro.',
             f'tentativa_encerrada_paga|{pagamento.id}')
-    if pedido.status == 'cancelado' and pedido.motivo_cancelamento != 'pix_expirado':
+    from app.models.loja_online import MOTIVOS_EXPIRACAO_AUTOMATICA
+    if (pedido.status == 'cancelado'
+            and pedido.motivo_cancelamento not in MOTIVOS_EXPIRACAO_AUTOMATICA):
         # Cancelamento DELIBERADO (admin, reembolso) não é revertido por um
         # pagamento que chega depois — mesma regra dos kits
         # (kits_pagamento.marcar_pago). Antes o pedido voltava a "pago" sem
