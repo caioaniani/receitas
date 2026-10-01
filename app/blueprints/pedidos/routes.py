@@ -104,7 +104,8 @@ def _mps_pediveis():
     """MPs que a loja PODE pedir da indústria — só as marcadas no checkbox
     "sugerir pedido loja" do Banco de MPs (decisão do dono 07/07/2026: loja
     pedia MP que não devia; a flag que já alimentava a sugestão semanal
-    virou TRAVA do pedido). Receitas e produtos seguem livres; MP é opt-in.
+    virou TRAVA do pedido). Receitas seguem livres; Produto só se a
+    indústria o fornece (`itens_industria`, dono 01/10/2026); MP é opt-in.
     Vale pro typeahead, pros forms de novo/editar e pra validação do POST."""
     return (MateriaPrima.ativas()
             .filter(MateriaPrima.sugerir_pedido_loja.is_(True))
