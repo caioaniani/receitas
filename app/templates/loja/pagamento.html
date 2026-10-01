@@ -73,6 +73,34 @@
   </p>
   {% if compra_kit %}{% include 'loja/_agenda_kit.html' %}{% endif %}
 
+  {% if assistido and pedido.status == 'aguardando_pagamento' %}
+  {# Pedido montado pela equipe (01/10/2026): o cliente confere o que foi
+     combinado antes de pagar — ele não passou pelo carrinho do site. #}
+  <div class="checkout-bloco" id="pedido-assistido">
+    <h2>Seu pedido, montado pela nossa equipe</h2>
+    <p class="text-muted small">Confira abaixo. Se algo estiver diferente do combinado, fale com a gente antes de pagar.</p>
+    <ul style="padding-left:18px; margin:0 0 8px;">
+      {% for it in pedido.itens %}
+      <li>{{ it.quantidade }}× {{ it.nome }}{% if it.fatiado %} (fatiado){% endif %}
+        {%- if it.componentes %} — {% for c in it.componentes %}{{ c.quantidade }}x {{ c.nome }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+        — R$ {{ '%.2f'|format(it.subtotal)|replace('.', ',') }}</li>
+      {% endfor %}
+    </ul>
+    <p class="small" style="margin:0 0 4px;">
+      {% if pedido.modo_entrega == 'retirada' %}Retirada na {{ pedido.loja_retirada.nome if pedido.loja_retirada else 'loja' }}
+      {% else %}Entrega em {{ pedido.endereco_entrega }}{% endif %}
+      {% if pedido.data_entrega %} · {{ pedido.data_entrega.strftime('%d/%m/%Y') }}{% endif %}
+      {% if pedido.janela_entrega %} · {{ pedido.janela_entrega }}{% endif %}
+      {% if pedido.nome_destinatario %} · para {{ pedido.nome_destinatario }}{% endif %}
+    </p>
+    <p class="text-muted small" style="margin:0;">
+      {% if assistido.prazo_pagamento %}Este link vale até {{ assistido.prazo_pagamento.strftime('%d/%m às %H:%M') }}. {% endif %}
+      Ao pagar, você concorda com os <a href="{{ url_for('loja.termos') }}" target="_blank" rel="noopener">Termos de Uso</a>
+      e a <a href="{{ url_for('loja.privacidade') }}" target="_blank" rel="noopener">Política de Privacidade</a>.
+    </p>
+  </div>
+  {% endif %}
+
   {% if erros %}
   <div class="checkout-erros">
     <strong>Não foi possível processar o pagamento:</strong>
