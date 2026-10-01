@@ -22,6 +22,7 @@ from app.decorators import (
     divulgacao_required,
     gerente_required,
     owner_required,
+    pedido_assistido_required,
 )
 from app.extensions import db
 from app.models import (
