@@ -366,6 +366,9 @@ def test_admin_pedidos_revenda_dry_run_lista_e_executar_remove(
     assert misto.status == 'confirmado'
     assert misto.modificado_por_id is None          # rascunho segue do cron
     assert db.session.get(PedidoLoja, so_agua.id).status == 'cancelado'
+    # Cancelado por ficar vazio NÃO leva carimbo humano: cancelado com
+    # carimbo protegeria o dia contra o cron e a loja ficaria sem pedido.
+    assert db.session.get(PedidoLoja, so_agua.id).modificado_por_id is None
     for pid in (separado.id, passado.id, hoje_.id):
         assert PedidoItem.query.filter_by(pedido_id=pid).count() == 1
 
