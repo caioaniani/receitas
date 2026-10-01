@@ -281,9 +281,10 @@
       <div class="card-body">
         {{ p.nome_cliente }}<br>
         <a href="mailto:{{ p.email_cliente }}">{{ p.email_cliente }}</a><br>
-        {% if p.telefone_cliente %}
-        <a href="https://wa.me/55{{ p.telefone_cliente|replace(' ','')|replace('-','')|replace('(','')|replace(')','') }}">
-          {{ p.telefone_cliente }}</a>{% endif %}
+        {# wa.me só pra celular BR em E.164 (fixo/internacional sem link —
+           o '55' colado na frente saía errado nesses casos). #}
+        {% if p.telefone_cliente %}{% if whatsapp_cliente_url %}
+        <a href="{{ whatsapp_cliente_url }}">{{ p.telefone_cliente }}</a>{% else %}{{ p.telefone_cliente }}{% endif %}{% endif %}
       </div>
     </div>
 
