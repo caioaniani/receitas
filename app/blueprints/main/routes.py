@@ -5937,13 +5937,31 @@ def _catalogo_pedido_assistido():
     return out
 
 
-def _form_pedido_assistido_ctx(form=None, erros=None, itens=None):
-    """Contexto da tela (GET e re-render de erro com os valores digitados)."""
+def _ctx_bloco_assistido(p):
+    """Contexto do bloco "Pedido criado pela equipe" (link de pagamento
+    pronto pra copiar / WhatsApp / e-mail) — usado pelo detalhe do pedido e
+    pela tela de criação logo após criar. {} em pedido comum do site."""
+    from app.services import pedido_assistido
+    assistido = pedido_assistido.registro_de(p)
+    if assistido is None:
+        return {}
+    texto_wa = pedido_assistido.texto_whatsapp(p, assistido)
+    return dict(
+        assistido=assistido,
+        link_pagamento=pedido_assistido.link_pagamento(p),
+        whatsapp_texto=texto_wa,
+        whatsapp_url=pedido_assistido.url_whatsapp(p, texto_wa),
+        assistido_vencido=pedido_assistido.vencido(assistido))
+
+
+def _form_pedido_assistido_ctx(form=None, erros=None, itens=None, criado=None):
+    """Contexto da tela (GET, re-render de erro com os valores digitados e
+    GET `?criado=<codigo>` logo após criar — mostra o bloco com o link)."""
     from app.models import CANAIS_PEDIDO_ASSISTIDO
     from app.services import loja_checkout, pedido_assistido
     hoje_d = hoje_brt()
     loja_permitida = loja_checkout.loja_retirada_permitida()
-    return dict(
+    ctx = dict(
         catalogo=_catalogo_pedido_assistido(), menus=_menus_divulgacao(),
         lojas=loja_checkout.lojas_retirada(),
         loja_permitida_id=loja_permitida.id if loja_permitida else None,
@@ -5953,23 +5971,40 @@ def _form_pedido_assistido_ctx(form=None, erros=None, itens=None):
                                      + loja_checkout.ENCOMENDA_LEAD_DIAS)).isoformat(),
         canais=CANAIS_PEDIDO_ASSISTIDO,
         prazo_horas=pedido_assistido.PRAZO_PADRAO_HORAS,
-        form=form or {}, erros=erros or [], itens_iniciais=itens or [])
+        prazo_express_min=pedido_assistido.PRAZO_EXPRESS_MIN,
+        form=form or {}, erros=erros or [], itens_iniciais=itens or [],
+        criado=None)
+    if criado is not None:
+        ctx['criado'] = criado
+        ctx['p'] = criado
+        ctx.update(_ctx_bloco_assistido(criado))
+    return ctx
 
 
 @main_bp.route('/admin/loja-online/pedido-assistido', methods=['GET', 'POST'])
 @login_required
-@gerente_required
+@pedido_assistido_required
 def loja_online_pedido_assistido():
     """Cria um pedido do site EM NOME do cliente (atendimento por WhatsApp/
     telefone/balcão) e entrega ao operador o link público de pagamento. O
     pedido nasce igual ao do checkout (`aguardando_pagamento`, reserva de
     estoque, mesmas validações); o cliente paga pelo link (Pix/cartão) e
-    daí em diante é um pedido do site como outro qualquer. Gate = o mesmo
-    da lista de Pedidos do site (gerente/admin/owner)."""
+    daí em diante é um pedido do site como outro qualquer. Gate =
+    capacidade `web_pedido_assistido` (gerente por padrão; o dono libera
+    atendente em /admin/permissoes). Depois de criar, volta AQUI com
+    `?criado=<codigo>` e o bloco do link — e não ao detalhe do pedido, que
+    é gerente_required (um atendente liberado só aqui levaria 403)."""
+    from app.models import PedidoOnline
     from app.services import pedido_assistido
     if request.method != 'POST':
+        criado = None
+        codigo = (request.args.get('criado') or '').strip()
+        if codigo:
+            criado = PedidoOnline.query.filter_by(codigo=codigo).first()
+            if criado is not None and pedido_assistido.registro_de(criado) is None:
+                criado = None
         return render_template('admin/loja_online_pedido_assistido.html',
-                               **_form_pedido_assistido_ctx())
+                               **_form_pedido_assistido_ctx(criado=criado))
     itens = _itens_do_form(request.form)
     pedido, erros, registro = pedido_assistido.criar(
         request.form, itens, operador_id=current_user.id,
@@ -5984,15 +6019,15 @@ def loja_online_pedido_assistido():
             **_form_pedido_assistido_ctx(form=request.form, erros=erros,
                                          itens=itens)), 400
     flash(f'Pedido {pedido.codigo} criado para {pedido.nome_cliente} — '
-          'envie o link de pagamento ao cliente (WhatsApp ou e-mail) pelo '
-          'bloco no topo do pedido.', 'success')
-    return redirect(url_for('main.loja_online_pedido_detalhe',
-                            codigo=pedido.codigo))
+          'envie o link de pagamento ao cliente (WhatsApp ou e-mail).',
+          'success')
+    return redirect(url_for('main.loja_online_pedido_assistido',
+                            criado=pedido.codigo))
 
 
 @main_bp.route('/admin/loja-online/pedido-assistido/cotacao')
 @login_required
-@gerente_required
+@pedido_assistido_required
 def loja_online_pedido_assistido_cotacao():
     """Janelas + frete + distância do endereço digitado (JSON pro form).
     Mesma regra do site; cota do preview (ver `_cotacao_endereco`)."""
@@ -6006,7 +6041,7 @@ def loja_online_pedido_assistido_cotacao():
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/pedido-assistido/cancelar',
                methods=['POST'])
 @login_required
-@gerente_required
+@pedido_assistido_required
 def loja_online_pedido_assistido_cancelar(codigo):
     """Desfaz um pedido assistido ainda NÃO pago (cliente desistiu, pedido
     montado errado): encerra a cobrança no gateway e libera a reserva pelo
@@ -6016,13 +6051,22 @@ def loja_online_pedido_assistido_cancelar(codigo):
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
     ok, msg = pedido_assistido.cancelar(p, usuario_id=current_user.id)
     flash(msg, 'success' if ok else 'warning')
-    return _detalhe_redirect(codigo)
+    return _assistido_redirect(codigo)
+
+
+def _assistido_redirect(codigo):
+    """Volta pra onde o operador estava: detalhe do pedido se ele pode
+    abri-lo (gerente/admin), senão a tela de criação com o bloco do link
+    (atendente liberado só na capacidade do pedido assistido)."""
+    if current_user.pode_lojas():
+        return _detalhe_redirect(codigo)
+    return redirect(url_for('main.loja_online_pedido_assistido', criado=codigo))
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/pedido-assistido/reenviar-email',
                methods=['POST'])
 @login_required
-@gerente_required
+@pedido_assistido_required
 def loja_online_pedido_assistido_reenviar_email(codigo):
     """Reenvia o e-mail com o link de pagamento (pedido assistido ainda
     aguardando pagamento). Corrija o e-mail do cliente antes, se preciso."""
@@ -6033,11 +6077,11 @@ def loja_online_pedido_assistido_reenviar_email(codigo):
     if reg is None or p.status != 'aguardando_pagamento':
         flash('Este pedido não está aguardando o pagamento de um link '
               'enviado pela equipe.', 'warning')
-        return _detalhe_redirect(codigo)
+        return _assistido_redirect(codigo)
     if '@' not in (p.email_cliente or ''):
         flash('Pedido sem e-mail válido — corrija o e-mail do cliente antes '
               'de reenviar.', 'danger')
-        return _detalhe_redirect(codigo)
+        return _assistido_redirect(codigo)
     res = pedido_assistido.enviar_email_link(p, reg)
     if res and res.get('ok'):
         flash(f'E-mail com o link de pagamento reenviado para {p.email_cliente}.',
@@ -6045,7 +6089,7 @@ def loja_online_pedido_assistido_reenviar_email(codigo):
     else:
         flash('Não consegui reenviar o e-mail: '
               f'{(res or {}).get("erro") or "verifique o Postmark"}.', 'danger')
-    return _detalhe_redirect(codigo)
+    return _assistido_redirect(codigo)
 
 
 @main_bp.route('/admin/loja-online/estoque-vitrine')
@@ -6268,19 +6312,16 @@ def loja_online_pedido_detalhe(codigo):
     estoque_reduzido = loja_pagamento._versao_estoque_atual(p) > 0
     # Pedido ASSISTIDO (01/10/2026): bloco com o link de pagamento pronto
     # pra copiar/WhatsApp/e-mail enquanto o cliente não paga.
-    from app.services import pedido_assistido
-    assistido = pedido_assistido.registro_de(p)
-    assistido_ctx = {}
-    if assistido is not None:
-        texto_wa = pedido_assistido.texto_whatsapp(p, assistido)
-        assistido_ctx = dict(
-            assistido=assistido,
-            link_pagamento=pedido_assistido.link_pagamento(p),
-            whatsapp_texto=texto_wa,
-            whatsapp_url=pedido_assistido.url_whatsapp(p, texto_wa),
-            assistido_vencido=pedido_assistido.vencido(assistido))
+    assistido_ctx = _ctx_bloco_assistido(p)
+    # wa.me do card "Cliente": número canônico (celular BR em E.164) — o
+    # template prefixava '55' em qualquer coisa (internacional/já com 55
+    # saía errado; caso 23/09/2026). None = sem link, só o texto.
+    from app.utils import telefone_e164_whatsapp
+    e164 = telefone_e164_whatsapp(p.telefone_cliente)
     return render_template('admin/loja_online_pedido_detalhe.html',
                            p=p, labels=_STATUS_PEDIDO_ONLINE_LABEL,
+                           whatsapp_cliente_url=(f'https://wa.me/{e164.lstrip("+")}'
+                                                 if e164 else None),
                            **assistido_ctx,
                            fiscal=fiscal_online.contexto(p),
                            lojas=loja_checkout.lojas_retirada(),
