@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+
+{% block title %}Criar pedido para cliente{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0">🧾 Criar pedido para cliente</h1>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.loja_online_pedidos', status='aguardando_pagamento') }}">
+        Pedidos aguardando pagamento
+    </a>
+</div>
+
+<div class="alert alert-info small">
+    Monte aqui o pedido que o cliente fez por <strong>WhatsApp, telefone ou no balcão</strong>.
+    O pedido nasce <strong>igual ao do site</strong> (mesmos produtos, preços, frete e regras)
+    e fica <strong>aguardando pagamento</strong>: você envia ao cliente o
+    <strong>link em que ele mesmo paga com Pix ou cartão</strong>. Depois do pagamento,
+    o pedido segue o fluxo normal (painel de entregas, nota fiscal, e-mails).
+    O link vale por até {{ prazo_horas }} h (nunca depois da véspera da entrega); se não for pago,
+    o pedido é cancelado sozinho e a reserva de estoque liberada.
+</div>
+
+{% if erros %}
+<div class="alert alert-danger py-2">
+    <strong>Não deu pra criar o pedido:</strong>
+    <ul class="mb-0">{% for e in erros %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="POST" class="card" id="form-assistido" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card-body">
+        <div class="mb-2 fw-semibold">Cliente (quem paga) *</div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <label class="form-label small text-muted" for="nome">Nome *</label>
+                <input type="text" class="form-control" id="nome" name="nome" required maxlength="100"
+                       value="{{ form.get('nome', '') }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted" for="sobrenome">Sobrenome *</label>
+                <input type="text" class="form-control" id="sobrenome" name="sobrenome" required maxlength="100"
+                       value="{{ form.get('sobrenome', '') }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted" for="email">E-mail *</label>
+                <input type="email" class="form-control" id="email" name="email" required maxlength="200"
+                       value="{{ form.get('email', '') }}" placeholder="recebe o link de pagamento">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted" for="telefone">WhatsApp / telefone *</label>
+                <input type="text" class="form-control" id="telefone" name="telefone" required maxlength="30"
+                       value="{{ form.get('telefone', '') }}" placeholder="(11) 90000-0000">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted" for="cpf">CPF ou CNPJ *</label>
+                <input type="text" class="form-control" id="cpf" name="cpf" required maxlength="32"
+                       value="{{ form.get('cpf', '') }}" placeholder="só números">
+                <div class="form-text">Exigido pelo Pix/cartão e pela nota fiscal.</div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted" for="canal">Como o cliente pediu</label>
+                <select class="form-select" id="canal" name="canal">
+                    <option value="">— não informado —</option>
+                    {% for valor, rotulo in canais %}
+                    <option value="{{ valor }}"{% if form.get('canal') == valor %} selected{% endif %}>{{ rotulo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small text-muted" for="observacao">Observação interna (não vai pro cliente)</label>
+                <input type="text" class="form-control" id="observacao" name="observacao" maxlength="500"
+                       value="{{ form.get('observacao', '') }}" placeholder="Ex.: pediu pelo WhatsApp da loja, quer entregar de manhã">
+            </div>
+        </div>
+
+        <hr>
+        <div class="mb-2 fw-semibold">Entrega *</div>
+        {% set modo_atual = form.get('modo_entrega') or 'agendada' %}
+        <div class="btn-group mb-3 flex-wrap" role="group">
+            <input type="radio" class="btn-check" name="modo_entrega" id="m-agendada" value="agendada"{% if modo_atual == 'agendada' %} checked{% endif %}>
+            <label class="btn btn-outline-primary" for="m-agendada">🚚 Entrega agendada</label>
+            <input type="radio" class="btn-check" name="modo_entrega" id="m-retirada" value="retirada"{% if modo_atual == 'retirada' %} checked{% endif %}>
+            <label class="btn btn-outline-primary" for="m-retirada">🏪 Retirada na loja</label>
+            {% if express_ok or modo_atual == 'express' %}
+            <input type="radio" class="btn-check" name="modo_entrega" id="m-express" value="express"{% if modo_atual == 'express' %} checked{% endif %}>
+            <label class="btn btn-outline-primary" for="m-express">⚡ Express (hoje, em até 1–2 h)</label>
+            {% endif %}
+        </div>
+        {% if not express_ok %}<div class="form-text mb-2">Express só dentro do horário de entrega (8h–18h) e fora de data especial.</div>{% endif %}
+
+        <div id="box-retirada" style="display:none;" class="mb-3">
+            <label class="form-label fw-semibold" for="loja_id">Loja de retirada *</label>
+            <select class="form-select" id="loja_id" name="loja_id" style="max-width:420px;">
+                <option value="">— escolha a loja —</option>
+                {% for lo in lojas %}
+                <option value="{{ lo.id }}"{% if lo.id != loja_permitida_id %} disabled{% endif %}{% if form.get('loja_id') == lo.id|string or (not form.get('loja_id') and lo.id == loja_permitida_id) %} selected{% endif %}>
+                    {{ lo.nome }}{% if lo.id != loja_permitida_id %} (sem retirada do site){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            <div class="form-text">Mesma regra do site: só a loja que atende o site aceita retirada.</div>
+        </div>
+
+        <div id="box-endereco" class="mb-3">
+            <div class="small fw-semibold mb-1" id="endereco-titulo">Endereço de entrega *</div>
+            <div class="row g-2">
+                <div class="col-6 col-md-3">
+                    <label class="form-label small text-muted" for="cep">CEP *</label>
+                    <input type="text" class="form-control" id="cep" name="cep" maxlength="9"
+                           inputmode="numeric" placeholder="00000-000" autocomplete="off"
+                           value="{{ form.get('cep', '') }}">
+                    <div id="cep-status" class="form-text"></div>
+                </div>
+                <div class="col-6 col-md-7">
+                    <label class="form-label small text-muted" for="logradouro">Rua / logradouro *</label>
+                    <input type="text" class="form-control" id="logradouro" name="logradouro" maxlength="200"
+                           value="{{ form.get('logradouro', '') }}">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted" for="numero">Número *</label>
+                    <input type="text" class="form-control" id="numero" name="numero" inputmode="numeric" maxlength="20"
+                           value="{{ form.get('numero', '') }}">
+                </div>
+                <div class="col-6 col-md-4">
+                    <label class="form-label small text-muted" for="bairro">Bairro *</label>
+                    <input type="text" class="form-control" id="bairro" name="bairro" maxlength="100"
+                           value="{{ form.get('bairro', '') }}">
+                </div>
+                <div class="col-8 col-md-5">
+                    <label class="form-label small text-muted" for="cidade">Cidade *</label>
+                    <input type="text" class="form-control" id="cidade" name="cidade" maxlength="100"
+                           value="{{ form.get('cidade', '') }}">
+                </div>
+                <div class="col-4 col-md-1">
+                    <label class="form-label small text-muted" for="uf">UF *</label>
+                    <input type="text" class="form-control" id="uf" name="uf" maxlength="2"
+                           value="{{ form.get('uf', '') }}">
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label small text-muted" for="complemento">Compl.</label>
+                    <input type="text" class="form-control" id="complemento" name="complemento" maxlength="100"
+                           placeholder="apto/bloco" value="{{ form.get('complemento', '') }}">
+                </div>
+            </div>
+            <div id="frete-status" class="form-text"></div>
+        </div>
+
+        <div class="row g-3 mb-3" id="box-data">
+            <div class="col-md-4">
+                <label class="form-label fw-semibold" for="data_entrega">Data *</label>
+                <input type="date" class="form-control" id="data_entrega" name="data_entrega"
+                       value="{{ form.get('data_entrega') or hoje }}" min="{{ hoje }}" max="{{ data_max }}" required>
+                <div class="form-text">Item sob encomenda exige D+2 — o sistema confere.</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold" for="janela_entrega">Janela / horário *</label>
+                <select class="form-select" id="janela_entrega" name="janela_entrega" required
+                        data-atual="{{ form.get('janela_entrega', '') }}">
+                    <option value="">— preencha o endereço —</option>
+                </select>
+                <div id="janela-status" class="form-text"></div>
+            </div>
+        </div>
+
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="e_presente" name="e_presente" value="1"
+                   {% if form.get('e_presente') %}checked{% endif %}>
+            <label class="form-check-label fw-semibold" for="e_presente">🎁 É presente — quem recebe é outra pessoa</label>
+        </div>
+        <div id="box-presente" class="row g-3 mb-3" style="display:none;">
+            <div class="col-md-4">
+                <label class="form-label small text-muted" for="nome_destinatario">Nome de quem recebe *</label>
+                <input type="text" class="form-control" id="nome_destinatario" name="nome_destinatario" maxlength="150"
+                       value="{{ form.get('nome_destinatario', '') }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small text-muted" for="telefone_destinatario">Telefone de quem recebe *</label>
+                <input type="text" class="form-control" id="telefone_destinatario" name="telefone_destinatario" maxlength="30"
+                       value="{{ form.get('telefone_destinatario', '') }}" placeholder="só pro entregador ligar">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small text-muted" for="cartinha">Cartinha (opcional, até 250 caracteres)</label>
+                <input type="text" class="form-control" id="cartinha" name="cartinha" maxlength="250"
+                       value="{{ form.get('cartinha', '') }}">
+            </div>
+        </div>
+
+        <hr>
+        <div class="mb-2 fw-semibold">Itens do pedido *</div>
+        <div class="form-text mb-2">Só o que está publicado no site, ao preço do site. Comece a digitar o nome.</div>
+        <div id="itens-lista"></div>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="add-item">
+            <i class="bi bi-plus-lg"></i> Adicionar item
+        </button>
+
+        <div class="mt-3 p-2 border rounded bg-light" id="box-total">
+            <span class="text-muted small">Estimativa (o servidor recalcula ao criar):</span>
+            <strong id="total-txt">—</strong>
+        </div>
+
+        <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="cliente_informado" name="cliente_informado" value="1"
+                   {% if form.get('cliente_informado') %}checked{% endif %}>
+            <label class="form-check-label" for="cliente_informado">
+                Informei ao cliente os itens, o total, a entrega e que os
+                <a href="{{ url_for('loja.termos') }}" target="_blank" rel="noopener">termos de compra do site</a>
+                valem para este pedido *
+            </label>
+        </div>
+        <div id="form-erro" class="alert alert-danger py-2 small mt-2" style="display:none;"></div>
+    </div>
+    <div class="card-footer d-flex gap-2 flex-wrap">
+        <button type="submit" class="btn btn-primary fw-semibold">🧾 Criar pedido e gerar link de pagamento</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.loja_online_pedidos') }}">Cancelar</a>
+    </div>
+</form>
+
+{% include 'admin/_pedido_itens_js.html' %}
+
+<script>
+(function () {
+  var CATALOGO = {{ catalogo | tojson }};
+  var MENUS = {{ menus | tojson }};
+  var ITENS_INICIAIS = {{ itens_iniciais | tojson }};
+
+  var boxRetir = document.getElementById('box-retirada');
+  var boxPresente = document.getElementById('box-presente');
+  var boxData = document.getElementById('box-data');
+  var lojaSel = document.getElementById('loja_id');
+  var endTitulo = document.getElementById('endereco-titulo');
+  var endCampos = ['cep', 'logradouro', 'numero', 'bairro', 'cidade', 'uf'];
+  var freteStatus = document.getElementById('frete-status');
+  var janSel = document.getElementById('janela_entrega');
+  var janStatus = document.getElementById('janela-status');
+  var totalTxt = document.getElementById('total-txt');
+  var freteAtual = null;      // número ou null (sem cotação / retirada = 0)
+  var expressJanela = '';
+
+  function modo() {
+    return document.querySelector('input[name="modo_entrega"]:checked').value;
+  }
+
+  function pintarTotal() {
+    var sub = itens.subtotal();
+    if (sub === null) { totalTxt.textContent = 'item sem preço — confira'; return; }
+    var m = modo();
+    var frete = (m === 'retirada') ? 0 : freteAtual;
+    if (frete == null) {
+      totalTxt.textContent = 'itens ' + PedidoForm.fmtBrl(sub) + ' + frete (preencha o endereço)';
+      return;
+    }
+    totalTxt.textContent = 'itens ' + PedidoForm.fmtBrl(sub) + ' + frete ' +
+      PedidoForm.fmtBrl(frete) + ' = ' + PedidoForm.fmtBrl(sub + frete);
+  }
+
+  function syncModo() {
+    var m = modo();
+    var retir = (m === 'retirada');
+    boxRetir.style.display = retir ? '' : 'none';
+    lojaSel.required = retir;
+    // Retirada TAMBÉM pede o endereço do cliente (é o da nota fiscal — regra
+    // do site desde 20/07/2026); só muda o título.
+    endTitulo.textContent = retir ? 'Endereço do cliente (para a nota fiscal) *'
+                                  : 'Endereço de entrega *';
+    boxData.style.display = (m === 'express') ? 'none' : '';
+    carregarCotacao();
+  }
+  document.querySelectorAll('input[name="modo_entrega"]').forEach(function (r) {
+    r.addEventListener('change', syncModo);
+  });
+
+  function syncPresente() {
+    var on = document.getElementById('e_presente').checked;
+    boxPresente.style.display = on ? '' : 'none';
+    document.getElementById('nome_destinatario').required = on;
+    document.getElementById('telefone_destinatario').required = on;
+  }
+  document.getElementById('e_presente').addEventListener('change', syncPresente);
+
+  // ── Cotação: janelas (mesma regra do site) + frete + distância ────────
+  function carregarCotacao() {
+    var m = modo();
+    var q = new URLSearchParams({
+      modo: m,
+      data: document.getElementById('data_entrega').value || '',
+      cep: document.getElementById('cep').value || '',
+      logradouro: document.getElementById('logradouro').value || '',
+      numero: document.getElementById('numero').value || '',
+      bairro: document.getElementById('bairro').value || '',
+      cidade: document.getElementById('cidade').value || ''
+    });
+    janStatus.textContent = 'atualizando horários…';
+    janStatus.className = 'form-text text-muted';
+    fetch('{{ url_for('main.loja_online_pedido_assistido_cotacao') }}?' + q.toString())
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var atual = janSel.value || janSel.getAttribute('data-atual') || '';
+        var jan = (j.janelas || []);
+        janSel.innerHTML = '<option value="">— escolha o horário —</option>' +
+          jan.map(function (h) {
+            return '<option value="' + h + '"' + (h === atual ? ' selected' : '') +
+              '>' + h + '</option>';
+          }).join('');
+        freteAtual = (m === 'retirada') ? 0 : (j.valor == null ? null : Number(j.valor));
+        expressJanela = j.janela_express || '';
+        if (j.aviso) {
+          janStatus.textContent = j.aviso;
+          janStatus.className = 'form-text text-warning';
+        } else if (j.distancia_km != null) {
+          janStatus.textContent = 'a ' + j.distancia_km + ' km da loja';
+          janStatus.className = 'form-text text-muted';
+        } else {
+          janStatus.textContent = '';
+        }
+        if (m === 'retirada') {
+          freteStatus.textContent = '';
+        } else if (j.fora_area) {
+          freteStatus.textContent = 'Fora da área de entrega do site — o pedido será recusado.';
+          freteStatus.className = 'form-text text-danger';
+        } else if (freteAtual != null) {
+          freteStatus.textContent = 'Frete: ' + PedidoForm.fmtBrl(freteAtual) +
+            (m === 'express' ? ' (express ' + expressJanela + ', valor estimado)' : '');
+          freteStatus.className = 'form-text text-success';
+        } else {
+          freteStatus.textContent = j.aviso ? '' : 'Preencha o endereço para cotar o frete.';
+          freteStatus.className = 'form-text text-muted';
+        }
+        if (m === 'express' && !j.express) {
+          freteStatus.textContent = 'Express indisponível agora (fora do horário de entrega).';
+          freteStatus.className = 'form-text text-danger';
+        }
+        pintarTotal();
+      }).catch(function () {
+        janStatus.textContent = 'não deu pra carregar os horários';
+        janStatus.className = 'form-text text-warning';
+      });
+  }
+  document.getElementById('data_entrega').addEventListener('change', carregarCotacao);
+  ['numero', 'logradouro', 'bairro', 'cidade'].forEach(function (id) {
+    document.getElementById(id).addEventListener('blur', carregarCotacao);
+  });
+
+  PedidoForm.cepAutofill({
+    cep: document.getElementById('cep'),
+    status: document.getElementById('cep-status'),
+    campos: {
+      logradouro: document.getElementById('logradouro'),
+      bairro: document.getElementById('bairro'),
+      cidade: document.getElementById('cidade'),
+      uf: document.getElementById('uf'),
+      numero: document.getElementById('numero')
+    },
+    onPreenchido: carregarCotacao
+  });
+
+  var itens = PedidoForm.montarItens({
+    lista: document.getElementById('itens-lista'),
+    addBtn: document.getElementById('add-item'),
+    catalogo: CATALOGO, menus: MENUS,
+    mostrarFatiado: true, mostrarPreco: true,
+    onChange: pintarTotal
+  });
+
+  // ── Validação no submit ───────────────────────────────────────────────
+  var form = document.getElementById('form-assistido');
+  var erroBox = document.getElementById('form-erro');
+  form.addEventListener('submit', function (e) {
+    var faltas = [];
+    ['nome', 'sobrenome', 'email', 'telefone', 'cpf'].forEach(function (id) {
+      if (!document.getElementById(id).value.trim()) faltas.push(id === 'cpf' ? 'CPF/CNPJ' : id);
+    });
+    var m = modo();
+    if (m === 'retirada' && !lojaSel.value) faltas.push('loja de retirada');
+    endCampos.forEach(function (id) {
+      if (!document.getElementById(id).value.trim()) faltas.push('endereço (' + id + ')');
+    });
+    if (m !== 'express') {
+      if (!document.getElementById('data_entrega').value) faltas.push('data');
+      if (!janSel.value.trim()) faltas.push('janela');
+    }
+    if (document.getElementById('e_presente').checked) {
+      if (!document.getElementById('nome_destinatario').value.trim()) faltas.push('nome de quem recebe');
+      if (!document.getElementById('telefone_destinatario').value.trim()) faltas.push('telefone de quem recebe');
+    }
+    if (!itens.temItem()) faltas.push('ao menos um item');
+    faltas = faltas.concat(itens.menusInvalidos());
+    if (!document.getElementById('cliente_informado').checked) faltas.push('a confirmação de que informou o cliente');
+    if (faltas.length) {
+      e.preventDefault();
+      erroBox.textContent = 'Faltou preencher: ' + faltas.join(', ') + '.';
+      erroBox.style.display = '';
+      erroBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  syncPresente();
+  if (ITENS_INICIAIS.length) {
+    ITENS_INICIAIS.forEach(function (it) {
+      itens.add({ alvo: it.kind + ':' + it.id, qtd: it.qtd, comp: it.comp, fatiado: it.fatiado });
+    });
+  } else {
+    itens.add();
+  }
+  syncModo();
+})();
+</script>
+{% endblock %}
