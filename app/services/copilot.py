@@ -56,7 +56,7 @@ TOOL_CRIAR_PEDIDO = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "nome": {"type": "string", "description": "Nome EXATO do item do catalogo — pode ser produto, receita OU materia-prima (loja pede MPs tambem: queijo, lagarto cozido, saco de pao de queijo, etc)."},
+                        "nome": {"type": "string", "description": "Nome EXATO do item do catalogo — receita, cesta montada pela industria OU materia-prima liberada pra pedido de loja (queijo, lagarto cozido, saco de pao de queijo, etc). Item de REVENDA comprado pronto (agua, refrigerante, suco de maquina, adicional) NAO entra em pedido pra industria — se o usuario pedir, explique que a industria nao fornece e nao inclua."},
                         "quantidade": {"type": "integer", "minimum": 1},
                         "estado": {"type": ["string", "null"], "enum": [None, "backup", "assado"], "description": "Estado do item: null = padrao da familia (cru congelado pra viennoiserie / congelado assado pra pao); 'backup' = pre-fermentado congelado (assa rapido pra repor vitrine); 'assado' = ja assado (raro, so se a loja pediu explicitamente). Pedido misto (ex: '5 croissants + 3 backup') vira 2 linhas — uma com estado=null, outra com estado='backup'. NUNCA consolide quantidades de estados distintos. Gatilhos pra `backup`: 'backup', 'fermentado e congelado', 'pre-fermentado', 'pre-fermentados congelados', 'fermentados congelados'. Gatilhos pra `assado`: 'assado(s)', 'ja assado'. Gatilhos pra `null`: 'congelado' sozinho, 'cru', sem qualificador."},
                         "observacao": {"type": ["string", "null"], "description": "Observacao livre do item (max 200 chars): 'sem cebola', 'recheio extra'. NAO use pra estado — use o campo `estado` acima. Default null."},
@@ -99,7 +99,7 @@ TOOL_EDITAR_PEDIDO = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "nome": {"type": "string", "description": "Nome EXATO do item do catalogo — pode ser produto, receita OU materia-prima (loja pede MPs tambem: queijo, lagarto cozido, saco de pao de queijo, etc)."},
+                        "nome": {"type": "string", "description": "Nome EXATO do item do catalogo — receita, cesta montada pela industria OU materia-prima liberada pra pedido de loja (queijo, lagarto cozido, saco de pao de queijo, etc). Item de REVENDA comprado pronto (agua, refrigerante, suco de maquina, adicional) NAO entra em pedido pra industria — se o usuario pedir, explique que a industria nao fornece e nao inclua."},
                         "quantidade": {"type": "integer", "minimum": 1},
                         "estado": {"type": ["string", "null"], "enum": [None, "backup", "assado"], "description": "Mesmos gatilhos de criar_pedido: 'backup'/'fermentado e congelado'/'pre-fermentado' = backup; 'assado(s)' = assado; 'congelado'/'cru'/sem qualificador = null."},
                         "observacao": {"type": ["string", "null"]},
