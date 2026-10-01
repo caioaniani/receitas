@@ -53,18 +53,28 @@ PRAZO_PADRAO_HORAS = 24
 # Piso: mesmo que a entrega seja daqui a pouco (hoje), o cliente tem pelo
 # menos isto para abrir o link.
 PRAZO_MINIMO_HORAS = 2
+# EXPRESS é "sai agora": a janela ('em até 1h/2h') é calculada na criação e
+# o motoboy é chamado no pagamento — um link pago 2 h depois seria um
+# express já vencido. Prazo curto, próprio.
+PRAZO_EXPRESS_MIN = 30
+# Duplo clique / reenvio do form: o MESMO operador criando pedido para o
+# MESMO e-mail dentro desta janela é recusado com o código do anterior.
+JANELA_DUPLICATA_SEG = 30
 CANAIS = tuple(c for c, _ in CANAIS_PEDIDO_ASSISTIDO)
 MSG_CLIENTE_NAO_INFORMADO = (
     'Confirme que informou ao cliente os itens, o total, a entrega e que os '
     'termos de compra do site valem para este pedido.')
 
 
-def prazo_pagamento(base, data_entrega):
+def prazo_pagamento(base, data_entrega, *, modo_entrega=None):
     """Até quando o link vale. Regra: 24 h a partir de agora, mas nunca
     depois da VÉSPERA da entrega às 23:59 (a produção/separação parte do que
-    está pago), com piso de 2 h (entrega hoje, express, pedido lançado
-    tarde na véspera). Função pura — a tela e o teste a leem igual."""
+    está pago), com piso de 2 h (entrega hoje, pedido lançado tarde na
+    véspera). EXPRESS: `PRAZO_EXPRESS_MIN` fixos. Função pura — a tela e o
+    teste a leem igual."""
     base = base or agora()
+    if modo_entrega == 'express':
+        return base + timedelta(minutes=PRAZO_EXPRESS_MIN)
     limite = base + timedelta(hours=PRAZO_PADRAO_HORAS)
     if data_entrega is not None:
         vespera = datetime.combine(data_entrega - timedelta(days=1),
@@ -72,6 +82,26 @@ def prazo_pagamento(base, data_entrega):
         limite = min(limite, vespera)
     piso = base + timedelta(hours=PRAZO_MINIMO_HORAS)
     return max(limite, piso)
+
+
+def _duplicata_recente(operador_id, email, base):
+    """Pedido assistido do MESMO operador para o MESMO e-mail criado há menos
+    de `JANELA_DUPLICATA_SEG` (duplo clique, F5 no POST). Devolve o pedido
+    anterior ou None. O form não tem nonce; esta guarda + o botão
+    desabilitado no clique cobrem o caso real."""
+    from app.models import PedidoOnline
+    email = (email or '').strip().lower()
+    if not operador_id or not email:
+        return None
+    desde = base - timedelta(seconds=JANELA_DUPLICATA_SEG)
+    reg = (PedidoOnlineAssistido.query
+           .join(PedidoOnline, PedidoOnline.id == PedidoOnlineAssistido.pedido_id)
+           .filter(PedidoOnlineAssistido.operador_id == operador_id,
+                   PedidoOnlineAssistido.criado_em >= desde,
+                   db.func.lower(PedidoOnline.email_cliente) == email)
+           .order_by(PedidoOnlineAssistido.criado_em.desc())
+           .first())
+    return reg.pedido if reg else None
 
 
 def link_pagamento(pedido):
