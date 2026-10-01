@@ -3777,6 +3777,110 @@ def arquivadas_saldo():
     }), 200
 
 
+@main_bp.route('/admin/pedidos-revenda')
+@owner_required
+def pedidos_revenda():
+    """Itens que a indústria NÃO fornece dentro de pedidos loja→indústria
+    FUTUROS (owner-only, 01/10/2026 — dono: "os pedidos das lojas para a
+    indústria devem ser somente do que a indústria produz, está vindo de
+    tudo até coca cola e adicional de morango").
+
+    Caso real: o motor venda+estoque sugeriu Produto de revenda (água,
+    sucos, adicionais) nos rascunhos automáticos e as lojas confirmaram.
+    O motor deixou de sugerir Produto; os rascunhos ainda PENDENTES do
+    próprio cron se corrigem sozinhos na re-sincronização (item fora da
+    grade vai a zero). Os pedidos já CONFIRMADOS pela loja são protegidos
+    do cron — esta rota é a limpeza deles, com decisão do dono.
+
+    Sem parâmetro = DRY-RUN (lista o que sairia). ?executar=1 remove os
+    itens (AuditLog registra cada exclusão de pedido_item) e cancela o
+    pedido que ficar sem nenhum item. Respeita o corte das 12h (pedido de
+    amanhã fechado fica de fora, listado em `pulados_corte`), só toca
+    pedido pendente/confirmado com entrega a partir de amanhã e NÃO
+    carimba `modificado_por_id` (rascunho do cron segue re-sincronizável;
+    pedido com carimbo humano continua com o carimbo que já tinha).
+    """
+
+    from app.constants import STATUS_PEDIDO_EDITAVEIS
+    from app.models import PedidoItem
+    from app.services.itens_industria import (
+        motivo_produto_nao_fornecido,
+        rotulo_motivo,
+    )
+    from app.services.pedido_corte import corte_ativo
+    from app.services.pedido_lock import travar_pedidos_lojas
+
+    executar = request.args.get('executar') == '1'
+    hoje_d = hoje_brt()
+
+    def _candidatos():
+        rows = (PedidoItem.query.join(PedidoLoja)
+                .options(joinedload(PedidoItem.pedido).joinedload(PedidoLoja.loja),
+                         joinedload(PedidoItem.produto).selectinload(Produto.itens))
+                .filter(PedidoItem.produto_id.isnot(None),
+                        PedidoLoja.status.in_(STATUS_PEDIDO_EDITAVEIS),
+                        PedidoLoja.data_entrega > hoje_d)
+                .order_by(PedidoLoja.data_entrega, PedidoLoja.id, PedidoItem.id)
+                .all())
+        return [(it, motivo_produto_nao_fornecido(it.produto)) for it in rows
+                if motivo_produto_nao_fornecido(it.produto) is not None]
+
+    candidatos = _candidatos()
+    if executar and candidatos:
+        # Mesma trava das edições humanas: relê sob a trava antes de apagar.
+        travar_pedidos_lojas(sorted({it.pedido.loja_id for it, _ in candidatos}))
+        db.session.expire_all()
+        candidatos = _candidatos()
+
+    usuarios = {u.id: u.nome for u in Usuario.query.all()}
+    linhas, pulados_corte = [], []
+    pedidos_tocados = {}
+    for it, motivo in candidatos:
+        p = it.pedido
+        info = {
+            'pedido_id': p.id,
+            'loja': p.loja.nome if p.loja else p.loja_id,
+            'data_entrega': p.data_entrega.isoformat(),
+            'status': p.status,
+            'criado_por': usuarios.get(p.criado_por) or 'automático',
+            'item': it.nome_item,
+            'quantidade': it.quantidade,
+            'motivo': rotulo_motivo(motivo),
+        }
+        if corte_ativo(p.data_entrega):
+            pulados_corte.append(info)
+            continue
+        linhas.append(info)
+        if executar:
+            pedidos_tocados[p.id] = p
+            db.session.delete(it)
+
+    cancelados = []
+    if executar:
+        db.session.flush()
+        for p in pedidos_tocados.values():
+            db.session.expire(p, ['itens'])
+            p.modificado_em = agora()
+            if not p.itens:
+                p.status = 'cancelado'
+                cancelados.append(p.id)
+        db.session.commit()
+
+    return jsonify({
+        'ok': True,
+        'dry_run': not executar,
+        'linhas': linhas,
+        'pulados_corte': pulados_corte,
+        'total_itens': len(linhas),
+        'removidos': len(linhas) if executar else 0,
+        'pedidos_cancelados_por_ficarem_vazios': cancelados,
+        'nota': ('Só pedidos pendente/confirmado com entrega a partir de amanhã; '
+                 'o pedido de amanhã já fechado pelo corte das 12h não é tocado.'),
+        'como_executar': (None if executar
+                          else 'repita com ?executar=1 pra remover os itens'),
+    }), 200
+
+
 @main_bp.route('/admin/db-vacuum')
 @owner_required
 def db_vacuum():
