@@ -96,7 +96,8 @@ def marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None):
         # 'pago' quer dizer que este aviso já saiu). Sem tentativa identificada
         # não há o que estornar por aqui — o log acima registra.
         if pagamento and status_anterior not in ('pago', 'estornado'):
-            cancelada = any(p.status == 'cancelado' and p.motivo_cancelamento != 'pix_expirado'
+            cancelada = any(p.status == 'cancelado'
+                            and p.motivo_cancelamento not in MOTIVOS_EXPIRACAO_AUTOMATICA
                             for p in pedidos)
             situacao = ('estava CANCELADA e recebeu pagamento. Ela continua cancelada'
                         if cancelada else
