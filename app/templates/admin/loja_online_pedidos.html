@@ -5,7 +5,13 @@
 {% import '_admin_navigation.html' as adminnav with context %}
 <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
   <h1 class="page-title mb-0">Pedidos do site</h1>
-  {{ adminnav.produtos_site('btn btn-outline-primary d-inline-flex align-items-center gap-2') }}
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('main.loja_online_pedido_assistido') }}" class="btn btn-primary d-inline-flex align-items-center gap-2"
+       title="Montar um pedido em nome do cliente e enviar o link de pagamento (Pix/cartão)">
+      <i class="bi bi-plus-lg"></i> Criar pedido para cliente
+    </a>
+    {{ adminnav.produtos_site('btn btn-outline-primary d-inline-flex align-items-center gap-2') }}
+  </div>
 </div>
 <p class="text-muted mb-3">Consulte as compras dos clientes. Abra um pedido para conferir pagamento, itens e entrega.</p>
 
