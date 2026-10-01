@@ -1310,9 +1310,11 @@ Testes: `tests/test_seru_cron_ruido.py`.
   `executar_editar_pedido` (defesa em profundidade — preview re-enviado não
   fura). GRANDFATHER no editar: MP que JÁ está no pedido segue válida (web e
   copilot via `mp_ids_extras`; o GET do editar une as MPs do pedido à lista
-  do select — sem isso o REPLACE derrubaria o item). Receitas e produtos
-  seguem livres; `receber_mp`/`ajuste_estoque` continuam vendo TODAS as MPs
-  (`_resolver_mp` intocado). Testes: `tests/test_mp_pedivel.py`.
+  do select — sem isso o REPLACE derrubaria o item). Receitas seguem
+  livres; Produto tem trava própria desde 01/10/2026 (só cesta que a
+  indústria monta — ver "Pedido loja→indústria só do que a indústria
+  produz" no topo); `receber_mp`/`ajuste_estoque` continuam vendo TODAS as
+  MPs (`_resolver_mp` intocado). Testes: `tests/test_mp_pedivel.py`.
 - **Componente de cesta/sub-receita: FK manda, nome e so fallback (03/07/2026)**:
   `ProdutoItem.item_nome` e `ReceitaIngrediente.ingrediente_nome` podem ficar
   com grafia ANTIGA apos rename — todo lookup (custo, agregacao) deve usar
