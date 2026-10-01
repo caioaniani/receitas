@@ -168,6 +168,10 @@ class EstoqueLoja(db.Model):
     # Tradicional fresco da Nebraska (dono 03/09/2026).
     reposicao_por_venda_diaria = db.Column(
         db.Boolean, nullable=False, default=False, server_default='false')
+    # As tres regras acima so valem em linha de RECEITA ou MP liberada: em
+    # linha de Produto ficam gravadas sem efeito, porque o motor venda+estoque
+    # nao sugere Produto (dono 01/10/2026 — a industria nao envia revenda;
+    # cesta repoe pelos componentes). Ver app/services/itens_industria.py.
 
     loja = db.relationship('Loja')
     receita = db.relationship('Receita')
