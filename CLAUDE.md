@@ -33,8 +33,13 @@ rascunhos automáticos do cron (`criado_por None`) e as lojas confirmaram;
 humanos pediram Produto simples duas vezes em 180 dias (1 Coca-Cola em
 junho, 1 Salada de Frutas 100g em agosto). A porta era o contrato
 "Produto simples participa da reposição" (motor venda+estoque com
-`produtos_diretos`/token `prod:<id>` via `cestas.produto_reposicao_direta`),
-que esta decisão SUBSTITUI.
+`produtos_diretos`/token `prod:<id>` via `cestas.produto_reposicao_direta`,
+auditoria de 22/09/2026 — `docs/correcoes-motor-2026-09-22.md:10`), que
+esta decisão SUBSTITUI. Dívida registrada na mesma revisão: a trava de MP
+está COPIADA em seis pontos (`pedidos/routes._mps_pediveis`/
+`_mps_nao_pediveis`, três em `copilot.py`, uma em `previsao_producao`) e
+só `itens_industria.mp_fornecida_pela_industria` olha `arquivada_em` —
+centralizar é decisão separada.
 
 Régua canônica em `app/services/itens_industria.py` (fonte única de todas
 as camadas): **Receita** ativa entra; **MP** só a liberada no checkbox
