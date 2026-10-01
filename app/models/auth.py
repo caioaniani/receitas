@@ -141,6 +141,19 @@ class Usuario(UserMixin, db.Model):
         """Pedidos, Estoque Loja, Relatorio."""
         return self.is_admin() or self.is_gerente()
 
+    def pode_pedido_assistido(self):
+        """Criar pedido do site em nome do cliente e mandar o link de
+        pagamento (01/10/2026). MESMO predicado do decorator
+        `pedido_assistido_required` (capacidade editável
+        `web_pedido_assistido`) — os templates mostram o botão só a quem a
+        rota deixa entrar. Papéis fixos de consulta/treino ficam fora."""
+        if self.is_observador() or self.is_relatorio_loja() or self.somente_treino:
+            return False
+        if self.is_admin():
+            return True
+        from app.services import permissoes
+        return permissoes.pode(self.papel or '', 'web_pedido_assistido')
+
     def pode_checklist(self):
         """Permissão efetiva, inclusive liberação individual pelo checklist."""
         if self.is_observador() or self.is_relatorio_loja():
