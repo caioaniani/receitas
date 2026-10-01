@@ -236,7 +236,7 @@ def test_sugerir_pedido_post_recusa_produto_de_revenda(
     agua = _produto('Água com gás')
     client = app.test_client()
     _login(client, admin_user)
-    r = client.post(f'/pedidos/sugerir/{loja.id}', data={
+    r = client.post(f'/pedidos/lojas/{loja.id}/sugerir-pedido', data={
         'data_entrega': (hoje() + timedelta(days=1)).isoformat(),
         'item_ref[]': f'produto:{agua.id}', 'item_qtd[]': '2'})
     assert r.status_code == 302
