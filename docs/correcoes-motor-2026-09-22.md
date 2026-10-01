@@ -12,6 +12,6 @@ A auditoria encontrou divergências entre saldo atual, pedidos sugeridos, previs
 
 ## Validação
 
-Regressões cobrem saldo líquido de hoje e estornos, entrega recebida/pendente, fornada especial, calendário, demanda firme, identidade de Produtos, criação/edição/remoção pela grade, proteção de pedidos humanos, recuperação de ordens e cópia das regras de receitas. Testes de concorrência usam duas sessões e aquisição de trava simulada; a trava PostgreSQL reutiliza o mecanismo existente do estoque.
+Regressões cobrem saldo líquido de hoje e estornos, entrega recebida/pendente, fornada especial, calendário, demanda firme, identidade de Produtos (substituído em 01/10/2026: Produto fora da grade), criação/edição/remoção pela grade, proteção de pedidos humanos, recuperação de ordens e cópia das regras de receitas. Testes de concorrência usam duas sessões e aquisição de trava simulada; a trava PostgreSQL reutiliza o mecanismo existente do estoque.
 
 Sem mudança de schema. Os efeitos seguem as próximas rodadas normais; a publicação não recalcula retroativamente pedidos humanos nem ordens em execução hoje. Uma revisão dos registros reais é necessária para identificar eventuais efeitos anteriores à correção.
