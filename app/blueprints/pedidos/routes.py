@@ -111,6 +111,25 @@ def _mps_pediveis():
             .order_by(MateriaPrima.nome))
 
 
+def _motivo_sem_reposicao(produto):
+    """Texto da tela de estoque da loja pra linha de Produto: nenhuma regra de
+    reposição (mínimo/diário/fresco) se aplica, porque o motor venda+estoque
+    não sugere Produto — a indústria não envia revenda (dono 01/10/2026) e
+    cesta repõe pelos componentes."""
+    from app.services.itens_industria import (
+        MOTIVO_INATIVO,
+        MOTIVO_REVENDA,
+        motivo_produto_nao_fornecido,
+    )
+    motivo = motivo_produto_nao_fornecido(produto)
+    if motivo == MOTIVO_INATIVO:
+        return 'Produto inativo: a reposição não se aplica.'
+    if motivo == MOTIVO_REVENDA:
+        return ('Produto de revenda: a indústria não produz nem envia, '
+                'não entra no pedido para a indústria.')
+    return 'Cesta montada com componentes: configure a reposição de cada componente.'
+
+
 def _mps_nao_pediveis(itens_norm):
     """Nomes das MPs em `itens_norm` que NÃO estão liberadas pra pedido de
     loja. Lista vazia = tudo certo. Usada na validação server-side do POST
@@ -2345,13 +2364,11 @@ def estoque_loja():
                       joinedload(EstoqueLoja.produto).selectinload(Produto.itens),
                       joinedload(EstoqueLoja.materia_prima))
              .all()) if loja_id else []
-    from app.services.cestas import produto_reposicao_direta
+    # Linha de Produto não tem regra de reposição: a indústria não envia
+    # produto de revenda (dono 01/10/2026) e cesta repõe pelos componentes.
     regras_reposicao_bloqueadas = {
-        el.id: ('Produto inativo: ative o cadastro para configurar a reposição.'
-                if el.produto and not el.produto.ativo else
-                'Cesta montada com componentes: configure a reposição de cada componente.')
+        el.id: _motivo_sem_reposicao(el.produto)
         for el in itens if el.produto_id and not el.receita_id
-        and not produto_reposicao_direta(el.produto)
     }
     lojas = _lojas_operacionais()
     receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all() \
@@ -3421,7 +3438,6 @@ def estoque_loja_minimos():
             return 'pula'
         return v if v > 0 else None
 
-    from app.services.cestas import produto_reposicao_direta
     alterados = 0
     bloqueados = []
     for i, eid in enumerate(eids):
@@ -3431,8 +3447,10 @@ def estoque_loja_minimos():
         novo = _piso(minimos, i)
         novo_d = _piso(diarios, i)
         novo_venda_dia = eid in venda_diaria_ids
-        if (el.produto_id and not el.receita_id
-                and not produto_reposicao_direta(el.produto)):
+        # Linha de Produto nunca ganha regra nova: o motor venda+estoque nao
+        # sugere Produto (revenda ou cesta) — dono 01/10/2026. Regra antiga
+        # fica gravada sem efeito; so o que mudaria e recusado com aviso.
+        if el.produto_id and not el.receita_id:
             if ((novo != 'pula' and novo != el.estoque_minimo)
                     or (novo_d != 'pula' and novo_d != el.pedido_minimo_diario)
                     or novo_venda_dia != bool(el.reposicao_por_venda_diaria)):
