@@ -210,139 +210,25 @@
     });
 
   // ── CEP → autofill (reusa /loja/api/cep, mesmo do checkout) ────────────
-  var cep = document.getElementById('endereco_cep');
-  var cepStatus = document.getElementById('cep-status');
-  function buscarCep() {
-    var d = (cep.value || '').replace(/\D/g, '');
-    if (d.length !== 8) return;
-    cepStatus.textContent = 'buscando…';
-    cepStatus.className = 'form-text text-muted';
-    fetch('/loja/api/cep/' + d).then(function (r) {
-      return r.json().then(function (j) { return { ok: r.ok, j: j }; });
-    }).then(function (res) {
-      if (res.ok && res.j.ok) {
-        if (res.j.logradouro) document.getElementById('endereco_logradouro').value = res.j.logradouro;
-        if (res.j.bairro) document.getElementById('endereco_bairro').value = res.j.bairro;
-        if (res.j.cidade) document.getElementById('endereco_cidade').value = res.j.cidade;
-        if (res.j.uf) document.getElementById('endereco_uf').value = res.j.uf;
-        cepStatus.textContent = 'endereço preenchido';
-        cepStatus.className = 'form-text text-success';
-        document.getElementById('endereco_numero').focus();
-        carregarJanelas();          // endereço mudou → recalcula horários
-      } else {
-        cepStatus.textContent = res.j.erro || 'confira o CEP';
-        cepStatus.className = 'form-text text-warning';
-      }
-    }).catch(function () {
-      cepStatus.textContent = 'não deu pra consultar — preencha à mão';
-      cepStatus.className = 'form-text text-warning';
-    });
-  }
-  cep.addEventListener('input', function () {
-    var d = cep.value.replace(/\D/g, '').slice(0, 8);
-    cep.value = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
-    if (d.length === 8) buscarCep();
+  PedidoForm.cepAutofill({
+    cep: document.getElementById('endereco_cep'),
+    status: document.getElementById('cep-status'),
+    campos: {
+      logradouro: document.getElementById('endereco_logradouro'),
+      bairro: document.getElementById('endereco_bairro'),
+      cidade: document.getElementById('endereco_cidade'),
+      uf: document.getElementById('endereco_uf'),
+      numero: document.getElementById('endereco_numero')
+    },
+    onPreenchido: carregarJanelas       // endereço mudou → recalcula horários
   });
-  cep.addEventListener('blur', buscarCep);
 
-  // ── Itens: combobox typeahead sobre o catálogo embutido ───────────────
-  var lista = document.getElementById('itens-lista');
-  var tpl = document.getElementById('tpl-item');
-
-  function montarCombo(row) {
-    var input = row.querySelector('.combo-input');
-    var hidden = row.querySelector('.combo-val');
-    var menu = row.querySelector('.combo-menu');
-    function fechar() { menu.style.display = 'none'; }
-    function abrir(termo) {
-      termo = (termo || '').trim().toLowerCase();
-      var achados = CATALOGO.filter(function (it) {
-        return !termo || it.nome.toLowerCase().indexOf(termo) !== -1;
-      }).slice(0, 40);
-      if (!achados.length) { fechar(); return; }
-      menu.innerHTML = achados.map(function (it) {
-        var preco = it.preco ? ' <span class="text-muted small">R$ ' +
-          it.preco.toFixed(2).replace('.', ',') + '</span>' : '';
-        return '<button type="button" class="list-group-item list-group-item-action py-1 combo-opt" ' +
-          'data-val="' + it.kind + ':' + it.id + '" data-nome="' +
-          it.nome.replace(/"/g, '&quot;') + '">' + it.nome + preco + '</button>';
-      }).join('');
-      menu.style.display = '';
-    }
-    input.addEventListener('input', function () {
-      hidden.value = '';           // digitou = precisa RE-escolher (sem lixo)
-      syncMenu(row, '');
-      abrir(input.value);
-    });
-    input.addEventListener('focus', function () { abrir(input.value); });
-    input.addEventListener('blur', function () { setTimeout(fechar, 150); });
-    menu.addEventListener('mousedown', function (e) {
-      var opt = e.target.closest('.combo-opt');
-      if (!opt) return;
-      e.preventDefault();
-      hidden.value = opt.getAttribute('data-val');
-      input.value = opt.getAttribute('data-nome');
-      syncMenu(row, hidden.value);
-      fechar();
-    });
-  }
-
-  // ── Montador de MENU (Caixa de Mini): escolher os minis como no site.
-  //    Total EXATO obrigatório; começa na pré-seleção do cadastro; a escolha
-  //    viaja como JSON {produto_item_id: qtd} no hidden item_comp[]. O
-  //    servidor re-valida tudo (loja_menu.normalizar/validar). ─────────────
-  function syncMenu(row, val) {
-    var box = row.querySelector('.menu-box');
-    var compVal = row.querySelector('.menu-comp-val');
-    var regras = val && MENUS[val];
-    if (!regras) {
-      box.style.display = 'none';
-      box.innerHTML = '';
-      compVal.value = '';
-      return;
-    }
-    var teto = regras.teto || regras.total;
-    box.innerHTML =
-      '<div class="small fw-semibold mb-1">Monte a caixa — exatamente ' +
-      regras.total + ' unidades <span class="menu-count badge bg-secondary"></span></div>' +
-      regras.slots.map(function (s) {
-        var preco = s.preco != null
-          ? ' <span class="text-muted">R$ ' + s.preco.toFixed(2).replace('.', ',') + '</span>' : '';
-        return '<div class="d-flex align-items-center gap-2 mb-1">' +
-          '<input type="number" class="form-control form-control-sm menu-slot" ' +
-          'style="width:5.5rem" min="0" max="' + teto + '" step="1" ' +
-          'value="' + (s.padrao || 0) + '" data-pi="' + s.pi_id + '">' +
-          '<span class="small">' + s.nome.replace(/</g, '&lt;') + preco + '</span></div>';
-      }).join('');
-    box.style.display = '';
-    function recalc() {
-      var soma = 0, comp = {};
-      box.querySelectorAll('.menu-slot').forEach(function (inp) {
-        var q = parseInt(inp.value, 10) || 0;
-        soma += q;
-        if (q > 0) comp[inp.getAttribute('data-pi')] = q;
-      });
-      var badge = box.querySelector('.menu-count');
-      badge.textContent = soma + '/' + regras.total;
-      badge.className = 'menu-count badge ' +
-        (soma === regras.total ? 'bg-success' : 'bg-danger');
-      compVal.value = JSON.stringify(comp);
-      row.dataset.menuOk = (soma === regras.total) ? '1' : '';
-      row.dataset.menuNome = row.querySelector('.combo-input').value;
-    }
-    box.addEventListener('input', recalc);
-    recalc();
-  }
-  function addItem() {
-    lista.appendChild(tpl.content.cloneNode(true));
-    montarCombo(lista.lastElementChild);
-  }
-  document.getElementById('add-item').addEventListener('click', addItem);
-  lista.addEventListener('click', function (e) {
-    if (e.target.classList.contains('rm-item')) {
-      var row = e.target.closest('.item-row');
-      if (row) row.remove();
-    }
+  // ── Itens: typeahead + montador de MENU (partial compartilhado) ────────
+  var itens = PedidoForm.montarItens({
+    lista: document.getElementById('itens-lista'),
+    addBtn: document.getElementById('add-item'),
+    catalogo: CATALOGO, menus: MENUS,
+    mostrarFatiado: false, mostrarPreco: false
   });
 
   // ── Validação no submit (todos obrigatórios) ──────────────────────────
@@ -364,17 +250,9 @@
         }
       });
     }
-    var temItem = Array.prototype.some.call(
-      lista.querySelectorAll('.combo-val'), function (h) { return h.value; });
-    if (!temItem) faltas.push('ao menos um item');
+    if (!itens.temItem()) faltas.push('ao menos um item');
     // Menu com total errado não sai da tela (o servidor recusaria igual).
-    lista.querySelectorAll('.item-row').forEach(function (row) {
-      var val = row.querySelector('.combo-val').value;
-      if (val && MENUS[val] && row.dataset.menuOk !== '1') {
-        faltas.push('a montagem de "' + (row.dataset.menuNome || val) +
-                    '" (tem que somar ' + MENUS[val].total + ')');
-      }
-    });
+    faltas = faltas.concat(itens.menusInvalidos());
     if (faltas.length) {
       e.preventDefault();
       erroBox.textContent = 'Faltou preencher: ' + faltas.join(', ') + '.';
@@ -384,7 +262,7 @@
   });
 
   syncModo();
-  addItem(); // começa com uma linha
+  itens.add(); // começa com uma linha
 })();
 </script>
 {% endblock %}
