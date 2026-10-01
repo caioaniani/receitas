@@ -5812,32 +5812,9 @@ def loja_online_divulgacao():
 
     if request.method == 'POST':
         modo = (request.form.get('modo_entrega') or 'agendada').strip()
-        # Itens: pares kind:id[] + qtd[] (linhas dinamicas no form).
-        alvos = request.form.getlist('item_alvo[]')     # "receita:12"
-        qtds = request.form.getlist('item_qtd[]')
-        # Composicao do MENU (montador dos minis, 20/08/2026): um JSON
-        # {produto_item_id: qtd} por linha, '' nas linhas comuns. O service
-        # re-valida tudo (normalizar/validar/preco) — aqui so desserializa.
-        comps = request.form.getlist('item_comp[]')
-        itens = []
-        for i, (alvo, q) in enumerate(zip(alvos, qtds)):
-            alvo = (alvo or '').strip()
-            if not alvo or ':' not in alvo:
-                continue
-            kind, _, sid = alvo.partition(':')
-            comp = None
-            if i < len(comps) and (comps[i] or '').strip():
-                try:
-                    bruto = json.loads(comps[i])
-                    if isinstance(bruto, dict):
-                        comp = bruto
-                except (TypeError, ValueError):
-                    comp = None
-            try:
-                itens.append({'kind': kind, 'id': int(sid),
-                              'qtd': int(q or 0), 'comp': comp})
-            except (TypeError, ValueError):
-                continue
+        # Itens: pares kind:id[] + qtd[] (+ comp JSON do montador de MENU,
+        # 20/08/2026) — parser compartilhado com o pedido assistido.
+        itens = _itens_do_form(request.form)
         data_str = (request.form.get('data_entrega') or '').strip()
         try:
             data_ent = _date.fromisoformat(data_str) if data_str else None
