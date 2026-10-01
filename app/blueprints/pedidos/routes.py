@@ -592,6 +592,16 @@ def novo():
                   + ', '.join(bloqueadas) + '. Um admin pode liberar no '
                   'Banco de MPs (checkbox "sugerir pedido loja").', 'warning')
             return formulario()
+        # Produto de revenda (sem composição) não entra: a indústria não o
+        # produz (dono 01/10/2026). Mesma defesa contra POST direto.
+        from app.services.itens_industria import (
+            mensagem_produtos_nao_pediveis,
+            produtos_nao_pediveis,
+        )
+        prod_bloqueados = produtos_nao_pediveis(itens_norm)
+        if prod_bloqueados:
+            flash(mensagem_produtos_nao_pediveis(prod_bloqueados), 'warning')
+            return formulario()
 
         # Item em g/ml com lote definido só aceita MÚLTIPLO do lote
         # (iogurte 3000 / granola 5000 — dono 18/08/2026, caso "potes").
