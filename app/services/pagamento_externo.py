@@ -20,11 +20,12 @@ def pode_confirmar(pedido):
 
 
 def _pedido_permite(pedido):
+    from app.models.loja_online import MOTIVOS_EXPIRACAO_AUTOMATICA
     return bool(
         not pedido.divulgacao and not pedido.pago_em
         and (pedido.status == 'aguardando_pagamento'
              or (pedido.status == 'cancelado'
-                 and pedido.motivo_cancelamento == 'pix_expirado'))
+                 and pedido.motivo_cancelamento in MOTIVOS_EXPIRACAO_AUTOMATICA))
     )
 
 
