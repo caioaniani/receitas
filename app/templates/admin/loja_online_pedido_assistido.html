@@ -32,8 +32,8 @@
     e fica <strong>aguardando pagamento</strong>: você envia ao cliente o
     <strong>link em que ele mesmo paga com Pix ou cartão</strong>. Depois do pagamento,
     o pedido segue o fluxo normal (painel de entregas, nota fiscal, e-mails).
-    O link vale por até {{ prazo_horas }} h (nunca depois da véspera da entrega); se não for pago,
-    o pedido é cancelado sozinho e a reserva de estoque liberada.
+    O link vale por até {{ prazo_horas }} h (nunca depois da véspera da entrega; express: {{ prazo_express_min }} min);
+    se não for pago, o pedido é cancelado sozinho e a reserva de estoque liberada.
 </div>
 
 {% if erros %}
