@@ -160,9 +160,19 @@ STATUS_PEDIDO_ONLINE = (
 # PedidoOnline.motivo_cancelamento) -> rotulo legivel pra UI.
 MOTIVOS_CANCELAMENTO = {
     'pix_expirado': 'Pix não pago (reserva expirou)',
+    # Pedido ASSISTIDO (01/10/2026): o link enviado pela equipe venceu sem
+    # pagamento — o cron de expiração grava este motivo em vez de
+    # 'pix_expirado' (nunca houve Pix). Mesma classe: expiração AUTOMÁTICA.
+    'link_expirado': 'Link de pagamento não pago (prazo venceu)',
     'reembolso': 'Reembolsado pelo admin',
     'cancelado_admin': 'Cancelado manualmente (admin)',
 }
+# Cancelamentos AUTOMÁTICOS por prazo (não decisão humana): um pagamento que
+# chega depois REABRE o pedido como pago (`loja_pagamento._marcar_pago`,
+# `kits_pagamento.marcar_pago`) e o dono pode confirmar recebimento externo
+# (`pagamento_externo.pode_confirmar`). Fonte única — nunca comparar com a
+# string 'pix_expirado' solta.
+MOTIVOS_EXPIRACAO_AUTOMATICA = ('pix_expirado', 'link_expirado')
 
 
 class PedidoOnline(db.Model):
