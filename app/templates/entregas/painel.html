@@ -197,6 +197,13 @@
              status pega '.at-topo .filtros button' e engoliria o clique. -->
         <button type="button" id="at-chamar" class="chamar-novo"
                 title="Abre conversa de WhatsApp com um cliente SEM pedido (ex.: venda barrada no site). Manda o template aprovado da Meta.">💬 Chamar por telefone</button>
+        {% if current_user.is_authenticated and current_user.pode_pedido_assistido() %}
+        {# Pedido ASSISTIDO (01/10/2026): o atendente monta o pedido do cliente
+           e manda o link de pagamento. Também FORA do span .filtros. #}
+        <a href="{{ url_for('main.loja_online_pedido_assistido') }}" target="_blank" rel="noopener"
+           class="chamar-novo" id="at-criar-pedido"
+           title="Monta um pedido do site em nome do cliente e gera o link em que ele paga (Pix/cartão).">🧾 Criar pedido para cliente</a>
+        {% endif %}
         <span class="att" id="at-att"></span>
       </div>
 
