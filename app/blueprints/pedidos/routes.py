@@ -409,12 +409,13 @@ def buscar_itens():
     # Produto só se a indústria o fornece (cesta montada de receita/MP
     # liberada). Revenda comprada pronta (água, Coca-Cola, adicional) fica
     # fora — decisão do dono 01/10/2026; regra em itens_industria.
-    from sqlalchemy.orm import selectinload
-
-    from app.services.itens_industria import produto_fornecido_pela_industria
+    from app.services.itens_industria import (
+        opcoes_composicao,
+        produto_fornecido_pela_industria,
+    )
     out += [{'id': f'p_{p.id}', 'nome': p.nome, 'em_gramas': False}
             for p in (Produto.query.filter_by(ativo=True)
-                      .options(selectinload(Produto.itens))
+                      .options(*opcoes_composicao())
                       .order_by(Produto.nome).all())
             if _casa(p.nome) and produto_fornecido_pela_industria(p)]
     out += [{'id': f'mp_{m.id}', 'nome': m.nome,
