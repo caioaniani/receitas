@@ -3473,9 +3473,10 @@ def estoque_loja_minimos():
     else:
         flash('Nenhuma regra de reposição alterada.', 'info')
     if bloqueados:
-        flash('Regras não alteradas para: %s. Cestas usam as regras dos '
-              'componentes; produtos inativos precisam ser ativados primeiro.'
-              % ', '.join(bloqueados), 'warning')
+        flash('Regras não alteradas para: %s. Linha de produto não tem regra '
+              'de reposição: a indústria não envia produto de revenda, cestas '
+              'usam as regras dos componentes e produto inativo não entra no '
+              'pedido.' % ', '.join(bloqueados), 'warning')
     return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
 
 
