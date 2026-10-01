@@ -5882,36 +5882,14 @@ def loja_online_divulgacao_janelas():
     """Janelas de horário válidas pra uma data/modo/endereço — MESMA regra do
     site (`loja_checkout.janelas_disponiveis`): agendada corta a 1ª janela da
     manhã quando o endereço está longe (distância do `consultar_frete`);
-    retirada não tem distância. Alimenta o select do form (JS)."""
-    from app.services import loja_checkout
+    retirada não tem distância. Alimenta o select do form (JS). Helper
+    compartilhado com a cotação do pedido assistido (`_cotacao_endereco`)."""
     modo = (request.args.get('modo') or 'agendada').strip()
     data = (request.args.get('data') or '').strip() or None
-    dist = None
-    aviso = None
-    if modo == 'agendada':
-        partes = [request.args.get('logradouro'), request.args.get('numero'),
-                  request.args.get('bairro'), request.args.get('cidade')]
-        geo = ', '.join(p.strip() for p in partes if (p or '').strip())
-        cep = (request.args.get('cep') or '').strip()
-        if cep and cep not in geo:
-            geo = ('%s, %s' % (geo, cep)) if geo else cep
-        if geo:
-            try:
-                from app.services import frete
-                # Chamada enquanto se digita: cota do preview, nunca a do
-                # checkout (revisão 28/09/2026).
-                r = frete.consultar_frete(geo, canal=frete.CANAL_PREVIEW)
-                if r.get('ok'):
-                    dist = r.get('distancia_km')
-                    if r.get('fora_area'):
-                        aviso = ('endereço fora do raio de entrega do site '
-                                 '(%.1f km) — confira com a equipe'
-                                 % (dist or 0))
-            except Exception:  # noqa: BLE001 — fail-open: sem dist, todas as janelas
-                current_app.logger.warning('divulgacao janelas: frete falhou',
-                                           exc_info=True)
-    janelas = loja_checkout.janelas_disponiveis(modo, data, distancia_km=dist)
-    return jsonify(ok=True, janelas=janelas, distancia_km=dist, aviso=aviso)
+    cot = _cotacao_endereco('retirada' if modo == 'retirada' else 'agendada',
+                            data, request.args)
+    return jsonify(ok=True, janelas=cot['janelas'],
+                   distancia_km=cot['distancia_km'], aviso=cot['aviso'])
 
 
 @main_bp.route('/admin/loja-online/divulgacao/<codigo>/cancelar',
