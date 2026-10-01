@@ -2788,6 +2788,17 @@ def executar_criar_pedido(params, user):
                 f'Materia(s)-prima(s) nao liberada(s) pra pedido de loja: '
                 f'{nomes}. Um admin pode liberar no Banco de MPs '
                 f'(checkbox "sugerir pedido loja").')}
+    # Produto de revenda (sem composicao) nao entra: a industria nao o
+    # produz (dono 01/10/2026). O resolver ja filtra; preview re-enviado
+    # nao fura.
+    from app.services.itens_industria import (
+        mensagem_produtos_nao_pediveis,
+        produtos_nao_pediveis,
+    )
+    prod_bloqueados = produtos_nao_pediveis(itens_norm)
+    if prod_bloqueados:
+        return {'ok': False,
+                'erro': mensagem_produtos_nao_pediveis(prod_bloqueados)}
 
     # Item em g/ml com lote definido so aceita MULTIPLO do lote (iogurte
     # 3000 / granola 5000 — dono 18/08/2026, caso "potes"). Espelho da
