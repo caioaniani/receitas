@@ -509,6 +509,63 @@ class ReservaEstoqueSite(db.Model):
                 f'{self.alvo_id} x{self.quantidade}>')
 
 
+# Como o cliente fez o pedido que a equipe lançou por ele (informativo).
+CANAIS_PEDIDO_ASSISTIDO = (
+    ('whatsapp', 'WhatsApp'),
+    ('telefone', 'Telefone'),
+    ('balcao', 'Balcão da loja'),
+    ('instagram', 'Instagram'),
+    ('outro', 'Outro'),
+)
+
+
+class PedidoOnlineAssistido(db.Model):
+    """Marcador de PEDIDO ASSISTIDO (01/10/2026, pedido do dono: "o operador
+    faz o pedido para o cliente e envia para ele a parte que ele insere os
+    dados para pagamento ou pix").
+
+    O pedido em si é um `PedidoOnline` COMUM, criado pelo mesmo motor do
+    checkout (`loja_checkout.criar_pedido`): nasce `aguardando_pagamento`,
+    reserva estoque, e o cliente paga pelo link público
+    `/loja/pedido/<codigo>/pagamento` (Pix ou cartão) — daí em diante
+    (webhook, baixa, NF, painel) nada o distingue de um pedido do site.
+    Esta tabela guarda só o que o pedido do site NÃO tem: quem lançou, por
+    qual canal o cliente pediu, até quando o link vale e se o e-mail com o
+    link saiu. Tabela NOVA via `db.create_all` — sem ALTER em
+    `pedido_online` (procedimento de 2 commits evitado de propósito).
+    """
+    __tablename__ = 'pedido_online_assistido'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_id = db.Column(
+        db.Integer, db.ForeignKey('pedido_online.id', ondelete='CASCADE'),
+        nullable=False, unique=True, index=True)
+    operador_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                            nullable=True, index=True)
+    # Até quando o link de pagamento vale. Espelha `PedidoOnline.
+    # reserva_expira_em` no momento da criação: é o cron de expiração da
+    # reserva (`loja_estoque_reserva.liberar_expirados`) que cancela o
+    # pedido não pago — fonte única, nenhum segundo relógio.
+    prazo_pagamento = db.Column(db.DateTime, nullable=False)
+    canal = db.Column(db.String(20), nullable=True)   # CANAIS_PEDIDO_ASSISTIDO
+    observacao = db.Column(db.Text, nullable=True)    # nota interna da equipe
+    email_enviado_em = db.Column(db.DateTime, nullable=True)
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+
+    pedido = db.relationship(
+        'PedidoOnline',
+        backref=db.backref('assistido', uselist=False, lazy='select'))
+    operador = db.relationship('Usuario')
+
+    @property
+    def canal_label(self):
+        return dict(CANAIS_PEDIDO_ASSISTIDO).get(self.canal or '', self.canal or '')
+
+    def __repr__(self):
+        return (f'<PedidoOnlineAssistido ped={self.pedido_id} '
+                f'op={self.operador_id} ate={self.prazo_pagamento}>')
+
+
 class ClienteResetSenha(db.Model):
     """Token de recuperação de senha do cliente (Fase 6 — PR 3).
 
