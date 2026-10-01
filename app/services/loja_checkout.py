@@ -1014,7 +1014,10 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
         if not cep_invalido:
             valor, dist, end_norm, erro_frete = (
                 frete_validado if frete_validado is not None
-                else _frete_para(modo, geo, base=base, contato=_contato))
+                else _frete_para(modo, geo, base=base, contato=_contato,
+                                 alertar=alertar_dono,
+                                 origem_sensor=('checkout' if alertar_dono
+                                                else 'assistido')))
             if erro_frete:
                 erros.append(erro_frete)
             else:
