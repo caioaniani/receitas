@@ -535,7 +535,9 @@ def pedidos_semana_gerar():
             qtd = int(valor or 0)
             data_ent = date.fromisoformat(data_s)
             # Item: int puro = receita (formato original); 'mp:<id>' =
-            # materia-prima; 'prod:<id>' = produto estocado diretamente.
+            # materia-prima; 'prod:<id>' = produto (o motor nao emite mais
+            # desde 01/10/2026 — o token so chega de form antigo/forjado e a
+            # validacao da grade recusa revenda; qtd 0 segue removendo item).
             if item_s.startswith('mp:'):
                 item = {'materia_prima_id': int(item_s[3:])}
             elif item_s.startswith('prod:'):
