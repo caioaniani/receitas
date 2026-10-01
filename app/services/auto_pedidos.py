@@ -314,6 +314,9 @@ def _gerar_pedidos_automaticos():
     # na grade com qtd 0 explícita (o _sincronizar_itens remove), e dia cuja
     # sugestão zerou POR INTEIRO cancela o rascunho (estoque subiu e cobre —
     # deixar os 50 velhos congelarem no corte viraria produção desnecessária).
+    # A chave ('p', produto_id) sobrevive aqui SÓ por isso: o motor não emite
+    # Produto desde 01/10/2026 (dono: só o que a indústria produz), então
+    # revenda já gravada num rascunho do cron entra com qtd 0 e sai sozinha.
     rascunhos = _rascunhos_por_dia(datas_ressinc)
     cancelados_zero = 0
     for (loja_id, data_ent), ped in rascunhos.items():
