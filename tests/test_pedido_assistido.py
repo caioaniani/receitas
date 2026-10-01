@@ -545,11 +545,17 @@ def test_cotacao_devolve_janelas_e_frete(app, cliente, admin_user):
                              'fora_area': False, 'valor': 35.0}) as cf:
         aj = cliente.get('/admin/loja-online/pedido-assistido/cotacao'
                          '?modo=agendada&data=' + d +
-                         '&logradouro=Rua+X&numero=1&cidade=SP').get_json()
+                         '&logradouro=Rua+X&numero=1&bairro=Moema&cidade=SP'
+                         '&uf=SP&cep=04077-000&complemento=apto+3').get_json()
     assert aj['ok'] and '08:00–09:00' not in aj['janelas']
     assert aj['valor'] == 35.0 and aj['distancia_km'] == 20.0
-    from app.services import frete
+    from app.services import frete, loja_checkout
     assert cf.call_args.kwargs.get('canal') == frete.CANAL_PREVIEW
+    # MESMA string de geocode do criar_pedido (sem complemento, com UF/CEP)
+    assert cf.call_args[0][0] == loja_checkout.texto_de_geocode({
+        'logradouro': 'Rua X', 'numero': '1', 'bairro': 'Moema',
+        'cidade': 'SP', 'uf': 'SP', 'cep': '04077-000', 'complemento': 'apto 3'})[0]
+    assert 'apto' not in cf.call_args[0][0]
 
 
 def test_reenviar_emails_manda_o_do_link_no_assistido(app, cliente, admin_user):
