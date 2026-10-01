@@ -218,6 +218,10 @@
            class="sidebar-link {% if request.path.startswith('/admin/loja-online/pedidos') %}active{% endif %}">
             Pedidos do site
         </a>
+        <a href="{{ url_for('main.loja_online_pedido_assistido') }}"
+           class="sidebar-link {% if request.path.startswith('/admin/loja-online/pedido-assistido') %}active{% endif %}">
+            🧾 Criar pedido para cliente
+        </a>
         {% endif %}
         {% if current_user.pode_divulgacao() %}
         <a href="{{ url_for('main.loja_online_divulgacao') }}"
