@@ -48,7 +48,7 @@ def test_picker_do_novo_oferece_produtos(app, admin_user, loja, catalogo, cesta,
     assert ('p_%d' % catalogo['produto'].id) in ids
 
 
-def test_novo_cria_pedido_com_produto(app, admin_user, loja, catalogo, cliente, pedidos_antes_do_corte):
+def test_novo_cria_pedido_com_produto(app, admin_user, loja, catalogo, cesta, cliente, pedidos_antes_do_corte):
     from app.models import PedidoItem
     from app.utils import hoje
     _login(cliente)
