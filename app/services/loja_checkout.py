@@ -1154,8 +1154,9 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
             # pego pelo teste de test_loja_alerta no CI).
             try:
                 from app.services import loja_alerta
-                loja_alerta.alertar_esgotado(
-                    nome, telefone, email, esgotados, data_entrega)
+                if alertar_dono:
+                    loja_alerta.alertar_esgotado(
+                        nome, telefone, email, esgotados, data_entrega)
             except Exception:  # noqa: BLE001
                 pass
 
