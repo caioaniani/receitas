@@ -195,7 +195,7 @@ def sugerir_pedido_loja_ia(loja_id, *, horizonte_dias=7, janela_semanas=6,
     """Proposta da IA para o pedido de UMA loja, no formato da grade da
     tela de pedidos da semana. `modo` escolhe a BASE (o motor da tela que
     chamou): 'media' (/pedidos-semana/media, itens por `receita_id`) ou
-    'venda' (/pedidos-semana/estoque, itens por `item_key` — inclui MPs e produtos;
+    'venda' (/pedidos-semana/estoque, itens por `item_key` — inclui MPs liberadas;
     `seguranca_pct` e o colchao da tela). O outro motor entra como
     contraprova no contexto. Devolve
     {'itens': [{receita_id|item_key, por_dia, motivo, mudou, aviso}],
