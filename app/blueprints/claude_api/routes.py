@@ -2646,6 +2646,27 @@ def _num(v):
     return f if math.isfinite(f) else None
 
 
+@claude_api_bp.route('/pedidos-revenda')
+@_claude_auth_required
+def pedidos_revenda():
+    """Itens de Produto que a industria NAO fornece (revenda sem composicao,
+    cesta so de revenda, inativo) dentro de pedidos loja->industria
+    pendente/confirmado com entrega a partir de amanha — a MESMA lista do
+    dry-run de `GET /admin/pedidos-revenda` (owner), para conferir de fora
+    antes e depois de o dono executar a limpeza (01/10/2026). Read-only:
+    nunca remove nada. `sob_corte` = pedido de amanha ja fechado pelo corte
+    das 12h (a limpeza nao o toca). COBERTURA: so pedidos editaveis futuros;
+    o pedido de hoje e os ja separados/entregues ficam fora.
+    """
+    from app.services import pedidos_revenda as svc
+    from app.utils import hoje
+
+    linhas = svc.publicas(svc.listar(hoje()))
+    return jsonify(ok=True, hoje=hoje().isoformat(), n=len(linhas),
+                   n_sob_corte=sum(1 for li in linhas if li['sob_corte']),
+                   itens=linhas)
+
+
 @claude_api_bp.route('/contas-pagar-itens')
 @_claude_auth_required
 def contas_pagar_itens():
