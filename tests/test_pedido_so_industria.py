@@ -202,7 +202,7 @@ def test_post_novo_aceita_cesta_montada_pela_industria(
 
 
 def test_editar_grandfather_mantem_revenda_antiga_e_recusa_nova(
-        app, admin_user, loja, pedidos_antes_do_corte):
+        app, admin_user, loja, pedidos_antes_do_corte, pedido_versao_form):
     antiga = _produto('Água antiga')
     nova = _produto('Coca-Cola nova')
     ped = _pedido(loja, admin_user, itens=[('p', antiga, 4)], criado_por=admin_user.id)
@@ -211,17 +211,17 @@ def test_editar_grandfather_mantem_revenda_antiga_e_recusa_nova(
     get = client.get(f'/pedidos/{ped.id}/editar')
     assert get.status_code == 200
     assert f'value="p_{antiga.id}"' in get.get_data(as_text=True)
-    base = {'data_entrega': ped.data_entrega.isoformat(), 'observacao': '',
-            'descricao_alteracao': 'ajuste', 'motivo_alteracao': 'teste'}
+    base = {'data_entrega': ped.data_entrega.isoformat(), 'observacao': ''}
 
     r = client.post(f'/pedidos/{ped.id}/editar', data={
-        **base, 'item_id[]': f'p_{antiga.id}', 'item_nome[]': antiga.nome,
+        **base, 'versao_edicao': pedido_versao_form(client, ped.id),
+        'item_id[]': f'p_{antiga.id}', 'item_nome[]': antiga.nome,
         'item_qtd[]': '9', 'item_obs[]': '', 'item_estado[]': ''})
-    assert r.status_code == 302
+    assert r.status_code in (302, 303)
     assert PedidoItem.query.filter_by(pedido_id=ped.id).one().quantidade == 9
 
     r2 = client.post(f'/pedidos/{ped.id}/editar', data={
-        **base,
+        **base, 'versao_edicao': pedido_versao_form(client, ped.id),
         'item_id[]': [f'p_{antiga.id}', f'p_{nova.id}'],
         'item_nome[]': [antiga.nome, nova.nome],
         'item_qtd[]': ['9', '1'], 'item_obs[]': ['', ''], 'item_estado[]': ['', '']})
