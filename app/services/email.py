@@ -428,7 +428,14 @@ def _texto_confirmacao(pedido):
         f'Entrega: {onde} {quando}\n')
 
 
-def _template_pedido_recebido(pedido, base):
+def _template_pedido_recebido(pedido, base, *, intro=None, botao=None,
+                              rodape=None):
+    """HTML do e-mail de pedido AGUARDANDO PAGAMENTO (itens, entrega e o
+    botão com o link público de pagamento). `intro`/`botao`/`rodape` já
+    escapados: o default é o "recebemos seu pedido" do checkout; o pedido
+    assistido (01/10/2026) troca os textos pelo "a equipe montou pra você"
+    — mesma tabela, mesmo link (fonte única, nunca copiar o HTML)."""
+    from html import escape
     itens = ''.join(
         f'<tr><td style="padding:4px 0;">{it.quantidade}× {_nome_item_html(it)}'
         f'{" (fatiado)" if it.fatiado else ""}{_comp_html(it)}</td>'
@@ -438,15 +445,20 @@ def _template_pedido_recebido(pedido, base):
     link = f'{base}/loja/pedido/{pedido.codigo}/pagamento' if base else ''
     link_html = (f'<a href="{link}" style="display:inline-block;background:#8b5a2b;'
                  f'color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;'
-                 f'font-weight:600;">Continuar pagamento</a>'
+                 f'font-weight:600;">{botao or "Continuar pagamento"}</a>'
                  if link else '')
+    if intro is None:
+        intro = (f'Recebemos seu pedido\n    <strong>{escape(pedido.codigo)}'
+                 '</strong>! Ele está aguardando pagamento.')
+    if rodape is None:
+        rodape = ('Você ainda não foi cobrado. Clique no botão acima para '
+                  'concluir o pagamento.')
     return f"""\
 <!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
 font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
 <div style="max-width:540px;margin:0 auto;padding:32px 24px;">
   <h1 style="font-size:22px;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
-  <p style="color:#6b5f54;margin:0 0 20px;">Recebemos seu pedido
-    <strong>{pedido.codigo}</strong>! Ele está aguardando pagamento.</p>
+  <p style="color:#6b5f54;margin:0 0 20px;">{intro}</p>
   <div style="background:#fff;border-radius:12px;padding:18px 20px;margin-bottom:18px;">
     <table style="width:100%;font-size:15px;border-collapse:collapse;">{itens}
       <tr><td style="padding-top:10px;border-top:1px solid #eee;">Subtotal</td>
@@ -462,11 +474,12 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
   </div>
   <p style="margin-top:20px;">{link_html}</p>
   <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
-    Você ainda não foi cobrado. Clique no botão acima para concluir o pagamento.</p>
+    {rodape}</p>
 </div></body></html>"""
 
 
-def _texto_pedido_recebido(pedido, base):
+def _texto_pedido_recebido(pedido, base, *, cabecalho=None, rodape=None):
+    """Versão texto puro de `_template_pedido_recebido` (mesmos parâmetros)."""
     onde, quando = _entrega_linha(pedido)
     linhas = '\n'.join(
         f'  {it.quantidade}x {it.nome}'
@@ -474,12 +487,50 @@ def _texto_pedido_recebido(pedido, base):
         f'{_comp_texto(it)}'
         for it in pedido.itens)
     link = f'{base}/loja/pedido/{pedido.codigo}/pagamento' if base else ''
+    if cabecalho is None:
+        cabecalho = f'Recebemos seu pedido {pedido.codigo}! Aguardando pagamento.'
     return (
-        f'Recebemos seu pedido {pedido.codigo}! Aguardando pagamento.\n\n'
+        f'{cabecalho}\n\n'
         f'{linhas}\n'
         f'Total: {_fmt_brl(pedido.valor_total)}\n\n'
         f'Entrega: {onde} {quando}\n\n'
-        f'Continuar o pagamento: {link}\n')
+        f'Continuar o pagamento: {link}\n'
+        + (f'{rodape}\n' if rodape else ''))
+
+
+def enviar_link_pagamento_assistido(pedido, *, prazo=None):
+    """E-mail do PEDIDO ASSISTIDO (01/10/2026): a equipe montou o pedido em
+    nome do cliente e manda o link público de pagamento (Pix ou cartão).
+    Diferente do "recebemos seu pedido" (que diz que o CLIENTE fez o
+    pedido), este diz quem montou, pede conferência dos itens/entrega e
+    informa até quando o link vale. Best-effort, mesmo contrato dos demais."""
+    from html import escape
+    destinatario = (pedido.email_cliente or '').strip()
+    if not destinatario:
+        return {'ok': False, 'erro': 'pedido sem email'}
+    base = (current_app.config.get('LOJA_BASE_URL')
+            or current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+    prazo_txt = prazo.strftime('%d/%m às %H:%M') if prazo else ''
+    assunto = (f'Seu pedido {pedido.codigo} está pronto para pagamento — '
+               'O Pão Padaria Artesanal')
+    intro = (f'Nossa equipe montou o pedido <strong>{escape(pedido.codigo)}'
+             '</strong> para você. Confira os itens e a entrega abaixo e, se '
+             'estiver tudo certo, pague com Pix ou cartão pelo botão.')
+    rodape = ('Você ainda não foi cobrado. '
+              + (f'O link de pagamento vale até {escape(prazo_txt)}. '
+                 if prazo_txt else '')
+              + 'Algo errado no pedido? Responda este e-mail ou fale com a '
+                'gente pelo WhatsApp antes de pagar.')
+    html = _template_pedido_recebido(pedido, base, intro=intro,
+                                     botao='Pagar o pedido', rodape=rodape)
+    texto = _texto_pedido_recebido(
+        pedido, base,
+        cabecalho=(f'Nossa equipe montou o pedido {pedido.codigo} para você. '
+                   'Confira os itens e a entrega; se estiver tudo certo, pague '
+                   'com Pix ou cartão pelo link.'),
+        rodape=('Você ainda não foi cobrado.'
+                + (f' O link vale até {prazo_txt}.' if prazo_txt else '')))
+    return enviar(destinatario, assunto, html, texto=texto)
 
 
 def _template_a_caminho(pedido, base, rastreio_url=None):
