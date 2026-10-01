@@ -388,6 +388,24 @@ def test_admin_pedidos_revenda_respeita_corte_das_12h(app, owner_user, loja, mon
     assert PedidoItem.query.filter_by(pedido_id=depois.id).count() == 0
 
 
+def test_sonda_pedidos_revenda_e_so_leitura(app, owner_user, loja, relogio_11h):
+    agua = _produto('Água com gás')
+    ped = _pedido(loja, owner_user, dias=2, itens=[('p', agua, 3)])
+    app.config['CLAUDE_API_TOKEN'] = 'teste-revenda'
+    client = app.test_client()
+    r = client.get('/api/claude/pedidos-revenda',
+                   headers={'Authorization': 'Bearer teste-revenda'})
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d['n'] == 1 and d['n_sob_corte'] == 0
+    assert d['itens'][0]['pedido_id'] == ped.id
+    assert d['itens'][0]['item'] == 'Água com gás'
+    assert d['itens'][0]['sob_corte'] is False
+    assert '_item' not in d['itens'][0]
+    assert PedidoItem.query.filter_by(pedido_id=ped.id).count() == 1
+    assert client.get('/api/claude/pedidos-revenda').status_code in (401, 403)
+
+
 def test_admin_pedidos_revenda_e_owner_only(app, admin_user):
     client = app.test_client()
     _login(client, admin_user)
