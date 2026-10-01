@@ -9,7 +9,7 @@ inventa a conta — ela ajusta a sugestao com contexto e justifica):
    e /pedidos-semana/estoque (modo='venda', 11/07/2026 a pedido do
    dono: base = motor VENDA+ESTOQUE com o `seguranca_pct` da tela,
    contraprova = MEDIA; itens identificados por `item_key` porque a
-   grade inclui MPs e produtos com estoque próprio). Entrada = os dois motores + estoque + desperdicio
+   grade inclui MPs liberadas; Produto nao entra desde 01/10/2026). Entrada = os dois motores + estoque + desperdicio
    recente + calendario (feriados/vesperas ficam a cargo do modelo —
    nao existe tabela de datas especiais). Saida = quantidades por dia
    POR PRODUTO com motivo, que o JS preenche na grade EDITAVEL. Nada e
