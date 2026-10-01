@@ -2151,13 +2151,19 @@ def _enriquecer_editar_pedido(tool_input):
         # derrubar item antigo legitimo).
         mp_ids_pedido = ({it.materia_prima_id for it in pedido.itens
                           if it.materia_prima_id} if pedido else set())
+        # Mesmo grandfather pra Produto que JA esta no pedido (revenda
+        # antiga segue resolvendo na edicao — dono 01/10/2026).
+        produto_ids_pedido = ({it.produto_id for it in pedido.itens
+                               if it.produto_id} if pedido else set())
         itens_enriq = []
         for item in itens_input:
             nome = (item.get('nome') or '').strip()
             qtd = int(item.get('quantidade') or 0)
             if not nome or qtd <= 0:
                 continue
-            matches = _resolver_item_pedido(nome, mp_ids_extras=mp_ids_pedido)
+            matches = _resolver_item_pedido(
+                nome, mp_ids_extras=mp_ids_pedido,
+                produto_ids_extras=produto_ids_pedido)
             obs_item = (item.get('observacao') or '').strip() or None
             estado_item = (item.get('estado') or '').strip().lower() or None
             if estado_item not in (None, 'backup', 'assado'):
