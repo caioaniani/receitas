@@ -6212,7 +6212,8 @@ arquivado em paginas ativas?"). Varredura sistemica achou a MESMA classe em
 `query` cru DE PROPOSITO (pedido antigo mostra o que foi vendido).
 
 Pontos corrigidos (alem do /cardapio, que tambem alimenta o PDF):
-typeahead do pedido loja→industria (`pedidos/buscar-itens.json`),
+typeahead do pedido loja→industria (`pedidos/buscar-itens.json` — que desde
+01/10/2026 tambem exige Produto FORNECIDO pela industria, ver secao no topo),
 `_catalogo_venda` do B2B (com GRANDFATHER no editar: item ja na venda segue
 visivel mesmo arquivado), copilot (`_resolver_produto` 3 ramos,
 `_resolver_item_qualquer`, `_catalogo_texto`, `consultar_margem` — produto
