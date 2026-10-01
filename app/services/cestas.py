@@ -8,13 +8,17 @@ DEVE descontar cada componente individualmente — porque a loja so estoca
 componentes (ela monta a cesta na hora da venda).
 
 Este helper centraliza a logica que era duplicada em varios servicos:
-- vnda_sync.py (delega aqui)
+- baixa_venda.py (motor unico de venda: Seru, site, lote, Tiny)
 - estoque_loja_lote.py::aplicar_saida_lote
-- seru_sync.py
 - copilot.py::executar_registrar_desperdicio
 - pedidos/routes.py::desperdicio
-- pedidos/routes.py::_executar_recebimento_pedido
-- pedidos/routes.py::_executar_envio_pedido
+
+ATENCAO (conferido 01/10/2026): o ENVIO e o RECEBIMENTO de pedido loja->
+industria (`pedido_estoque.baixar_industria_pedido` e
+`pedidos/routes._executar_recebimento_pedido`) NAO explodem cesta — debitam/
+creditam a linha do PROPRIO Produto (EstoqueProducao/EstoqueLoja com
+produto_id), enquanto a venda baixa os componentes. Cesta pedida a industria
+e, portanto, uma inconsistencia conhecida (decisao separada do dono).
 
 DESDE A MIGRATION B5 (efb6e5837fd0): vinculo eh via FK
 (`ProdutoItem.receita_id` / `materia_prima_id`). `item_nome` continua
