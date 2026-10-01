@@ -348,10 +348,11 @@ def test_get_renderiza_catalogo_publicado(app, cliente, admin_user):
     db.session.commit()
     _login(cliente, admin_user)
     html = cliente.get('/admin/loja-online/pedido-assistido').get_data(as_text=True)
-    assert 'Cesta Publicada' in html
-    assert 'Cesta Pausada' not in html
+    # O catálogo embutido (JSON do typeahead) só traz o PUBLICADO — o nome
+    # do pausado ainda aparece no <datalist> da busca global do layout.
+    assert f'"nome": "{prod.nome}"' in html
+    assert '"nome": "Cesta Pausada"' not in html
     assert 'tpl-item' in html and 'cliente_informado' in html
-    assert prod.nome in html
 
 
 def test_post_cria_e_redireciona_para_o_detalhe(app, cliente, admin_user):
