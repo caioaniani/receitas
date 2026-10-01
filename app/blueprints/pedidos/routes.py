@@ -386,9 +386,17 @@ def buscar_itens():
              'lote': int(r.lote_pedido or 0) if r.medida_em_gramas else 0}
             for r in Receita.ativas().order_by(Receita.nome).all()
             if _casa(r.nome)]
+    # Produto só se a indústria o fornece (cesta montada de receita/MP
+    # liberada). Revenda comprada pronta (água, Coca-Cola, adicional) fica
+    # fora — decisão do dono 01/10/2026; regra em itens_industria.
+    from sqlalchemy.orm import selectinload
+
+    from app.services.itens_industria import produto_fornecido_pela_industria
     out += [{'id': f'p_{p.id}', 'nome': p.nome, 'em_gramas': False}
-            for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-            if _casa(p.nome)]
+            for p in (Produto.query.filter_by(ativo=True)
+                      .options(selectinload(Produto.itens))
+                      .order_by(Produto.nome).all())
+            if _casa(p.nome) and produto_fornecido_pela_industria(p)]
     out += [{'id': f'mp_{m.id}', 'nome': m.nome,
              'em_gramas': (m.unidade or '').strip().lower() in ('g', 'ml', 'kg', 'l')}
             for m in _mps_pediveis().all() if _casa(m.nome)]
