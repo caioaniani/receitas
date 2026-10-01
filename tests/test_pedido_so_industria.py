@@ -258,6 +258,18 @@ def test_resolver_item_pedido_filtra_revenda_com_excecao_do_editar(app):
     assert agua.id in {m['id'] for m in ms2 if m['tipo'] == 'produto'}
 
 
+def test_resolver_item_pedido_cai_na_receita_quando_so_revenda_casou_exato(app):
+    """Match EXATO num Produto de revenda encerrava o resolver antes do
+    fuzzy; sem este fallback 'pao frances' devolvia 'nao achei' mesmo com a
+    receita 'Pão Francês Fermentado' no catálogo."""
+    from app.services.copilot import _resolver_item_pedido
+    _produto('Pão Francês')
+    receita = _receita('Pão Francês Fermentado')
+    ms = _resolver_item_pedido('Pão Francês')
+    assert [(m['tipo'], m['id']) for m in ms] == [('receita', receita.id)]
+    assert _resolver_item_pedido('Coca-Cola') == []
+
+
 def test_executor_criar_pedido_recusa_revenda_mesmo_resolvida(
         app, admin_user, loja, pedidos_antes_do_corte):
     from app.services.copilot import executar_criar_pedido
