@@ -11,7 +11,8 @@ Camadas cobertas:
 - copilot: resolver não oferece bloqueada (mas aceita via mp_ids_extras no
   editar) e executores recusam mesmo com params re-enviados.
 
-Receitas e produtos seguem livres; a trava é só de MP (opt-in).
+Receitas seguem livres. Produto tem trava própria desde 01/10/2026 (só o
+que a indústria fornece — ver tests/test_pedido_so_industria.py).
 """
 from datetime import timedelta
 
