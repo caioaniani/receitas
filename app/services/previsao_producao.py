@@ -1905,27 +1905,26 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # congelado, comprado em saco e vendido via cones; a venda do cone baixa a
     # linha MP da loja). Opt-in de proposito: nem toda MP que passa por loja e
     # pedida pra industria. Token unico por item: receita = o proprio id (int,
-    # compat com o gerar existente); MP = 'mp:<id>'; Produto = 'prod:<id>'.
-    # Cestas nao entram como item direto: o estoque movimenta os componentes.
-    from sqlalchemy.orm import selectinload
-
-    from app.models import MateriaPrima, Produto
-    from app.services.cestas import produto_reposicao_direta
+    # compat com o gerar existente); MP = 'mp:<id>'.
+    # PRODUTO NUNCA ENTRA (dono 01/10/2026: "os pedidos das lojas para a
+    # industria devem ser somente do que a industria produz, esta vindo de
+    # tudo ate coca cola e adicional de morango"): a linha de EstoqueLoja de
+    # um Produto e revenda comprada pronta (agua, suco, adicional) ou cesta —
+    # e cesta nao entra como item direto porque o estoque movimenta os
+    # componentes. A regra canonica mora em app/services/itens_industria.py;
+    # aqui o token de produto e sempre None (venda, minimo, piso diario e
+    # modo fresco cadastrados numa linha de Produto sao ignorados).
+    from app.models import MateriaPrima
 
     mps = {m.id: m for m in MateriaPrima.query
            .filter(MateriaPrima.sugerir_pedido_loja.is_(True),
                    MateriaPrima.arquivada_em.is_(None)).all()}
-    produtos_diretos = {
-        p.id: p for p in Produto.query.filter(Produto.ativo.is_(True))
-        .options(selectinload(Produto.itens)).all()
-        if produto_reposicao_direta(p)
-    }
 
     def _token(rid, mid, pid):
         if rid is not None:
             return rid if rid in receitas else None
         if pid is not None:
-            return f'prod:{pid}' if pid in produtos_diretos else None
+            return None
         return f'mp:{mid}' if mid in mps else None
 
     # Consumo por (loja, item, dow, DATA) na janela: MovEstoqueLoja x
@@ -2169,8 +2168,10 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                  'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
                  'dow': d.weekday()} for d in dias_futuros]
 
-    # Catalogo unificado da tela: receitas, MPs marcadas e Produtos simples.
-    # Entrada: (token, nome, lote, minimo, fornada_especial, rid, mid, pid).
+    # Catalogo unificado da tela: receitas e MPs marcadas (Produto fica fora,
+    # ver _token acima). Entrada: (token, nome, lote, minimo,
+    # fornada_especial, rid, mid, pid) — `pid` e sempre None e segue na tupla
+    # so pra manter a forma das linhas (`produto_id`/`eh_produto` no JSON).
     # MP tambem tem caixa/piso desde 02/07 (colunas lote_pedido/minimo_pedido
     # em MateriaPrima — ex: pao de queijo comprado em saco nao sai picado).
     catalogo = [(rid, rec.nome, int(rec.lote_pedido or 0),
@@ -2182,8 +2183,6 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                          int(getattr(m, 'lote_pedido', None) or 0),
                          int(getattr(m, 'minimo_pedido', None) or 0),
                          False, None, mid, None))
-    for pid, p in produtos_diretos.items():
-        catalogo.append((f'prod:{pid}', p.nome, 0, 0, False, None, None, pid))
     catalogo.sort(key=lambda c: (c[1] or '').lower())
 
     def _media_dow(por_dow, dow_i):
