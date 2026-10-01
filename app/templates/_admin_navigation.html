@@ -10,6 +10,14 @@
 {% endif %}
 {%- endmacro %}
 
+{# Pedido ASSISTIDO (01/10/2026): link secundário abaixo de "Pedidos do site",
+   sem 5º card na Home (regra "menos é mais" de 07/09/2026). #}
+{% macro criar_pedido_cliente(class_name='sidebar-link') -%}
+{% if current_user.pode_pedido_assistido() %}
+<a href="{{ url_for('main.loja_online_pedido_assistido') }}" class="{{ class_name }}{{ ' active' if request.endpoint == 'main.loja_online_pedido_assistido' }}"{% if request.endpoint == 'main.loja_online_pedido_assistido' %} aria-current="page"{% endif %} title="Monte o pedido do cliente e envie o link de pagamento (Pix/cartão)"><i class="bi bi-receipt-cutoff" aria-hidden="true"></i><span>Criar pedido para cliente</span></a>
+{% endif %}
+{%- endmacro %}
+
 {# Os quatro caminhos diários são os mesmos na Home e no menu.
    A auditoria tem acesso direto adicional no menu, sem aumentar os cards. #}
 {% macro rotina(variant='sidebar') -%}
