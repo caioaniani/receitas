@@ -3014,6 +3014,24 @@ def _executar_editar_pedido(params, user):
                     f'Materia(s)-prima(s) nao liberada(s) pra pedido de '
                     f'loja: {nomes}. Um admin pode liberar no Banco de MPs '
                     f'(checkbox "sugerir pedido loja").')}
+        # Produto NOVO so se a industria o fornece; o que JA estava no
+        # pedido segue valido (grandfather) — dono 01/10/2026.
+        from app.services.itens_industria import (
+            mensagem_produtos_nao_pediveis,
+            produtos_nao_pediveis,
+        )
+        produto_ids_antes = {it.produto_id for it in pedido.itens
+                             if it.produto_id}
+        prod_bloqueados = produtos_nao_pediveis(
+            [{'produto_id': it['resolvido']['id']} for it in itens_novos
+             if it.get('resolvido')
+             and it['resolvido'].get('tipo') == 'produto'
+             and it['resolvido'].get('id')],
+            produto_ids_extras=produto_ids_antes)
+        if prod_bloqueados:
+            db.session.rollback()
+            return {'ok': False,
+                    'erro': mensagem_produtos_nao_pediveis(prod_bloqueados)}
         # Item em g/ml com lote definido so aceita MULTIPLO do lote
         # (iogurte 3000 / granola 5000 — dono 18/08/2026). Checado ANTES
         # do REPLACE; sem grandfather de proposito (decisao do dono: o
