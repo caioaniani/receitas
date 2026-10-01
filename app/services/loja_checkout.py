@@ -1201,7 +1201,7 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
         cliente.nome = nome or cliente.nome
         cliente.telefone = telefone or cliente.telefone
         cliente.cpf = cpf or cliente.cpf
-    if aceite and not cliente.aceite_lgpd_em:
+    if aceite and registrar_aceite and not cliente.aceite_lgpd_em:
         cliente.aceite_lgpd_em = base
     db.session.flush()  # garante cliente.id
 
