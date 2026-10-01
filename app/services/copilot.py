@@ -1098,13 +1098,20 @@ def _catalogo_texto():
     if _CATALOGO_CACHE['texto'] and _CATALOGO_CACHE['expira_em'] > now:
         return _CATALOGO_CACHE['texto']
 
+    from sqlalchemy.orm import selectinload
+
     from app.models import Fornecedor, Funcionario
-    linhas = ["PRODUTOS (use o nome exato):"]
+    from app.services.itens_industria import produto_fornecido_pela_industria
+    linhas = ["PRODUTOS (use o nome exato; '(revenda)' = a industria nao "
+              "fornece, nao entra em pedido de loja pra industria):"]
     # ativo=True: produto desativado nao pode ser OFERECIDO como opcao pelo
     # modelo (varredura 19/07/2026 — Receita/MP/Fornecedor ja filtravam).
-    for p in Produto.query.filter(Produto.ativo.is_(True)) \
-                          .order_by(Produto.nome).all():
-        linhas.append(f"  - {p.nome}")
+    # O marcador de revenda (dono 01/10/2026) fica so no texto: o catalogo
+    # tambem serve B2B/desperdicio, onde revenda continua valida.
+    for p in (Produto.query.filter(Produto.ativo.is_(True))
+              .options(selectinload(Produto.itens)).order_by(Produto.nome).all()):
+        sufixo = '' if produto_fornecido_pela_industria(p) else ' (revenda)'
+        linhas.append(f"  - {p.nome}{sufixo}")
     linhas.append("")
     linhas.append("RECEITAS (use o nome exato):")
     for r in Receita.query.filter(Receita.arquivada_em.is_(None)).order_by(Receita.nome).all():
