@@ -31,12 +31,29 @@ MOTIVO_CESTA_DE_REVENDA = 'cesta_de_revenda'
 _ROTULO_MOTIVO = {
     MOTIVO_INATIVO: 'produto inativo',
     MOTIVO_REVENDA: 'produto de revenda, a indústria não produz',
-    MOTIVO_CESTA_DE_REVENDA: 'cesta só com itens que a indústria não produz',
+    MOTIVO_CESTA_DE_REVENDA: ('cesta sem componente que a indústria produza ou '
+                              'envie: nenhuma receita ativa nem MP liberada no '
+                              'Banco de MPs; componente órfão não conta, '
+                              'resolva em Cestas → órfãos'),
 }
 
 ORIENTACAO_PEDIDO = ('O pedido para a indústria aceita receitas, cestas '
                      'montadas pela indústria e matérias-primas liberadas '
                      'no Banco de MPs.')
+
+
+def opcoes_composicao():
+    """Opções de carregamento para avaliar a régua sem N+1: a composição
+    (ProdutoItem) e os alvos de cada componente numa ida só. Usar em toda
+    query de Produto cujo resultado passa por `motivo_produto_nao_fornecido`
+    em loop (typeahead, resolver do copilot, sugestão por loja, limpeza)."""
+    from sqlalchemy.orm import selectinload
+
+    from app.models import Produto, ProdutoItem
+    comp = selectinload(Produto.itens)
+    return [comp.joinedload(ProdutoItem.receita),
+            comp.joinedload(ProdutoItem.materia_prima),
+            comp.joinedload(ProdutoItem.produto_componente)]
 
 
 def mp_fornecida_pela_industria(mp):
