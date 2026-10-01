@@ -2269,7 +2269,7 @@ def _resolver_produto(nome):
     return matches
 
 
-def _resolver_item_pedido(nome, mp_ids_extras=None):
+def _resolver_item_pedido(nome, mp_ids_extras=None, produto_ids_extras=None):
     """Resolve nome em qualquer item que cabe num PedidoLoja: Receita,
     Produto OU MateriaPrima. Loja pede MPs tambem (queijo pra salada, lagarto
     cozido, saco de pao de queijo), entao tem que cobrir os 3.
@@ -2282,8 +2282,23 @@ def _resolver_item_pedido(nome, mp_ids_extras=None):
     nao devia). O receber_mp continua vendo todas via `_resolver_mp`.
     `mp_ids_extras`: ids liberados por excecao — o editar_pedido passa as
     MPs que JA estao no pedido (grandfather: re-enviar a lista atual nao
-    pode derrubar um item antigo legitimo)."""
+    pode derrubar um item antigo legitimo).
+
+    Produto so entra se a industria o FORNECE (cesta montada de receita/MP
+    liberada — `itens_industria.produto_fornecido_pela_industria`); revenda
+    comprada pronta (agua, Coca-Cola, adicional) nao resolve pra pedido de
+    loja (dono 01/10/2026). `produto_ids_extras` = grandfather do editar."""
+    from app.services.itens_industria import produto_fornecido_pela_industria
+
     matches = _resolver_produto(nome)
+    prod_ids = [m['id'] for m in matches if m['tipo'] == 'produto']
+    if prod_ids:
+        liberados = set(produto_ids_extras or ())
+        for p in Produto.query.filter(Produto.id.in_(prod_ids)).all():
+            if produto_fornecido_pela_industria(p):
+                liberados.add(p.id)
+        matches = [m for m in matches
+                   if m['tipo'] != 'produto' or m['id'] in liberados]
     mps = _resolver_mp(nome)
     if mps:
         liberadas = {mid for (mid,) in MateriaPrima.query
