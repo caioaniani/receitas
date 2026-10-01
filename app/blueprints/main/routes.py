@@ -5685,9 +5685,10 @@ def _catalogo_divulgacao():
 def _menus_divulgacao():
     """Regras + slots dos MENUS configuraveis (Caixa de Mini etc.) pro
     montador da tela de divulgacao (20/08/2026, caso 24FB0FFB — dono quer
-    escolher os minis "como no site"). {'produto:<id>': {'total', 'teto',
-    'slots': [{'pi_id','nome','preco','padrao'}]}}. So produtos ativos que
-    `loja_menu.eh_menu` reconhece."""
+    escolher os minis "como no site") e da tela de pedido assistido
+    (01/10/2026). {'produto:<id>': {'total', 'teto', 'slots': [{'pi_id',
+    'nome','preco','padrao'}]}}. So produtos ativos que `loja_menu.eh_menu`
+    reconhece."""
     from app.services import loja_menu
     out = {}
     for p in Produto.query.filter_by(ativo=True).all():
@@ -5701,6 +5702,94 @@ def _menus_divulgacao():
                       for s in loja_menu.slots(p)],
         }
     return out
+
+
+def _itens_do_form(form):
+    """Linhas de item do form das telas admin (divulgação e pedido
+    assistido): pares `item_alvo[]` ("receita:12") + `item_qtd[]`, mais
+    `item_comp[]` (JSON {produto_item_id: qtd} do montador de MENU, '' nas
+    linhas comuns) e `item_fatiado[]` ('1' = sourdough fatiado; só a tela
+    do pedido assistido manda). Devolve a lista no formato que
+    `loja_checkout.criar_pedido`/`divulgacao.criar_divulgacao` consomem:
+    {'kind', 'id', 'qtd', 'comp', 'fatiado'}. Os serviços re-validam tudo —
+    aqui só se desserializa. Linha sem alvo ou com número inválido é
+    ignorada (o serviço acusa "adicione ao menos um item" se sobrar nada)."""
+    alvos = form.getlist('item_alvo[]')
+    qtds = form.getlist('item_qtd[]')
+    comps = form.getlist('item_comp[]')
+    fatiados = form.getlist('item_fatiado[]')
+    itens = []
+    for i, (alvo, q) in enumerate(zip(alvos, qtds)):
+        alvo = (alvo or '').strip()
+        if not alvo or ':' not in alvo:
+            continue
+        kind, _, sid = alvo.partition(':')
+        comp = None
+        if i < len(comps) and (comps[i] or '').strip():
+            try:
+                bruto = json.loads(comps[i])
+                if isinstance(bruto, dict):
+                    comp = bruto
+            except (TypeError, ValueError):
+                comp = None
+        fatiado = i < len(fatiados) and (fatiados[i] or '').strip() == '1'
+        try:
+            itens.append({'kind': kind, 'id': int(sid), 'qtd': int(q or 0),
+                          'comp': comp, 'fatiado': fatiado})
+        except (TypeError, ValueError):
+            continue
+    return itens
+
+
+def _cotacao_endereco(modo, data, args):
+    """Janelas válidas + frete de um endereço digitado nas telas admin —
+    MESMA regra do site (`loja_checkout.janelas_disponiveis`; agendada corta
+    a 1ª janela da manhã quando o endereço está longe; retirada não tem
+    distância). Cota na COTA DO PREVIEW (chamada enquanto se digita, nunca
+    a do checkout — revisão 28/09/2026); o pedido de verdade recota pelo
+    canal do checkout dentro de `criar_pedido`. Fail-open: frete fora do ar
+    = todas as janelas, sem valor. Devolve dict pronto pra `jsonify`."""
+    from app.services import loja_checkout
+    dist = None
+    aviso = None
+    valor = None
+    fora_area = False
+    if modo in ('agendada', 'express'):
+        partes = [args.get('logradouro'), args.get('numero'),
+                  args.get('bairro'), args.get('cidade')]
+        geo = ', '.join(p.strip() for p in partes if (p or '').strip())
+        cep = (args.get('cep') or '').strip()
+        if cep and cep not in geo:
+            geo = ('%s, %s' % (geo, cep)) if geo else cep
+        if geo:
+            try:
+                from app.services import frete
+                r = frete.consultar_frete(geo, canal=frete.CANAL_PREVIEW)
+                if r.get('ok'):
+                    dist = r.get('distancia_km')
+                    valor = r.get('valor')
+                    if r.get('fora_area'):
+                        fora_area = True
+                        valor = None
+                        aviso = ('endereço fora do raio de entrega do site '
+                                 '(%.1f km) — confira com a equipe'
+                                 % (dist or 0))
+                    elif r.get('impreciso'):
+                        aviso = ('frete cotado só pelo CEP (endereço não '
+                                 'localizado com precisão) — confira')
+                else:
+                    aviso = frete.mensagem_erro(r.get('erro'))
+            except Exception:  # noqa: BLE001 — fail-open: sem dist, todas as janelas
+                current_app.logger.warning('cotacao admin: frete falhou',
+                                           exc_info=True)
+    janelas = loja_checkout.janelas_disponiveis(
+        'retirada' if modo == 'retirada' else 'agendada', data,
+        distancia_km=dist)
+    return {'ok': True, 'janelas': janelas, 'distancia_km': dist,
+            'aviso': aviso, 'valor': valor, 'fora_area': fora_area,
+            'express': (modo == 'express'
+                        and loja_checkout.express_disponivel()),
+            'janela_express': loja_checkout.janela_express_para_distancia(dist)}
 
 
 @main_bp.route('/admin/loja-online/divulgacao', methods=['GET', 'POST'])
