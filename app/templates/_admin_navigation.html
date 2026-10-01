@@ -34,7 +34,7 @@
     <span>{% if variant == 'sidebar' %}{{ titulo }}{% else %}<strong>{{ titulo }}</strong><small>{{ descricao }}</small>{% endif %}</span>
 </a>
 {% if variant == 'sidebar' and endpoint == 'industria_teste.index' %}{{ auditoria() }}{% endif %}
-{% if variant == 'sidebar' and endpoint == 'main.loja_online_pedidos' %}{{ produtos_site() }}{% endif %}
+{% if variant == 'sidebar' and endpoint == 'main.loja_online_pedidos' %}{{ produtos_site() }}{{ criar_pedido_cliente() }}{% endif %}
 {% endfor %}
 {% endif %}
 {%- endmacro %}
