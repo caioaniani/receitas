@@ -6181,12 +6181,14 @@ def loja_online_pedidos():
     pedidos = q.order_by(PedidoOnline.criado_em.desc()).limit(200).all()
     contagens = dict(db.session.query(PedidoOnline.status, _func.count())
                      .group_by(PedidoOnline.status).all())
+    from app.services import pedido_assistido
     return render_template(
         'admin/loja_online_pedidos.html',
         pedidos=pedidos, status=status, contagens=contagens,
         total=sum(contagens.values()), labels=_STATUS_PEDIDO_ONLINE_LABEL,
         data=data_str, data_ini=data_ini_str, data_fim=data_fim_str,
-        filtro_data_ativo=bool(data or data_ini or data_fim))
+        filtro_data_ativo=bool(data or data_ini or data_fim),
+        assistidos=pedido_assistido.ids_assistidos(pedidos))
 
 
 @main_bp.route('/admin/loja-online/buscar-pedidos')
