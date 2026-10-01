@@ -117,19 +117,21 @@ def criar(form, itens_raw, *, operador_id, canal=None, observacao=None,
     observacao = (observacao or '').strip() or None
     if observacao and len(observacao) > 500:
         erros.append('A observação interna deve ter no máximo 500 caracteres.')
-    # O aceite dos termos entra como "informado pelo operador": o motor exige
-    # o campo; `registrar_aceite=False` impede carimbar o consentimento no
-    # cadastro do cliente (quem clicou não foi ele).
+    # O aceite dos termos entra como "informado pelo operador" (o campo
+    # `cliente_informado` acima é o que o operador marca); o motor exige
+    # `aceite_lgpd`, e `registrar_aceite=False` impede carimbar o
+    # consentimento no cadastro do cliente (quem clicou não foi ele).
     dados = dict(form)
-    dados['aceite_lgpd'] = '1' if not erros else ''
+    dados['aceite_lgpd'] = '1'
     itens = loja_checkout.normalizar_itens_raw(itens_raw)
     pedido, erros_motor = loja_checkout.criar_pedido(
         dados, itens, base=base, commit=False, itens_estritos=True,
         registrar_aceite=False, atualizar_cadastro=False,
         origem_cliente='balcao')
-    erros.extend(e for e in erros_motor
-                 if not (erros and 'aceitar os termos' in e))
+    erros.extend(erros_motor)
     if erros or pedido is None:
+        # Com `commit=False` o motor só deu flush: nada do pedido (nem o
+        # Cliente criado por ele) sobrevive ao rollback.
         db.session.rollback()
         return None, erros or ['Não foi possível criar o pedido.'], None
 
