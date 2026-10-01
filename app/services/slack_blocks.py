@@ -627,6 +627,13 @@ def build_resultado(resultado, ok=True):
             label_botao = 'Abrir pedido'
         elif resultado.get('pedido_id'):
             partes = [f"✓ pedido #{resultado['pedido_id']} criado."]
+            # Item que nao resolveu (revenda, nome errado) ficou FORA — o
+            # executor devolve a lista; dizer aqui evita a loja achar que a
+            # agua entrou (01/10/2026).
+            nao_res = [str(n) for n in (resultado.get('nao_resolvidos') or []) if n]
+            if nao_res:
+                partes.append('⚠ nao entrou (sem match no catalogo): '
+                              + ', '.join(nao_res[:8]))
             label_botao = 'Abrir pedido'
         elif resultado.get('venda_id'):
             partes = [f"✓ venda B2B #{resultado['venda_id']} criada."]
