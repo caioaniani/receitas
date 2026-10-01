@@ -400,6 +400,7 @@ def test_texto_e_url_whatsapp(app, admin_user):
 
 @pytest.mark.parametrize('papel,esperado', [
     ('gerente', 200), ('admin', 200), ('funcionario', 403), ('producao', 403),
+    ('marketing', 403), ('observador', 403),
 ])
 def test_gate_da_tela(app, cliente, papel, esperado):
     _loja_site()
@@ -408,6 +409,58 @@ def test_gate_da_tela(app, cliente, papel, esperado):
     assert cliente.get('/admin/loja-online/pedido-assistido').status_code == esperado
     assert cliente.get('/admin/loja-online/pedido-assistido/cotacao'
                        '?modo=retirada').status_code == esperado
+    assert u.pode_pedido_assistido() is (esperado == 200)
+
+
+def test_dono_libera_atendente_pela_matriz_de_permissoes(app, cliente):
+    """Capacidade PRÓPRIA `web_pedido_assistido`: 'funcionario' entra só com
+    a liberação em /admin/permissoes — sem abrir estoque/relatório/preços
+    (web_estoque_loja segue fechada)."""
+    from app.models import PermissaoPapel
+    _loja_site()
+    u = _usuario('funcionario', 'atendente')
+    _login(cliente, u)
+    assert cliente.get('/admin/loja-online/pedido-assistido').status_code == 403
+    db.session.add(PermissaoPapel(papel='funcionario',
+                                  capacidade='web_pedido_assistido', permitido=True))
+    db.session.commit()
+    assert cliente.get('/admin/loja-online/pedido-assistido').status_code == 200
+    assert cliente.get('/admin/loja-online/pedidos').status_code == 403
+    assert u.pode_pedido_assistido() is True and u.pode_lojas() is False
+
+
+def test_atendente_liberado_cria_e_ve_o_link_sem_abrir_o_detalhe(app, cliente):
+    """Depois de criar, a tela volta com `?criado=` e o bloco do link — o
+    atendente não precisa do detalhe do pedido (gerente_required)."""
+    from app.models import PedidoOnline, PermissaoPapel
+    loja = _loja_site()
+    prod = _produto()
+    _estoque(loja, produto=prod)
+    u = _usuario('funcionario', 'atendente2')
+    db.session.add(PermissaoPapel(papel='funcionario',
+                                  capacidade='web_pedido_assistido', permitido=True))
+    db.session.commit()
+    _login(cliente, u)
+    from app.services import loja_checkout
+    from app.utils import agora
+    data = loja_checkout.datas_disponiveis('retirada', base=agora())[1].isoformat()
+    form = _form_retirada(loja, data_entrega=data, janela_entrega='12:00–13:00')
+    form.update({'item_alvo[]': f'produto:{prod.id}', 'item_qtd[]': '1'})
+    with patch('app.services.email.disponivel', return_value=False):
+        r = cliente.post('/admin/loja-online/pedido-assistido', data=form,
+                         follow_redirects=True)
+    assert r.status_code == 200
+    p = PedidoOnline.query.one()
+    html = r.get_data(as_text=True)
+    assert 'criado pela equipe' in html
+    assert f'/loja/pedido/{p.codigo}/pagamento' in html
+    assert 'Abrir o pedido' not in html           # sem permissão no detalhe
+    # Desfazer e reenviar pelo bloco também valem pro atendente
+    r = cliente.post(f'/admin/loja-online/pedidos/{p.codigo}/pedido-assistido/cancelar')
+    assert r.status_code == 302
+    assert r.headers['Location'].endswith(f'/admin/loja-online/pedido-assistido?criado={p.codigo}')
+    db.session.refresh(p)
+    assert p.status == 'cancelado'
 
 
 def test_get_renderiza_catalogo_publicado(app, cliente, admin_user):
