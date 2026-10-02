@@ -146,11 +146,13 @@ def equipe_lojas_remover(loja_id):
     def mensagem(resultado, loja):
         nome = resultado['pessoa'].nome
         texto = f'{nome} saiu da equipe de {loja.nome}; a ficha continua ativa no RH.'
-        if resultado['era_principal']:
-            if resultado['nova_principal']:
-                texto += f' A unidade principal passou a ser {resultado["nova_principal"]}.'
-            elif resultado['restantes']:
-                texto += ' Defina a nova unidade principal em Organizar equipe.'
+        if resultado['nova_principal']:
+            texto += (f' Com uma única loja ativa restante, {resultado["nova_principal"]} '
+                      'passou a ser a unidade principal.')
+        elif resultado['era_principal']:
+            if resultado['restantes']:
+                texto += (' A pessoa ficou sem unidade principal ativa: defina a nova '
+                          'em "Editar estrutura".')
             else:
                 texto += ' A pessoa ficou sem loja: aparece em "Unidade principal a definir".'
         return texto
