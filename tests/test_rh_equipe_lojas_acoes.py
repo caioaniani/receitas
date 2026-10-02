@@ -484,3 +484,159 @@ def test_cadastro_novo_pre_marca_a_loja_vinda_da_equipe(app, owner_user):
     html = cliente.get('/rh/funcionarios/novo').get_data(as_text=True)
     assert ' checked' not in html.split('name="lojas[]"')[1].split('>')[0]
     assert cliente.get('/rh/funcionarios/novo', query_string={'loja': 'abc'}).status_code == 200
+
+
+# ── Revisão independente (02/10/2026): loja inativa, duas marcas, loja única ──
+
+def test_loja_inativa_nunca_conta_como_principal_no_adicionar(app, owner_user):
+    fechada = _loja('Fechada', ativa=False)
+    centro = _loja('Centro')
+    joao = _pessoa('João', lojas=[fechada], principal=fechada)
+    db.session.commit()
+    cand = acoes.candidatos_por_loja([centro.id])[centro.id]
+    assert [(g['titulo'], [p['id'] for p in g['pessoas']]) for g in cand['adicionar']] == [
+        ('Sem unidade principal', [joao.id])]
+    assert cand['importar'] == []
+
+    resultado = acoes.adicionar_pessoa(centro, joao.id, actor_id=owner_user.id)
+    db.session.commit()
+
+    # A tela prometia "quem não tem unidade principal passa a ter esta".
+    assert resultado['principal'] is True and resultado['principal_anterior'] is None
+    assert _vinculos(joao) == {fechada.id: False, centro.id: True}
+    assert unidades_principais([joao]) == {joao.id: centro.id}
+    visao = carregar_lojas()
+    assert next(c for c in visao['lojas'] if c['id'] == centro.id)['total'] == 1
+    assert visao['sem_unidade'] == []
+
+
+def test_loja_inativa_nunca_conta_como_principal_no_remover_e_no_importar(app):
+    fechada = _loja('Fechada', ativa=False)
+    centro, jardim = _loja('Centro'), _loja('Jardim')
+    bia = _pessoa('Bia', lojas=[centro, fechada], principal=centro)
+    db.session.commit()
+
+    resultado = acoes.remover_pessoa(centro, bia.id)
+    db.session.commit()
+    assert resultado['era_principal'] is True
+    assert resultado['restantes'] == 1 and resultado['nova_principal'] is None
+    assert [p['id'] for p in carregar_lojas()['sem_unidade']] == [bia.id]
+
+    with pytest.raises(acoes.EquipeLojaError, match='Adicionar pessoa'):
+        acoes.importar_pessoa(jardim, bia.id)
+    db.session.rollback()
+    assert _vinculos(bia) == {fechada.id: False}
+
+
+def test_remover_ultima_principal_ativa_orienta_editar_estrutura(app, owner_user):
+    fechada = _loja('Fechada', ativa=False)
+    centro = _loja('Centro')
+    bia = _pessoa('Bia', lojas=[centro, fechada], principal=centro)
+    db.session.commit()
+    cliente = _cliente(app, owner_user)
+    resposta = cliente.post(f'/rh/equipe/lojas/{centro.id}/remover', data={
+        'funcionario_id': bia.id, 'voltar': 'loja'})
+    html = cliente.get(resposta.location).get_data(as_text=True)
+    assert 'ficou sem unidade principal ativa: defina a nova em &#34;Editar estrutura&#34;' in html
+    assert 'passou a ser a unidade principal' not in html
+
+
+def test_duas_marcas_de_principal_servico_e_tela_escolhem_a_mesma(app):
+    a, b, c = _loja('A Centro'), _loja('B Jardim'), _loja('C Anexo')
+    ana = _pessoa('Ana', lojas=[a, b])
+    db.session.execute(funcionario_loja.update().where(
+        funcionario_loja.c.funcionario_id == ana.id).values(loja_principal=True))
+    db.session.commit()
+    assert _vinculos(ana) == {a.id: True, b.id: True}
+    da_tela = unidades_principais([ana])[ana.id]
+    assert da_tela == max(a.id, b.id)
+    assert acoes._principal_ativa(__import__('app.services.treino_lideranca', fromlist=['x'])
+                                  .vinculos_de(ana.id)) == da_tela
+
+    resultado = acoes.adicionar_pessoa(c, ana.id)
+    db.session.commit()
+    # O gesto normaliza para UMA marca — a que a tela mostrava.
+    assert resultado['principal'] is False
+    assert _vinculos(ana) == {a.id: a.id == da_tela, b.id: b.id == da_tela, c.id: False}
+    assert unidades_principais([ana]) == {ana.id: da_tela}
+
+
+def test_remover_de_quem_tem_duas_lojas_sem_marca_avisa_a_nova_lotacao(app, owner_user):
+    centro, jardim = _loja('Centro'), _loja('Jardim')
+    bia = _pessoa('Bia', lojas=[centro, jardim])  # sem marca: "sem principal definida"
+    db.session.commit()
+    assert unidades_principais([bia]) == {}
+    cliente = _cliente(app, owner_user)
+    resposta = cliente.post(f'/rh/equipe/lojas/{centro.id}/remover', data={
+        'funcionario_id': bia.id, 'voltar': 'loja'})
+    html = cliente.get(resposta.location).get_data(as_text=True)
+    assert 'Com uma única loja ativa restante, Jardim passou a ser a unidade principal.' in html
+    assert unidades_principais([bia]) == {bia.id: jardim.id}
+    card = next(c for c in carregar_lojas()['lojas'] if c['id'] == jardim.id)
+    assert card['total'] == 1
+
+
+def test_lider_em_dois_turnos_tem_um_unico_remover(app, owner_user):
+    centro = _loja('Centro')
+    lider = _pessoa('Líder dupla', lojas=[centro], principal=centro)
+    _pessoa('Manhã visual', lojas=[centro], lider=lider, periodo='Manhã')
+    _pessoa('Tarde visual', lojas=[centro], lider=lider, periodo='Tarde')
+    db.session.commit()
+    html = _cliente(app, owner_user).get(
+        '/rh/equipe/lojas', query_string={'loja': centro.id}).get_data(as_text=True)
+    assert html.count(f'<input type="hidden" name="funcionario_id" value="{lider.id}">') == 1
+    assert html.count('Remover da loja') == 3  # líder + 2 liderados
+    assert f'role="group" aria-labelledby="loja-{centro.id}"' in html
+
+
+def test_candidatos_nao_crescem_com_o_numero_de_lojas(app):
+    from sqlalchemy import event
+
+    def medir(ids):
+        db.session.expunge_all()
+        consultas = []
+
+        def registrar(conn, cursor, statement, parameters, context, executemany):
+            consultas.append(statement)
+        event.listen(db.engine, 'before_cursor_execute', registrar)
+        try:
+            acoes.candidatos_por_loja(ids)
+        finally:
+            event.remove(db.engine, 'before_cursor_execute', registrar)
+        assert all(sql.lstrip().upper().startswith('SELECT') for sql in consultas)
+        return len(consultas)
+
+    lojas = [_loja(f'Loja {n}') for n in range(6)]
+    for n, loja in enumerate(lojas):
+        _pessoa(f'Pessoa {n}', lojas=[loja])
+    db.session.commit()
+    ids = [loja.id for loja in lojas]  # antes do expunge: instância solta não recarrega
+    uma = medir(ids[:1])
+    todas = medir(ids)
+    assert uma == todas == 3
+
+
+def test_organizar_equipe_usa_a_mesma_regra_de_principal(app):
+    from app.services import treino_lideranca as lideranca
+    centro, jardim = _loja('Centro'), _loja('Jardim')
+    bia = _pessoa('Bia', lojas=[centro], principal=centro)
+    db.session.commit()
+    lideranca.salvar_estrutura([bia], {bia.id: None}, {bia.id: jardim.id}, {bia.id: 'Tarde'})
+    assert _vinculos(bia) == {centro.id: False, jardim.id: True}
+    assert bia.periodo == 'Tarde'
+    with pytest.raises(lideranca.LiderancaError, match='Manhã ou Tarde'):
+        lideranca.salvar_estrutura([bia], {bia.id: None}, {bia.id: jardim.id}, {bia.id: 'Noite'})
+    db.session.rollback()
+
+
+def test_auditoria_grava_o_ip_resolvido_pelo_proxy_e_nao_o_header_cru(app, owner_user):
+    centro = _loja('Centro')
+    livre = _pessoa('Livre')
+    db.session.commit()
+    cliente = _cliente(app, owner_user)
+    cliente.post(f'/rh/equipe/lojas/{centro.id}/adicionar',
+                 data={'funcionario_id': livre.id, 'voltar': 'loja'},
+                 headers={'X-Forwarded-For': '203.0.113.9, 198.51.100.7'},
+                 environ_base={'REMOTE_ADDR': '198.51.100.7'})
+    (log,) = _auditoria(livre)
+    assert log.ip == '198.51.100.7'

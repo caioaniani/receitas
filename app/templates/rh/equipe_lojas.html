@@ -69,7 +69,7 @@
         {% if not selecionada %}<a class="rh-equipe-text-link" href="{{ url_for('rh.equipe_lojas', loja=loja.id) }}">Ver só esta loja <i class="bi bi-arrow-right" aria-hidden="true"></i></a>{% endif %}
       </header>
 
-      <div class="rh-lojas-actions" aria-label="Alterar a equipe de {{ loja.nome }}">
+      <div class="rh-lojas-actions" role="group" aria-labelledby="loja-{{ loja.id }}">
         <details class="rh-lojas-action">
           <summary class="rh-equipe-button"><i class="bi bi-person-plus" aria-hidden="true"></i> Adicionar pessoa</summary>
           <form method="post" action="{{ url_for('rh.equipe_lojas_adicionar', loja_id=loja.id) }}" class="rh-lojas-action-form">
@@ -112,6 +112,8 @@
       </div>
 
       {% if loja.total %}
+      {# Um líder pode encabeçar grupos em dois turnos: o gesto de remover sai uma vez por loja. #}
+      {% set vistos = namespace(ids=[]) %}
       <div class="rh-lojas-shifts">
         {% for turno in loja.turnos %}{% if turno.total or turno.grupos or turno.sem_lider %}
         <section class="rh-lojas-shift" aria-labelledby="turno-{{ loja.id }}-{{ loop.index }}">
@@ -130,7 +132,7 @@
               {% if grupo.compartilhados %}
               <div class="rh-lojas-shared"><span>Liderança compartilhada com</span>{% for parceiro in grupo.compartilhados %}<a href="{{ url_for('rh.detalhe_funcionario', id=parceiro.id) }}">{{ parceiro.nome }}</a>{% endfor %}</div>
               {% endif %}
-              {{ remover_form(grupo.lider, loja) }}
+              {% if grupo.lider.id not in vistos.ids %}{{ remover_form(grupo.lider, loja) }}{% set vistos.ids = vistos.ids + [grupo.lider.id] %}{% endif %}
             </div>
             {% if grupo.pessoas %}
             <div class="rh-lojas-reports"><span class="rh-lojas-label">Equipe liderada</span><ul>{% for pessoa in grupo.pessoas %}{{ pessoa_item(pessoa, loja=loja) }}{% endfor %}</ul></div>
