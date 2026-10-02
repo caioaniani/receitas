@@ -177,6 +177,15 @@ em `acesso_gestao_rh.ENDPOINTS_RH`. Serviço
 automático). Escala (`Posicao`) intocada de propósito. Verificado: o salvar
 da ficha (`clear()` + `append`) PRESERVA a marca de principal das lojas que
 continuam marcadas (histórico de coleção do SQLAlchemy) — não há bug ali.
+REVISÃO (02/10, 12 achados aplicados): **loja INATIVA nunca conta como
+principal** no gesto — a tela já lia assim e o serviço divergia; regra
+única em `treino_lideranca` (`escolher_principal`/`vinculos_de`/
+`marcar_unidade_principal`/`validar_periodo`, usados por Organizar
+equipe E Equipe por loja; duas marcas = vale a de maior id nas duas
+leituras); `salvar_estrutura` trava as fichas (`travar_funcionarios`);
+`audit._request_meta` passou a gravar `request.remote_addr` (ProxyFix)
+em vez do `X-Forwarded-For` cru — vale para TODO modelo auditado
+(`handshake/routes.py` ainda lê o header cru, fora deste escopo).
 Docs: `docs/rh-visao-equipe.md`; testes `tests/test_rh_equipe_lojas_acoes.py`.
 
 ## Publicação após testes (autorização do dono, 28/09/2026)
