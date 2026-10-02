@@ -5,6 +5,12 @@ principal) e, quando pedido, o período mudam. Nenhuma função altera cargo,
 salário, líder direto, conta de acesso ou os demais campos da ficha; remover
 alguém de uma loja nunca desliga a pessoa do RH.
 
+A regra da unidade principal é a de `treino_lideranca` (`escolher_principal`
+/ `marcar_unidade_principal` / `validar_periodo`): este módulo não a copia.
+Aqui, como na tela (`rh_equipe_lojas.carregar_lojas`), uma loja INATIVA
+nunca conta como principal — quem está preso numa loja fechada entra por
+"Adicionar" e a loja nova vira a principal.
+
 Sem commit: a rota controla a transação. A tabela de associação não passa
 pelo listener automático de auditoria, então cada gesto grava a própria
 linha em `AuditLog` (tabela ``funcionario_loja``) com o estado antes/depois.
@@ -13,7 +19,7 @@ from __future__ import annotations
 
 import json
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete
 from sqlalchemy.orm import joinedload, load_only, selectinload
 
 from app.extensions import db
@@ -61,12 +67,14 @@ def _ordem(item):
 
 
 def candidatos_por_loja(lojas_ids):
-    """Listas dos formulários de cada loja, com duas consultas no total.
+    """Listas dos formulários de cada loja: três consultas, qualquer que seja
+    o número de lojas (pessoas, lojas delas e marcas de principal).
 
     ``adicionar``: pessoas ativas ainda sem vínculo com a loja, agrupadas
-    pela unidade principal atual (sem unidade primeiro). ``importar``:
-    pessoas cuja unidade principal é OUTRA loja ativa. Direção fica fora
-    das duas listas — ela não integra a lotação de loja nenhuma.
+    pela unidade principal atual (sem unidade primeiro — inclui quem só
+    tem loja inativa, mesma leitura da tela). ``importar``: pessoas cuja
+    unidade principal é OUTRA loja ativa. Direção fica fora das duas
+    listas — ela não integra a lotação de loja nenhuma.
     """
     pessoas = [p for p in _pessoas_ativas() if not lideranca.eh_direcao(p)]
     unidades = lideranca.unidades_principais(pessoas)
@@ -118,30 +126,25 @@ def _pessoa(funcionario_id):
     return pessoa
 
 
-def _vinculos(pessoa):
-    linhas = db.session.execute(
-        select(funcionario_loja.c.loja_id, funcionario_loja.c.loja_principal)
-        .where(funcionario_loja.c.funcionario_id == pessoa.id)).all()
-    return {loja_id: bool(principal) for loja_id, principal in linhas}
+def _principal_ativa(vinculos):
+    """Unidade principal pela regra única, mas só se a loja estiver ativa.
 
-
-def _principal_atual(pessoa, vinculos):
-    """Mesma regra de `unidades_principais`: marca explícita ou loja única."""
-    marcadas = [loja_id for loja_id, principal in vinculos.items() if principal]
-    if marcadas:
-        return marcadas[0]
-    if len(vinculos) == 1:
-        return next(iter(vinculos))
-    return None
+    A tela mostra quem tem marca numa loja fechada como "unidade principal
+    a definir"; o gesto precisa ler igual, senão a loja nova entraria como
+    vínculo adicional de uma loja que não existe mais na operação.
+    """
+    escolhida = lideranca.escolher_principal(
+        {loja_id: dados['principal'] for loja_id, dados in vinculos.items()})
+    if escolhida is None or not vinculos[escolhida]['ativa']:
+        return None
+    return escolhida
 
 
 def _periodo_validado(periodo):
-    periodo = (periodo or '').strip()
-    if not periodo:
-        return None
-    if periodo not in lideranca.PERIODOS_EQUIPE:
-        raise EquipeLojaError('O período deve ser Manhã ou Tarde.')
-    return periodo
+    try:
+        return lideranca.validar_periodo(periodo)
+    except lideranca.LiderancaError as exc:
+        raise EquipeLojaError(str(exc)) from None
 
 
 def _auditar(acao, pessoa, loja, antes, depois, actor_id):
@@ -163,16 +166,10 @@ def _auditar(acao, pessoa, loja, antes, depois, actor_id):
 
 def definir_principal(pessoa, loja_id):
     """Deixa uma única unidade principal; a loja precisa já estar vinculada."""
-    vinculos = _vinculos(pessoa)
-    if loja_id not in vinculos:
-        raise EquipeLojaError('A unidade principal precisa estar entre as lojas da pessoa.')
-    db.session.execute(update(funcionario_loja)
-                       .where(funcionario_loja.c.funcionario_id == pessoa.id)
-                       .values(loja_principal=False))
-    db.session.execute(update(funcionario_loja)
-                       .where(funcionario_loja.c.funcionario_id == pessoa.id,
-                              funcionario_loja.c.loja_id == loja_id)
-                       .values(loja_principal=True))
+    try:
+        lideranca.marcar_unidade_principal(pessoa.id, loja_id, inserir=False)
+    except lideranca.LiderancaError as exc:
+        raise EquipeLojaError(str(exc)) from None
 
 
 def _inserir_vinculo(pessoa, loja, principal):
@@ -188,8 +185,16 @@ def _aplicar_periodo(pessoa, periodo):
     return False
 
 
+def _loja_leve(loja_id):
+    """Só id/nome/ativa — a planta da loja (LargeBinary) fica fora."""
+    if not loja_id:
+        return None
+    return (Loja.query.options(load_only(Loja.id, Loja.nome, Loja.ativa))
+            .filter_by(id=loja_id).first())
+
+
 def _nome_loja(loja_id):
-    loja = db.session.get(Loja, loja_id) if loja_id else None
+    loja = _loja_leve(loja_id)
     return loja.nome if loja else None
 
 
@@ -197,7 +202,8 @@ def adicionar_pessoa(loja, funcionario_id, *, principal=False, periodo=None,
                      actor_id=None):
     """Vincula uma pessoa ativa à loja.
 
-    Quem não tinha unidade principal passa a ter esta. Quem já tinha fica
+    Quem não tinha unidade principal ATIVA passa a ter esta (inclusive quem
+    só tinha loja fechada — a marca antiga é limpa). Quem já tinha fica
     com um vínculo adicional, a não ser que ``principal`` seja pedido. Uma
     pessoa de loja única que ganha o segundo vínculo tem a loja antiga
     marcada explicitamente como principal, para não cair em "várias
@@ -205,10 +211,10 @@ def adicionar_pessoa(loja, funcionario_id, *, principal=False, periodo=None,
     """
     _loja_ativa(loja)
     pessoa = _pessoa(funcionario_id)
-    vinculos = _vinculos(pessoa)
+    vinculos = lideranca.vinculos_de(pessoa.id)
     if loja.id in vinculos:
         raise EquipeLojaError(f'{pessoa.nome} já está vinculado(a) a {loja.nome}.')
-    principal_antes = _principal_atual(pessoa, vinculos)
+    principal_antes = _principal_ativa(vinculos)
     vira_principal = bool(principal) or principal_antes is None
     _inserir_vinculo(pessoa, loja, vira_principal)
     if vira_principal:
@@ -228,23 +234,24 @@ def adicionar_pessoa(loja, funcionario_id, *, principal=False, periodo=None,
 
 def importar_pessoa(loja, funcionario_id, *, manter_origem=False, periodo=None,
                     actor_id=None):
-    """Transfere a unidade principal de outra loja para esta.
+    """Transfere a unidade principal de outra loja ativa para esta.
 
     Por padrão a pessoa sai da loja de origem; ``manter_origem`` conserva
     aquele vínculo como adicional. Outros vínculos secundários ficam como
-    estão. Quem não tem unidade principal deve entrar por ``adicionar``.
+    estão. Quem não tem unidade principal ativa deve entrar por ``adicionar``.
     """
     _loja_ativa(loja)
     pessoa = _pessoa(funcionario_id)
-    vinculos = _vinculos(pessoa)
-    origem_id = _principal_atual(pessoa, vinculos)
+    vinculos = lideranca.vinculos_de(pessoa.id)
+    origem_id = _principal_ativa(vinculos)
     if origem_id is None:
         raise EquipeLojaError(
             f'{pessoa.nome} não tem unidade principal; use "Adicionar pessoa".')
     if origem_id == loja.id:
         raise EquipeLojaError(f'{loja.nome} já é a unidade principal de {pessoa.nome}.')
-    origem = db.session.get(Loja, origem_id)
-    if loja.id not in vinculos:
+    origem = _loja_leve(origem_id)
+    ja_vinculada = loja.id in vinculos
+    if not ja_vinculada:
         _inserir_vinculo(pessoa, loja, True)
     definir_principal(pessoa, loja.id)
     if not manter_origem:
@@ -256,8 +263,8 @@ def importar_pessoa(loja, funcionario_id, *, manter_origem=False, periodo=None,
                  None, actor_id)
     periodo_mudou = _aplicar_periodo(pessoa, periodo)
     db.session.expire(pessoa, ['lojas'])
-    _auditar('update' if loja.id in vinculos else 'insert', pessoa, loja,
-             {'loja_principal': False} if loja.id in vinculos else None,
+    _auditar('update' if ja_vinculada else 'insert', pessoa, loja,
+             {'loja_principal': False} if ja_vinculada else None,
              {'loja_principal': True, 'origem': origem.nome if origem else None,
               'origem_mantida': bool(manter_origem), 'periodo': pessoa.periodo},
              actor_id)
@@ -268,22 +275,28 @@ def importar_pessoa(loja, funcionario_id, *, manter_origem=False, periodo=None,
 def remover_pessoa(loja, funcionario_id, *, actor_id=None):
     """Retira só o vínculo com esta loja; a ficha continua ativa no RH.
 
-    Se era a unidade principal, a pessoa passa a "unidade principal a
-    definir" (ou, com uma única loja restante, essa loja vira a principal
-    pela regra de loja única). Líder direto e período não mudam.
+    Devolve ``nova_principal`` sempre que a unidade principal ATIVA mudar
+    com o gesto — tanto quando a loja removida era a principal quanto
+    quando a pessoa tinha várias lojas sem principal e a única restante
+    passa a contar pela regra de loja única. Líder direto e período não
+    mudam.
     """
     pessoa = _pessoa(funcionario_id)
-    vinculos = _vinculos(pessoa)
+    vinculos = lideranca.vinculos_de(pessoa.id)
     if loja.id not in vinculos:
         raise EquipeLojaError(f'{pessoa.nome} não está vinculado(a) a {loja.nome}.')
-    era_principal = _principal_atual(pessoa, vinculos) == loja.id
+    principal_antes = _principal_ativa(vinculos)
+    era_principal = principal_antes == loja.id
     db.session.execute(delete(funcionario_loja).where(
         funcionario_loja.c.funcionario_id == pessoa.id,
         funcionario_loja.c.loja_id == loja.id))
     db.session.expire(pessoa, ['lojas'])
-    restantes = _vinculos(pessoa)
-    nova_principal = _principal_atual(pessoa, restantes) if era_principal else None
-    _auditar('delete', pessoa, loja, {'loja_principal': era_principal}, None, actor_id)
+    restantes = lideranca.vinculos_de(pessoa.id)
+    principal_depois = _principal_ativa(restantes)
+    mudou = principal_depois is not None and principal_depois != principal_antes
+    _auditar('delete', pessoa, loja,
+             {'loja_principal': bool(vinculos[loja.id]['principal'])},
+             None, actor_id)
     return {'pessoa': pessoa, 'era_principal': era_principal,
             'restantes': len(restantes),
-            'nova_principal': _nome_loja(nova_principal)}
+            'nova_principal': _nome_loja(principal_depois) if mudou else None}
