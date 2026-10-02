@@ -624,7 +624,31 @@ def receita():
         'estoque_lojas': est_lojas,
         'mapeamentos_venda': mapas,
         'em_cestas': cestas,
+        # Etapas do fluxograma (02/10/2026): nome/duração/tipo + parâmetros da
+        # ficha de produção — pra conferir de fora o que o Gantt vai mostrar.
+        'etapas': [e.to_dict() for e in rec.etapas],
     })
+
+
+@claude_api_bp.route('/fichas-producao')
+@_claude_auth_required
+def fichas_producao():
+    """Estado das fichas de produção (02/10/2026): marcador da última
+    importação da planilha, marker do seed de startup, receitas ativas com
+    as etapas (e parâmetros) e as que ficaram SEM etapas. Read-only — a
+    aplicação é gesto do dono em /receitas/fichas-producao."""
+    from app.models import AppConfig
+    from app.services import fichas_producao as svc
+    situacao = svc.situacao_receitas()
+    return jsonify(ok=True,
+                   importacao=svc.ultima_importacao(),
+                   seed=AppConfig.get('seed_fichas_producao_2026_10'),
+                   total_receitas=len(situacao),
+                   com_etapas=sum(1 for r in situacao if r['n_etapas']),
+                   sem_etapas=[{'id': r['id'], 'nome': r['nome'],
+                                'categoria': r['categoria']}
+                               for r in situacao if not r['n_etapas']],
+                   receitas=[r for r in situacao if r['n_etapas']])
 
 
 @claude_api_bp.route('/pedidos-semana')

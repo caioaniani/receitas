@@ -50,6 +50,8 @@ main { padding: 0 28px 24px; }
 .step strong { display: block; font-size: clamp(19px, 1.5vw, 28px); line-height: 1.25; overflow-wrap: anywhere; }
 .step-duration { display: block; margin-top: 8px; font-size: clamp(17px, 1.1vw, 21px); color: var(--muted); }
 .step > div { min-width: 0; }
+.step-params { display: block; margin-top: 6px; font-size: clamp(16px, 1.05vw, 20px); line-height: 1.35; color: #2b5f2b; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.step.passive .step-params { color: #6a4d12; }
 .step-instruction { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: clamp(17px, 1.15vw, 22px); line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
 .step.passive { background: #f9f3e5; border-color: #e6d9ba; }
 .step.passive .step-number { background: #785b23; }

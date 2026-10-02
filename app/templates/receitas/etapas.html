@@ -16,6 +16,10 @@
   (<a href="{{ url_for('padeiro.gantt') }}" target="_blank">ver Gantt</a>).
   Cada etapa tem uma <strong>duração</strong> e um <strong>tipo de trabalho</strong>.
   Arraste pelo <span class="text-muted">≡</span> pra reordenar.
+  Os <strong>⚙ parâmetros</strong> (velocidades do batimento, temperaturas,
+  dobras, forno/teto/lastro) vêm da planilha de
+  <a href="{{ url_for('receitas.fichas_producao') }}">fichas de produção</a>;
+  salvar aqui os preserva — para mudá-los, importe a planilha de novo.
   <ul class="mb-0 mt-1">
     <li><strong>✋ Padeiro (mão de obra)</strong>: a pessoa está trabalhando
       (mise en place, modelagem, dobras). Ocupa o padeiro.</li>
@@ -53,6 +57,9 @@
         <td>
           <input type="text" name="nome[]" value="{{ e.nome }}" required maxlength="80"
                  class="form-control form-control-sm" placeholder="Ex: Amassamento">
+          {% set plabel = resumo_parametros(e.parametros, e.duracao_min) %}
+          {% if plabel %}<div class="small text-success-emphasis mt-1">⚙ {{ plabel }}</div>{% endif %}
+          <input type="hidden" name="parametros[]" value="{{ (e.parametros or '')|tojson|forceescape if e.parametros else '' }}">
           <textarea name="descricao[]" rows="2" maxlength="2000" class="form-control form-control-sm mt-1"
                     placeholder="O que fazer nesta etapa (passo a passo do padeiro — opcional)">{{ e.descricao or '' }}</textarea>
         </td>
@@ -91,23 +98,13 @@
   </div>
 </form>
 
-{# Form isolado: preenche com o padrão da categoria (fora do form principal).
-   Confirm em JS não-inline (apóstrofo na categoria quebrava o onsubmit). #}
-<form method="POST" action="{{ url_for('receitas.etapas', id=receita.id) }}" class="mt-2"
-      id="form-padrao-cat" data-categoria="{{ receita.categoria or 'sem categoria' }}">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <input type="hidden" name="acao" value="padrao">
-  <button type="submit" class="btn btn-outline-primary btn-sm">
-    <i class="bi bi-magic"></i> Preencher com o padrão da categoria
-  </button>
-</form>
-
 <template id="row-template">
   <tr class="etapa-row">
     <td class="text-muted text-center handle" title="Arraste para reordenar"
         style="cursor:grab; touch-action:none; font-size:18px;">≡</td>
     <td>
       <input type="text" name="nome[]" required maxlength="80" class="form-control form-control-sm" placeholder="Ex: Amassamento">
+      <input type="hidden" name="parametros[]" value="">
       <textarea name="descricao[]" rows="2" maxlength="2000" class="form-control form-control-sm mt-1"
                 placeholder="O que fazer nesta etapa (passo a passo do padeiro — opcional)"></textarea>
     </td>
@@ -164,16 +161,6 @@
         ' produto(s) da categoria «' + btnAplicar.dataset.categoria + '»?' +
         '\n\nIsso SUBSTITUI as etapas atuais de cada um — INCLUINDO o passo ' +
         'a passo escrito pelo padeiro — e não dá pra desfazer.';
-      if (!confirm(msg)) e.preventDefault();
-    });
-  }
-  var formPadrao = document.getElementById('form-padrao-cat');
-  if (formPadrao) {
-    formPadrao.addEventListener('submit', function (e) {
-      var msg = 'Substituir as etapas pelo padrão da categoria «' +
-        formPadrao.dataset.categoria + '»? O passo a passo escrito nesta ' +
-        'ficha também é substituído. (não salva automático — você ajusta e ' +
-        'salva depois)';
       if (!confirm(msg)) e.preventDefault();
     });
   }

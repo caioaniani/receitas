@@ -110,6 +110,7 @@
 {{ _lnk(variant, url_for('receitas.imagens_upload'), 'Subir imagens (zip)', request.path.startswith('/receitas/imagens')) }}
 {% if current_user.is_admin() %}
 {{ _lnk(variant, url_for('produtos.cadastro_ia'), 'Cadastro assistido (IA)', request.path.startswith('/produtos/cadastro-ia'), icon='bi-robot') }}
+{{ _lnk(variant, url_for('receitas.fichas_producao'), 'Fichas de produção (planilha)', request.path.startswith('/receitas/fichas-producao'), title='Etapas e parâmetros do fluxograma do padeiro, importados da planilha de fichas') }}
 {{ _lnk(variant, url_for('main.todo'), 'Pendências do catálogo', request.path == '/todo') }}
 {% endif %}
 {% endmacro %}

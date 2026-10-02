@@ -7221,6 +7221,56 @@ preparos permanecem disponíveis em sequência.
   não 17338 pães. Teste de registro confirma que 1000 g credita exatamente
   1000 na unidade-base existente.
 
+## Fichas de produção (planilha do dono) — etapas do fluxograma (02/10/2026)
+
+Dono: "cadastrar e usar essas infos no gantt/fluxograma de producao. Apagar
+todos os registros que o gantt usa hoje e trocar por esses dessa planilha".
+A planilha (abas Batimento / Fermentação "CAIXA" / Fermentação final /
+Forno; 12 receitas) virou a FONTE das `ReceitaEtapa`. Serviço
+`app/services/fichas_producao.py` (`ler_planilha` → `casar` → `aplicar`),
+tela `/receitas/fichas-producao` (admin vê a prévia; SÓ o dono aplica, token
+assinado 30 min), seed one-shot `_seed_fichas_producao_2026_10` (planilha
+embarcada em `app/seeds_data/fichas_producao_2026_10.xlsx`, marker com
+contagens), sonda `/api/claude/fichas-producao` (+ `etapas` na sonda
+`receita`). Doc: `docs/fichas-producao.md`.
+
+- **`receita_etapa.parametros` (JSON)**: velocidades V1/V2, ponto da massa,
+  temperaturas (ambiente/líquido/massa ao fim), local e temperatura da
+  fermentação, dobras, alternativas da fermentação final, forno/teto/lastro,
+  mais `origem` (aba · linha). Procedimento de 2 commits (ALTER c6b34b6a
+  confirmado pela sonda antes do modelo). Rótulo legível = FONTE ÚNICA
+  `etapas_receita.resumo_parametros` (Gantt, TV, editores, prévia, sonda —
+  há teste travando o formato). `bateladas_paes.processo_da_receita` é a
+  forma única do `processo` (snapshot, mise en place e Gantt); `parametros`
+  tem de ser propagado explicitamente nas tarefas do Gantt (`_passos`).
+- **Aplicar = wipe GLOBAL com rede**: backup JSON de TODAS as etapas em
+  AppConfig (`fichas_producao_backup_<ts>`) ANTES de apagar; apaga as etapas
+  de todas as receitas (inclusive fora da planilha e arquivadas — só ativas
+  casam, por nome normalizado EXATO); reescreve SÓ `dados['processo']` dos
+  snapshots de batelada das ordens que o Gantt ainda lê (data ≥ hoje−3, com
+  falta, não dispensada/encerrada; reatribuição do dict — `db.JSON` sem
+  Mutable não vê mutação in-place; quantidades/MP/subs intactos — exceção
+  documentada em `docs/bateladas-paes.md`); `expire_all()` antes do
+  reescrever (DELETE em massa não sincroniza coleções já carregadas);
+  marcador `fichas_producao_import`. Célula em branco NUNCA vira valor —
+  vira `avisos` (caixa sem "Duração (h)" usa o tempo até a última dobra).
+- **Padrão genérico por categoria REMOVIDO** (`ETAPAS_PADRAO`,
+  `etapas_padrao_categoria`, `seed_etapas_categoria`, `de_tuplas`, rota
+  `receitas.amassadeira_etapas_padrao`, botões "Preencher/Começar do padrão"
+  e "Aplicar padrão"): recriaria os registros que o dono mandou apagar.
+  `acao=padrao` numa aba antiga NÃO grava (flash + 303) — o form chega sem
+  linhas e zeraria a ficha. Os editores preservam `parametros[]` (hidden
+  JSON; ilegível = None) e `duplicar` copia os parâmetros.
+- **Consequências literais da planilha (reportadas ao dono)**: Croissant
+  "24h" a 28 °C = 1440 min passiva (dia D só a espera; forno em D+1);
+  croissant/pain sem laminação/modelagem; "Mesa: do corte à modelagem"
+  nasce passiva; sourdoughs com a forma CF 12 h como etapa e "ambiente 6 h"
+  em `alternativas`; receitas fora da planilha ficam SEM etapas (a tela
+  lista). Pão Francês Fermentado tem `dias_producao=1` no cadastro mas a
+  ficha é toda do mesmo dia — ajustar o cadastro é decisão do dono.
+- Testes: `tests/test_fichas_producao.py` (planilha real como fixture),
+  `test_etapas_producao.py` e `test_padeiro_fichas.py` reescritos.
+
 ## Treinamento: avanço e acompanhamento (10/09/2026)
 
 - `/treino/gestor/` e a ficha RH mostram avanço assistido (inclusive parcial), separado da conclusão obrigatória. A leitura considera aulas publicadas de módulos ativos e a versão atual, mesmo sem cargo ou temporada.

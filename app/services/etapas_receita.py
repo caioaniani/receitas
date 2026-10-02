@@ -7,8 +7,15 @@ não podem divergir (regra do CLAUDE.md sobre implementações duplicadas).
 
 Cada etapa: nome + duração (min) + tipo de trabalho (padeiro/máquina/descanso,
 via RECURSO_MAP) + `descricao` (o QUE fazer na etapa — passo a passo que o
-padeiro preenche; alimenta o drawer de mise en place e o fluxograma).
+padeiro preenche; alimenta o drawer de mise en place e o fluxograma) +
+`parametros` (dict JSON com os valores da ficha de produção — velocidades do
+batimento, temperaturas, local da fermentação, dobras, forno/teto/lastro —,
+importado da planilha pelo serviço `fichas_producao`; os editores só o
+PRESERVAM, em `parametros[]`, e o fluxograma/TV o mostram pelo
+`resumo_parametros`).
 """
+import json
+
 from app.extensions import db
 from app.models import ReceitaEtapa
 
@@ -28,6 +35,104 @@ RECURSO_MAP = {
 }
 
 DESCRICAO_MAX = 2000
+PARAMETROS_MAX = 4000     # JSON por etapa no form (hidden) — ficha real ~300 B
+
+
+def _num_br(v):
+    """Número no formato da padaria: 5,4 / 20 / 28,6."""
+    if isinstance(v, bool):
+        return str(v)
+    if isinstance(v, (int, float)):
+        if float(v).is_integer():
+            return str(int(v))
+        return ('%.2f' % float(v)).rstrip('0').rstrip('.').replace('.', ',')
+    return str(v)
+
+
+def _dur_br(minutos):
+    m = int(minutos or 0)
+    if m and m % 60 == 0:
+        return '%d h' % (m // 60)
+    if m > 60:
+        return ('%.1f h' % (m / 60.0)).replace('.', ',')
+    return '%d min' % m
+
+
+def _metodo_label(m):
+    partes = []
+    if m.get('local'):
+        partes.append(str(m['local']))
+    if m.get('temp_c') is not None:
+        partes.append('%s °C' % _num_br(m['temp_c']))
+    if m.get('tempo_min') is not None:
+        partes.append(_dur_br(m['tempo_min']))
+    elif m.get('tempo_como_escrito'):
+        partes.append(str(m['tempo_como_escrito']))
+    return ' · '.join(partes)
+
+
+def resumo_parametros(p, duracao_min=None):
+    """Rótulo legível dos parâmetros de uma etapa — FONTE ÚNICA do texto que
+    o Gantt, a TV do padeiro, os editores e a sonda mostram. Chaves que não
+    existem na ficha ficam de fora; chaves desconhecidas são ignoradas.
+    `tempo_como_escrito` só aparece quando a duração não pôde ser lida."""
+    if not isinstance(p, dict) or not p:
+        return ''
+    partes = []
+    if p.get('velocidade_1_min') is not None:
+        partes.append('V1 %s min' % _num_br(p['velocidade_1_min']))
+    if p.get('velocidade_2_min') is not None:
+        partes.append('V2 %s min' % _num_br(p['velocidade_2_min']))
+    if p.get('ponto_massa'):
+        partes.append('ponto: %s' % p['ponto_massa'])
+    if p.get('temp_liquido_c') is not None:
+        partes.append('líquido %s °C' % _num_br(p['temp_liquido_c']))
+    elif p.get('temp_liquido_txt'):
+        partes.append('líquido: %s' % p['temp_liquido_txt'])
+    if p.get('temp_ambiente_c') is not None:
+        partes.append('ambiente %s °C' % _num_br(p['temp_ambiente_c']))
+    if p.get('temp_massa_final_c') is not None:
+        partes.append('massa ao fim %s °C' % _num_br(p['temp_massa_final_c']))
+    if p.get('local'):
+        partes.append(str(p['local']))
+    if p.get('temp_c') is not None:
+        partes.append('%s °C' % _num_br(p['temp_c']))
+    if p.get('dobras_min'):
+        d = [_num_br(x) for x in p['dobras_min']]
+        if len(d) == 1:
+            partes.append('dobra aos %s min' % d[0])
+        else:
+            partes.append('dobras aos %s e %s min' % (', '.join(d[:-1]), d[-1]))
+    if p.get('tempo_como_escrito') and not duracao_min:
+        partes.append('na ficha: %s' % p['tempo_como_escrito'])
+    for alt in p.get('alternativas') or []:
+        lbl = _metodo_label(alt) if isinstance(alt, dict) else ''
+        if lbl:
+            partes.append('alternativa: %s' % lbl)
+    if p.get('forno_c') is not None:
+        partes.append('%s °C' % _num_br(p['forno_c']))
+    if p.get('teto') is not None:
+        partes.append('teto %s' % _num_br(p['teto']))
+    if p.get('lastro') is not None:
+        partes.append('lastro %s' % _num_br(p['lastro']))
+    if p.get('unidade_teto_lastro'):
+        partes.append('(%s)' % p['unidade_teto_lastro'])
+    if p.get('alvo_interno_c') is not None:
+        partes.append('alvo interno %s °C' % _num_br(p['alvo_interno_c']))
+    return ' · '.join(partes)
+
+
+def parametros_de_form(raw):
+    """JSON do hidden `parametros[]` → dict ou None (vazio/ilegível/não-objeto
+    = None; nunca levanta — o editor não pode travar por um hidden torto)."""
+    raw = (raw or '').strip()
+    if not raw or len(raw) > PARAMETROS_MAX:
+        return None
+    try:
+        v = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    return v if isinstance(v, dict) and v else None
 
 
 def recurso_de_etapa(e):
@@ -46,6 +151,7 @@ def parse_etapas_form(form):
     duracoes = form.getlist('duracao[]')
     recursos = form.getlist('recurso[]')
     descricoes = form.getlist('descricao[]')
+    parametros = form.getlist('parametros[]')
     for i, nome in enumerate(nomes):
         nome = (nome or '').strip()
         if not nome:
@@ -59,17 +165,11 @@ def parse_etapas_form(form):
         equip, ativa = RECURSO_MAP.get(recurso, (None, True))
         desc = (descricoes[i] if i < len(descricoes) else '') or ''
         desc = desc.strip()[:DESCRICAO_MAX] or None
+        params = parametros_de_form(parametros[i] if i < len(parametros) else '')
         out.append({'nome': nome[:80], 'duracao_min': dur_min,
-                    'equipamento': equip, 'ativa': ativa, 'descricao': desc})
+                    'equipamento': equip, 'ativa': ativa, 'descricao': desc,
+                    'parametros': params})
     return out
-
-
-def de_tuplas(padrao):
-    """Converte o padrão da categoria (tuplas (nome, dur, equip, ativa) de
-    app/constants.py) pro formato dict do serviço — sem descrição."""
-    return [{'nome': nome, 'duracao_min': dur, 'equipamento': equip,
-             'ativa': ativa, 'descricao': None}
-            for nome, dur, equip, ativa in padrao]
 
 
 def set_etapas(receita_id, etapas):
@@ -82,7 +182,8 @@ def set_etapas(receita_id, etapas):
             duracao_min=e.get('duracao_min') or 0,
             equipamento=e.get('equipamento'),
             ativa=bool(e.get('ativa', True)),
-            descricao=e.get('descricao')))
+            descricao=e.get('descricao'),
+            parametros=e.get('parametros') or None))
 
 
 def listar(receita_id):

@@ -428,6 +428,9 @@
     flex-wrap:wrap; }
   /* Passo a passo da ficha de preparo (/padeiro/fichas) — quebra pra linha
      inteira abaixo do nome/duração da etapa. */
+  .mep-step .st-params { flex-basis:100%; font-size:15px; font-weight:600;
+    color:#2b5f2b; font-variant-numeric:tabular-nums; }
+  .mep-step.passiva .st-params { color:#6a4d12; }
   .mep-step .st-desc { flex-basis:100%; font-size:15px; font-weight:400;
     font-style:normal; color:#495057; line-height:1.45; white-space:pre-line;
     padding-left:42px; }
@@ -798,14 +801,17 @@
           d.processo.forEach(function (e) {
             var ic = _mepEquipIcon(e.equipamento, e.ativa);
             var eq = e.equipamento ? '<span class="st-eq">' + _mepEsc(e.equipamento) + '</span>' : '';
-            // Passo a passo da ficha de preparo (o QUE fazer na etapa).
+            // Parâmetros da ficha de produção (velocidades, temperaturas,
+            // forno/teto/lastro) e passo a passo (o QUE fazer na etapa).
+            var params = e.parametros_label
+              ? '<div class="st-params">' + _mepEsc(e.parametros_label) + '</div>' : '';
             var desc = e.descricao
               ? '<div class="st-desc">' + _mepEsc(e.descricao) + '</div>' : '';
             h += '<li class="mep-step' + (e.ativa ? '' : ' passiva') + '">' +
                  '<span class="ic">' + ic + '</span>' +
                  '<span class="st-nm">' + _mepEsc(e.nome) + '</span>' + eq +
                  '<span class="st-dur">' + _mepEsc(e.duracao) + '</span>' +
-                 desc + '</li>';
+                 params + desc + '</li>';
           });
           h += '</ul>';
         } else if (d.etapas && d.etapas.length) {

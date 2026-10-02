@@ -1,22 +1,14 @@
 """Etapas de producao (processo / fluxograma).
 
-ReceitaEtapa guarda o passo a passo de cada receita (Mise en place,
-Amassamento, Fermentacao, Forno...) com duracao e equipamento. O seed por
-categoria preenche o padrao artesanal pesquisado; o mise_en_place expoe o
-processo pro card do padeiro.
+ReceitaEtapa guarda o passo a passo de cada receita (Batimento, Fermentacao,
+Forno...) com duracao, equipamento e os parametros da ficha de producao. O
+padrao generico por categoria (seed pesquisado) foi REMOVIDO em 02/10/2026 —
+as etapas vem da planilha de fichas (tests/test_fichas_producao.py); o
+mise_en_place expoe o processo pro card do padeiro.
 """
-from app.constants import (
-    ETAPAS_PADRAO,
-    ETAPAS_PADRAO_DEFAULT,
-    etapas_padrao_categoria,
-)
 from app.extensions import db
 from app.models import Receita, ReceitaEtapa
-from app.services.producao import (
-    _fmt_dur,
-    mise_en_place,
-    seed_etapas_categoria,
-)
+from app.services.producao import _fmt_dur, mise_en_place
 
 
 def _receita(nome='Pão Francês', categoria='Pães', modo=''):
@@ -25,6 +17,26 @@ def _receita(nome='Pão Francês', categoria='Pães', modo=''):
     db.session.add(r)
     db.session.commit()
     return r
+
+
+ETAPAS_EXEMPLO = [
+    ('Mise en place', 10, None, True, None),
+    ('Amassamento', 15, 'amassadeira', True,
+     {'velocidade_1_min': 14, 'velocidade_2_min': 1, 'temp_liquido_c': 5.4}),
+    ('Fermentação', 120, None, False, None),
+    ('Forno', 25, 'forno', True, {'forno_c': 235, 'teto': 100, 'lastro': 100}),
+]
+
+
+def _cadastrar(r, etapas=ETAPAS_EXEMPLO):
+    """Substitui as etapas da receita (no lugar do antigo seed por categoria)."""
+    ReceitaEtapa.query.filter_by(receita_id=r.id).delete()
+    for i, (nome, dur, equip, ativa, params) in enumerate(etapas):
+        db.session.add(ReceitaEtapa(receita_id=r.id, ordem=i, nome=nome,
+                                    duracao_min=dur, equipamento=equip,
+                                    ativa=ativa, parametros=params))
+    db.session.commit()
+    db.session.refresh(r)
 
 
 # ── _fmt_dur ────────────────────────────────────────────────────────────────
@@ -37,100 +49,6 @@ def test_fmt_dur():
     assert _fmt_dur(150) == '2,5h'
     assert _fmt_dur(2880) == '48h'
 
-
-# ── padrao por categoria ─────────────────────────────────────────────────────
-
-def test_etapas_padrao_categoria_conhecida():
-    assert etapas_padrao_categoria('Pães') is ETAPAS_PADRAO['Pães']
-    assert etapas_padrao_categoria('Viennoiserie') is ETAPAS_PADRAO['Viennoiserie']
-
-
-def test_etapas_padrao_categoria_desconhecida_cai_no_default():
-    assert etapas_padrao_categoria('Categoria Inexistente') is ETAPAS_PADRAO_DEFAULT
-    assert etapas_padrao_categoria('') is ETAPAS_PADRAO_DEFAULT
-    assert etapas_padrao_categoria(None) is ETAPAS_PADRAO_DEFAULT
-
-
-def test_padrao_paes_tem_etapas_passivas():
-    """Fermentacao longa = passiva (entre turnos, nao ocupa mao-de-obra)."""
-    paes = ETAPAS_PADRAO['Pães']
-    passivas = [e for e in paes if e[3] is False]
-    assert passivas, 'Pães deve ter ao menos uma etapa passiva'
-    # alguma etapa usa amassadeira e outra usa forno (serializam no Gantt)
-    equips = {e[2] for e in paes}
-    assert 'amassadeira' in equips
-    assert 'forno' in equips
-
-
-# ── seed_etapas_categoria ────────────────────────────────────────────────────
-
-def test_seed_cria_etapas_na_ordem(app):
-    r = _receita(categoria='Pães')
-    n = seed_etapas_categoria('Pães')
-    assert n == 1
-    etapas = (ReceitaEtapa.query.filter_by(receita_id=r.id)
-              .order_by(ReceitaEtapa.ordem).all())
-    padrao = ETAPAS_PADRAO['Pães']
-    assert len(etapas) == len(padrao)
-    for i, (e, (nome, dur, equip, ativa)) in enumerate(zip(etapas, padrao)):
-        assert e.ordem == i
-        assert e.nome == nome
-        assert e.duracao_min == dur
-        assert e.equipamento == equip
-        assert e.ativa == ativa
-
-
-def test_seed_idempotente_substitui(app):
-    """Re-aplicar nao duplica — substitui as etapas existentes."""
-    r = _receita(categoria='Pães')
-    seed_etapas_categoria('Pães')
-    seed_etapas_categoria('Pães')
-    etapas = ReceitaEtapa.query.filter_by(receita_id=r.id).all()
-    assert len(etapas) == len(ETAPAS_PADRAO['Pães'])  # nao dobrou
-
-
-def test_seed_preenche_modo_preparo_vazio(app):
-    r = _receita(categoria='Pães', modo='')
-    seed_etapas_categoria('Pães')
-    db.session.refresh(r)
-    assert r.modo_preparo.strip()
-    assert 'Mise en place' in r.modo_preparo
-
-
-def test_seed_nao_sobrescreve_modo_preparo_existente(app):
-    r = _receita(categoria='Pães', modo='Modo de preparo já escrito pelo dono.')
-    seed_etapas_categoria('Pães')
-    db.session.refresh(r)
-    assert r.modo_preparo == 'Modo de preparo já escrito pelo dono.'
-
-
-def test_seed_so_afeta_a_categoria_pedida(app):
-    rp = _receita('Pão', categoria='Pães')
-    rc = _receita('Brigadeiro', categoria='Cremes')
-    seed_etapas_categoria('Pães')
-    assert ReceitaEtapa.query.filter_by(receita_id=rp.id).count() > 0
-    assert ReceitaEtapa.query.filter_by(receita_id=rc.id).count() == 0
-
-
-def test_seed_sem_categoria_usa_default(app):
-    r = _receita('Item solto', categoria='')
-    n = seed_etapas_categoria('')
-    assert n == 1
-    etapas = ReceitaEtapa.query.filter_by(receita_id=r.id).all()
-    assert len(etapas) == len(ETAPAS_PADRAO_DEFAULT)
-
-
-def test_seed_ignora_arquivadas(app):
-    from app.utils import agora
-    r = _receita('Pão arquivado', categoria='Pães')
-    r.arquivada_em = agora()
-    db.session.commit()
-    n = seed_etapas_categoria('Pães')
-    assert n == 0
-    assert ReceitaEtapa.query.filter_by(receita_id=r.id).count() == 0
-
-
-# ── relationship + cascade ───────────────────────────────────────────────────
 
 def test_receita_etapas_relationship_ordenada(app):
     r = _receita(categoria='Pães')
@@ -146,7 +64,7 @@ def test_receita_etapas_relationship_ordenada(app):
 
 def test_etapas_cascade_delete(app):
     r = _receita(categoria='Pães')
-    seed_etapas_categoria('Pães')
+    _cadastrar(r)
     rid = r.id
     db.session.delete(r)
     db.session.commit()
@@ -157,18 +75,23 @@ def test_etapas_cascade_delete(app):
 
 def test_mise_en_place_inclui_processo(app):
     r = _receita(categoria='Pães')
-    seed_etapas_categoria('Pães')
-    db.session.refresh(r)
+    _cadastrar(r)
     mep = mise_en_place(r, 20)
     assert 'processo' in mep
-    assert len(mep['processo']) == len(ETAPAS_PADRAO['Pães'])
+    assert len(mep['processo']) == len(ETAPAS_EXEMPLO)
     p0 = mep['processo'][0]
     assert p0['nome'] == 'Mise en place'
     assert p0['duracao'] == '10 min'
     assert p0['ativa'] is True
-    # etapa de forno tem equipamento e duracao formatada
+    assert p0['parametros'] is None and p0['parametros_label'] == ''
+    # etapa de forno tem equipamento, duracao formatada e os parametros da
+    # ficha de producao prontos pra TV (mesma forma do snapshot de batelada)
     forno = [p for p in mep['processo'] if p['equipamento'] == 'forno'][0]
     assert forno['duracao'].endswith('min')
+    assert forno['parametros'] == {'forno_c': 235, 'teto': 100, 'lastro': 100}
+    assert forno['parametros_label'] == '235 °C · teto 100 · lastro 100'
+    amass = mep['processo'][1]
+    assert amass['parametros_label'] == 'V1 14 min · V2 1 min · líquido 5,4 °C'
 
 
 def test_mise_en_place_processo_vazio_sem_etapas(app):
@@ -186,25 +109,33 @@ def _login(app, user):
     return c
 
 
-def test_rota_seed_aplica_categoria(app, admin_user):
+def test_rota_seed_generico_nao_existe_mais(app, admin_user):
+    """O seed 'Aplicar padrão' por categoria foi removido (02/10/2026) — a
+    URL antiga responde 404 e nada é gravado."""
     r = _receita(categoria='Pães')
     c = _login(app, admin_user)
     resp = c.post('/receitas/amassadeira/etapas-padrao',
-                  data={'categoria': 'Pães'}, follow_redirects=True)
-    assert resp.status_code == 200
-    assert ReceitaEtapa.query.filter_by(receita_id=r.id).count() == \
-        len(ETAPAS_PADRAO['Pães'])
+                  data={'categoria': 'Pães'}, follow_redirects=False)
+    assert resp.status_code == 404
+    assert ReceitaEtapa.query.filter_by(receita_id=r.id).count() == 0
+    html = c.get('/receitas/amassadeira').get_data(as_text=True)
+    assert 'Aplicar padrão' not in html
+    assert 'etapas-padrao' not in html
 
 
 def test_editor_get_renderiza(app, admin_user):
     r = _receita(categoria='Pães')
-    seed_etapas_categoria('Pães')
+    _cadastrar(r)
     c = _login(app, admin_user)
     resp = c.get('/receitas/%d/etapas' % r.id)
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     assert 'Mise en place' in html
     assert 'Amassamento' in html
+    # parâmetros da ficha: rótulo legível + hidden que os preserva no save
+    assert '⚙ V1 14 min · V2 1 min · líquido 5,4 °C' in html
+    assert 'name="parametros[]"' in html
+    assert 'Preencher com o padrão da categoria' not in html
 
 
 def test_editor_post_salva_etapas(app, admin_user):
@@ -242,7 +173,7 @@ def test_editor_amassadeira_e_maquina_nao_mao_de_obra(app, admin_user):
 
 def test_editor_post_substitui_e_ignora_vazias(app, admin_user):
     r = _receita(categoria='Pães')
-    seed_etapas_categoria('Pães')      # estado inicial
+    _cadastrar(r)      # estado inicial
     c = _login(app, admin_user)
     c.post('/receitas/%d/etapas' % r.id, data={
         'nome[]': ['Só essa', '', '   '],
@@ -310,13 +241,38 @@ def test_gantt_congelar_nao_vira_camara_fria(app):
     assert '🧊' in icones                              # congelar inline, freezer
 
 
-def test_editor_acao_padrao_preenche_da_categoria(app, admin_user):
+def test_editor_acao_padrao_nao_grava_nada(app, admin_user):
+    """Aba antiga com o botão 'padrão da categoria': o POST chega sem linhas
+    e NÃO pode zerar a ficha — avisa e devolve ao editor."""
+    r = _receita(categoria='Pães')
+    _cadastrar(r)
+    c = _login(app, admin_user)
+    resp = c.post('/receitas/%d/etapas' % r.id, data={'acao': 'padrao'},
+                  follow_redirects=False)
+    assert resp.status_code == 303
+    etapas = ReceitaEtapa.query.filter_by(receita_id=r.id).all()
+    assert len(etapas) == len(ETAPAS_EXEMPLO)      # intactas
+
+
+def test_editor_post_preserva_parametros_da_ficha(app, admin_user):
+    """Salvar a etapa no editor mantém os parâmetros (hidden JSON); linha
+    nova sem hidden ou com JSON torto fica sem parâmetros."""
+    import json
     r = _receita(categoria='Pães')
     c = _login(app, admin_user)
-    c.post('/receitas/%d/etapas' % r.id, data={'acao': 'padrao'},
-           follow_redirects=True)
-    etapas = ReceitaEtapa.query.filter_by(receita_id=r.id).all()
-    assert len(etapas) == len(ETAPAS_PADRAO['Pães'])
+    c.post('/receitas/%d/etapas' % r.id, data={
+        'nome[]': ['Batimento', 'Forno', 'Nova'],
+        'duracao[]': ['15', '25', '5'],
+        'recurso[]': ['amassadeira', 'forno', 'padeiro'],
+        'descricao[]': ['', '', ''],
+        'parametros[]': [json.dumps({'velocidade_1_min': 14}), 'não é json',
+                         ''],
+    }, follow_redirects=True)
+    etapas = (ReceitaEtapa.query.filter_by(receita_id=r.id)
+              .order_by(ReceitaEtapa.ordem).all())
+    assert etapas[0].parametros == {'velocidade_1_min': 14}
+    assert etapas[1].parametros is None
+    assert etapas[2].parametros is None
 
 
 def test_editor_exige_admin(app):
@@ -329,21 +285,6 @@ def test_editor_exige_admin(app):
     c = _login(app, u)
     resp = c.get('/receitas/%d/etapas' % r.id)
     assert resp.status_code == 403
-
-
-def test_rota_seed_exige_admin(app):
-    from app.models import Usuario
-    u = Usuario(nome='func', login='func', papel='funcionario')
-    u.set_senha('123')
-    db.session.add(u)
-    db.session.commit()
-    r = _receita(categoria='Pães')
-    c = _login(app, u)
-    resp = c.post('/receitas/amassadeira/etapas-padrao',
-                  data={'categoria': 'Pães'}, follow_redirects=False)
-    assert resp.status_code in (302, 403)
-    # funcionario nao deve ter aplicado etapas
-    assert ReceitaEtapa.query.filter_by(receita_id=r.id).count() == 0
 
 
 # ── Aplicar ESTAS etapas a toda a categoria (26/06/2026) ─────────────────────

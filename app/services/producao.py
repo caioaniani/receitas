@@ -549,36 +549,6 @@ def _fmt_dur(minutos):
     return '%d min' % m
 
 
-def seed_etapas_categoria(categoria):
-    """Cria/substitui as etapas de producao de TODAS as receitas (nao
-    arquivadas) da categoria com o padrao pesquisado. Tambem preenche o
-    modo_preparo (texto) SE estiver vazio, gerado das etapas. Retorna o nº de
-    receitas afetadas. Idempotente (re-aplicar substitui as etapas)."""
-    from app.constants import etapas_padrao_categoria
-    from app.models import ReceitaEtapa
-
-    q = Receita.query.filter(Receita.arquivada_em.is_(None))
-    if categoria:
-        q = q.filter(Receita.categoria == categoria)
-    else:
-        q = q.filter((Receita.categoria.is_(None)) | (Receita.categoria == ''))
-    padrao = etapas_padrao_categoria(categoria)
-    n = 0
-    for r in q.all():
-        ReceitaEtapa.query.filter_by(receita_id=r.id).delete()
-        for i, (nome, dur, equip, ativa) in enumerate(padrao):
-            db.session.add(ReceitaEtapa(receita_id=r.id, ordem=i, nome=nome,
-                                        duracao_min=dur, equipamento=equip,
-                                        ativa=ativa))
-        if not (r.modo_preparo or '').strip():
-            r.modo_preparo = '\n\n'.join(
-                '%s — %s' % (nome, _fmt_dur(dur))
-                for nome, dur, equip, ativa in padrao)
-        n += 1
-    db.session.commit()
-    return n
-
-
 def mise_en_place(receita, unidades):
     """Receita ESCALADA pra produzir `unidades`: cada ingrediente com a
     quantidade ja ajustada (farinha, agua, sal...) pro padeiro pesar, mais o
@@ -621,17 +591,12 @@ def mise_en_place(receita, unidades):
         })
 
     # Processo estruturado (etapas cadastradas) pro fluxograma do padeiro:
-    # nome, duracao formatada, equipamento e se e ativa (mao-de-obra) ou
-    # passiva (fermentacao/descanso). Vazio quando a receita ainda nao tem
-    # etapas cadastradas — o card cai no modo_preparo em texto.
-    processo = [{
-        'nome': e.nome,
-        'duracao': _fmt_dur(e.duracao_min),
-        'duracao_min': e.duracao_min,
-        'equipamento': e.equipamento,
-        'ativa': e.ativa,
-        'descricao': e.descricao,
-    } for e in receita.etapas]
+    # nome, duracao formatada, equipamento, se e ativa (mao-de-obra) ou
+    # passiva (fermentacao/descanso) e os parametros da ficha de producao.
+    # Vazio quando a receita ainda nao tem etapas cadastradas — o card cai
+    # no modo_preparo em texto. Mesma forma do snapshot de batelada.
+    from app.services.bateladas_paes import processo_da_receita
+    processo = processo_da_receita(receita)
 
     return {
         'receita_id': receita.id,
