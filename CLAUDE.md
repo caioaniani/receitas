@@ -7254,6 +7254,31 @@ contagens), sonda `/api/claude/fichas-producao` (+ `etapas` na sonda
   reescrever (DELETE em massa não sincroniza coleções já carregadas);
   marcador `fichas_producao_import`. Célula em branco NUNCA vira valor —
   vira `avisos` (caixa sem "Duração (h)" usa o tempo até a última dobra).
+- **Revisão independente (02/10/2026, 22 achados, todos aplicados)**: as
+  abas são agrupadas pela MESMA normalização do casamento (grafia diferente
+  entre abas = uma ficha, com aviso; `ordem` segue a aparição na planilha);
+  coluna pelo cabeçalho MAIS ESPECÍFICO (`_coluna`, "teto (valor)" ganha de
+  "unidade teto / lastro" em qualquer ordem) e obrigatória ausente =
+  `PlanilhaInvalida`; traço "–" = célula vazia e "Local" sozinho não é dado
+  (a 1ª linha COM tempo é a fermentação final principal); célula AMARELA da
+  legenda do dono = `parametros['incerto']` + aviso + sufixo no rótulo
+  ("leitura incerta na ficha: temperatura, tempo"; 11 células na planilha
+  real — a aba "Notas" que a legenda cita não veio); "Duração (h)" e MESA
+  em horas (número = h; aceita 1:30/"2 h"/time/datetime de planilha);
+  "Tempo (min)" ≠ texto = vale o número + aviso; linha repetida = vale a 1ª
+  + aviso; duração fora de [0, 100000] = 0 + aviso (régua ÚNICA
+  `etapas_receita.duracao_valida`, a do editor); esquema FECHADO
+  `validar_parametros` em todo caminho de gravação (hidden do editor e
+  planilha) e `resumo_parametros` nunca levanta (RecursionError do JSON
+  aninhado incluído); dobras rotuladas como INTERVALOS ("a cada");
+  `aplicar` recusa com ValueError (nada apagado) sem nenhuma receita casada
+  — a rota avisa, o seed loga ERROR sem marker — e serializa com
+  `pg_advisory_xact_lock(7768)`; `gantt.MAX_LEAD_DIAS` importado (sem
+  cópia); "Aplicar a toda a categoria" NÃO copia os parâmetros (medidos por
+  receita; `origem` apontaria a linha errada); testes de round-trip do
+  hidden pelo HTML renderizado e planilha sintética (`_planilha` em
+  `tests/test_fichas_producao.py`) para cada ramo que a planilha real não
+  exercita.
 - **Padrão genérico por categoria REMOVIDO** (`ETAPAS_PADRAO`,
   `etapas_padrao_categoria`, `seed_etapas_categoria`, `de_tuplas`, rota
   `receitas.amassadeira_etapas_padrao`, botões "Preencher/Começar do padrão"

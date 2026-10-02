@@ -8,9 +8,10 @@ A planilha REAL embarcada em app/seeds_data é a fixture.
 """
 import json
 import re
-from datetime import timedelta
+from datetime import time, timedelta
 
 import pytest
+from sqlalchemy import text
 
 from app.extensions import db
 from app.models import (
@@ -177,7 +178,25 @@ def test_avisos_dizem_o_que_a_ficha_nao_informa(lido):
     caixa = [a for a in lido['avisos'] if 'fermentação em caixa' in a]
     assert len(caixa) == 6
     assert any(a.startswith('Sourdough Tradicional') and '85 min' in a for a in caixa)
-    assert len(lido['avisos']) == 6
+    # 11 células amarelas ("leitura incerta" na legenda do dono) em 7 etapas
+    incertos = [a for a in lido['avisos'] if 'leitura incerta' in a]
+    assert len(incertos) == 7
+    assert any(a.startswith('Croissant Tradicional: Fermentação final') and
+               'temperatura, tempo' in a for a in incertos)
+    assert any(a.startswith('Pão Francês Fermentado: Forno') and 'tempo' in a
+               for a in incertos)
+    assert len(lido['avisos']) == 13
+
+
+def test_celulas_amarelas_viram_incerto_nos_parametros(lido):
+    bri = lido['fichas']['Brioche'][0]['parametros']
+    assert bri['incerto'] == ['temp_liquido_c', 'temp_massa_final_c']
+    cro = lido['fichas']['Croissant Tradicional'][0]['parametros']
+    assert cro['incerto'] == ['temp_c', 'tempo_como_escrito']
+    pf = lido['fichas']['Pão Francês Fermentado']
+    assert pf[2]['parametros']['incerto'] == ['tempo_como_escrito', 'tempo_min']
+    assert pf[3]['parametros']['incerto'] == ['tempo_min']
+    assert 'incerto' not in lido['fichas']['Sourdough Integral'][0]['parametros']
 
 
 def test_planilha_invalida_levanta_erro_legivel(tmp_path):
@@ -193,7 +212,6 @@ def test_planilha_invalida_levanta_erro_legivel(tmp_path):
 
 
 def test_minutos_de_texto_e_celulas():
-    from datetime import time
     assert svc._minutos('12 h') == 720
     assert svc._minutos('43 min') == 43
     assert svc._minutos('24h') == 1440
@@ -201,8 +219,15 @@ def test_minutos_de_texto_e_celulas():
     assert svc._minutos(timedelta(hours=1, minutes=30)) == 90
     assert svc._minutos(time(1, 30)) == 90
     assert svc._minutos(45) == 45
-    assert svc._minutos('–') is None
+    assert svc._minutos('–') is None and svc._minutos('-') is None
     assert svc._minutos(None) is None
+    assert svc._minutos('1:30:00') == 90
+    from datetime import datetime
+    assert svc._minutos(datetime(1899, 12, 31, 2, 0)) == 26 * 60   # 26:00 h:mm
+    assert svc._minutos(datetime(2026, 10, 2, 1, 30)) == 90
+    assert svc._horas_min(12) == 720 and svc._horas_min(1.5) == 90
+    assert svc._horas_min('12 h') == 720 and svc._horas_min(time(1, 30)) == 90
+    assert svc._numero('–') is None and svc._texto('—') is None
 
 
 # ── rótulo dos parâmetros (fonte única) ──────────────────────────────────────
@@ -212,17 +237,20 @@ def test_resumo_parametros_formata_em_portugues(lido):
     assert resumo_parametros(sd[0]['parametros'], 15) == \
         'V1 14 min · V2 1 min · líquido 5,4 °C · ambiente 20 °C · massa ao fim 23 °C'
     assert resumo_parametros(sd[1]['parametros'], 85) == \
-        'Câmara fria · 21 °C · dobras aos 30, 30 e 25 min'
+        ('Câmara fria · 21 °C · dobras a cada 30, 30 e 25 min · '
+         'leitura incerta na ficha: temperatura')
     assert resumo_parametros(sd[2]['parametros'], 90) == ''   # só o tempo
     assert resumo_parametros(sd[3]['parametros'], 720) == \
-        'Câmara fria · 3 °C · alternativa: Ambiente · 21 °C · 6 h'
+        ('Câmara fria · 3 °C · alternativa: Ambiente · 21 °C · 6 h · '
+         'leitura incerta na ficha: temperatura')
     assert resumo_parametros(sd[4]['parametros'], 23) == '235 °C · teto 100 · lastro 100'
     mf = lido['fichas']['Massa para folhar'][0]['parametros']
     assert resumo_parametros(mf, 16) == (
         'V1 5 min · V2 11 min · líquido: Água 4,5 / Leite 5,2 / Ovos 7,5 · '
-        'ambiente 20 °C · massa ao fim 28,6 °C')
+        'ambiente 20 °C · massa ao fim 28,6 °C · '
+        'leitura incerta na ficha: líquido, massa ao fim')
     pf = lido['fichas']['Pão Francês Fermentado'][1]['parametros']
-    assert resumo_parametros(pf, 60) == 'Ambiente · 21 °C · dobras aos 30 e 30 min'
+    assert resumo_parametros(pf, 60) == 'Ambiente · 21 °C · dobras a cada 30 e 30 min'
 
 
 def test_resumo_parametros_casos_de_borda():
@@ -233,7 +261,13 @@ def test_resumo_parametros_casos_de_borda():
     # duração ilegível: o texto da ficha aparece
     assert resumo_parametros({'tempo_como_escrito': '24h', 'temp_c': 28}, 0) == \
         '28 °C · na ficha: 24h'
-    assert resumo_parametros({'dobras_min': [20]}) == 'dobra aos 20 min'
+    assert resumo_parametros({'dobras_min': [20]}) == 'dobra após 20 min'
+    # tipo errado nunca derruba o render (o esquema descarta)
+    assert resumo_parametros({'dobras_min': 5}) == ''
+    assert resumo_parametros({'alternativas': 7, 'forno_c': 235}) == '235 °C'
+    assert resumo_parametros({'alternativas': [{'tempo_min': 'x', 'local': 'A'}]}) == \
+        'alternativa: A'
+    assert resumo_parametros({'forno_c': 'quente', 'teto': True, 'lastro': 80}) == 'lastro 80'
 
 
 # ── casamento por nome exato ─────────────────────────────────────────────────
@@ -383,10 +417,12 @@ def test_gantt_mostra_parametros_no_passo_no_destino_e_na_continuacao(app, lido)
     assert etapas == [svc.NOME_BATIMENTO, svc.NOME_CAIXA, svc.NOME_MESA]
     assert prod['tarefas'][0]['parametros_label'].startswith('V1 14 min · V2 1 min')
     assert prod['tarefas'][1]['parametros_label'] == \
-        'Câmara fria · 21 °C · dobras aos 30, 30 e 25 min'
+        ('Câmara fria · 21 °C · dobras a cada 30, 30 e 25 min · '
+         'leitura incerta na ficha: temperatura')
     assert prod['destino_etapa'] == svc.NOME_FINAL
     assert prod['destino_parametros_label'] == \
-        'Câmara fria · 3 °C · alternativa: Ambiente · 21 °C · 6 h'
+        ('Câmara fria · 3 °C · alternativa: Ambiente · 21 °C · 6 h · '
+         'leitura incerta na ficha: temperatura')
     # continuação no dia seguinte: só o forno, com os parâmetros do forno
     g2 = montar_gantt(hj + timedelta(days=1))
     cont = next(p for p in g2['produtos'] if p['tipo'] == 'continuacao')
@@ -403,7 +439,8 @@ def test_rota_gantt_renderiza_parametros(app, admin_user, lido):
     html = c.get('/padeiro/gantt').get_data(as_text=True)
     assert 'class="step-params"' in html
     assert 'V1 14 min · V2 1 min · líquido 5,4 °C' in html
-    assert 'Câmara fria · 3 °C · alternativa: Ambiente · 21 °C · 6 h' in html
+    assert 'Câmara fria · 3 °C · alternativa: Ambiente · 21 °C · 6 h · ' \
+           'leitura incerta na ficha: temperatura' in html
     assert 'padeiro-sequencia.css?v=20261002a' in html
 
 
@@ -599,3 +636,382 @@ def test_duplicar_receita_copia_os_parametros(app, admin_user):
     copia = Receita.query.filter_by(nome='Cópia de Sourdough Tradicional').first()
     assert copia is not None
     assert copia.etapas[0].parametros == {'forno_c': 235, 'teto': 100}
+
+
+# ── revisão independente (02/10/2026): casos de borda com planilha sintética ──
+
+def _planilha(tmp_path, abas):
+    """xlsx com os cabeçalhos REAIS da planilha do dono; `abas` =
+    {'batimento': [linhas], 'caixa': [...], 'final': [...], 'forno': [...]}
+    (cada linha uma lista de valores a partir da coluna Receita; valores
+    (valor, 'incerto') marcam a célula em amarelo)."""
+    import openpyxl
+    from openpyxl.styles import PatternFill
+    cabecalhos = {
+        'batimento': ('1. Batimento', ['Receita', 'Velocidade 1 (min)',
+                      'Velocidade 2 (min)', 'Ponto da massa',
+                      'Temperatura ambiente (°C)', 'Temperatura do líquido (°C)',
+                      'Temperatura após o fim do batimento (°C)']),
+        'caixa': ('2. Fermentação', ['Receita', 'Local', 'Temperatura (°C)',
+                  'Duração (h)', 'Dobra 1 (min)', 'Dobra 2 (min)', 'Dobra 3 (min)',
+                  'MESA – corte à modelagem: tempo final (h:mm)']),
+        'final': ('3. Fermentação final', ['Receita',
+                  'Local (CF = Câmara fria · A = Ambiente)', 'Temperatura (°C)',
+                  'Tempo (como escrito)', 'Tempo (min)']),
+        'forno': ('4. Forno', ['Receita', 'Forno (°C)', 'Tempo (min)',
+                  'Teto (valor)', 'Lastro (valor)', 'Unidade teto / lastro',
+                  'Alvo interno (°C)']),
+    }
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    amarelo = PatternFill('solid', fgColor='FFFFF2CC')
+    for chave, (titulo, cab) in cabecalhos.items():
+        ws = wb.create_sheet(titulo)
+        ws.append([titulo])
+        ws.append(['nota'])
+        linhas = abas.get(chave, [])
+        if isinstance(linhas, dict):            # cabeçalho customizado
+            cab = linhas['cabecalho']
+            linhas = linhas['linhas']
+        ws.append(cab)
+        for linha in linhas:
+            valores = []
+            marcados = []
+            for i, v in enumerate(linha):
+                if isinstance(v, tuple) and len(v) == 2 and v[1] == 'incerto':
+                    valores.append(v[0]); marcados.append(i)
+                else:
+                    valores.append(v)
+            ws.append(valores)
+            for i in marcados:
+                ws.cell(row=ws.max_row, column=i + 1).fill = amarelo
+        ws.append(['Legenda: azul = escrito à mão'])
+    caminho = tmp_path / 'sintetica.xlsx'
+    wb.save(caminho)
+    return caminho
+
+
+def test_grafia_diferente_entre_abas_e_a_mesma_ficha_na_ordem_certa(app, tmp_path):
+    caminho = _planilha(tmp_path, {
+        'batimento': [['Sourdough Tradicional', 14, 1, None, 20, 5.4, 23]],
+        'caixa': [['Sourdough  Tradicional', 'Câmara fria', 21, None, 30, 30, 25,
+                   timedelta(minutes=90)]],
+        'final': [['sourdough tradicional', 'CF', 3, '12 h', 720]],
+        'forno': [['SOURDOUGH TRADICIONAL', 235, 23, 100, 100, None, None]],
+    })
+    lido = svc.ler_planilha(caminho)
+    assert lido['ordem'] == ['Sourdough Tradicional']
+    assert [e['nome'] for e in lido['fichas']['Sourdough Tradicional']] == [
+        svc.NOME_BATIMENTO, svc.NOME_CAIXA, svc.NOME_MESA, svc.NOME_FINAL,
+        svc.NOME_FORNO]
+    grafias = [a for a in lido['avisos'] if 'grafia diferente' in a]
+    assert len(grafias) == 3
+    sd = _receita('Sourdough Tradicional')
+    resumo = svc.aplicar(lido['fichas'], svc.casar(lido['fichas']))
+    db.session.commit()
+    assert resumo['receitas_aplicadas'] == 1
+    db.session.refresh(sd)
+    assert [(e.ordem, e.nome) for e in sd.etapas] == [
+        (0, svc.NOME_BATIMENTO), (1, svc.NOME_CAIXA), (2, svc.NOME_MESA),
+        (3, svc.NOME_FINAL), (4, svc.NOME_FORNO)]
+
+
+def test_ordem_das_colunas_nao_importa_e_coluna_obrigatoria_ausente_avisa(tmp_path):
+    caminho = _planilha(tmp_path, {
+        'forno': {'cabecalho': ['Receita', 'Unidade teto / lastro',
+                                'Tempo (como escrito)', 'Teto (valor)',
+                                'Lastro (valor)', 'Tempo (min)', 'Forno (°C)'],
+                  'linhas': [['Brioche', '%', '45 min', 80, 100, 45, 170]]},
+        'batimento': [['Brioche', 30, 0, None, 20, 20, 27]],
+    })
+    lido = svc.ler_planilha(caminho)
+    forno = lido['fichas']['Brioche'][1]
+    assert forno['duracao_min'] == 45
+    assert forno['parametros']['teto'] == 80 and forno['parametros']['lastro'] == 100
+    assert forno['parametros']['forno_c'] == 170
+    assert forno['parametros']['unidade_teto_lastro'] == '%'
+    assert resumo_parametros(forno['parametros'], 45) == \
+        '170 °C · teto 80 · lastro 100 · (%)'
+    # cabeçalho obrigatório ausente: erro legível, não etapa calada
+    sem = _planilha(tmp_path, {
+        'forno': {'cabecalho': ['Receita', 'Forno (°C)'], 'linhas': [['Brioche', 170]]}})
+    with pytest.raises(svc.PlanilhaInvalida, match='tempo'):
+        svc.ler_planilha(sem)
+
+
+def test_traco_e_linha_so_com_temperatura_nao_viram_etapa_principal(tmp_path):
+    caminho = _planilha(tmp_path, {
+        'final': [['Pão Francês Fermentado', 'CF', '–', '–', None],
+                  ['Pão Francês Fermentado', 'A', 20, '43 min', 43],
+                  ['Brioche', 'CF', 4, None, None],
+                  ['Brioche', 'A', 20, '30 min', 30]],
+    })
+    lido = svc.ler_planilha(caminho)
+    pf = lido['fichas']['Pão Francês Fermentado'][0]
+    assert pf['duracao_min'] == 43 and pf['equipamento'] is None
+    assert pf['parametros']['local'] == 'Ambiente'
+    assert 'alternativas' not in pf['parametros']
+    bri = lido['fichas']['Brioche'][0]
+    assert bri['duracao_min'] == 30 and bri['parametros']['local'] == 'Ambiente'
+    assert bri['parametros']['alternativas'] == [{'local': 'Câmara fria', 'temp_c': 4}]
+    assert any('Brioche: fermentação final sem tempo na ficha' in a
+               for a in lido['avisos'])
+    assert not any('None' in a for a in lido['avisos'])
+
+
+def test_duracao_em_horas_mesa_numerica_e_divergencia_min_x_texto(tmp_path):
+    caminho = _planilha(tmp_path, {
+        'caixa': [['Pão Francês Fermentado', 'Ambiente', 21, time(1, 30), 30, 30, None, None],
+                  ['Brioche', 'Ambiente', 21, '2 h', 20, 20, None, 1.5],
+                  ['Sourdough Integral', 'Ambiente', 21, 'duas horas', 30, 30, 30, None],
+                  ['Pão de Cranberry', 'Ambiente', 21, None, None, None, None, None]],
+        'final': [['Brioche', 'A', 20, '30 min', 300]],
+        'forno': [['Brioche', 170, None, 80, 100, None, None],
+                  ['Pão de Cranberry', 180, 25, 80, 100, None, 92]],
+    })
+    lido = svc.ler_planilha(caminho)
+    pf = lido['fichas']['Pão Francês Fermentado'][0]
+    assert pf['duracao_min'] == 90 and pf['parametros']['duracao_origem'] == 'ficha'
+    assert pf['parametros']['duracao_h'] == 1.5
+    bri = lido['fichas']['Brioche']
+    assert bri[0]['duracao_min'] == 120                    # '2 h' como texto
+    assert bri[1]['nome'] == svc.NOME_MESA and bri[1]['duracao_min'] == 90   # 1.5 h
+    assert bri[2]['duracao_min'] == 300                    # vale o número…
+    assert any('diferente do escrito ("30 min" = 30 min)' in a for a in lido['avisos'])
+    assert bri[3]['duracao_min'] == 0                      # forno sem tempo
+    assert any('Brioche: forno sem tempo na ficha' in a for a in lido['avisos'])
+    si = lido['fichas']['Sourdough Integral'][0]
+    assert si['duracao_min'] == 90 and si['parametros']['duracao_origem'] == 'ate_ultima_dobra'
+    assert any('"Duração (h)" ilegível ("duas horas"' in a for a in lido['avisos'])
+    cran = lido['fichas']['Pão de Cranberry']
+    assert cran[0]['duracao_min'] == 0 and cran[0]['parametros']['duracao_origem'] == 'ausente'
+    assert any('sem tempo nem dobras' in a for a in lido['avisos'])
+    assert resumo_parametros(cran[1]['parametros'], 25) == \
+        '180 °C · teto 80 · lastro 100 · alvo interno 92 °C'
+
+
+def test_linha_repetida_e_linha_vazia_nao_criam_etapa(tmp_path):
+    caminho = _planilha(tmp_path, {
+        'batimento': [['Brioche', 30, 0, None, 20, 20, 27],
+                      ['Brioche', 31, 0, None, None, None, None],
+                      ['Fantasma', None, None, None, None, None, None]],
+        'caixa': [['Fantasma', None, None, None, None, None, None, None]],
+    })
+    lido = svc.ler_planilha(caminho)
+    assert lido['ordem'] == ['Brioche']
+    assert [e['duracao_min'] for e in lido['fichas']['Brioche']] == [30]
+    assert any('Brioche: linha repetida' in a for a in lido['avisos'])
+
+
+def test_duracao_fora_da_faixa_vira_aviso_e_zero_e_a_regua_e_unica(tmp_path):
+    from app.services.etapas_receita import DURACAO_MAX, duracao_valida
+    caminho = _planilha(tmp_path, {
+        'batimento': [['Brioche', 3000000000, 0, None, None, None, None],
+                      ['Sourdough Integral', -5, 2, None, None, None, None]],
+    })
+    lido = svc.ler_planilha(caminho)
+    assert lido['fichas']['Brioche'][0]['duracao_min'] == 0
+    assert lido['fichas']['Sourdough Integral'][0]['duracao_min'] == 0
+    assert sum('fora da faixa' in a for a in lido['avisos']) == 2
+    assert duracao_valida(-1) == 0 and duracao_valida(10 ** 12) == DURACAO_MAX
+    assert duracao_valida('abc') == 0 and duracao_valida('15') == 15
+
+
+def test_celula_amarela_sintetica_marca_incerto(tmp_path):
+    caminho = _planilha(tmp_path, {
+        'forno': [['Brioche', (170, 'incerto'), (45, 'incerto'), 80, 100, None, None]],
+    })
+    lido = svc.ler_planilha(caminho)
+    p = lido['fichas']['Brioche'][0]['parametros']
+    assert p['incerto'] == ['forno_c', 'tempo_min']
+    assert resumo_parametros(p, 45) == \
+        '170 °C · teto 80 · lastro 100 · leitura incerta na ficha: forno, tempo'
+
+
+def test_validar_parametros_descarta_lixo_e_parametros_de_form_nunca_levanta():
+    from app.services.etapas_receita import parametros_de_form, validar_parametros
+    assert validar_parametros({'forno_c': 235, 'chave_estranha': 1,
+                               'dobras_min': 5, 'alternativas': 7,
+                               'teto': 'x', 'origem': 'a' * 500}) == {
+        'forno_c': 235, 'origem': 'a' * 200}
+    assert validar_parametros({'alternativas': [{'tempo_min': 'x'}, 'lixo',
+                                                {'local': 'A', 'tempo_min': 360}]}) == {
+        'alternativas': [{'tempo_min': 360, 'local': 'A'}]}
+    assert validar_parametros({'incerto': ['forno_c', 'zzz', 3]}) == {'incerto': ['forno_c']}
+    assert validar_parametros({'forno_c': float('inf')}) is None
+    assert validar_parametros('x') is None and validar_parametros({}) is None
+    # JSON aninhado dentro do teto não derruba o editor
+    assert parametros_de_form('{"a":' + '[' * 1990 + ']' * 1990 + '}') is None
+    assert parametros_de_form(json.dumps({'dobras_min': 5})) is None
+    assert parametros_de_form(json.dumps({'forno_c': 235, 'lixo': 1})) == {'forno_c': 235}
+
+
+def test_aplicar_recusa_quando_nenhuma_receita_casa_e_nada_apaga(app, lido):
+    fora = _receita('Cookie', categoria='Doces')
+    _etapa_velha(fora)
+    with pytest.raises(ValueError, match='nada foi apagado'):
+        svc.aplicar(lido['fichas'], svc.casar(lido['fichas']))
+    assert ReceitaEtapa.query.filter_by(receita_id=fora.id).count() == 1
+    assert svc.ultima_importacao() is None
+    assert not [k for k in [c.key for c in AppConfig.query.all()]
+                if k.startswith(svc.PREFIXO_BACKUP)]
+
+
+def test_seed_sem_casamento_nao_grava_marker_nem_apaga(app):
+    from app.migrations_legacy import _seed_fichas_producao_2026_10
+    fora = _receita('Cookie', categoria='Doces')
+    _etapa_velha(fora)
+    _seed_fichas_producao_2026_10(app)
+    assert AppConfig.get('seed_fichas_producao_2026_10') is None
+    assert ReceitaEtapa.query.filter_by(receita_id=fora.id).count() == 1
+
+
+def test_aplicar_pela_tela_sem_casamento_avisa(app, owner_user):
+    import re
+    fora = _receita('Cookie', categoria='Doces')
+    _etapa_velha(fora)
+    c = _login(app, owner_user)
+    html = _upload(c).get_data(as_text=True)
+    token = re.search(r'name="token" value="([^"]+)"', html).group(1)
+    resp = c.post('/receitas/fichas-producao/aplicar', data={'token': token},
+                  follow_redirects=True)
+    assert 'nada foi apagado' in resp.get_data(as_text=True)
+    assert ReceitaEtapa.query.filter_by(receita_id=fora.id).count() == 1
+
+
+def test_aplicar_serializa_com_advisory_lock_em_postgres(app, lido, monkeypatch):
+    _receita('Sourdough Tradicional')
+    chamadas = []
+    original = db.session.execute
+
+    def _execute(stmt, *a, **kw):
+        chamadas.append(str(stmt))
+        return original(text('SELECT 1')) if 'pg_advisory_xact_lock' in str(stmt) \
+            else original(stmt, *a, **kw)
+    monkeypatch.setattr(db.engine.dialect, 'name', 'postgresql', raising=False)
+    monkeypatch.setattr(db.session, 'execute', _execute)
+    svc.aplicar(lido['fichas'], svc.casar(lido['fichas']))
+    assert any('pg_advisory_xact_lock' in c for c in chamadas)
+    assert svc.LOCK_KEY_APLICAR == 7768
+
+
+def test_aplicar_a_toda_categoria_nao_copia_os_parametros(app, admin_user):
+    sd = _receita('Sourdough Tradicional')
+    si = _receita('Sourdough Integral')
+    db.session.add(ReceitaEtapa(receita_id=sd.id, ordem=0, nome='Batimento',
+                                duracao_min=15, equipamento='amassadeira',
+                                parametros={'velocidade_1_min': 14,
+                                            'origem': '1. Batimento · linha 5'}))
+    db.session.add(ReceitaEtapa(receita_id=si.id, ordem=0, nome='Batimento',
+                                duracao_min=26, equipamento='amassadeira',
+                                parametros={'velocidade_1_min': 24}))
+    db.session.commit()
+    c = _login(app, admin_user)
+    c.post(f'/receitas/{sd.id}/etapas', data={
+        'acao': 'aplicar_categoria',
+        'nome[]': ['Batimento'], 'duracao[]': ['15'], 'recurso[]': ['amassadeira'],
+        'descricao[]': [''],
+        'parametros[]': [json.dumps({'velocidade_1_min': 14,
+                                     'origem': '1. Batimento · linha 5'})],
+    }, follow_redirects=True)
+    assert ReceitaEtapa.query.filter_by(receita_id=sd.id).first().parametros == {
+        'velocidade_1_min': 14, 'origem': '1. Batimento · linha 5'}
+    alvo = ReceitaEtapa.query.filter_by(receita_id=si.id).first()
+    assert alvo.nome == 'Batimento' and alvo.duracao_min == 15
+    assert alvo.parametros is None            # parâmetro é por receita
+
+
+def test_round_trip_do_hidden_pelo_html_renderizado(app, admin_user):
+    """O hidden parametros[] do editor carrega o JSON de verdade e re-POSTar
+    o que a tela renderizou mantém os parâmetros iguais."""
+    import re
+    from html import unescape
+    sd = _receita('Sourdough Tradicional')
+    params = {'velocidade_1_min': 14, 'velocidade_2_min': 1, 'temp_liquido_c': 5.4,
+              'origem': '1. Batimento · linha 5', 'incerto': ['temp_liquido_c']}
+    db.session.add(ReceitaEtapa(receita_id=sd.id, ordem=0, nome='Batimento',
+                                duracao_min=15, equipamento='amassadeira',
+                                descricao='bata "devagar"', parametros=params))
+    db.session.commit()
+    c = _login(app, admin_user)
+    html = c.get(f'/receitas/{sd.id}/etapas').get_data(as_text=True)
+    hidden = re.findall(r'name="parametros\[\]" value="([^"]*)"', html)
+    assert json.loads(unescape(hidden[0])) == params
+    c.post(f'/receitas/{sd.id}/etapas', data={
+        'nome[]': ['Batimento'], 'duracao[]': ['15'], 'recurso[]': ['amassadeira'],
+        'descricao[]': ['bata "devagar"'], 'parametros[]': [unescape(hidden[0])],
+    }, follow_redirects=True)
+    e = ReceitaEtapa.query.filter_by(receita_id=sd.id).first()
+    assert e.parametros == params and e.descricao == 'bata "devagar"'
+
+
+def test_round_trip_do_hidden_na_ficha_do_padeiro(app):
+    import re
+    from html import unescape
+    u = Usuario(nome='Padeiro RT', login='padrt', papel='padeiro')
+    u.set_senha('12345678')
+    db.session.add(u)
+    sd = _receita('Sourdough Tradicional')
+    params = {'forno_c': 235, 'teto': 100, 'lastro': 100}
+    db.session.add(ReceitaEtapa(receita_id=sd.id, ordem=0, nome='Forno',
+                                duracao_min=23, equipamento='forno', parametros=params))
+    db.session.commit()
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'padrt', 'senha': '12345678'})
+    html = c.get(f'/padeiro/fichas/{sd.id}').get_data(as_text=True)
+    hidden = re.findall(r'name="parametros\[\]" value="([^"]*)"', html)
+    assert json.loads(unescape(hidden[0])) == params
+    c.post(f'/padeiro/fichas/{sd.id}', data={
+        'nome[]': ['Forno'], 'duracao[]': ['25'], 'recurso[]': ['forno'],
+        'descricao[]': ['asse com vapor'], 'parametros[]': [unescape(hidden[0])],
+    })
+    e = ReceitaEtapa.query.filter_by(receita_id=sd.id).first()
+    assert e.parametros == params and e.duracao_min == 25
+
+
+def test_token_da_previa_expira(app, owner_user, monkeypatch):
+    import re
+
+    from app.blueprints.receitas import routes as rotas
+    _receita('Sourdough Tradicional')
+    c = _login(app, owner_user)
+    html = _upload(c).get_data(as_text=True)
+    token = re.search(r'name="token" value="([^"]+)"', html).group(1)
+    monkeypatch.setattr(rotas, '_FICHAS_TOKEN_MAX_AGE', -1)
+    resp = c.post('/receitas/fichas-producao/aplicar', data={'token': token},
+                  follow_redirects=True)
+    assert 'prévia expirou' in resp.get_data(as_text=True)
+    assert ReceitaEtapa.query.count() == 0
+
+
+def test_previa_lista_ambigua_e_avisos(app, admin_user):
+    _receita('Pão de Cranberry', categoria='Fornadas Especiais')
+    _receita('Pão de Cranberry', categoria='Fornadas Especiais')
+    c = _login(app, admin_user)
+    html = _upload(c).get_data(as_text=True)
+    assert 'ambígua' in html
+    assert 'leitura incerta' in html and 'até a última dobra' in html
+
+
+def test_ordem_aberta_de_receita_fora_da_planilha_fica_sem_processo(app, lido):
+    _receita('Sourdough Tradicional')
+    cookie = _receita('Cookie', categoria='Doces')
+    _etapa_velha(cookie, 'Assar cookie')
+    pl = PlanejamentoProducao(data=hoje(), origem='cronograma')
+    db.session.add(pl)
+    db.session.flush()
+    it = PlanejamentoItem(planejamento_id=pl.id, receita_id=cookie.id,
+                          multiplicador=1, qtd_alvo=10, produzido_qtd=0)
+    db.session.add(it)
+    db.session.flush()
+    db.session.add(PlanejamentoItemBatelada(
+        item_id=it.id, bateladas=1,
+        dados={'unidades': 10, 'mp': [], 'processo': [{'nome': 'Assar cookie'}]}))
+    db.session.commit()
+    svc.aplicar(lido['fichas'], svc.casar(lido['fichas']))
+    db.session.commit()
+    snap = db.session.get(PlanejamentoItemBatelada, it.id)
+    db.session.refresh(snap)
+    assert snap.dados['processo'] == []        # o Gantt mostra "sem etapas"
+    bk = json.loads(AppConfig.get(svc.ultima_importacao()['backup']))
+    assert bk['etapas'][0]['nome'] == 'Assar cookie'

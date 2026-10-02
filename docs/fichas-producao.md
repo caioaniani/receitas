@@ -14,34 +14,58 @@ mostram; o modelo genérico "padrão da categoria" (etapas pesquisadas,
 | Aba | Etapa gerada | Tipo | Duração | Parâmetros guardados |
 | --- | --- | --- | --- | --- |
 | Batimento | `Batimento` | amassadeira (máquina) | V1 + V2 (min) | velocidade_1_min, velocidade_2_min, ponto_massa, temp_ambiente_c, temp_liquido_c **ou** temp_liquido_txt (texto como "Água 4,5 / Leite 5,2"), temp_massa_final_c |
-| Fermentação | `Fermentação em caixa` | câmara fria ou descanso (passiva) | "Duração (h)" se preenchida; senão a soma das dobras (tempo até a última dobra), com aviso | local, temp_c, dobras_min, duracao_h, duracao_origem |
-| Fermentação (coluna MESA) | `Mesa: do corte à modelagem` | descanso (passiva) | o tempo escrito (h:mm) | tempo_como_escrito |
-| Fermentação final | `Fermentação final` | câmara fria ou descanso (passiva) | "Tempo (min)"; sem ele, o texto ("24h", "43 min") convertido | local, temp_c, tempo_como_escrito, alternativas (a 2ª forma da ficha: CF × ambiente) |
+| Fermentação | `Fermentação em caixa` | câmara fria ou descanso (passiva) | "Duração (h)" se preenchida (número = horas; aceita 1:30, "2 h"); senão a soma das dobras (tempo até a última dobra), com aviso | local, temp_c, dobras_min, duracao_h, duracao_origem |
+| Fermentação (coluna MESA) | `Mesa: do corte à modelagem` | descanso (passiva) | o tempo escrito (h:mm; número puro = horas) | tempo_como_escrito |
+| Fermentação final | `Fermentação final` | câmara fria ou descanso (passiva) | "Tempo (min)"; sem ele, o texto ("24h", "43 min") convertido; os dois divergindo = vale o número, com aviso | local, temp_c, tempo_como_escrito, alternativas (a 2ª forma da ficha: CF × ambiente) |
 | Forno | `Forno` | forno (máquina) | "Tempo (min)" | forno_c, teto, lastro, unidade_teto_lastro, alvo_interno_c |
 
 Regras:
 
-- **Célula em branco não vira valor.** A chave simplesmente não entra no JSON
-  e nada aparece no rótulo. Lacunas que afetam a duração geram `avisos`
-  (prévia e log do seed): fermentação em caixa sem "Duração (h)", forno sem
-  tempo, fermentação final sem tempo legível.
+- **Célula em branco (ou com traço "–") não vira valor.** A chave
+  simplesmente não entra no JSON e nada aparece no rótulo. Lacunas que afetam
+  a duração geram `avisos` (prévia e log do seed): fermentação em caixa sem
+  "Duração (h)", forno sem tempo, fermentação final sem tempo (ou com tempo
+  ilegível), duração fora da faixa (0–100000 min, a mesma régua do editor).
+  Na Fermentação final, a linha de um método sem tempo (ex.: "CF · –") nunca
+  vira a etapa principal: a primeira linha **com tempo** manda.
+- **Célula amarela = "leitura incerta"** (legenda do próprio dono): o valor
+  entra, mas a chave vai em `parametros['incerto']`, o rótulo termina com
+  "leitura incerta na ficha: …" e a prévia/log avisam. A planilha de
+  02/10/2026 tem 11 células assim (Brioche e Massa para folhar no batimento,
+  temperaturas do Sourdough Tradicional, fermentação final e forno do Pão
+  Francês, fermentação final do Croissant); a aba "Notas" que a legenda cita
+  não veio no arquivo.
 - Uma receita ganha a etapa de uma aba só quando a linha dela naquela aba tem
-  algum dado. Receita só com a aba Forno preenchida fica com uma etapa.
+  algum dado ("Local" sozinho não é dado). Receita só com a aba Forno
+  preenchida fica com uma etapa. Linha repetida da mesma receita numa aba:
+  vale a primeira, com aviso.
 - A receita da planilha casa com **uma** receita não arquivada por nome
   normalizado **exato** (sem acento, sem caixa, espaços colapsados).
   "Sourdough Tradicional" nunca casa "Mini Sourdough Tradicional". Nome sem
   receita ou com duas ativas fica de fora e é listado (prévia, flash,
-  marcador).
-- Cada parâmetro guarda `origem` (aba e linha da planilha) para auditoria.
+  marcador). A **mesma** normalização agrupa as abas: "SOURDOUGH TRADICIONAL"
+  no Forno é a mesma ficha de "Sourdough Tradicional" no Batimento (com
+  aviso de grafia).
+- As colunas são achadas pelo cabeçalho (o mais específico ganha: "Teto
+  (valor)" antes de "Unidade teto / lastro"), em qualquer ordem; cabeçalho
+  obrigatório ausente recusa a planilha com a mensagem da aba/coluna.
+- Cada parâmetro guarda `origem` (aba e linha da planilha) para auditoria. O
+  JSON passa por um **esquema fechado** (`etapas_receita.validar_parametros`):
+  chave desconhecida ou tipo errado é descartada, venha da planilha ou do
+  hidden do editor — o rótulo nunca levanta.
 - O rótulo legível é único (`etapas_receita.resumo_parametros`): o Gantt, a
   TV, os editores, a prévia e a sonda mostram o mesmo texto, por exemplo
   `V1 14 min · V2 1 min · líquido 5,4 °C · ambiente 20 °C · massa ao fim 23 °C`
-  ou `Câmara fria · 3 °C · alternativa: Ambiente · 21 °C · 6 h`.
+  ou `Câmara fria · 3 °C · alternativa: Ambiente · 21 °C · 6 h`. As dobras
+  são **intervalos** ("dobras a cada 30, 30 e 25 min"), a mesma leitura da
+  duração (soma).
 
 ## O que a aplicação faz
 
 `fichas_producao.aplicar` (serviço, sem commit; a rota e o seed fecham a
-transação):
+transação). Recusa (ValueError, nada apagado, sem backup) quando nenhuma
+receita da planilha casa com o cadastro; em Postgres serializa dois gestos
+concorrentes com `pg_advisory_xact_lock(7768)`.
 
 1. Guarda **todas** as `ReceitaEtapa` atuais em `AppConfig`
    (`fichas_producao_backup_<AAAAMMDD_HHMMSS>`, JSON com receita, ordem, nome,
@@ -73,7 +97,10 @@ transação):
 - **Editores** (`/receitas/<id>/etapas` e `/padeiro/fichas/<id>`): mostram os
   parâmetros (⚙) e os preservam ao salvar (`parametros[]`); duração, tipo e
   passo a passo seguem editáveis. Para mudar um parâmetro, importe a planilha.
-  O POST antigo `acao=padrao` não grava nada.
+  O POST antigo `acao=padrao` não grava nada. "Aplicar a toda a categoria"
+  copia nome/duração/tipo/passo a passo, **nunca** os parâmetros (são medidos
+  por receita): as outras receitas da categoria ficam sem parâmetros até a
+  próxima importação; `duplicar` copia tudo, parâmetros inclusive.
 - **Sonda** `GET /api/claude/fichas-producao`: marcador da importação, marker do
   seed, receitas com etapas (com parâmetros) e as sem etapas.
   `GET /api/claude/receita` passou a trazer `etapas`.

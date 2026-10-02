@@ -13,18 +13,25 @@ Este módulo é a fonte única desse gesto:
   da planilha, a lista de etapas no formato de `etapas_receita.set_etapas`
   (nome, duracao_min, equipamento, ativa, descricao) mais `parametros` — o
   JSON estruturado da etapa (velocidades, temperaturas, local, dobras, forno,
-  teto/lastro...). Célula em branco NÃO vira parâmetro nem tempo inventado:
-  o que a ficha não diz fica fora e aparece em `avisos`.
+  teto/lastro...). Célula em branco (ou com traço) NÃO vira parâmetro nem
+  tempo inventado: o que a ficha não diz fica fora e aparece em `avisos`.
+  Célula marcada em AMARELO na planilha ("leitura incerta" na legenda do
+  dono) entra com o valor, mas a chave vai em `parametros['incerto']` e o
+  rótulo diz que a leitura é incerta.
 - `casar(fichas)` liga cada nome da planilha a UMA receita não arquivada por
   nome normalizado EXATO ("Sourdough Tradicional" nunca casa "Mini Sourdough
-  Tradicional"); ausente ou ambígua fica de fora, listada.
+  Tradicional"); ausente ou ambígua fica de fora, listada. A mesma
+  normalização agrupa as linhas da planilha: grafias diferentes do mesmo
+  nome entre as abas viram UMA ficha (com aviso).
 - `aplicar(fichas, casamento, ...)` SUBSTITUI todas as `ReceitaEtapa` do
-  sistema (de TODAS as receitas, como o dono pediu) pelas da planilha, depois
-  de guardar um backup JSON em `AppConfig` (o passo a passo escrito pelo
-  padeiro nunca se perde sem volta), reescreve o `processo` congelado das
-  ordens ainda abertas (o Gantt lê o snapshot de batelada, não a ficha viva)
-  e grava o marcador `fichas_producao_import`. Não commita — o chamador
-  (rota ou seed de startup) fecha a transação.
+  sistema (de TODAS as receitas, como o dono pediu), depois de guardar um
+  backup JSON em `AppConfig` (o passo a passo escrito pelo padeiro nunca se
+  perde sem volta), reescreve o `processo` congelado das ordens ainda abertas
+  (o Gantt lê o snapshot de batelada, não a ficha viva) e grava o marcador
+  `fichas_producao_import`. Recusa (ValueError, nada apagado) quando nenhuma
+  receita da planilha casa com o cadastro. Em Postgres serializa o gesto com
+  um advisory lock transacional. Não commita — o chamador (rota ou seed de
+  startup) fecha a transação.
 
 Ordem das etapas geradas por receita: Batimento (amassadeira, ativa, V1+V2)
 → Fermentação em caixa (passiva; dobras) → Mesa: do corte à modelagem
@@ -38,19 +45,32 @@ import json
 import re
 import unicodedata
 from copy import deepcopy
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
+
+from sqlalchemy import text
 
 from app.extensions import db
 from app.models import AppConfig, Receita, ReceitaEtapa
+from app.services.etapas_receita import (
+    duracao_valida,
+    rotulo_chaves,
+    validar_parametros,
+)
 from app.utils import agora, hoje
 
 ARQUIVO_SEED = Path(__file__).resolve().parents[1] / 'seeds_data' / 'fichas_producao_2026_10.xlsx'
 MARCADOR_IMPORT = 'fichas_producao_import'
 PREFIXO_BACKUP = 'fichas_producao_backup_'
-# Ordens cujo snapshot de batelada é reescrito: as que o Gantt ainda lê —
-# hoje e as continuações dos últimos MAX_LEAD_DIAS dias (gantt.MAX_LEAD_DIAS).
-JANELA_SNAPSHOT_DIAS = 3
+# Advisory lock transacional (Postgres) que serializa dois "aplicar"
+# concorrentes — o wipe global + inserts não pode cruzar com outro igual.
+LOCK_KEY_APLICAR = 7768
+# Duração acima disso (minutos) é dedo errado na ficha, não tempo real.
+DURACAO_MAX_MIN = 100000
+# Preenchimento AMARELO da planilha do dono = "leitura incerta" (legenda).
+_FILL_INCERTO = 'FFF2CC'
+# Traço na célula = "não se aplica" na ficha (ex.: Pão Francês sem câmara fria).
+_TRACOS = {'-', '–', '—', '‒', '―'}
 
 # Nomes canônicos das etapas geradas (o diário de produção sugere os nomes
 # da ficha; manter estáveis).
@@ -78,12 +98,17 @@ def normalizar_nome(texto):
 
 
 def _vazio(v):
-    return v is None or (isinstance(v, str) and not v.strip())
+    if v is None:
+        return True
+    if isinstance(v, str):
+        t = v.strip()
+        return not t or t in _TRACOS
+    return False
 
 
 def _numero(v):
     """Número da célula (int quando inteiro), ou None se não for número."""
-    if isinstance(v, bool):
+    if isinstance(v, bool) or _vazio(v):
         return None
     if isinstance(v, (int, float)):
         if isinstance(v, float) and v != v:        # NaN
@@ -104,19 +129,26 @@ def _texto(v):
 
 
 def _minutos(v):
-    """Minutos a partir de número, timedelta, datetime.time ou texto
-    ('1:30', '12 h', '43 min', '24h'). None quando não dá pra ler."""
+    """Minutos a partir de número, timedelta, datetime.time, datetime (hora
+    de planilha) ou texto ('1:30', '12 h', '43 min', '24h'). None quando não
+    dá pra ler."""
     if _vazio(v):
         return None
     if isinstance(v, timedelta):
         return int(round(v.total_seconds() / 60))
-    if hasattr(v, 'hour') and hasattr(v, 'minute') and not hasattr(v, 'date'):
-        return int(v.hour) * 60 + int(v.minute)       # datetime.time
+    if isinstance(v, datetime):
+        # Hora ≥ 24 h numa célula h:mm vira datetime a partir de 1899-12-30
+        # (época do Excel); hora comum vira datetime do próprio dia.
+        if v.year <= 1900:
+            return int(round((v - datetime(1899, 12, 30)).total_seconds() / 60))
+        return v.hour * 60 + v.minute
+    if hasattr(v, 'hour') and hasattr(v, 'minute'):     # datetime.time
+        return int(v.hour) * 60 + int(v.minute)
     n = _numero(v)
     if n is not None:
         return int(round(n))
     t = str(v).strip().lower().replace(',', '.')
-    m = re.fullmatch(r'(\d{1,2}):(\d{2})', t)
+    m = re.fullmatch(r'(\d{1,3}):(\d{2})(?::\d{2})?', t)
     if m:
         return int(m.group(1)) * 60 + int(m.group(2))
     m = re.fullmatch(r'(\d+(?:\.\d+)?)\s*(h|hora|horas|hr|hrs)', t)
@@ -128,11 +160,46 @@ def _minutos(v):
     return None
 
 
+def _horas_min(v):
+    """Coluna em HORAS ('Duração (h)', 'MESA h:mm'): número puro = horas;
+    o resto passa pelo `_minutos` (hora da planilha, '1:30', '12 h')."""
+    if _vazio(v):
+        return None
+    n = _numero(v)
+    if n is not None:
+        return int(round(float(n) * 60))
+    return _minutos(v)
+
+
 def _local(v):
     t = _texto(v)
     if t is None:
         return None
     return _LOCAL_LABEL.get(normalizar_nome(t), t)
+
+
+def _como_escrito(v):
+    if isinstance(v, timedelta):
+        total = int(round(v.total_seconds() / 60))
+        return '%d:%02d' % divmod(total, 60)
+    if isinstance(v, datetime):
+        m = _minutos(v) or 0
+        return '%d:%02d' % divmod(m, 60)
+    if hasattr(v, 'hour') and hasattr(v, 'minute'):
+        return '%d:%02d' % (v.hour, v.minute)
+    return _texto(v)
+
+
+def _incerto(cell):
+    """Célula com o preenchimento amarelo da legenda ("leitura incerta")."""
+    try:
+        fill = cell.fill
+        if not fill or not fill.fill_type:
+            return False
+        rgb = getattr(fill.fgColor, 'rgb', None)
+        return isinstance(rgb, str) and rgb.upper().endswith(_FILL_INCERTO)
+    except Exception:  # noqa: BLE001 — estilo é bônus, nunca derruba a leitura
+        return False
 
 
 # ── leitura do xlsx ───────────────────────────────────────────────────────────
@@ -146,7 +213,9 @@ def _carregar(origem):
     else:
         fonte = str(origem)
     try:
-        return openpyxl.load_workbook(fonte, data_only=True, read_only=True)
+        # Sem read_only: precisamos do preenchimento das células (amarelo =
+        # leitura incerta). A planilha é pequena (4 abas, ~20 linhas cada).
+        return openpyxl.load_workbook(fonte, data_only=True)
     except Exception as exc:  # noqa: BLE001 — openpyxl levanta vários tipos
         raise PlanilhaInvalida(f'Não foi possível abrir a planilha: {exc}') from exc
 
@@ -160,18 +229,22 @@ def _aba(wb, *termos, excluir=()):
 
 
 def _linhas(ws):
-    """(numero_linha, cabecalho_normalizado->indice, celulas) das linhas de
-    dados: do cabeçalho ("Receita" na 1ª coluna) até a legenda ou o fim."""
+    """(cabecalho_normalizado->indice, [(numero_linha, nome, celulas)]) das
+    linhas de dados: do cabeçalho ("Receita" na 1ª coluna) até a legenda ou
+    o fim. `celulas` são objetos Cell (valor + preenchimento)."""
     cab = None
     saida = []
-    for n, row in enumerate(ws.iter_rows(values_only=True), start=1):
+    for row in ws.iter_rows():
         if not row:
             continue
-        primeiro = _texto(row[0])
+        n = row[0].row
+        primeiro = _texto(row[0].value)
         if cab is None:
             if primeiro and normalizar_nome(primeiro) == 'receita':
-                cab = {normalizar_nome(c): i for i, c in enumerate(row)
-                       if not _vazio(c)}
+                cab = {}
+                for i, c in enumerate(row):
+                    if not _vazio(c.value):
+                        cab.setdefault(normalizar_nome(c.value), i)
             continue
         if primeiro is None:
             continue
@@ -184,12 +257,36 @@ def _linhas(ws):
     return cab, saida
 
 
-def _col(cab, row, *termos):
-    """Valor da coluna cujo cabeçalho normalizado contém TODOS os termos."""
-    for chave, idx in cab.items():
-        if all(t in chave for t in termos):
-            return row[idx] if idx < len(row) else None
-    return None
+def _coluna(cab, *termos, excluir=()):
+    """Índice da coluna cujo cabeçalho normalizado contém TODOS os termos e
+    nenhum de `excluir`; com mais de um candidato vale o MAIS ESPECÍFICO
+    (cabeçalho mais curto) — 'teto (valor)' ganha de 'unidade teto / lastro'
+    em qualquer ordem de colunas."""
+    candidatos = [(len(chave), idx) for chave, idx in cab.items()
+                  if all(t in chave for t in termos)
+                  and not any(x in chave for x in excluir)]
+    if not candidatos:
+        return None
+    return min(candidatos)[1]
+
+
+def _exigir(ws, cab, *termos, excluir=()):
+    idx = _coluna(cab, *termos, excluir=excluir)
+    if idx is None:
+        raise PlanilhaInvalida(
+            f'Aba "{ws.title}": coluna "{" ".join(termos)}" não encontrada.')
+    return idx
+
+
+def _cel(row, idx):
+    if idx is None or idx >= len(row):
+        return None
+    return row[idx]
+
+
+def _val(row, idx):
+    c = _cel(row, idx)
+    return None if c is None else c.value
 
 
 def _origem(ws, n):
@@ -200,185 +297,325 @@ def _limpar(d):
     return {k: v for k, v in d.items() if v is not None and v != [] and v != ''}
 
 
+def _marcar_incertos(params, row, chaves_colunas):
+    """Acrescenta `incerto` = chaves cujo valor veio de célula amarela."""
+    incertos = [chave for chave, idx in chaves_colunas
+                if chave in params and _incerto(_cel(row, idx))]
+    if incertos:
+        params['incerto'] = incertos
+    return params
+
+
+def _duracao_lida(valor, nome, rotulo, origem, avisos):
+    """Duração em minutos dentro da régua; fora dela vira 0 + aviso (nunca
+    um número inventado nem um estouro de coluna na hora de aplicar)."""
+    if valor is None:
+        return None
+    if valor < 0 or valor > DURACAO_MAX_MIN:
+        avisos.append(f'{nome}: {rotulo} fora da faixa ({valor} min) — '
+                      f'ignorado ({origem}).')
+        return 0
+    return int(valor)
+
+
 def ler_planilha(origem):
     """Lê o xlsx e devolve
     {'fichas': {nome_planilha: [etapa, ...]}, 'avisos': [...],
      'ordem': [nomes na ordem em que aparecem]}.
     Cada etapa: nome, duracao_min, equipamento, ativa, descricao=None,
-    parametros (dict, sempre com 'origem')."""
+    parametros (dict, sempre com 'origem'). Nomes com grafia diferente entre
+    as abas são a MESMA ficha (chave normalizada; vale a 1ª grafia)."""
     wb = _carregar(origem)
     try:
         ws_bat = _aba(wb, 'batimento')
         ws_caixa = _aba(wb, 'fermentacao', excluir=('final',))
         ws_final = _aba(wb, 'fermentacao', 'final')
         ws_forno = _aba(wb, 'forno')
-        fichas = {}
-        ordem = []
         avisos = []
-        partes = {}      # nome -> {'batimento': [...], 'caixa': [...], ...}
+        partes = {}      # chave normalizada -> partes da ficha
+        ordem = []       # chaves normalizadas na ordem de APARIÇÃO (qualquer
+        #                  aba, mesmo linha vazia): a prévia segue a planilha
+        grafias = {}     # chave -> grafia exibida (a primeira)
 
-        def _slot(nome):
-            if nome not in partes:
-                partes[nome] = {'batimento': [], 'caixa': [], 'final': [],
-                                'forno': []}
-                ordem.append(nome)
-            return partes[nome]
+        def _visto(nome):
+            chave = normalizar_nome(nome)
+            if chave not in grafias:
+                grafias[chave] = nome
+                ordem.append(chave)
+            return chave
+
+        def _slot(nome, ws, n):
+            chave = _visto(nome)
+            if chave not in partes:
+                partes[chave] = {'batimento': [], 'caixa': [], 'final': [],
+                                 'forno': []}
+            if nome != grafias[chave] and not any(
+                    a.startswith(f'"{nome}"') for a in avisos):
+                avisos.append(f'"{nome}" ({_origem(ws, n)}) foi lido como a '
+                              f'mesma receita de "{grafias[chave]}" '
+                              '(grafia diferente entre as abas).')
+            return partes[chave]
+
+        def _repetida(slot, parte, nome, ws, n):
+            if slot[parte]:
+                avisos.append(f'{nome}: linha repetida em "{ws.title}" '
+                              f'({_origem(ws, n)}) — só a primeira vale.')
+                return True
+            return False
 
         # 1. Batimento
         cab, linhas = _linhas(ws_bat)
+        c_v1 = _exigir(ws_bat, cab, 'velocidade 1')
+        c_v2 = _exigir(ws_bat, cab, 'velocidade 2')
+        c_ponto = _coluna(cab, 'ponto')
+        c_amb = _coluna(cab, 'ambiente')
+        c_liq = _coluna(cab, 'liquido')
+        c_fim = _coluna(cab, 'apos')
         for n, nome, row in linhas:
-            slot = _slot(nome)
-            v1 = _numero(_col(cab, row, 'velocidade 1'))
-            v2 = _numero(_col(cab, row, 'velocidade 2'))
-            ponto = _texto(_col(cab, row, 'ponto'))
-            t_amb = _numero(_col(cab, row, 'ambiente'))
-            liq_raw = _col(cab, row, 'liquido')
+            _visto(nome)
+            v1 = _numero(_val(row, c_v1))
+            v2 = _numero(_val(row, c_v2))
+            ponto = _texto(_val(row, c_ponto))
+            t_amb = _numero(_val(row, c_amb))
+            liq_raw = _val(row, c_liq)
             t_liq = _numero(liq_raw)
             t_liq_txt = None if t_liq is not None else _texto(liq_raw)
-            t_fim = _numero(_col(cab, row, 'apos'))
+            t_fim = _numero(_val(row, c_fim))
             if all(x is None for x in (v1, v2, ponto, t_amb, t_liq,
                                        t_liq_txt, t_fim)):
                 continue
-            dur = int(round((v1 or 0) + (v2 or 0)))
+            slot = _slot(nome, ws_bat, n)
+            if _repetida(slot, 'batimento', nome, ws_bat, n):
+                continue
             if v1 is None and v2 is None:
                 avisos.append(f'{nome}: batimento sem tempo de velocidade na '
                               f'ficha ({_origem(ws_bat, n)}).')
+            dur = _duracao_lida(int(round((v1 or 0) + (v2 or 0))), nome,
+                                'tempo de batimento', _origem(ws_bat, n), avisos)
+            params = _limpar({
+                'velocidade_1_min': v1, 'velocidade_2_min': v2,
+                'ponto_massa': ponto, 'temp_ambiente_c': t_amb,
+                'temp_liquido_c': t_liq, 'temp_liquido_txt': t_liq_txt,
+                'temp_massa_final_c': t_fim, 'origem': _origem(ws_bat, n)})
+            _marcar_incertos(params, row, [
+                ('velocidade_1_min', c_v1), ('velocidade_2_min', c_v2),
+                ('ponto_massa', c_ponto), ('temp_ambiente_c', c_amb),
+                ('temp_liquido_c', c_liq), ('temp_liquido_txt', c_liq),
+                ('temp_massa_final_c', c_fim)])
             slot['batimento'].append({
-                'nome': NOME_BATIMENTO, 'duracao_min': dur,
+                'nome': NOME_BATIMENTO, 'duracao_min': dur or 0,
                 'equipamento': 'amassadeira', 'ativa': True, 'descricao': None,
-                'parametros': _limpar({
-                    'velocidade_1_min': v1, 'velocidade_2_min': v2,
-                    'ponto_massa': ponto, 'temp_ambiente_c': t_amb,
-                    'temp_liquido_c': t_liq, 'temp_liquido_txt': t_liq_txt,
-                    'temp_massa_final_c': t_fim,
-                    'origem': _origem(ws_bat, n)})})
+                'parametros': params})
 
         # 2. Fermentação em caixa (+ mesa)
         cab, linhas = _linhas(ws_caixa)
+        c_local = _exigir(ws_caixa, cab, 'local')
+        c_temp = _exigir(ws_caixa, cab, 'temperatura')
+        c_dur = _coluna(cab, 'duracao')
+        c_dobras = [_coluna(cab, f'dobra {i}') for i in (1, 2, 3)]
+        if c_dobras[0] is None:
+            raise PlanilhaInvalida(f'Aba "{ws_caixa.title}": coluna "dobra 1" '
+                                   'não encontrada.')
+        c_mesa = _coluna(cab, 'mesa')
         for n, nome, row in linhas:
-            slot = _slot(nome)
-            local = _local(_col(cab, row, 'local'))
-            temp = _numero(_col(cab, row, 'temperatura'))
-            dur_h = _numero(_col(cab, row, 'duracao'))
-            dobras = [_numero(_col(cab, row, f'dobra {i}')) for i in (1, 2, 3)]
+            _visto(nome)
+            local = _local(_val(row, c_local))
+            temp = _numero(_val(row, c_temp))
+            dur_raw = _val(row, c_dur)
+            dur_h_min = _horas_min(dur_raw)
+            dobras = [_numero(_val(row, c)) for c in c_dobras if c is not None]
             dobras = [int(round(d)) for d in dobras if d is not None]
-            mesa_raw = _col(cab, row, 'mesa')
-            mesa_min = _minutos(mesa_raw)
-            if all(x is None for x in (local, temp, dur_h)) and not dobras \
-                    and mesa_min is None:
+            mesa_raw = _val(row, c_mesa)
+            mesa_min = _horas_min(mesa_raw)
+            if (all(x is None for x in (local, temp, dur_h_min)) and not dobras
+                    and mesa_min is None and _vazio(dur_raw) and _vazio(mesa_raw)):
                 continue
-            if dur_h is not None:
-                dur = int(round(float(dur_h) * 60))
+            slot = _slot(nome, ws_caixa, n)
+            if _repetida(slot, 'caixa', nome, ws_caixa, n):
+                continue
+            if dur_h_min is not None:
+                dur = dur_h_min
                 duracao_origem = 'ficha'
-            elif dobras:
-                dur = sum(dobras)                 # até a última dobra
-                duracao_origem = 'ate_ultima_dobra'
-                avisos.append(f'{nome}: a ficha não diz a duração total da '
-                              f'fermentação em caixa — o fluxograma usa o tempo '
-                              f'até a última dobra ({dur} min; '
-                              f'{_origem(ws_caixa, n)}).')
             else:
-                dur = 0
-                duracao_origem = 'ausente'
-                avisos.append(f'{nome}: fermentação em caixa sem tempo nem '
-                              f'dobras na ficha ({_origem(ws_caixa, n)}).')
+                if not _vazio(dur_raw):
+                    avisos.append(f'{nome}: "Duração (h)" ilegível ("{dur_raw}"; '
+                                  f'{_origem(ws_caixa, n)}).')
+                if dobras:
+                    dur = sum(dobras)                 # até a última dobra
+                    duracao_origem = 'ate_ultima_dobra'
+                    avisos.append(f'{nome}: a ficha não diz a duração total da '
+                                  f'fermentação em caixa — o fluxograma usa o '
+                                  f'tempo até a última dobra ({dur} min; '
+                                  f'{_origem(ws_caixa, n)}).')
+                else:
+                    dur = 0
+                    duracao_origem = 'ausente'
+                    avisos.append(f'{nome}: fermentação em caixa sem tempo nem '
+                                  f'dobras na ficha ({_origem(ws_caixa, n)}).')
+            dur = _duracao_lida(dur, nome, 'fermentação em caixa',
+                                _origem(ws_caixa, n), avisos)
             cf = local is not None and normalizar_nome(local).startswith('camara')
+            params = _limpar({
+                'local': local, 'temp_c': temp,
+                'duracao_h': (round(dur_h_min / 60.0, 2) if dur_h_min is not None
+                              else None),
+                'dobras_min': dobras, 'duracao_origem': duracao_origem,
+                'origem': _origem(ws_caixa, n)})
+            _marcar_incertos(params, row, [
+                ('local', c_local), ('temp_c', c_temp), ('duracao_h', c_dur),
+                ('dobras_min', c_dobras[0])])
             slot['caixa'].append({
-                'nome': NOME_CAIXA, 'duracao_min': dur,
+                'nome': NOME_CAIXA, 'duracao_min': dur or 0,
                 'equipamento': 'camara_fria' if cf else None, 'ativa': False,
-                'descricao': None,
-                'parametros': _limpar({
-                    'local': local, 'temp_c': temp,
-                    'duracao_h': dur_h, 'dobras_min': dobras,
-                    'duracao_origem': duracao_origem,
-                    'origem': _origem(ws_caixa, n)})})
+                'descricao': None, 'parametros': params})
             if mesa_min is not None:
+                mesa_min = _duracao_lida(mesa_min, nome, 'tempo de mesa',
+                                         _origem(ws_caixa, n), avisos)
+                params_mesa = _limpar({'tempo_como_escrito': _como_escrito(mesa_raw),
+                                       'origem': _origem(ws_caixa, n)})
+                _marcar_incertos(params_mesa, row, [('tempo_como_escrito', c_mesa)])
                 slot['caixa'].append({
-                    'nome': NOME_MESA, 'duracao_min': mesa_min,
+                    'nome': NOME_MESA, 'duracao_min': mesa_min or 0,
                     'equipamento': None, 'ativa': False, 'descricao': None,
-                    'parametros': _limpar({
-                        'tempo_como_escrito': _como_escrito(mesa_raw),
-                        'origem': _origem(ws_caixa, n)})})
+                    'parametros': params_mesa})
+            elif not _vazio(mesa_raw):
+                avisos.append(f'{nome}: tempo de mesa ilegível ("{mesa_raw}"; '
+                              f'{_origem(ws_caixa, n)}).')
 
-        # 3. Fermentação final (uma linha por método; a 1ª usável manda)
+        # 3. Fermentação final (uma linha por método; a 1ª com tempo manda)
         cab, linhas = _linhas(ws_final)
+        c_local = _exigir(ws_final, cab, 'local')
+        c_temp = _exigir(ws_final, cab, 'temperatura')
+        c_txt = _coluna(cab, 'como escrito')
+        c_min = _coluna(cab, '(min)')
+        if c_txt is None and c_min is None:
+            raise PlanilhaInvalida(f'Aba "{ws_final.title}": coluna de tempo '
+                                   'não encontrada.')
         metodos = {}
         for n, nome, row in linhas:
-            _slot(nome)
-            local = _local(_col(cab, row, 'local'))
-            temp = _numero(_col(cab, row, 'temperatura'))
-            txt = _texto(_col(cab, row, 'como escrito'))
-            mins = _numero(_col(cab, row, '(min)'))
-            if mins is None and txt is not None:
-                mins = _minutos(txt)
-            if mins is None and txt is None and temp is None:
-                continue                                   # '–' ou em branco
+            _visto(nome)
+            local = _local(_val(row, c_local))
+            temp = _numero(_val(row, c_temp))
+            txt_raw = _val(row, c_txt)
+            txt = _texto(txt_raw)
+            mins = _numero(_val(row, c_min))
+            mins_txt = _minutos(txt) if txt is not None else None
             if mins is None:
-                avisos.append(f'{nome}: fermentação final sem tempo legível '
-                              f'("{txt}"; {_origem(ws_final, n)}).')
-            metodos.setdefault(nome, []).append({
-                'local': local, 'temp_c': temp, 'tempo_como_escrito': txt,
-                'tempo_min': int(round(mins)) if mins is not None else None,
-                'origem': _origem(ws_final, n)})
-        for nome, lista in metodos.items():
-            principal, alternativas = lista[0], lista[1:]
+                mins = mins_txt
+            elif mins_txt is not None and mins_txt != mins:
+                avisos.append(f'{nome}: fermentação final com "Tempo (min)" = '
+                              f'{mins} diferente do escrito ("{txt}" = {mins_txt} '
+                              f'min) — vale o número; confira a ficha '
+                              f'({_origem(ws_final, n)}).')
+            if mins is None and txt is None and temp is None:
+                continue        # '–' ou em branco: o "Local" sozinho não é dado
+            slot = _slot(nome, ws_final, n)
+            if mins is None:
+                if txt is not None:
+                    avisos.append(f'{nome}: fermentação final com tempo ilegível '
+                                  f'("{txt}"; {_origem(ws_final, n)}).')
+                else:
+                    avisos.append(f'{nome}: fermentação final sem tempo na ficha '
+                                  f'({_origem(ws_final, n)}).')
+            else:
+                mins = _duracao_lida(int(round(mins)), nome, 'fermentação final',
+                                     _origem(ws_final, n), avisos)
+            metodo = {'local': local, 'temp_c': temp, 'tempo_como_escrito': txt,
+                      'tempo_min': mins, 'origem': _origem(ws_final, n),
+                      'incerto': [k for k, c in (('local', c_local),
+                                                 ('temp_c', c_temp),
+                                                 ('tempo_como_escrito', c_txt),
+                                                 ('tempo_min', c_min))
+                                  if _incerto(_cel(row, c))]}
+            metodos.setdefault(normalizar_nome(nome), []).append(metodo)
+            slot['final']            # garante o slot (criado acima)
+        for chave, lista in metodos.items():
+            com_tempo = [m for m in lista if m['tempo_min'] is not None]
+            principal = com_tempo[0] if com_tempo else lista[0]
+            alternativas = [m for m in lista if m is not principal]
             cf = (principal['local'] is not None
                   and normalizar_nome(principal['local']).startswith('camara'))
-            partes[nome]['final'].append({
+            params = _limpar({
+                'local': principal['local'], 'temp_c': principal['temp_c'],
+                'tempo_como_escrito': principal['tempo_como_escrito'],
+                'alternativas': [_limpar({
+                    'local': a['local'], 'temp_c': a['temp_c'],
+                    'tempo_min': a['tempo_min'],
+                    'tempo_como_escrito': a['tempo_como_escrito']})
+                    for a in alternativas],
+                'origem': principal['origem'],
+                'incerto': [k for k in principal['incerto']
+                            if k in ('local', 'temp_c', 'tempo_como_escrito')
+                            or k == 'tempo_min']})
+            partes[chave]['final'].append({
                 'nome': NOME_FINAL,
                 'duracao_min': principal['tempo_min'] or 0,
                 'equipamento': 'camara_fria' if cf else None, 'ativa': False,
-                'descricao': None,
-                'parametros': _limpar({
-                    'local': principal['local'], 'temp_c': principal['temp_c'],
-                    'tempo_como_escrito': principal['tempo_como_escrito'],
-                    'alternativas': [_limpar({
-                        'local': a['local'], 'temp_c': a['temp_c'],
-                        'tempo_min': a['tempo_min'],
-                        'tempo_como_escrito': a['tempo_como_escrito']})
-                        for a in alternativas],
-                    'origem': principal['origem']})})
+                'descricao': None, 'parametros': params})
 
         # 4. Forno
         cab, linhas = _linhas(ws_forno)
+        c_forno = _exigir(ws_forno, cab, 'forno')
+        c_tempo = _exigir(ws_forno, cab, 'tempo')
+        c_teto = _coluna(cab, 'teto', excluir=('unidade',))
+        c_lastro = _coluna(cab, 'lastro', excluir=('unidade',))
+        c_unid = _coluna(cab, 'unidade')
+        c_alvo = _coluna(cab, 'alvo')
         for n, nome, row in linhas:
-            slot = _slot(nome)
-            forno_c = _numero(_col(cab, row, 'forno'))
-            tempo = _numero(_col(cab, row, 'tempo'))
-            teto = _numero(_col(cab, row, 'teto'))
-            lastro = _numero(_col(cab, row, 'lastro'))
-            unidade = _texto(_col(cab, row, 'unidade'))
-            alvo = _numero(_col(cab, row, 'alvo'))
+            _visto(nome)
+            forno_c = _numero(_val(row, c_forno))
+            tempo = _numero(_val(row, c_tempo))
+            teto = _numero(_val(row, c_teto))
+            lastro = _numero(_val(row, c_lastro))
+            unidade = _texto(_val(row, c_unid))
+            alvo = _numero(_val(row, c_alvo))
             if all(x is None for x in (forno_c, tempo, teto, lastro, unidade,
                                        alvo)):
+                continue
+            slot = _slot(nome, ws_forno, n)
+            if _repetida(slot, 'forno', nome, ws_forno, n):
                 continue
             if tempo is None:
                 avisos.append(f'{nome}: forno sem tempo na ficha '
                               f'({_origem(ws_forno, n)}).')
+                dur = 0
+            else:
+                dur = _duracao_lida(int(round(tempo)), nome, 'tempo de forno',
+                                    _origem(ws_forno, n), avisos)
+            params = _limpar({
+                'forno_c': forno_c, 'teto': teto, 'lastro': lastro,
+                'unidade_teto_lastro': unidade, 'alvo_interno_c': alvo,
+                'origem': _origem(ws_forno, n)})
+            _marcar_incertos(params, row, [
+                ('forno_c', c_forno), ('teto', c_teto), ('lastro', c_lastro),
+                ('unidade_teto_lastro', c_unid), ('alvo_interno_c', c_alvo)])
+            # o tempo do forno é a duração da etapa, não um parâmetro: marca
+            # a incerteza na chave que o rótulo conhece
+            if _incerto(_cel(row, c_tempo)):
+                params['incerto'] = params.get('incerto', []) + ['tempo_min']
             slot['forno'].append({
-                'nome': NOME_FORNO,
-                'duracao_min': int(round(tempo)) if tempo is not None else 0,
+                'nome': NOME_FORNO, 'duracao_min': dur or 0,
                 'equipamento': 'forno', 'ativa': True, 'descricao': None,
-                'parametros': _limpar({
-                    'forno_c': forno_c, 'teto': teto, 'lastro': lastro,
-                    'unidade_teto_lastro': unidade, 'alvo_interno_c': alvo,
-                    'origem': _origem(ws_forno, n)})})
+                'parametros': params})
 
-        for nome in ordem:
-            p = partes[nome]
-            fichas[nome] = p['batimento'] + p['caixa'] + p['final'] + p['forno']
-        return {'fichas': fichas, 'ordem': ordem, 'avisos': avisos}
+        fichas = {}
+        nomes = []
+        for chave in ordem:
+            if chave not in partes:
+                continue                 # só linhas vazias: nem entra na prévia
+            p = partes[chave]
+            etapas = p['batimento'] + p['caixa'] + p['final'] + p['forno']
+            for e in etapas:
+                if e['parametros'].get('incerto'):
+                    avisos.append(f'{grafias[chave]}: {e["nome"]} com leitura '
+                                  f'incerta na ficha (célula amarela: '
+                                  f'{rotulo_chaves(e["parametros"]["incerto"])}; '
+                                  f'{e["parametros"]["origem"]}).')
+            fichas[grafias[chave]] = etapas
+            nomes.append(grafias[chave])
+        return {'fichas': fichas, 'ordem': nomes, 'avisos': avisos}
     finally:
         wb.close()
-
-
-def _como_escrito(v):
-    if isinstance(v, timedelta):
-        total = int(round(v.total_seconds() / 60))
-        return '%d:%02d' % divmod(total, 60)
-    if hasattr(v, 'hour') and hasattr(v, 'minute') and not hasattr(v, 'date'):
-        return '%d:%02d' % (v.hour, v.minute)
-    return _texto(v)
 
 
 def sha256_de(origem):
@@ -424,17 +661,28 @@ def _backup_etapas():
              'parametros': e.parametros} for e in rows]
 
 
+def _travar_aplicacao():
+    """Serializa dois `aplicar` concorrentes (Postgres): o segundo espera o
+    primeiro commitar e então refaz o gesto por cima — nunca etapas em
+    dobro. SQLite (dev/testes) é um processo só."""
+    if db.engine.dialect.name == 'postgresql':
+        db.session.execute(text('SELECT pg_advisory_xact_lock(:k)'),
+                           {'k': LOCK_KEY_APLICAR})
+
+
 def _reescrever_snapshots_abertos(referencia=None):
     """Reescreve `dados['processo']` dos snapshots de batelada das ordens
-    que o Gantt ainda lê (hoje e os últimos JANELA_SNAPSHOT_DIAS dias, item
-    com falta, não dispensado, não encerrado). Quantidades, MP e subs do
-    snapshot ficam intactos — só o passo a passo acompanha a ficha nova."""
+    que o Gantt ainda lê (hoje e as continuações dos últimos
+    `gantt.MAX_LEAD_DIAS` dias, item com falta, não dispensado, não
+    encerrado). Quantidades, MP e subs do snapshot ficam intactos — só o
+    passo a passo acompanha a ficha nova."""
     from app.models import PlanejamentoItem, PlanejamentoProducao
     from app.models.producao_batelada import PlanejamentoItemBatelada
     from app.services.bateladas_paes import processo_da_receita
+    from app.services.gantt import MAX_LEAD_DIAS
 
     ref = referencia or hoje()
-    desde = ref - timedelta(days=JANELA_SNAPSHOT_DIAS)
+    desde = ref - timedelta(days=MAX_LEAD_DIAS)
     q = (db.session.query(PlanejamentoItemBatelada)
          .join(PlanejamentoItem,
                PlanejamentoItem.id == PlanejamentoItemBatelada.item_id)
@@ -461,8 +709,15 @@ def aplicar(fichas, casamento, *, usuario_id=None, arquivo=None, sha256=None,
             origem='tela', referencia=None):
     """Substitui TODAS as etapas do sistema pelas da planilha. Não commita.
 
-    Devolve o resumo gravado no marcador: receitas aplicadas, etapas, as não
-    encontradas/ambíguas, a chave do backup e os snapshots reescritos."""
+    Levanta ValueError (sem tocar no banco) quando nenhuma receita da
+    planilha casa com o cadastro. Devolve o resumo gravado no marcador:
+    receitas aplicadas, etapas, as não encontradas/ambíguas, a chave do
+    backup e os snapshots reescritos."""
+    casadas = [n for n in fichas if (casamento.get(n) or {}).get('receita_id')]
+    if not casadas:
+        raise ValueError('Nenhuma receita da planilha casa com uma receita '
+                         'ativa do cadastro — nada foi apagado.')
+    _travar_aplicacao()
     momento = agora()
     backup = _backup_etapas()
     chave_backup = PREFIXO_BACKUP + momento.strftime('%Y%m%d_%H%M%S')
@@ -487,12 +742,13 @@ def aplicar(fichas, casamento, *, usuario_id=None, arquivo=None, sha256=None,
             continue
         for i, e in enumerate(etapas):
             db.session.add(ReceitaEtapa(
-                receita_id=alvo['receita_id'], ordem=i, nome=e['nome'][:80],
-                duracao_min=int(e.get('duracao_min') or 0),
+                receita_id=alvo['receita_id'], ordem=i,
+                nome=str(e.get('nome') or '?')[:80],
+                duracao_min=duracao_valida(e.get('duracao_min')),
                 equipamento=e.get('equipamento'),
                 ativa=bool(e.get('ativa', True)),
                 descricao=e.get('descricao'),
-                parametros=e.get('parametros') or None))
+                parametros=validar_parametros(e.get('parametros'))))
             n_etapas += 1
         aplicadas.append({'planilha': nome, 'receita_id': alvo['receita_id'],
                           'receita': alvo['receita_nome'], 'etapas': len(etapas)})

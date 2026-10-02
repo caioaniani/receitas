@@ -1095,7 +1095,15 @@ def _seed_fichas_producao_2026_10(app):
             logger.error('seed fichas producao: arquivo %s ausente',
                          svc.ARQUIVO_SEED)
             return
-        resumo = svc.aplicar_arquivo(svc.ARQUIVO_SEED, origem='seed')
+        try:
+            resumo = svc.aplicar_arquivo(svc.ARQUIVO_SEED, origem='seed')
+        except ValueError as e:
+            # Nenhuma receita da planilha casou com o cadastro: nada foi
+            # apagado e o marker NÃO é gravado (o próximo boot tenta de novo;
+            # o erro fica visível no log/Sentry em vez de passar batido).
+            db.session.rollback()
+            logger.error('seed fichas producao NAO aplicado: %s', e)
+            return
         AppConfig.set(chave,
                       f"receitas={resumo['receitas_aplicadas']} "
                       f"etapas={resumo['etapas']} "

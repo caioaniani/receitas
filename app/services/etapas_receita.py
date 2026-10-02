@@ -36,6 +36,109 @@ RECURSO_MAP = {
 
 DESCRICAO_MAX = 2000
 PARAMETROS_MAX = 4000     # JSON por etapa no form (hidden) — ficha real ~300 B
+DURACAO_MAX = 100000      # minutos; acima disso é dedo errado, não tempo real
+
+# Esquema FECHADO dos parâmetros da ficha de produção (fichas_producao.py).
+# Chave fora daqui é descartada; tipo errado idem — o rótulo e o Gantt nunca
+# veem lixo, venha ele do hidden do editor ou de uma planilha torta.
+_PARAM_NUM = ('velocidade_1_min', 'velocidade_2_min', 'temp_ambiente_c',
+              'temp_liquido_c', 'temp_massa_final_c', 'temp_c', 'duracao_h',
+              'forno_c', 'teto', 'lastro', 'alvo_interno_c')
+_PARAM_TXT = ('ponto_massa', 'temp_liquido_txt', 'local', 'duracao_origem',
+              'tempo_como_escrito', 'unidade_teto_lastro', 'origem')
+_ALT_NUM = ('temp_c', 'tempo_min')
+_ALT_TXT = ('local', 'tempo_como_escrito')
+_TXT_MAX = 200
+_NUM_MIN, _NUM_MAX = -1000.0, 1000000.0
+# Chave -> como o rótulo a chama (pra dizer "leitura incerta: líquido").
+_ROTULO_CHAVE = {
+    'velocidade_1_min': 'V1', 'velocidade_2_min': 'V2', 'ponto_massa': 'ponto',
+    'temp_ambiente_c': 'ambiente', 'temp_liquido_c': 'líquido',
+    'temp_liquido_txt': 'líquido', 'temp_massa_final_c': 'massa ao fim',
+    'local': 'local', 'temp_c': 'temperatura', 'duracao_h': 'duração',
+    'dobras_min': 'dobras', 'tempo_como_escrito': 'tempo', 'tempo_min': 'tempo',
+    'forno_c': 'forno', 'teto': 'teto', 'lastro': 'lastro',
+    'unidade_teto_lastro': 'unidade', 'alvo_interno_c': 'alvo interno',
+}
+
+
+def rotulo_chaves(chaves):
+    """Nomes legíveis das chaves de parâmetro (pra avisos e pro rótulo)."""
+    return ', '.join(dict.fromkeys(_ROTULO_CHAVE.get(k, k) for k in chaves))
+
+
+def duracao_valida(raw):
+    """Minutos inteiros na régua [0, DURACAO_MAX] — a MESMA para o form do
+    editor e para a planilha (duas réguas para a mesma coluna divergiam)."""
+    try:
+        n = int(float(raw or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    return max(0, min(n, DURACAO_MAX))
+
+
+def _num_ok(v):
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    if v != v or v in (float('inf'), float('-inf')):
+        return None
+    if not (_NUM_MIN <= v <= _NUM_MAX):
+        return None
+    return int(v) if float(v).is_integer() else float(v)
+
+
+def _txt_ok(v):
+    if not isinstance(v, str):
+        return None
+    t = v.strip()[:_TXT_MAX]
+    return t or None
+
+
+def validar_parametros(p):
+    """Dict de parâmetros SANEADO (só chaves/tipos do esquema) ou None.
+    Nunca levanta."""
+    if not isinstance(p, dict) or not p:
+        return None
+    out = {}
+    for k in _PARAM_NUM:
+        v = _num_ok(p.get(k))
+        if v is not None:
+            out[k] = v
+    for k in _PARAM_TXT:
+        v = _txt_ok(p.get(k))
+        if v is not None:
+            out[k] = v
+    dobras = p.get('dobras_min')
+    if isinstance(dobras, (list, tuple)):
+        ok = [_num_ok(d) for d in dobras[:10]]
+        ok = [d for d in ok if d is not None and d >= 0]
+        if ok:
+            out['dobras_min'] = ok
+    alts = p.get('alternativas')
+    if isinstance(alts, (list, tuple)):
+        lista = []
+        for a in alts[:5]:
+            if not isinstance(a, dict):
+                continue
+            alt = {}
+            for k in _ALT_NUM:
+                v = _num_ok(a.get(k))
+                if v is not None:
+                    alt[k] = v
+            for k in _ALT_TXT:
+                v = _txt_ok(a.get(k))
+                if v is not None:
+                    alt[k] = v
+            if alt:
+                lista.append(alt)
+        if lista:
+            out['alternativas'] = lista
+    incerto = p.get('incerto')
+    if isinstance(incerto, (list, tuple)):
+        ok = [k for k in incerto if isinstance(k, str) and k in _ROTULO_CHAVE]
+        if ok:
+            out['incerto'] = list(dict.fromkeys(ok))
+    return out or None
 
 
 def _num_br(v):
@@ -74,9 +177,18 @@ def _metodo_label(m):
 def resumo_parametros(p, duracao_min=None):
     """Rótulo legível dos parâmetros de uma etapa — FONTE ÚNICA do texto que
     o Gantt, a TV do padeiro, os editores e a sonda mostram. Chaves que não
-    existem na ficha ficam de fora; chaves desconhecidas são ignoradas.
-    `tempo_como_escrito` só aparece quando a duração não pôde ser lida."""
-    if not isinstance(p, dict) or not p:
+    existem na ficha ficam de fora; chaves desconhecidas ou com tipo errado
+    são ignoradas (o dict passa pelo esquema antes). `tempo_como_escrito` só
+    aparece quando a duração não pôde ser lida. Nunca levanta: uma linha
+    torta no banco não pode derrubar o Gantt nem a TV."""
+    try:
+        return _resumo_parametros(validar_parametros(p), duracao_min)
+    except Exception:  # noqa: BLE001 — defesa final do render
+        return ''
+
+
+def _resumo_parametros(p, duracao_min=None):
+    if not p:
         return ''
     partes = []
     if p.get('velocidade_1_min') is not None:
@@ -98,11 +210,13 @@ def resumo_parametros(p, duracao_min=None):
     if p.get('temp_c') is not None:
         partes.append('%s °C' % _num_br(p['temp_c']))
     if p.get('dobras_min'):
+        # Intervalos consecutivos (a conta da duração soma os valores): a
+        # ficha diz "30, 30, 25" = dobra após 30 min, outra 30 min depois…
         d = [_num_br(x) for x in p['dobras_min']]
         if len(d) == 1:
-            partes.append('dobra aos %s min' % d[0])
+            partes.append('dobra após %s min' % d[0])
         else:
-            partes.append('dobras aos %s e %s min' % (', '.join(d[:-1]), d[-1]))
+            partes.append('dobras a cada %s e %s min' % (', '.join(d[:-1]), d[-1]))
     if p.get('tempo_como_escrito') and not duracao_min:
         partes.append('na ficha: %s' % p['tempo_como_escrito'])
     for alt in p.get('alternativas') or []:
@@ -119,20 +233,23 @@ def resumo_parametros(p, duracao_min=None):
         partes.append('(%s)' % p['unidade_teto_lastro'])
     if p.get('alvo_interno_c') is not None:
         partes.append('alvo interno %s °C' % _num_br(p['alvo_interno_c']))
+    if p.get('incerto'):
+        partes.append('leitura incerta na ficha: %s' % rotulo_chaves(p['incerto']))
     return ' · '.join(partes)
 
 
 def parametros_de_form(raw):
-    """JSON do hidden `parametros[]` → dict ou None (vazio/ilegível/não-objeto
-    = None; nunca levanta — o editor não pode travar por um hidden torto)."""
+    """JSON do hidden `parametros[]` → dict SANEADO pelo esquema ou None
+    (vazio/ilegível/não-objeto/sem chave conhecida = None; nunca levanta —
+    o editor não pode travar por um hidden torto)."""
     raw = (raw or '').strip()
     if not raw or len(raw) > PARAMETROS_MAX:
         return None
     try:
         v = json.loads(raw)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, RecursionError):
         return None
-    return v if isinstance(v, dict) and v else None
+    return validar_parametros(v)
 
 
 def recurso_de_etapa(e):
@@ -157,10 +274,7 @@ def parse_etapas_form(form):
         if not nome:
             continue            # linha vazia = ignora
         dur_raw = duracoes[i] if i < len(duracoes) else 0
-        try:
-            dur_min = max(0, min(int(dur_raw or 0), 100000))
-        except (TypeError, ValueError):
-            dur_min = 0
+        dur_min = duracao_valida(dur_raw)
         recurso = recursos[i] if i < len(recursos) else ''
         equip, ativa = RECURSO_MAP.get(recurso, (None, True))
         desc = (descricoes[i] if i < len(descricoes) else '') or ''

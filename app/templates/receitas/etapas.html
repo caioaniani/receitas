@@ -160,7 +160,9 @@
       var msg = 'Aplicar ESTAS etapas a TODOS os ' + btnAplicar.dataset.n +
         ' produto(s) da categoria «' + btnAplicar.dataset.categoria + '»?' +
         '\n\nIsso SUBSTITUI as etapas atuais de cada um — INCLUINDO o passo ' +
-        'a passo escrito pelo padeiro — e não dá pra desfazer.';
+        'a passo escrito pelo padeiro e os ⚙ parâmetros da planilha (as outras ' +
+        'receitas ficam SEM parâmetros até a próxima importação) — e não dá ' +
+        'pra desfazer.';
       if (!confirm(msg)) e.preventDefault();
     });
   }

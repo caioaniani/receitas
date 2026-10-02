@@ -312,11 +312,17 @@ def etapas(id):
                       'categoria.', 'warning')
                 return redirect(url_for('receitas.etapas', id=receita.id))
             etapas_form = _parse_etapas_form(request.form)
+            # Os ⚙ parâmetros da ficha de produção são MEDIDOS por receita
+            # (e `origem` aponta a linha dela na planilha): as outras
+            # receitas da categoria recebem só nome/duração/tipo/passo a
+            # passo; parâmetro delas só entra pela planilha.
+            sem_parametros = [dict(e, parametros=None) for e in etapas_form]
             alvos = (Receita.query
                      .filter(Receita.categoria == cat,
                              Receita.arquivada_em.is_(None)).all())
             for r in alvos:
-                _set_etapas(r.id, etapas_form)
+                _set_etapas(r.id, etapas_form if r.id == receita.id
+                            else sem_parametros)
             db.session.commit()
             flash(f'{len(etapas_form)} etapa(s) aplicadas a {len(alvos)} '
                   f'produto(s) da categoria "{cat}".', 'success')
@@ -439,6 +445,10 @@ def fichas_producao_aplicar():
                              arquivo=carga.get('arquivo'),
                              sha256=carga.get('sha256'), origem='tela')
         db.session.commit()
+    except ValueError as exc:              # nenhuma receita casou: nada apagado
+        db.session.rollback()
+        flash(str(exc), 'warning')
+        return redirect(url_for('receitas.fichas_producao'))
     except Exception:
         db.session.rollback()
         raise
