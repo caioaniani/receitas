@@ -53,7 +53,7 @@
         {% for c in l.casamento.candidatos %}<br><small>#{{ c.id }} {{ c.nome }}</small>{% endfor %}
       {% else %}<span class="badge bg-danger-subtle text-danger-emphasis">não encontrada</span>{% endif %}
     </td>
-    <td>
+    <td style="max-width:460px;">
       {% if l.etapas %}<ol class="mb-0 ps-3 small">
         {% for e in l.etapas %}<li><strong>{{ e.nome }}</strong> · {{ e.duracao_min }} min
           {%- if e.equipamento %} · {{ e.equipamento }}{% endif %}{% if not e.ativa %} · espera{% endif %}
@@ -103,7 +103,7 @@
   {% for r in situacao if r.n_etapas %}
   <tr>
     <td>{{ r.nome }}</td><td class="small text-muted">{{ r.categoria }}</td>
-    <td><ol class="mb-0 ps-3 small">
+    <td style="max-width:460px;"><ol class="mb-0 ps-3 small">
       {% for e in r.etapas %}<li><strong>{{ e.nome }}</strong> · {{ e.duracao_min }} min{% if e.equipamento %} · {{ e.equipamento }}{% endif %}{% if not e.ativa %} · espera{% endif %}
         {% if e.parametros_label %}<br><span class="text-success-emphasis">⚙ {{ e.parametros_label }}</span>{% endif %}</li>{% endfor %}
     </ol></td>

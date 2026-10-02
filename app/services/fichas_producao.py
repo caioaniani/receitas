@@ -554,6 +554,7 @@ def situacao_receitas():
             'etapas': [{'nome': e.nome, 'duracao_min': e.duracao_min,
                         'equipamento': e.equipamento, 'ativa': bool(e.ativa),
                         'descricao': e.descricao, 'parametros': e.parametros,
-                        'parametros_label': resumo_parametros(e.parametros)}
+                        'parametros_label': resumo_parametros(e.parametros,
+                                                              e.duracao_min)}
                        for e in r.etapas]})
     return saida
