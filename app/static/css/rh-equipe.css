@@ -127,6 +127,10 @@
     .rh-lojas .rh-lojas-context { padding: 4px 18px; }
     .rh-lojas .rh-lojas-pending-list { padding: 8px 18px; }
     .rh-lojas .rh-lojas-selector > a { flex: 1 1 auto; justify-content: space-between; }
+    .rh-lojas .rh-lojas-actions { padding: 14px 18px 0; }
+    .rh-lojas .rh-lojas-action { flex: 1 1 100%; }
+    .rh-lojas .rh-lojas-action > summary { width: 100%; }
+    .rh-lojas .rh-lojas-action-form { max-width: none; padding: 14px; }
 }
 .rh-equipe {
     --equipe-ink: var(--v2-ink, var(--text-main, #17221d));
