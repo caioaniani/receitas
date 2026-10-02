@@ -295,7 +295,8 @@ def remover_pessoa(loja, funcionario_id, *, actor_id=None):
     principal_depois = _principal_ativa(restantes)
     mudou = principal_depois is not None and principal_depois != principal_antes
     _auditar('delete', pessoa, loja,
-             {'loja_principal': bool(vinculos[loja.id]['principal'])},
+             {'loja_principal': era_principal,
+              'marca_explicita': bool(vinculos[loja.id]['principal'])},
              None, actor_id)
     return {'pessoa': pessoa, 'era_principal': era_principal,
             'restantes': len(restantes),
