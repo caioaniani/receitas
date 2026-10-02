@@ -60,9 +60,13 @@ def _executar_gesto(loja_id, gesto, mensagem):
     transforma o resultado no texto de sucesso. Falha de validação ou de
     corrida (dois cliques no mesmo vínculo) desfaz tudo e avisa.
     """
+    from sqlalchemy.orm import load_only
+
     from app.services import rh_equipe_lojas_acoes as acoes
 
-    loja = db.get_or_404(Loja, loja_id)
+    # Só id/nome/ativa: a planta da loja (LargeBinary) não entra no gesto.
+    loja = (Loja.query.options(load_only(Loja.id, Loja.nome, Loja.ativa))
+            .filter_by(id=loja_id).first_or_404())
     todas = request.form.get('voltar') == 'todas'
     try:
         resultado = gesto(acoes, loja)
