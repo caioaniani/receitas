@@ -62,6 +62,59 @@ Se algo mudou, nenhum item do lote é aprovado. Cada aprovação gera uma entrad
 gera uma data de promoção. O commit é único e preserva benefícios, acesso,
 lojas e liderança. Testes `test_plano_carreira_lote*` cobrem serviço e rotas.
 
+## Adicionar, importar e remover pessoas por loja (02/10/2026)
+
+Pedido do dono: em **Equipe → Lojas e equipes** (`/rh/equipe/lojas`), botão
+para excluir ou adicionar pessoa, ou importar uma pessoa de outra loja. Os
+três gestos ficam no cartão de cada loja e valem para o dono e para a
+chefia de RH (`gestao_rh_required`, os mesmos da tela; endpoints na
+allowlist `acesso_gestao_rh.ENDPOINTS_RH`). Eles mudam **só o vínculo
+pessoa↔loja** (`funcionario_loja`, com a marca `loja_principal`) e, se
+informado, o período; cargo, salário, líder direto, conta de acesso e os
+demais campos da ficha ficam como estão. Serviço
+`app/services/rh_equipe_lojas_acoes.py`, sem commit (a rota controla a
+transação); rotas em `equipe_routes.py`.
+
+- **Adicionar pessoa**: pessoa ativa já cadastrada no RH e ainda sem vínculo
+  com a loja (lista agrupada por unidade principal atual, "Sem unidade
+  principal" primeiro). Quem não tinha unidade principal passa a ter esta;
+  quem já tinha fica com vínculo adicional, salvo se marcar "tornar esta a
+  unidade principal". Uma pessoa de loja única que ganha o segundo vínculo
+  tem a loja antiga marcada explicitamente como principal, para não cair em
+  "várias unidades, sem principal definida" (a regra de loja única de
+  `unidades_principais` deixaria de valer). Atalho "Cadastrar pessoa nova
+  nesta loja" abre `/rh/funcionarios/novo?loja=<id>` com a loja pré-marcada.
+- **Importar de outra loja**: pessoa cuja unidade principal é outra loja
+  ativa. Esta loja passa a ser a principal e, por padrão, a pessoa sai da
+  loja de origem; "manter o vínculo com a loja de origem" a conserva como
+  adicional. Outros vínculos secundários não mudam. Quem não tem unidade
+  principal entra por Adicionar (o servidor recusa e orienta).
+- **Remover da loja**: aparece ao lado de cada pessoa com vínculo real com
+  a loja (membros e "outros vínculos"); líder de outra unidade é referência
+  e não ganha o gesto. Retira só aquele vínculo. Se era a principal, a
+  pessoa vai para "Unidade principal a definir" — ou, com uma única loja
+  restante, essa loja vira a principal pela regra de loja única (o aviso
+  diz qual). Nunca desliga a ficha: desligar continua sendo gesto da ficha.
+- Direção (`eh_direcao`) fica fora das listas e é recusada no servidor;
+  pessoa desligada, loja inativa, período fora de Manhã/Tarde e vínculo já
+  existente/inexistente são recusados sem gravar nada. Dois cliques no
+  mesmo vínculo (PK composta) viram aviso, não 500.
+- Cada gesto grava uma linha em `AuditLog` (tabela `funcionario_loja`,
+  `registro_id` = funcionário, antes/depois em JSON com loja, marca de
+  principal, origem e período) — a tabela de associação não passa pelo
+  listener automático de auditoria. Visível em `/audit`.
+- Tela sem JavaScript obrigatório (`<details>`); a confirmação do Remover
+  usa `data-confirmar` (texto puro, nomes nunca em `onsubmit`). O formulário
+  volta para a mesma visão (uma loja ou todas) de onde o gesto saiu.
+- Fora do escopo, de propósito: a escala (`Posicao`) não é alterada ao
+  remover alguém da loja (a escala já aceita qualquer funcionário e o
+  dono não pediu); os responsáveis canônicos do checklist e as lideranças
+  compartilhadas seguem a unidade principal e se ajustam sozinhos.
+
+Testes: `tests/test_rh_equipe_lojas_acoes.py` (serviço, candidatos, rotas,
+permissões, auditoria, escape de nomes, corrida, loja inativa, pré-marcação
+do cadastro novo).
+
 ## Atendente = Atendente 1
 
 O painel agrupa ambos os nomes como **Atendente 1**. A consolidação dos cadastros
