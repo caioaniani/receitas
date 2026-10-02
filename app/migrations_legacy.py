@@ -3338,6 +3338,16 @@ def _migrate_postgres(app):
         _try("ALTER TABLE treino_item_checklist ADD COLUMN IF NOT EXISTS "
              "ativo BOOLEAN NOT NULL DEFAULT TRUE")
 
+    # Parâmetros estruturados da etapa de produção (02/10/2026, dono: fichas
+    # de produção da padaria — batimento V1/V2, temperaturas, local e
+    # temperatura da fermentação, dobras, forno/teto/lastro). JSON por etapa:
+    # o fluxograma/Gantt e a TV mostram os valores junto do passo; a ficha
+    # em texto (`descricao`) segue livre. Commit 1 do procedimento de 2
+    # commits — o modelo só entra depois deste ALTER estar no ar.
+    if 'parametros' not in _cols('receita_etapa'):
+        _try("ALTER TABLE receita_etapa ADD COLUMN IF NOT EXISTS "
+             "parametros JSON")
+
 
 def _migrate_mp_custo_opcional_sqlite(conn):
     """Relaxa somente o custo, conservando o schema e os vínculos existentes.
@@ -3425,6 +3435,10 @@ def _migrate_sqlite(app):
     cols_re = [row[1] for row in cursor.fetchall()]
     if cols_re and 'descricao' not in cols_re:
         cursor.execute("ALTER TABLE receita_etapa ADD COLUMN descricao TEXT")
+    # receita_etapa.parametros — parâmetros estruturados da etapa (02/10/2026,
+    # fichas de produção: batimento, fermentação, forno). Espelho do Postgres.
+    if cols_re and 'parametros' not in cols_re:
+        cursor.execute("ALTER TABLE receita_etapa ADD COLUMN parametros JSON")
     # receita.sub_na_amassadeira — sub-receita que entra na amassadeira
     # (Levain (pé)); backfill único junto com a criação (15/07/2026).
     if 'sub_na_amassadeira' not in colunas:
