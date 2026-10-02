@@ -111,9 +111,33 @@ transação); rotas em `equipe_routes.py`.
   dono não pediu); os responsáveis canônicos do checklist e as lideranças
   compartilhadas seguem a unidade principal e se ajustam sozinhos.
 
+Revisão independente (4 lentes + refutação por execução, 02/10/2026) —
+aplicados: **loja inativa nunca conta como unidade principal** no gesto
+(a tela já lia assim; o serviço aceitava a marca numa loja fechada e
+deixava a loja nova como vínculo adicional — `_principal_ativa` ignora
+loja inativa; quem só tem loja fechada entra por Adicionar e a loja nova
+vira principal, com a marca antiga limpa; Remover não anuncia loja
+inativa como nova principal); **regra única em `treino_lideranca`**
+(`escolher_principal`, `vinculos_de`, `marcar_unidade_principal`,
+`validar_periodo` — Organizar equipe e Equipe por loja usam os mesmos
+helpers; com duas marcas de principal, dado inconsistente sem índice que
+o impeça, vale a de maior id nas duas leituras, e qualquer gesto
+normaliza para uma); `salvar_estrutura` trava as fichas (`FOR UPDATE`,
+`travar_funcionarios`) para não cruzar com os gestos novos; Remover de
+quem tinha várias lojas sem principal avisa qual loja passou a contar
+pela regra de loja única; líder que encabeça dois turnos recebe um único
+"Remover da loja" por cartão; o grupo de gestos é `role="group"` nomeado
+pela loja; a loja é carregada sem a planta (LargeBinary) nos POSTs; e a
+auditoria grava o IP resolvido pelo ProxyFix (`request.remote_addr`),
+não o primeiro elemento do `X-Forwarded-For`, que o cliente controla —
+correção no helper compartilhado `audit._request_meta`, vale para todos
+os modelos auditados. Refutados: escala/compartilhamento/checklist ao
+remover (fora do escopo, documentado acima) e `aria-label` em `div`.
+
 Testes: `tests/test_rh_equipe_lojas_acoes.py` (serviço, candidatos, rotas,
 permissões, auditoria, escape de nomes, corrida, loja inativa, pré-marcação
-do cadastro novo).
+do cadastro novo, duas marcas, loja única restante, líder em dois turnos,
+contagem de consultas, Organizar equipe com a mesma regra, IP do proxy).
 
 ## Atendente = Atendente 1
 
