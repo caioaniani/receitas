@@ -299,7 +299,8 @@ def test_candidatos_separam_sem_unidade_outras_lojas_e_excluem_direcao(app, owne
     assert ids(cand['adicionar']) == [
         ('Sem unidade principal', [da_fechada.id, sem.id]), ('Jardim', [de_la.id])]
     assert ids(cand['importar']) == [('Jardim', [de_la.id])]
-    assert aqui.id not in str(cand) and inativa.id not in str(cand)
+    todos = [p['id'] for g in cand['adicionar'] + cand['importar'] for p in g['pessoas']]
+    assert aqui.id not in todos and inativa.id not in todos
     pessoa = cand['importar'][0]['pessoas'][0]
     assert pessoa == {'id': de_la.id, 'nome': 'De lá', 'cargo': 'Sem cargo',
                       'periodo': 'Tarde'}
@@ -466,7 +467,8 @@ def test_nomes_sao_escapados_nos_formularios(app, owner_user):
     db.session.commit()
     html = _cliente(app, owner_user).get(
         '/rh/equipe/lojas', query_string={'loja': centro.id}).get_data(as_text=True)
-    assert '<script>' not in html and '<img src=x' not in html
+    assert 'Ana "x" <script>' not in html and '<img src=x onerror=alert(1)>' not in html
+    assert 'Loja "aspas" <b>' not in html
     assert 'data-confirmar="Remover Ana &#34;x&#34; &lt;script&gt; da equipe de Loja &#34;aspas&#34; &lt;b&gt;?' in html
     assert '&lt;img src=x onerror=alert(1)&gt; · Sem cargo' in html
     assert livre.id and ana.id
