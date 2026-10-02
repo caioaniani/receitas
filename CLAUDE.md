@@ -158,6 +158,27 @@ que nenhuma ordem credita. Nada mudou nisso aqui. Testes:
 produtos.py` e `tests/test_reposicao_produtos_interfaces.py` (os dois
 últimos reescritos para o contrato novo).
 
+## Equipe por loja — adicionar, importar e remover pessoa (dono, 02/10/2026)
+
+Pedido do dono em `/rh/equipe/lojas`: "botão para excluir ou adicionar
+pessoa, ou importar uma pessoa de outra loja". Os três gestos mudam SÓ o
+vínculo `funcionario_loja` (com `loja_principal`) e, se informado, o
+período; nunca cargo, salário, líder, acesso ou a ficha. **Remover da loja
+não desliga ninguém** (desligar é gesto da ficha). Adicionar = pessoa
+ativa já no RH (vira principal se não tinha; senão adicional, salvo
+checkbox); pessoa de loja única que ganha 2º vínculo tem a antiga marcada
+principal explicitamente (sem isso a regra de loja única de
+`unidades_principais` sumiria). Importar = transferência da unidade
+principal (sai da origem por padrão; "manter" conserva como adicional).
+Direção fica fora. Permissão = a da tela (`gestao_rh_required`), endpoints
+em `acesso_gestao_rh.ENDPOINTS_RH`. Serviço
+`app/services/rh_equipe_lojas_acoes.py` sem commit; cada gesto grava
+`AuditLog` tabela `funcionario_loja` (a associação não passa pelo listener
+automático). Escala (`Posicao`) intocada de propósito. Verificado: o salvar
+da ficha (`clear()` + `append`) PRESERVA a marca de principal das lojas que
+continuam marcadas (histórico de coleção do SQLAlchemy) — não há bug ali.
+Docs: `docs/rh-visao-equipe.md`; testes `tests/test_rh_equipe_lojas_acoes.py`.
+
 ## Publicação após testes (autorização do dono, 28/09/2026)
 
 Para alterações do sistema explicitamente solicitadas ou aprovadas pelo dono,
