@@ -132,7 +132,10 @@ Caso real: o aplicativo nunca foi adicionado a `#fermentadora-filial`. Desde a
 separação por canal (27/09), o Slack recusou a lista da Anésio todo dia
 (`not_in_channel`) e a recusa ficou só no registro `falhou` e na tela de admin —
 sete listas sem ninguém saber. A matriz só funcionou porque o aplicativo entrou em
-`#fermentadora-matriz` em 27/09 às 17:14, quando foi mencionado no canal. No mesmo
+`#fermentadora-matriz` em 27/09 às 17:14, quando foi mencionado no canal. A filial
+foi resolvida pelo mesmo gesto em 03/10: o dono mencionou o aplicativo no canal às
+14:41 e a lista de 04/10 saiu às 14:42 (6 listas, de 28/09 a 03/10, não chegaram
+ao canal). No mesmo
 período, a lista de domingo da Ribeiro saiu bloqueada por `CROISSANT AZUL`
 (vendido em 27/09, sem vínculo no PDV): esse dia bloqueia as listas de domingo
 até 22/11 se o produto não for vinculado. “Ignorar” não destrava: nome relevante

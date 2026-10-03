@@ -214,7 +214,9 @@ Detalhes e auditoria em `docs/fermentacao.md`.
 **Conferência + aviso ao dono + sonda (03/10/2026, caso "não enviou na
 filial")**: o aplicativo nunca foi adicionado a `#fermentadora-filial`; o
 Slack recusou a lista da Anésio todo dia desde 27/09 (`not_in_channel`) e a
-recusa ficou só no registro — sete listas sem ninguém saber. Agora
+recusa ficou só no registro — sete listas sem ninguém saber (resolvido no
+mesmo dia: o dono mencionou o aplicativo no canal às 14:41, ele entrou e a
+lista de 04/10 saiu às 14:42). Agora
 `fermentacao.verificar_envio_de_amanha` roda às 12:10 e às 16:00 (trava 7769)
 sobre o estado GRAVADO: reenvia loja sem nenhuma tentativa (job perdido no
 deploy) e avisa o dono no WhatsApp (`critico=True`, barrado em cópia de
