@@ -178,14 +178,18 @@ def test_avisos_dizem_o_que_a_ficha_nao_informa(lido):
     caixa = [a for a in lido['avisos'] if 'fermentação em caixa' in a]
     assert len(caixa) == 6
     assert any(a.startswith('Sourdough Tradicional') and '85 min' in a for a in caixa)
-    # 11 células amarelas ("leitura incerta" na legenda do dono) em 7 etapas
-    incertos = [a for a in lido['avisos'] if 'leitura incerta' in a]
+    # 12 células amarelas ("leitura incerta" na legenda do dono): 11 com
+    # valor em 7 etapas + 1 EM BRANCO (Pain au Chocolat, "Duração (h)")
+    incertos = [a for a in lido['avisos'] if 'leitura incerta na ficha' in a]
     assert len(incertos) == 7
+    vazias = [a for a in lido['avisos'] if 'célula amarela em branco' in a]
+    assert len(vazias) == 1
+    assert vazias[0].startswith('Pain au Chocolat') and 'duração' in vazias[0]
     assert any(a.startswith('Croissant Tradicional: Fermentação final') and
                'temperatura, tempo' in a for a in incertos)
     assert any(a.startswith('Pão Francês Fermentado: Forno') and 'tempo' in a
                for a in incertos)
-    assert len(lido['avisos']) == 13
+    assert len(lido['avisos']) == 14
 
 
 def test_celulas_amarelas_viram_incerto_nos_parametros(lido):
@@ -223,7 +227,13 @@ def test_minutos_de_texto_e_celulas():
     assert svc._minutos(None) is None
     assert svc._minutos('1:30:00') == 90
     from datetime import datetime
-    assert svc._minutos(datetime(1899, 12, 31, 2, 0)) == 26 * 60   # 26:00 h:mm
+    # 26:00 numa célula h:mm: o openpyxl devolve 1900-01-01 02:00 (bug do
+    # ano bissexto de 1900 — base 1899-12-31, não 1899-12-30)
+    assert svc._minutos(datetime(1900, 1, 1, 2, 0)) == 26 * 60
+    assert svc._minutos(datetime(1900, 1, 2, 0, 0)) == 48 * 60
+    assert svc._minutos(datetime(1900, 1, 1, 0, 0)) == 24 * 60
+    assert svc._minutos(datetime(1900, 3, 1, 2, 0)) == 61 * 24 * 60 + 120
+    assert svc._como_escrito(datetime(1900, 1, 1, 2, 0)) == '26:00'
     assert svc._minutos(datetime(2026, 10, 2, 1, 30)) == 90
     assert svc._horas_min(12) == 720 and svc._horas_min(1.5) == 90
     assert svc._horas_min('12 h') == 720 and svc._horas_min(time(1, 30)) == 90
@@ -826,6 +836,122 @@ def test_celula_amarela_sintetica_marca_incerto(tmp_path):
     assert p['incerto'] == ['forno_c', 'tempo_min']
     assert resumo_parametros(p, 45) == \
         '170 °C · teto 80 · lastro 100 · leitura incerta na ficha: forno, tempo'
+
+
+def test_hora_acima_de_24h_le_o_que_o_openpyxl_devolve_de_verdade(tmp_path):
+    """Round-trip REAL: célula h:mm com 26:00 / 48:00 / 24:00 / 1:30 gravada
+    e relida pelo openpyxl (o datetime de 1900 não é inventado no teste)."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    for linha, horas in enumerate((26, 48, 24, 1.5), start=1):
+        c = ws.cell(row=linha, column=1, value=horas / 24.0)
+        c.number_format = 'h:mm'
+    caminho = tmp_path / 'horas.xlsx'
+    wb.save(caminho)
+    ws = openpyxl.load_workbook(caminho, data_only=True).active
+    lidos = [ws.cell(row=i, column=1).value for i in range(1, 5)]
+    assert [svc._minutos(v) for v in lidos] == [1560, 2880, 1440, 90]
+    assert [svc._como_escrito(v) for v in lidos] == \
+        ['26:00', '48:00', '24:00', '1:30']
+    # e a MESA (h:mm) de uma linha real passa pelo mesmo caminho
+    caminho2 = _planilha(tmp_path, {
+        'caixa': [['Brioche', 'Ambiente', 21, None, 20, 20, None, lidos[0]]],
+    })
+    lido = svc.ler_planilha(caminho2)
+    mesa = lido['fichas']['Brioche'][1]
+    assert mesa['nome'] == svc.NOME_MESA and mesa['duracao_min'] == 1560
+    assert mesa['parametros']['tempo_como_escrito'] == '26:00'
+
+
+def test_fermentacao_final_com_o_mesmo_metodo_repetido_vale_a_primeira(tmp_path):
+    caminho = _planilha(tmp_path, {
+        'final': [['Brioche', 'A', 20, '30 min', 30],
+                  ['Brioche', 'A', 24, '45 min', 45],
+                  ['Brioche', 'CF', 4, '10 h', 600]],
+    })
+    lido = svc.ler_planilha(caminho)
+    etapa = lido['fichas']['Brioche'][0]
+    assert etapa['duracao_min'] == 30 and etapa['parametros']['temp_c'] == 20
+    alts = etapa['parametros']['alternativas']
+    assert [a['local'] for a in alts] == ['Câmara fria']       # a 2ª 'A' caiu
+    repetidas = [a for a in lido['avisos'] if 'linha repetida' in a]
+    assert len(repetidas) == 1 and 'método "Ambiente"' in repetidas[0]
+
+
+def test_celula_amarela_na_alternativa_marca_e_avisa(tmp_path):
+    caminho = _planilha(tmp_path, {
+        'final': [['Brioche', 'A', 20, '30 min', 30],
+                  ['Brioche', 'CF', (4, 'incerto'), '10 h', 600]],
+    })
+    lido = svc.ler_planilha(caminho)
+    p = lido['fichas']['Brioche'][0]['parametros']
+    assert p['incerto'] == ['alternativas']
+    assert resumo_parametros(p, 30).endswith(
+        'alternativa: Câmara fria · 4 °C · 10 h · '
+        'leitura incerta na ficha: alternativa')
+    avisos = [a for a in lido['avisos'] if 'leitura incerta' in a]
+    assert len(avisos) == 1
+    assert avisos[0].startswith('Brioche: alternativa da fermentação final '
+                                '("Câmara fria")')
+    assert 'temperatura' in avisos[0] and 'linha 5' in avisos[0]   # a linha DELA
+
+
+def test_qualquer_dobra_amarela_marca_as_dobras(tmp_path):
+    caminho = _planilha(tmp_path, {
+        'caixa': [['Brioche', 'Ambiente', 21, None, 20, (20, 'incerto'), None,
+                   None],
+                  ['Sourdough Integral', 'Câmara fria', 21, None, 30,
+                   (30, 'incerto'), (30, 'incerto'), None]],
+    })
+    lido = svc.ler_planilha(caminho)
+    assert lido['fichas']['Brioche'][0]['parametros']['incerto'] == ['dobras_min']
+    # duas dobras amarelas = a chave entra UMA vez
+    assert lido['fichas']['Sourdough Integral'][0]['parametros']['incerto'] == \
+        ['dobras_min']
+    assert sum('célula amarela: dobras' in a for a in lido['avisos']) == 2
+
+
+def test_local_sozinho_nao_cria_fermentacao_em_caixa(tmp_path):
+    caminho = _planilha(tmp_path, {
+        'caixa': [['Brioche', 'Ambiente', None, None, None, None, None, None],
+                  ['Sourdough Integral', None, None, None, None, None, None,
+                   timedelta(minutes=90)],
+                  ['Pão de Cranberry', 'Ambiente', None, None, None, None, None,
+                   timedelta(minutes=45)]],
+        'forno': [['Brioche', 170, 45, None, None, None, None]],
+    })
+    lido = svc.ler_planilha(caminho)
+    # "Local" sozinho: nenhuma etapa de caixa (e aviso)
+    assert [e['nome'] for e in lido['fichas']['Brioche']] == [svc.NOME_FORNO]
+    # só MESA: só a etapa de mesa
+    assert [e['nome'] for e in lido['fichas']['Sourdough Integral']] == \
+        [svc.NOME_MESA]
+    # local + MESA: só a mesa, com o aviso do local
+    assert [e['nome'] for e in lido['fichas']['Pão de Cranberry']] == \
+        [svc.NOME_MESA]
+    so_local = [a for a in lido['avisos'] if 'só com o local' in a]
+    assert sorted(a.split(':')[0] for a in so_local) == \
+        ['Brioche', 'Pão de Cranberry']
+    assert 'etapa não criada' in so_local[0]
+
+
+def test_celula_amarela_em_branco_avisa_e_nao_vira_etapa(tmp_path):
+    caminho = _planilha(tmp_path, {
+        'caixa': [['Pain au Chocolat', None, None, (None, 'incerto'), None,
+                   None, None, None]],
+        'forno': [['Brioche', 170, (None, 'incerto'), 80, 100, None, None]],
+    })
+    lido = svc.ler_planilha(caminho)
+    assert 'Pain au Chocolat' not in lido['fichas']       # linha vazia segue fora
+    vazias = [a for a in lido['avisos'] if 'célula amarela em branco' in a]
+    assert len(vazias) == 2
+    assert any(a.startswith('Pain au Chocolat') and '(duração;' in a
+               for a in vazias)
+    assert any(a.startswith('Brioche') and '(tempo;' in a for a in vazias)
+    forno = lido['fichas']['Brioche'][0]
+    assert forno['duracao_min'] == 0
+    assert 'incerto' not in forno['parametros']          # vazio não é valor
 
 
 def test_validar_parametros_descarta_lixo_e_parametros_de_form_nunca_levanta():

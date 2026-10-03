@@ -7262,8 +7262,8 @@ contagens), sonda `/api/claude/fichas-producao` (+ `etapas` na sonda
   `PlanilhaInvalida`; traço "–" = célula vazia e "Local" sozinho não é dado
   (a 1ª linha COM tempo é a fermentação final principal); célula AMARELA da
   legenda do dono = `parametros['incerto']` + aviso + sufixo no rótulo
-  ("leitura incerta na ficha: temperatura, tempo"; 11 células na planilha
-  real — a aba "Notas" que a legenda cita não veio); "Duração (h)" e MESA
+  ("leitura incerta na ficha: temperatura, tempo"; 12 células na planilha
+  real, uma delas EM BRANCO — a aba "Notas" que a legenda cita não veio); "Duração (h)" e MESA
   em horas (número = h; aceita 1:30/"2 h"/time/datetime de planilha);
   "Tempo (min)" ≠ texto = vale o número + aviso; linha repetida = vale a 1ª
   + aviso; duração fora de [0, 100000] = 0 + aviso (régua ÚNICA
@@ -7279,6 +7279,20 @@ contagens), sonda `/api/claude/fichas-producao` (+ `etapas` na sonda
   hidden pelo HTML renderizado e planilha sintética (`_planilha` em
   `tests/test_fichas_producao.py`) para cada ramo que a planilha real não
   exercita.
+- **2ª revisão (02-03/10/2026, parcial por limite de sessão — só a lente do
+  parser rodou; 6 achados, todos aplicados)**: hora ≥ 24 h em célula h:mm
+  (MESA) — o openpyxl devolve `datetime(1900, 1, 1, 2, 0)` para 26:00 (bug
+  do ano bissexto de 1900: serial < 60 ganha um dia), a base é 1899-12-31
+  até 28/02/1900 e 1899-12-30 depois; o teste antigo assertava um datetime
+  que o openpyxl nunca produz (agora round-trip REAL gravando a célula);
+  célula amarela EM BRANCO = aviso "célula amarela em branco … confira",
+  nunca parâmetro (a 12ª amarela da planilha real: Pain au Chocolat,
+  "Duração (h)"); qualquer das três dobras amarela marca `dobras_min` (uma
+  vez); "Local" sozinho na caixa NÃO cria etapa (aviso "etapa não criada";
+  só MESA = só a Mesa); Fermentação final com o MESMO método repetido = vale
+  a 1ª + aviso (antes virava alternativa idêntica em silêncio); amarela na
+  linha de uma alternativa = `'alternativas'` em `incerto` (rótulo
+  "alternativa", chave em `_ROTULO_CHAVE`) + aviso com a linha dela.
 - **Padrão genérico por categoria REMOVIDO** (`ETAPAS_PADRAO`,
   `etapas_padrao_categoria`, `seed_etapas_categoria`, `de_tuplas`, rota
   `receitas.amassadeira_etapas_padrao`, botões "Preencher/Começar do padrão"

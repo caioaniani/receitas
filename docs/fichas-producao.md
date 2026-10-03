@@ -31,14 +31,28 @@ Regras:
 - **Célula amarela = "leitura incerta"** (legenda do próprio dono): o valor
   entra, mas a chave vai em `parametros['incerto']`, o rótulo termina com
   "leitura incerta na ficha: …" e a prévia/log avisam. A planilha de
-  02/10/2026 tem 11 células assim (Brioche e Massa para folhar no batimento,
-  temperaturas do Sourdough Tradicional, fermentação final e forno do Pão
-  Francês, fermentação final do Croissant); a aba "Notas" que a legenda cita
-  não veio no arquivo.
+  02/10/2026 tem 12 células assim: 11 com valor (Brioche e Massa para folhar
+  no batimento, temperaturas do Sourdough Tradicional, fermentação final e
+  forno do Pão Francês, fermentação final do Croissant) e 1 **em branco**
+  ("Duração (h)" do Pain au Chocolat) — amarela sem valor não vira
+  parâmetro, só aviso ("célula amarela em branco na ficha … confira").
+  Qualquer das três dobras amarela marca `dobras_min` (uma vez). Na
+  Fermentação final, amarela na linha de uma **alternativa** marca
+  `alternativas` no `incerto` da etapa (rótulo "leitura incerta na ficha:
+  alternativa") e o aviso cita a linha da alternativa. A aba "Notas" que a
+  legenda cita não veio no arquivo.
 - Uma receita ganha a etapa de uma aba só quando a linha dela naquela aba tem
-  algum dado ("Local" sozinho não é dado). Receita só com a aba Forno
-  preenchida fica com uma etapa. Linha repetida da mesma receita numa aba:
-  vale a primeira, com aviso.
+  dado de verdade. Na Fermentação em caixa, **"Local" sozinho não é dado**: a
+  etapa de caixa só nasce com temperatura, "Duração (h)" ou dobras (linha só
+  com o local gera aviso "etapa não criada"; linha só com MESA gera só a
+  etapa de mesa). Receita só com a aba Forno preenchida fica com uma etapa.
+  Linha repetida da mesma receita numa aba: vale a primeira, com aviso — na
+  Fermentação final isso vale por **método** (segunda linha "A" do mesmo pão
+  cai; "CF" e "A" continuam sendo a principal + alternativa).
+- Hora acima de 24 h numa célula h:mm (MESA) chega como `datetime` de 1900:
+  o openpyxl reproduz o bug do ano bissexto de 1900 do Excel (serial < 60
+  ganha um dia), então a base é 1899-12-31 até 28/02/1900 e 1899-12-30 daí
+  em diante — 26:00 = 1560 min, 48:00 = 2880 (teste de round-trip real).
 - A receita da planilha casa com **uma** receita não arquivada por nome
   normalizado **exato** (sem acento, sem caixa, espaços colapsados).
   "Sourdough Tradicional" nunca casa "Mini Sourdough Tradicional". Nome sem

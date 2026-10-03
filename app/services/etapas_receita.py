@@ -59,6 +59,7 @@ _ROTULO_CHAVE = {
     'dobras_min': 'dobras', 'tempo_como_escrito': 'tempo', 'tempo_min': 'tempo',
     'forno_c': 'forno', 'teto': 'teto', 'lastro': 'lastro',
     'unidade_teto_lastro': 'unidade', 'alvo_interno_c': 'alvo interno',
+    'alternativas': 'alternativa',
 }
 
 

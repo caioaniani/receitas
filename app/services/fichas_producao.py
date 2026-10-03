@@ -137,10 +137,16 @@ def _minutos(v):
     if isinstance(v, timedelta):
         return int(round(v.total_seconds() / 60))
     if isinstance(v, datetime):
-        # Hora ≥ 24 h numa célula h:mm vira datetime a partir de 1899-12-30
-        # (época do Excel); hora comum vira datetime do próprio dia.
+        # Hora ≥ 24 h numa célula h:mm vira datetime na época do Excel. O
+        # openpyxl (`from_excel`, época Windows) reproduz o bug do ano
+        # bissexto de 1900: serial < 60 ganha +1 dia, então 26:00 (serial
+        # 1,083) volta como 1900-01-01 02:00 — base 1899-12-31 até
+        # 1900-02-28; de 1900-03-01 em diante a base é 1899-12-30.
         if v.year <= 1900:
-            return int(round((v - datetime(1899, 12, 30)).total_seconds() / 60))
+            base = (datetime(1899, 12, 31) if v < datetime(1900, 3, 1)
+                    else datetime(1899, 12, 30))
+            m = int(round((v - base).total_seconds() / 60))
+            return m if m >= 0 else None
         return v.hour * 60 + v.minute
     if hasattr(v, 'hour') and hasattr(v, 'minute'):     # datetime.time
         return int(v.hour) * 60 + int(v.minute)
@@ -298,12 +304,26 @@ def _limpar(d):
 
 
 def _marcar_incertos(params, row, chaves_colunas):
-    """Acrescenta `incerto` = chaves cujo valor veio de célula amarela."""
+    """Acrescenta `incerto` = chaves cujo valor veio de célula amarela (uma
+    chave pode cobrir várias colunas — as três dobras — e entra uma vez)."""
     incertos = [chave for chave, idx in chaves_colunas
-                if chave in params and _incerto(_cel(row, idx))]
+                if chave in params and idx is not None
+                and _incerto(_cel(row, idx))]
     if incertos:
-        params['incerto'] = incertos
+        params['incerto'] = list(dict.fromkeys(incertos))
     return params
+
+
+def _amarelas_vazias(row, colunas, nome, origem, avisos):
+    """Célula amarela SEM valor: a legenda diz "leitura incerta", mas não há
+    o que ler — não vira parâmetro; avisa pra conferir na ficha."""
+    rotulos = [rotulo for rotulo, idx in colunas
+               if idx is not None and _vazio(_val(row, idx))
+               and _incerto(_cel(row, idx))]
+    if rotulos:
+        avisos.append(f'{nome}: célula amarela em branco na ficha '
+                      f'({", ".join(rotulos)}; {origem}) — leitura incerta sem '
+                      'valor; confira a ficha.')
 
 
 def _duracao_lida(valor, nome, rotulo, origem, avisos):
@@ -373,6 +393,10 @@ def ler_planilha(origem):
         c_fim = _coluna(cab, 'apos')
         for n, nome, row in linhas:
             _visto(nome)
+            _amarelas_vazias(row, [('V1', c_v1), ('V2', c_v2), ('ponto', c_ponto),
+                                   ('ambiente', c_amb), ('líquido', c_liq),
+                                   ('massa ao fim', c_fim)],
+                             nome, _origem(ws_bat, n), avisos)
             v1 = _numero(_val(row, c_v1))
             v2 = _numero(_val(row, c_v2))
             ponto = _texto(_val(row, c_ponto))
@@ -419,6 +443,12 @@ def ler_planilha(origem):
         c_mesa = _coluna(cab, 'mesa')
         for n, nome, row in linhas:
             _visto(nome)
+            _amarelas_vazias(row, [('local', c_local), ('temperatura', c_temp),
+                                   ('duração', c_dur)]
+                             + [(f'dobra {i + 1}', c)
+                                for i, c in enumerate(c_dobras)]
+                             + [('mesa', c_mesa)],
+                             nome, _origem(ws_caixa, n), avisos)
             local = _local(_val(row, c_local))
             temp = _numero(_val(row, c_temp))
             dur_raw = _val(row, c_dur)
@@ -431,43 +461,56 @@ def ler_planilha(origem):
                     and mesa_min is None and _vazio(dur_raw) and _vazio(mesa_raw)):
                 continue
             slot = _slot(nome, ws_caixa, n)
-            if _repetida(slot, 'caixa', nome, ws_caixa, n):
+            # "Local" sozinho não é dado: a etapa de caixa só nasce com
+            # temperatura, duração ou dobras (linha só com MESA = só a Mesa).
+            tem_caixa = (temp is not None or dur_h_min is not None or dobras
+                         or not _vazio(dur_raw))
+            if not tem_caixa and local is not None:
+                avisos.append(f'{nome}: fermentação em caixa só com o local '
+                              f'("{local}") na ficha, sem temperatura, duração '
+                              f'nem dobras — etapa não criada '
+                              f'({_origem(ws_caixa, n)}).')
+            if tem_caixa and _repetida(slot, 'caixa', nome, ws_caixa, n):
                 continue
-            if dur_h_min is not None:
-                dur = dur_h_min
-                duracao_origem = 'ficha'
-            else:
-                if not _vazio(dur_raw):
-                    avisos.append(f'{nome}: "Duração (h)" ilegível ("{dur_raw}"; '
-                                  f'{_origem(ws_caixa, n)}).')
-                if dobras:
-                    dur = sum(dobras)                 # até a última dobra
-                    duracao_origem = 'ate_ultima_dobra'
-                    avisos.append(f'{nome}: a ficha não diz a duração total da '
-                                  f'fermentação em caixa — o fluxograma usa o '
-                                  f'tempo até a última dobra ({dur} min; '
-                                  f'{_origem(ws_caixa, n)}).')
+            if tem_caixa:
+                if dur_h_min is not None:
+                    dur = dur_h_min
+                    duracao_origem = 'ficha'
                 else:
-                    dur = 0
-                    duracao_origem = 'ausente'
-                    avisos.append(f'{nome}: fermentação em caixa sem tempo nem '
-                                  f'dobras na ficha ({_origem(ws_caixa, n)}).')
-            dur = _duracao_lida(dur, nome, 'fermentação em caixa',
-                                _origem(ws_caixa, n), avisos)
-            cf = local is not None and normalizar_nome(local).startswith('camara')
-            params = _limpar({
-                'local': local, 'temp_c': temp,
-                'duracao_h': (round(dur_h_min / 60.0, 2) if dur_h_min is not None
-                              else None),
-                'dobras_min': dobras, 'duracao_origem': duracao_origem,
-                'origem': _origem(ws_caixa, n)})
-            _marcar_incertos(params, row, [
-                ('local', c_local), ('temp_c', c_temp), ('duracao_h', c_dur),
-                ('dobras_min', c_dobras[0])])
-            slot['caixa'].append({
-                'nome': NOME_CAIXA, 'duracao_min': dur or 0,
-                'equipamento': 'camara_fria' if cf else None, 'ativa': False,
-                'descricao': None, 'parametros': params})
+                    if not _vazio(dur_raw):
+                        avisos.append(f'{nome}: "Duração (h)" ilegível '
+                                      f'("{dur_raw}"; {_origem(ws_caixa, n)}).')
+                    if dobras:
+                        dur = sum(dobras)                 # até a última dobra
+                        duracao_origem = 'ate_ultima_dobra'
+                        avisos.append(f'{nome}: a ficha não diz a duração total '
+                                      f'da fermentação em caixa — o fluxograma '
+                                      f'usa o tempo até a última dobra ({dur} '
+                                      f'min; {_origem(ws_caixa, n)}).')
+                    else:
+                        dur = 0
+                        duracao_origem = 'ausente'
+                        avisos.append(f'{nome}: fermentação em caixa sem tempo '
+                                      f'nem dobras na ficha '
+                                      f'({_origem(ws_caixa, n)}).')
+                dur = _duracao_lida(dur, nome, 'fermentação em caixa',
+                                    _origem(ws_caixa, n), avisos)
+                cf = (local is not None
+                      and normalizar_nome(local).startswith('camara'))
+                params = _limpar({
+                    'local': local, 'temp_c': temp,
+                    'duracao_h': (round(dur_h_min / 60.0, 2)
+                                  if dur_h_min is not None else None),
+                    'dobras_min': dobras, 'duracao_origem': duracao_origem,
+                    'origem': _origem(ws_caixa, n)})
+                # qualquer das três dobras amarela marca 'dobras_min'
+                _marcar_incertos(params, row, [
+                    ('local', c_local), ('temp_c', c_temp), ('duracao_h', c_dur)]
+                    + [('dobras_min', c) for c in c_dobras if c is not None])
+                slot['caixa'].append({
+                    'nome': NOME_CAIXA, 'duracao_min': dur or 0,
+                    'equipamento': 'camara_fria' if cf else None, 'ativa': False,
+                    'descricao': None, 'parametros': params})
             if mesa_min is not None:
                 mesa_min = _duracao_lida(mesa_min, nome, 'tempo de mesa',
                                          _origem(ws_caixa, n), avisos)
@@ -494,6 +537,9 @@ def ler_planilha(origem):
         metodos = {}
         for n, nome, row in linhas:
             _visto(nome)
+            _amarelas_vazias(row, [('local', c_local), ('temperatura', c_temp),
+                                   ('tempo', c_txt), ('tempo (min)', c_min)],
+                             nome, _origem(ws_final, n), avisos)
             local = _local(_val(row, c_local))
             temp = _numero(_val(row, c_temp))
             txt_raw = _val(row, c_txt)
@@ -527,7 +573,15 @@ def ler_planilha(origem):
                                                  ('tempo_como_escrito', c_txt),
                                                  ('tempo_min', c_min))
                                   if _incerto(_cel(row, c))]}
-            metodos.setdefault(normalizar_nome(nome), []).append(metodo)
+            lista = metodos.setdefault(normalizar_nome(nome), [])
+            if any(normalizar_nome(m['local'] or '') == normalizar_nome(local or '')
+                   for m in lista):
+                # segunda linha do MESMO método (mesmo local): vale a 1ª
+                avisos.append(f'{nome}: linha repetida em "{ws_final.title}" '
+                              f'({_origem(ws_final, n)}, método '
+                              f'"{local or "sem local"}") — só a primeira vale.')
+                continue
+            lista.append(metodo)
             slot['final']            # garante o slot (criado acima)
         for chave, lista in metodos.items():
             com_tempo = [m for m in lista if m['tempo_min'] is not None]
@@ -535,6 +589,20 @@ def ler_planilha(origem):
             alternativas = [m for m in lista if m is not principal]
             cf = (principal['local'] is not None
                   and normalizar_nome(principal['local']).startswith('camara'))
+            incerto = [k for k in principal['incerto']
+                       if k in ('local', 'temp_c', 'tempo_como_escrito')
+                       or k == 'tempo_min']
+            for a in alternativas:
+                if a['incerto']:
+                    # a alternativa não tem chave própria de incerteza (esquema
+                    # fechado): marca 'alternativas' no rótulo e avisa com a
+                    # linha dela
+                    incerto.append('alternativas')
+                    avisos.append(f'{grafias[chave]}: alternativa da fermentação '
+                                  f'final ("{a["local"] or "sem local"}") com '
+                                  f'leitura incerta na ficha (célula amarela: '
+                                  f'{rotulo_chaves(a["incerto"])}; '
+                                  f'{a["origem"]}).')
             params = _limpar({
                 'local': principal['local'], 'temp_c': principal['temp_c'],
                 'tempo_como_escrito': principal['tempo_como_escrito'],
@@ -544,9 +612,7 @@ def ler_planilha(origem):
                     'tempo_como_escrito': a['tempo_como_escrito']})
                     for a in alternativas],
                 'origem': principal['origem'],
-                'incerto': [k for k in principal['incerto']
-                            if k in ('local', 'temp_c', 'tempo_como_escrito')
-                            or k == 'tempo_min']})
+                'incerto': list(dict.fromkeys(incerto))})
             partes[chave]['final'].append({
                 'nome': NOME_FINAL,
                 'duracao_min': principal['tempo_min'] or 0,
@@ -563,6 +629,10 @@ def ler_planilha(origem):
         c_alvo = _coluna(cab, 'alvo')
         for n, nome, row in linhas:
             _visto(nome)
+            _amarelas_vazias(row, [('forno', c_forno), ('tempo', c_tempo),
+                                   ('teto', c_teto), ('lastro', c_lastro),
+                                   ('unidade', c_unid), ('alvo interno', c_alvo)],
+                             nome, _origem(ws_forno, n), avisos)
             forno_c = _numero(_val(row, c_forno))
             tempo = _numero(_val(row, c_tempo))
             teto = _numero(_val(row, c_teto))
@@ -591,7 +661,7 @@ def ler_planilha(origem):
                 ('unidade_teto_lastro', c_unid), ('alvo_interno_c', c_alvo)])
             # o tempo do forno é a duração da etapa, não um parâmetro: marca
             # a incerteza na chave que o rótulo conhece
-            if _incerto(_cel(row, c_tempo)):
+            if tempo is not None and _incerto(_cel(row, c_tempo)):
                 params['incerto'] = params.get('incerto', []) + ['tempo_min']
             slot['forno'].append({
                 'nome': NOME_FORNO, 'duracao_min': dur or 0,
@@ -606,10 +676,12 @@ def ler_planilha(origem):
             p = partes[chave]
             etapas = p['batimento'] + p['caixa'] + p['final'] + p['forno']
             for e in etapas:
-                if e['parametros'].get('incerto'):
+                proprias = [k for k in e['parametros'].get('incerto') or []
+                            if k != 'alternativas']   # a alternativa já avisou
+                if proprias:
                     avisos.append(f'{grafias[chave]}: {e["nome"]} com leitura '
                                   f'incerta na ficha (célula amarela: '
-                                  f'{rotulo_chaves(e["parametros"]["incerto"])}; '
+                                  f'{rotulo_chaves(proprias)}; '
                                   f'{e["parametros"]["origem"]}).')
             fichas[grafias[chave]] = etapas
             nomes.append(grafias[chave])
