@@ -135,6 +135,33 @@ def test_area_lista_funcoes_da_area(app, owner_user):
     assert '/relatorios/dashboards' not in bloco
 
 
+def test_area_producao_lista_a_sequencia_da_producao(app, owner_user):
+    """Dono 03/10/2026: "Não encontrei o acesso para gantt" — o fluxograma da
+    TV só tinha link dentro da tela do padeiro. Agora está na área Produção
+    (página da área e sidebar)."""
+    app.config['UI_V2_ENABLED'] = False
+    import re
+    c = app.test_client()
+    _login(c, owner_user.id)
+    r = c.get('/area/producao')
+    assert r.status_code == 200
+    html = r.data.decode()
+    m = re.search(r'class="area-links">(.*?)</div>\s*</div>', html, re.S)
+    assert m
+    bloco = m.group(1)
+    assert '/padeiro/gantt' in bloco
+    assert 'Sequência da produção (Gantt)' in bloco
+    assert '/padeiro' in bloco                      # a Tela do padeiro continua
+    # e na v2 (padrão do sistema) também
+    app.config['UI_V2_ENABLED'] = True
+    r = c.get('/area/producao')
+    assert r.status_code == 200
+    html = r.data.decode()
+    # na página da área E no atalho da sidebar v2 (seção "Atalhos")
+    assert html.count('/padeiro/gantt') >= 2
+    assert 'Sequência da produção (Gantt)' in html
+
+
 def test_area_slug_inexistente_404(app, owner_user):
     c = app.test_client()
     _login(c, owner_user.id)

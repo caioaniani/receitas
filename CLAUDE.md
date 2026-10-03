@@ -7213,6 +7213,13 @@ preparos permanecem disponíveis em sequência.
   sem etapas; dispensados e faltas encerradas não entram. A referência não
   orienta refazer o que já foi produzido.
 - Sem alteração de schema, motor de pedidos, estoque ou confirmação parcial.
+- **Acesso (dono 03/10/2026, "Não encontrei o acesso para gantt")**: até
+  então o `/padeiro/gantt` só tinha link DENTRO da TV ("Ver sequência"), do
+  diário e das telas de ficha. Agora está na área Produção
+  (`_area_nav.html`, link "Sequência da produção (Gantt)"), no atalho da
+  sidebar v2 (`_ui_v2_sidebar.html`, seção Atalhos) e na busca do menu
+  (`busca_navegacao`: "gantt", "fluxograma", "ver sequência"). Testes em
+  `test_area_hub.py` e `test_busca_navegacao.py`.
 
 - Unidade na TV: `massa_base.unidade_producao` identifica o rótulo da quantidade
   sem converter valores: peso unitário 1 → g (ml no cadastro ml/l); outros pesos

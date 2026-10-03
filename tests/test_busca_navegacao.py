@@ -63,6 +63,10 @@ def test_owner_encontra_tarefas_com_destinos_existentes(app, owner_user):
     assert por_termo['minis'] == '/cardapio?tipo=atacado'
     assert por_termo['vender minis'] == '/b2b/vendas/nova'
     assert por_termo['cargos e salários'] == '/rh/plano-carreira'
+    # Gantt da produção (dono 03/10/2026: "Não encontrei o acesso para gantt")
+    assert por_termo['gantt'] == '/padeiro/gantt'
+    assert por_termo['fluxograma'] == '/padeiro/gantt'
+    assert por_termo['ver sequência'] == '/padeiro/gantt'
     # Nenhuma entrada é um URL inventado ou aponta para ação apenas POST.
     adapter = app.url_map.bind('localhost')
     for item in itens:
