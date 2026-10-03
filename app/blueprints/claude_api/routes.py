@@ -3140,3 +3140,99 @@ def atendimento_painel():
         except Exception as exc:  # noqa: BLE001
             out['erros_envio'] = {'ok': False, 'erro': _erro(exc)}
     return jsonify(out)
+
+
+@claude_api_bp.route('/fermentacao')
+@_claude_auth_required
+def fermentacao_diag():
+    """Lista de fermentação vista de fora (03/10/2026, caso "não enviou na
+    filial"): sem esta sonda, o estado gravado de cada envio (recusa do Slack,
+    código do erro) só aparecia na tela do dono. Read-only: não publica, não
+    corrige, não recupera.
+
+    Params: ?data=AAAA-MM-DD (default amanhã), ?dias=14 (1-60) histórico dos
+    envios por loja, ?fontes=1 inclui os produtos vendidos de cada dia
+    (pesado), ?slack=1 consulta no Slack se o aplicativo é membro de cada
+    canal de destino (conversations.info, só leitura).
+    """
+    from datetime import date, timedelta
+
+    from app.extensions import db
+    from app.models import FermentacaoEnvio, FermentacaoEnvioLoja
+    from app.services import fermentacao
+    from app.utils import hoje
+
+    bruto = (request.args.get('data') or '').strip()
+    if bruto:
+        try:
+            alvo = date.fromisoformat(bruto)
+        except ValueError:
+            return jsonify(ok=False, erro='data invalida (use AAAA-MM-DD)'), 400
+        if not hoje() - timedelta(days=400) <= alvo <= hoje() + timedelta(days=30):
+            return jsonify(ok=False, erro='data fora do intervalo consultavel'), 400
+    else:
+        alvo = hoje() + timedelta(days=1)
+    dias = _int_arg('dias', 14, 1, 60)
+    com_fontes = request.args.get('fontes') == '1'
+
+    def _iso(valor):
+        return valor.isoformat() if valor else None
+
+    def _envio(e, com_texto=False):
+        calculo = e.calculo or {}
+        entrega = calculo.get('_entrega') or {}
+        item = {
+            'data_alvo': _iso(e.data_alvo),
+            'loja': getattr(e, 'loja', None),
+            'canal': e.canal,
+            'estado': e.estado,
+            'criado_em': _iso(e.criado_em),
+            'enviado_em': _iso(e.enviado_em),
+            'tem_slack_ts': bool(e.slack_ts),
+            'codigo_erro': entrega.get('codigo_erro'),
+            'rejeitado': entrega.get('rejeitado'),
+            'verificacao': entrega.get('verificacao'),
+            'tentativas_anteriores': len(entrega.get('historico') or []),
+            'calculo_ok': calculo.get('ok'),
+            'erros': list(calculo.get('erros') or [])[:20],
+        }
+        if com_texto:
+            item['texto'] = e.texto
+        return item
+
+    def _calculo(nome):
+        calc = fermentacao.calcular_seguro(alvo, nome_loja=nome)
+        lojas = []
+        for loja in calc.get('lojas') or []:
+            loja = dict(loja)
+            if not com_fontes:
+                loja['dias'] = [{k: v for k, v in dia.items() if k != 'fontes'}
+                                for dia in loja.get('dias') or []]
+            lojas.append(loja)
+        return {'ok': calc.get('ok'), 'erros': calc.get('erros') or [],
+                'texto': calc.get('texto'), 'lojas': lojas,
+                'feriado_alvo': calc.get('feriado_alvo'),
+                'exclusoes_por_loja': calc.get('exclusoes_por_loja') or []}
+
+    destinos = fermentacao.destinos()
+    unificado = db.session.get(FermentacaoEnvio, alvo)
+    historico = (FermentacaoEnvioLoja.query
+                 .filter(FermentacaoEnvioLoja.data_alvo >= alvo - timedelta(days=dias),
+                         FermentacaoEnvioLoja.data_alvo <= alvo)
+                 .order_by(FermentacaoEnvioLoja.data_alvo.desc(),
+                           FermentacaoEnvioLoja.loja).all())
+    out = {
+        'ok': True,
+        'data_alvo': alvo.isoformat(),
+        'destinos': destinos,
+        'envio_unificado': _envio(unificado, com_texto=True) if unificado else None,
+        'envios': [_envio(e, com_texto=True) for e in historico if e.data_alvo == alvo],
+        'historico': [_envio(e) for e in historico],
+        'calculo': {nome: _calculo(nome) for nome in fermentacao.LOJAS},
+    }
+    if request.args.get('slack') == '1':
+        from app.services import slack_entrega
+        out['slack'] = {nome: {'canal': canal, **(slack_entrega.info_canal(canal)
+                                                  if canal else {'erro': 'canal_nao_configurado'})}
+                        for nome, canal in destinos.items()}
+    return jsonify(out)
