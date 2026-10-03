@@ -124,3 +124,79 @@ O envio normal do cron continua sem repetir tentativas persistidas. O link “Ab
 mensagem no Slack” é obtido pela API apenas para um canal/ts confirmado, com acesso
 restrito ao owner e URL HTTPS do Slack validada. Confirmar que o aplicativo está
 nos canais de destino faz parte da configuração; mudar o ID não concede acesso.
+
+
+## Conferência do envio, aviso ao dono e sonda (03/10/2026)
+
+Caso real: o aplicativo nunca foi adicionado a `#fermentadora-filial`. Desde a
+separação por canal (27/09), o Slack recusou a lista da Anésio todo dia
+(`not_in_channel`) e a recusa ficou só no registro `falhou` e na tela de admin —
+sete listas sem ninguém saber. A matriz só funcionou porque o aplicativo entrou em
+`#fermentadora-matriz` em 27/09 às 17:14, quando foi mencionado no canal. No mesmo
+período, a lista de domingo da Ribeiro saiu bloqueada por `CROISSANT AZUL`
+(vendido em 27/09, sem vínculo no PDV): esse dia bloqueia as listas de domingo
+até 22/11 se o produto não for vinculado. “Ignorar” não destrava: nome relevante
+(`croiss`, `pain`, `cesta`, `kit`, `box`, `combo`) ou vínculo que leva a croissant
+ou pain exige vínculo confirmado. Também: 21/08 com vendas sem itens bloqueia as
+listas das sextas 02/10 e 09/10.
+
+- `enviar_amanha()` devolve `lojas` (uma entrada por loja: `loja`, `estado`,
+  `mensagem`) e `data_alvo`; a mensagem composta prefixa o nome da loja. Exceção
+  inesperada no cálculo de uma loja vira `indisponivel` para ela, com log, sem
+  registro (a conferência tenta de novo) e sem impedir a outra loja.
+- Conferência `verificar_envio_de_amanha()` às **12:10** e às **16:00**
+  (`seru_cron`, jobs `slack-fermentacao-conferencia[-tarde]`, trava 7769).
+  Lê o estado GRAVADO, não o retorno em memória do envio:
+  1. loja sem nenhuma tentativa registrada (job das 12h perdido em deploy,
+     processo morto antes da reserva, erro no cálculo) → mesmo gesto do botão
+     “Enviar mensagens pendentes de amanhã” (`enviar_amanha()`; não toca em
+     tentativa já registrada, então não reenvia resposta incerta);
+  2. toda loja que não ficou `enviado` vira um bloco do WhatsApp ao dono
+     (`ZAPI_NUMERO_DESTINO`, senão `ZAPI_BOT_DONO_NUMERO` — mesma ordem do digest
+     da Z-API; os outros avisos ao dono não têm fonte única de destino, dívida
+     registrada no código): recusa do Slack (texto de `ERROS_ENTREGA` + código e
+     nome do canal), envio ou correção não confirmados (com "espere 5 minutos
+     após a tentativa"), aviso de cálculo bloqueado (até cinco erros e a dica de
+     cada tipo de erro — uma dica por erro, a primeira que casa) ou motivo de não
+     ter enviado (canal ou bot não configurado cita a variável; trava presa na
+     última rodada orienta reiniciar o serviço), com o gesto da tela. Quando um
+     erro do cálculo não se resolve no sistema (venda sem itens, erro interno), o
+     gesto é combinar a quantidade com a equipe — a recuperação só publica lista
+     completa e a correção não destrava a lista.
+  3. na rodada das 16:00, a lista que a própria conferência publicou (loja sem
+     tentativa ao meio-dia) vira bloco informativo "publicada com atraso".
+  Um aviso por PROBLEMA por dia: claim por loja (`whatsapp.claim_envio`, chave
+  `fermentacao_alerta_dono_<loja>`, tick = data-alvo + assinatura do problema:
+  estado, código do Slack e erros do cálculo). A rodada das 16:00 não repete o
+  que as 12:10 já avisaram e avisa só o problema novo; WhatsApp fora devolve os
+  claims e a rodada seguinte tenta de novo; claim que não grava não envia
+  (contrato do `claim_envio`). Vai como `critico=True` (o teto/hora o reduziria
+  a 60 caracteres num digest); a cópia de homologação é barrada antes, na
+  checagem de instância canônica do início. Antes da última rodada, “envio em
+  andamento” não avisa: loja sem registro com a trava 7767 ocupada e
+  `enviando` de menos de 5 minutos esperam as 16:00 — sem calar a outra loja.
+  Exceção dentro da própria conferência vai para o log e, na rodada das 16:00,
+  vira aviso próprio (chave `fermentacao_alerta_dono`). O botão manual não
+  manda WhatsApp.
+- A tela, a sonda, a recuperação e a correção usam `calcular_seguro`: erro
+  inesperado aparece como bloqueio com `erro_interno` (nunca página 500); com
+  ele, a recuperação não reenvia, a correção não altera a mensagem do Slack e a
+  tela não oferece “Corrigir a mensagem” nem a prévia feita do erro.
+- Unlock da trava 7767 que falha descarta a conexão (`_soltar_trava`): voltar
+  ao pool com a trava presa deixaria todo envio seguinte "em andamento".
+- Sonda read-only `GET /api/claude/fermentacao` (`?data=`, `?dias=`,
+  `?fontes=1`, `?slack=1`): envios da data com estado, código do Slack e texto,
+  histórico por loja, cálculo atual por loja e, com `slack=1`, se o aplicativo é
+  membro de cada canal (`slack_entrega.info_canal`, timeout curto).
+
+Limitações conhecidas: sem banco não há claim nem aviso — e o `/health` que o
+Uptime Kuma vigia devolve `ok` sem tocar o banco (`app/__init__.py`), então banco
+fora só aparece no monitor da loja online (`opao.online`, cuja página depende do
+banco; a configuração real do Kuma não é verificável daqui); agendador
+parado não roda envio nem conferência, e o heartbeat das 08:00 no Slack só
+acusa isso pela AUSÊNCIA da mensagem diária; enquanto o problema persistir, sai
+um aviso por dia (ex.: CROISSANT AZUL sem vínculo, todo sábado até 21/11 — o
+27/09 entra nas sete ocorrências de domingo até a lista de 22/11, porque o
+feriado de 15/11 sai da conta).
+
+Testes: `tests/test_fermentacao_aviso_dono.py`.

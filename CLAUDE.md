@@ -211,6 +211,30 @@ lojas, Nebraska ou ordens industriais. Histórico incompleto bloqueia a lista.
 O envio às 12h continua; correção manual atualiza a mesma mensagem no Slack.
 Detalhes e auditoria em `docs/fermentacao.md`.
 
+**Conferência + aviso ao dono + sonda (03/10/2026, caso "não enviou na
+filial")**: o aplicativo nunca foi adicionado a `#fermentadora-filial`; o
+Slack recusou a lista da Anésio todo dia desde 27/09 (`not_in_channel`) e a
+recusa ficou só no registro — sete listas sem ninguém saber. Agora
+`fermentacao.verificar_envio_de_amanha` roda às 12:10 e às 16:00 (trava 7769)
+sobre o estado GRAVADO: reenvia loja sem nenhuma tentativa (job perdido no
+deploy) e avisa o dono no WhatsApp (`critico=True`, barrado em cópia de
+homologação) do que não ficou `enviado`, com o gesto que resolve — UM aviso
+por PROBLEMA por dia (claim por loja, tick = data + assinatura: estado, código
+do Slack, erros do cálculo), então as 16:00 só avisam o que for novo. Envio
+"em andamento" (trava 7767 ocupada, `enviando` < 5 min) espera a última
+rodada sem calar a outra loja; lista que só saiu às 16:00 vira aviso
+informativo; exceção na própria conferência avisa às 16:00. O botão manual
+não avisa. Exceção no cálculo de uma loja não impede a outra; tela, sonda,
+recuperação e correção usam `calcular_seguro` (erro interno nunca é 500 nem
+vira mensagem publicada). REGRA: canal novo de envio automático exige o
+aplicativo como MEMBRO (mudar o ID não concede acesso) — conferir com
+`GET /api/claude/fermentacao?slack=1`.
+Venda de produto relevante (croissant/pain/cesta/kit/box/combo no nome, ou
+vínculo que chega a croissant/pain) sem vínculo bloqueia a lista daquele dia
+da semana enquanto a data estiver entre as 7 ocorrências da conta (3 na
+Anésio); feriado excluído alonga — o 27/09 bloqueia os domingos até 22/11.
+"Ignorar" não destrava, só Vincular.
+
 ## Corte de pedidos às 12h (decisão do dono, 24/09/2026)
 
 Pedidos das lojas para entrega pela indústria no dia seguinte ficam
@@ -547,6 +571,10 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   notas lidas com itens; boleto sem itens, leitura falha e compra sem nota
   postada ficam fora. Loja pelo `conta_pagar.mapa_lojas_nf(consultar_slack=
   False)` — fonte única, movida da tela de Contas a Pagar, sem rede.
+- `GET /api/claude/fermentacao?data=&dias=&fontes=1&slack=1` (03/10/2026, caso
+  "não enviou na filial"): envios da lista de fermentação por loja (estado,
+  código do Slack, texto), histórico, cálculo atual por loja e, com `slack=1`,
+  se o aplicativo é membro de cada canal de destino. Só leitura.
 - `GET /api/claude/pedidos-revenda` (01/10/2026): a lista do dry-run de
   `/admin/pedidos-revenda` (Produto que a indústria não fornece em pedido
   loja→indústria pendente/confirmado com entrega a partir de amanhã, com

@@ -24,7 +24,9 @@
     {% if envio.slack_ts %}
     <p><a class="btn btn-outline-primary" href="{{ url_for('main.slack_fermentacao_mensagem', data=envio.data_alvo.isoformat(), loja=nome_loja or '') }}" target="_blank" rel="noopener">Abrir mensagem no Slack</a></p>
     {% elif envio.estado in ('incerto', 'enviando', 'falhou') %}
-    {% if envio.texto != calculo.texto %}
+    {% if calculo.erro_interno %}
+    <div class="alert alert-warning">O cálculo atual falhou por um erro interno (detalhe no log do sistema). A verificação ainda procura a mensagem original, mas nada é reenviado enquanto o cálculo não voltar.</div>
+    {% elif envio.texto != calculo.texto %}
     <div class="card mb-3"><div class="card-body">
         <h2 class="h5">Prévia do cálculo atualizado</h2>
         <div style="white-space: pre-wrap">{{ calculo.texto }}</div>
@@ -40,7 +42,9 @@
         <p class="small text-muted mt-2">Localiza a mensagem existente. Se ela não foi publicada, confere o cálculo atual antes de enviar, guardando o anterior. Se já existe, uma mudança de cálculo pode ser aplicada em “Corrigir a mensagem no Slack”.</p>
     </form>
     {% endif %}
-    {% if envio.slack_ts and (envio.texto != calculo.texto or envio.estado == 'correcao_incerta') %}
+    {% if envio.slack_ts and calculo.erro_interno and envio.estado != 'correcao_incerta' %}
+    <div class="alert alert-warning">Correção indisponível: o cálculo atual falhou por um erro interno (detalhe no log do sistema). A mensagem do Slack continua como está.</div>
+    {% elif envio.slack_ts and (envio.texto != calculo.texto or envio.estado == 'correcao_incerta') %}
     <div class="card mb-3"><div class="card-body">
         <h2 class="h5">Prévia da correção</h2>
         <div style="white-space: pre-wrap">{{ envio.calculo.correcao_pendente.texto if envio.calculo.correcao_pendente else calculo.texto }}</div>
