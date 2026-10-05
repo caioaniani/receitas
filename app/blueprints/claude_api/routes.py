@@ -2215,6 +2215,130 @@ def estoque_ledger():
                    itens=itens[:40])
 
 
+@claude_api_bp.route('/estoque-ledger-industria')
+@_claude_auth_required
+def estoque_ledger_industria():
+    """Razão do estoque da INDÚSTRIA (`EstoqueProducao`) de um item: saldo,
+    somas por tipo de `MovEstoqueProducao` na janela, saldo reconstruído pelo
+    razão inteiro e, com `?detalhe=1`, cada movimento com referência e autor.
+
+    Criada em 05/10/2026 (caso "sistema diz 76 brioches na produção, o
+    físico é 22"): a `/estoque-ledger` cobre só `MovEstoqueLoja`, e sem o
+    razão da indústria não dava para dizer de fora o que creditou a linha.
+    Direção de cada tipo pela fonte única
+    `historico_humano.mov_producao_direcao` (o sinal gravado não é confiável
+    para isso — a tela também mostra `abs`). Read-only.
+
+    Params: ?item=<trecho do nome> ou ?receita_id=, ?dias=N (default 30,
+    máx 180), ?detalhe=1 (movimentos da janela, cap 400, mais novos
+    primeiro).
+    """
+    from datetime import datetime, time, timedelta
+
+    from sqlalchemy import func
+
+    from app.extensions import db
+    from app.models import EstoqueProducao, MovEstoqueProducao, Usuario
+    from app.services import historico_humano as hh
+    from app.utils import hoje, normalizar_busca
+
+    dias = max(1, min(request.args.get('dias', 30, type=int) or 30, 180))
+    ini = datetime.combine(hoje() - timedelta(days=dias - 1), time.min)
+    detalhe = (request.args.get('detalhe') or '').strip() in ('1', 'true')
+
+    linhas = EstoqueProducao.query.all()
+    rid = request.args.get('receita_id', type=int)
+    trecho = (request.args.get('item') or '').strip()
+    if rid:
+        linhas = [ep for ep in linhas if ep.receita_id == rid]
+    elif len(trecho) >= 3:
+        termos = normalizar_busca(trecho).split()
+        linhas = [ep for ep in linhas
+                  if all(t in normalizar_busca(ep.nome_item or '') for t in termos)]
+    else:
+        return jsonify(ok=False, erro='informe ?item= (>= 3 chars) ou ?receita_id='), 400
+    if not linhas:
+        return jsonify(ok=False, erro='nenhuma linha de estoque da indústria casou'), 404
+
+    def _sinal(tipo, qtd):
+        d = hh.mov_producao_direcao(tipo, qtd)
+        return 1 if d == 'credito' else (-1 if d == 'debito' else 0)
+
+    ids = [ep.id for ep in linhas]
+    janela = {}
+    for eid, tipo, soma, soma_abs, n in (
+            db.session.query(MovEstoqueProducao.estoque_producao_id,
+                             MovEstoqueProducao.tipo,
+                             func.sum(MovEstoqueProducao.quantidade),
+                             func.sum(func.abs(MovEstoqueProducao.quantidade)),
+                             func.count(MovEstoqueProducao.id))
+            .filter(MovEstoqueProducao.estoque_producao_id.in_(ids),
+                    MovEstoqueProducao.data >= ini)
+            .group_by(MovEstoqueProducao.estoque_producao_id,
+                      MovEstoqueProducao.tipo).all()):
+        janela.setdefault(eid, {})[tipo] = {
+            'n': int(n or 0), 'soma': int(soma or 0), 'soma_abs': int(soma_abs or 0),
+            'direcao': hh.mov_producao_direcao(tipo, soma),
+        }
+
+    # Saldo reconstruído pelo razão INTEIRO. ajuste_conferencia é assinado,
+    # então entra movimento a movimento; o resto, pela direção do tipo.
+    reconstruido = {}
+    for eid, tipo, qtd in (
+            db.session.query(MovEstoqueProducao.estoque_producao_id,
+                             MovEstoqueProducao.tipo,
+                             MovEstoqueProducao.quantidade)
+            .filter(MovEstoqueProducao.estoque_producao_id.in_(ids)).all()):
+        q = int(qtd or 0)
+        reconstruido[eid] = reconstruido.get(eid, 0) + _sinal(tipo, q) * abs(q)
+
+    usuarios = {}
+    itens = []
+    for ep in linhas:
+        por_tipo = janela.get(ep.id, {})
+        entradas = sum(v['soma_abs'] for v in por_tipo.values()
+                       if v['direcao'] == 'credito')
+        saidas = sum(v['soma_abs'] for v in por_tipo.values()
+                     if v['direcao'] == 'debito')
+        item = {
+            'item': ep.nome_item,
+            'estoque_producao_id': ep.id,
+            'receita_id': ep.receita_id,
+            'produto_id': ep.produto_id,
+            'estado': ep.estado,
+            'saldo_atual': int(ep.quantidade or 0),
+            'saldo_reconstruido_pelo_razao': reconstruido.get(ep.id, 0),
+            'janela_entradas': entradas,
+            'janela_saidas': saidas,
+            'por_tipo': por_tipo,
+        }
+        if detalhe:
+            movs = (MovEstoqueProducao.query
+                    .filter(MovEstoqueProducao.estoque_producao_id == ep.id,
+                            MovEstoqueProducao.data >= ini)
+                    .order_by(MovEstoqueProducao.data.desc(),
+                              MovEstoqueProducao.id.desc())
+                    .limit(400).all())
+            uids = {m.usuario_id for m in movs if m.usuario_id} - set(usuarios)
+            if uids:
+                usuarios.update({u.id: u.nome for u in
+                                 Usuario.query.filter(Usuario.id.in_(uids)).all()})
+            item['movimentos'] = [{
+                'id': m.id,
+                'data': m.data.strftime('%Y-%m-%d %H:%M:%S') if m.data else None,
+                'tipo': m.tipo,
+                'direcao': hh.mov_producao_direcao(m.tipo, m.quantidade),
+                'quantidade': int(m.quantidade or 0),
+                'referencia': m.referencia,
+                'usuario': usuarios.get(m.usuario_id),
+            } for m in movs]
+        itens.append(item)
+
+    return jsonify(ok=True,
+                   janela={'inicio': ini.date().isoformat(), 'dias': dias},
+                   itens=itens[:20])
+
+
 @claude_api_bp.route('/plano-dia')
 @_claude_auth_required
 def plano_dia_site():
