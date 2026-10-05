@@ -1217,3 +1217,60 @@ def test_mapa_lojas_nf_sem_slack_nao_chama_a_api(app, monkeypatch):
     monkeypatch.setattr(slack_api, 'nome_canal',
                         lambda cid: (_ for _ in ()).throw(AssertionError('rede')))
     assert mapa_lojas_nf(consultar_slack=False) == {'CSEMNOME': 'CSEMNOME'}
+
+
+# ── /estoque-ledger-industria (05/10/2026, caso brioche 76 x 22) ──────────
+
+def _seed_ledger_industria():
+    from app.models import EstoqueProducao, MovEstoqueProducao
+    r = Receita(nome='Brioche Ledger', categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=1000.0)
+    db.session.add(r)
+    db.session.flush()
+    ep = EstoqueProducao(receita_id=r.id, quantidade=4)
+    db.session.add(ep)
+    db.session.flush()
+    db.session.add_all([
+        MovEstoqueProducao(estoque_producao_id=ep.id, tipo='producao',
+                           quantidade=10, referencia='Produção plano #1'),
+        MovEstoqueProducao(estoque_producao_id=ep.id, tipo='saida_pedido',
+                           quantidade=4, referencia='Pedido #7'),
+        MovEstoqueProducao(estoque_producao_id=ep.id, tipo='ajuste_conferencia',
+                           quantidade=-2, referencia='Conferência'),
+        MovEstoqueProducao(estoque_producao_id=ep.id,
+                           tipo='saida_pedido_sem_estoque', quantidade=3,
+                           referencia='Pedido #8'),
+    ])
+    db.session.commit()
+    return r, ep
+
+
+def test_estoque_ledger_industria_soma_por_direcao_e_reconstroi_saldo(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    r, ep = _seed_ledger_industria()
+    h = {'Authorization': f'Bearer {TOKEN}'}
+    d = app.test_client().get(
+        '/api/claude/estoque-ledger-industria?item=brioche ledger&detalhe=1',
+        headers=h).get_json()
+    assert d['ok'] is True
+    it = d['itens'][0]
+    assert it['receita_id'] == r.id and it['saldo_atual'] == 4
+    # 10 de produção - 4 do pedido - 2 da conferência; o sem_estoque é neutro
+    assert it['saldo_reconstruido_pelo_razao'] == 4
+    assert it['janela_entradas'] == 10 and it['janela_saidas'] == 6
+    assert it['por_tipo']['saida_pedido_sem_estoque']['direcao'] == 'neutro'
+    assert {m['referencia'] for m in it['movimentos']} >= {'Pedido #7', 'Conferência'}
+
+
+def test_estoque_ledger_industria_por_receita_id_e_validacao(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    r, _ep = _seed_ledger_industria()
+    c = app.test_client()
+    h = {'Authorization': f'Bearer {TOKEN}'}
+    d = c.get(f'/api/claude/estoque-ledger-industria?receita_id={r.id}',
+              headers=h).get_json()
+    assert d['itens'][0]['item'] == 'Brioche Ledger'
+    assert 'movimentos' not in d['itens'][0]
+    assert c.get('/api/claude/estoque-ledger-industria', headers=h).status_code == 400
+    assert c.get('/api/claude/estoque-ledger-industria?item=inexistente',
+                 headers=h).status_code == 404
