@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Fichas de produção — etapas do fluxograma{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+  <h1 class="page-title mb-0"><i class="bi bi-clipboard2-data"></i> Fichas de produção</h1>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('padeiro.gantt') }}" class="btn btn-sm btn-outline-secondary" target="_blank">Ver sequência (TV)</a>
+    <a href="{{ url_for('receitas.amassadeira') }}" class="btn btn-sm btn-outline-secondary">Produção por categoria</a>
+  </div>
+</div>
+
+<div class="alert alert-light border small">
+  A planilha das <strong>fichas de produção</strong> (abas <em>Batimento</em>,
+  <em>Fermentação</em>, <em>Fermentação final</em> e <em>Forno</em>) é a fonte das
+  etapas que o fluxograma/Gantt e a TV do padeiro mostram. Importar
+  <strong>substitui as etapas de todas as receitas</strong> pelas da planilha
+  (as anteriores ficam guardadas em backup); a receita casa pelo
+  <strong>nome exato</strong> (sem acento/caixa). Célula em branco na ficha não
+  vira valor. Ajuste fino continua na ficha de cada receita (duração, passo a passo).
+</div>
+
+{% if importacao %}
+<div class="card mb-3"><div class="card-body small">
+  <strong>Última importação:</strong>
+  {{ importacao.quando }} · {{ importacao.origem }}{% if importacao.arquivo %} · {{ importacao.arquivo }}{% endif %}
+  · {{ importacao.receitas_aplicadas }} receita(s), {{ importacao.etapas }} etapa(s)
+  · {{ importacao.etapas_anteriores }} etapa(s) anteriores em <code>{{ importacao.backup }}</code>
+  · {{ importacao.snapshots_reescritos }} ordem(ns) aberta(s) atualizada(s)
+  {% if importacao.nao_encontradas %}<br><span class="text-danger">Não encontradas:</span> {{ importacao.nao_encontradas|join(', ') }}{% endif %}
+  {% if importacao.ambiguas %}<br><span class="text-danger">Ambíguas:</span> {{ importacao.ambiguas|join(', ') }}{% endif %}
+</div></div>
+{% else %}
+<div class="alert alert-warning small">Nenhuma importação registrada ainda. A planilha
+  <code>{{ arquivo_seed }}</code> embarcada no sistema é aplicada uma vez no startup.</div>
+{% endif %}
+
+{% if modo == 'previa' %}
+<h2 class="h5">Prévia — {{ arquivo }} <small class="text-muted">sha256 {{ sha256[:12] }}…</small></h2>
+<p class="small">Hoje há <strong>{{ n_atual }}</strong> etapa(s) cadastrada(s) no sistema (todas as receitas).
+  Ao aplicar, <strong>todas</strong> são substituídas pelas abaixo.</p>
+{% for a in avisos %}<div class="alert alert-warning py-1 small mb-1">{{ a }}</div>{% endfor %}
+<div class="table-responsive">
+<table class="table table-sm align-middle">
+  <thead class="table-light"><tr><th>Receita (planilha)</th><th>Casa com</th><th>Etapas que nascem</th></tr></thead>
+  <tbody>
+  {% for l in linhas %}
+  <tr>
+    <td><strong>{{ l.planilha }}</strong></td>
+    <td>
+      {% if l.casamento.receita_id %}<span class="badge bg-success-subtle text-success-emphasis">#{{ l.casamento.receita_id }} {{ l.casamento.receita_nome }}</span>
+      {% elif l.casamento.erro == 'ambigua' %}<span class="badge bg-danger-subtle text-danger-emphasis">ambígua</span>
+        {% for c in l.casamento.candidatos %}<br><small>#{{ c.id }} {{ c.nome }}</small>{% endfor %}
+      {% else %}<span class="badge bg-danger-subtle text-danger-emphasis">não encontrada</span>{% endif %}
+    </td>
+    <td style="max-width:460px;">
+      {% if l.etapas %}<ol class="mb-0 ps-3 small">
+        {% for e in l.etapas %}<li><strong>{{ e.nome }}</strong> · {{ e.duracao_min }} min
+          {%- if e.equipamento %} · {{ e.equipamento }}{% endif %}{% if not e.ativa %} · espera{% endif %}
+          {% set plabel = resumo_parametros(e.parametros, e.duracao_min) %}{% if plabel %}<br><span class="text-success-emphasis">⚙ {{ plabel }}</span>{% endif %}</li>{% endfor %}
+      </ol>{% else %}<span class="text-muted">sem dados nas abas</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if pode_aplicar %}
+<form method="POST" action="{{ url_for('receitas.fichas_producao_aplicar') }}"
+      data-confirmar="Substituir TODAS as etapas de TODAS as receitas pelas desta planilha? As etapas atuais ficam guardadas em backup, mas o fluxograma passa a mostrar só o que está na planilha.">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="token" value="{{ token }}">
+  <button type="submit" class="btn btn-danger"><i class="bi bi-arrow-repeat"></i> Aplicar: substituir todas as etapas</button>
+  <a href="{{ url_for('receitas.fichas_producao') }}" class="btn btn-outline-secondary">Cancelar</a>
+</form>
+{% else %}
+<div class="alert alert-info small">Só o proprietário aplica a planilha (a troca vale para todas as receitas).</div>
+{% endif %}
+
+{% else %}
+<form method="POST" action="{{ url_for('receitas.fichas_producao_previa') }}" enctype="multipart/form-data" class="card mb-3">
+  <div class="card-body d-flex flex-wrap gap-2 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label class="form-label mb-1 small">Planilha de fichas (.xlsx)</label>
+      <input type="file" name="planilha" accept=".xlsx" required class="form-control form-control-sm"></div>
+    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-eye"></i> Ver prévia</button>
+    <span class="small text-muted">Nada é gravado na prévia.</span>
+  </div>
+</form>
+
+{% if sem_etapas %}
+<div class="alert alert-warning small">
+  <strong>{{ sem_etapas|length }} receita(s) sem etapas</strong> (ficam como "sem etapas cadastradas" na sequência):
+  {% for r in sem_etapas %}<a href="{{ url_for('receitas.etapas', id=r.id) }}">{{ r.nome }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+</div>
+{% endif %}
+
+<h2 class="h5">Etapas cadastradas por receita</h2>
+<div class="table-responsive">
+<table class="table table-sm align-middle">
+  <thead class="table-light"><tr><th>Receita</th><th>Categoria</th><th>Etapas</th><th></th></tr></thead>
+  <tbody>
+  {% for r in situacao if r.n_etapas %}
+  <tr>
+    <td>{{ r.nome }}</td><td class="small text-muted">{{ r.categoria }}</td>
+    <td style="max-width:460px;"><ol class="mb-0 ps-3 small">
+      {% for e in r.etapas %}<li><strong>{{ e.nome }}</strong> · {{ e.duracao_min }} min{% if e.equipamento %} · {{ e.equipamento }}{% endif %}{% if not e.ativa %} · espera{% endif %}
+        {% if e.parametros_label %}<br><span class="text-success-emphasis">⚙ {{ e.parametros_label }}</span>{% endif %}</li>{% endfor %}
+    </ol></td>
+    <td><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('receitas.etapas', id=r.id) }}">Editar</a></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

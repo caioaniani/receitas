@@ -114,6 +114,10 @@ def itens_para_usuario(usuario, categorias_receitas):
     if capacidade('web_padeiro'):
         adicionar('Tela do padeiro', 'padeiro.index', 'Produção',
                   'check2-square', aliases=['confirmar produção'])
+        adicionar('Sequência da produção (Gantt)', 'padeiro.gantt', 'Produção',
+                  'diagram-3', aliases=['gantt', 'fluxograma', 'ver sequência',
+                                        'sequência do padeiro', 'etapas da produção',
+                                        'fichas de produção na tv'])
     if capacidade('web_catalogo'):
         adicionar('Matérias-primas', 'materias_primas.banco', 'Catálogo',
                   'flower3', aliases=['ingredientes'])

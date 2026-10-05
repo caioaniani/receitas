@@ -28,6 +28,11 @@ documentada em [bateladas-viennoiserie.md](bateladas-viennoiserie.md).
 `PlanejamentoItemBatelada` é uma tabela nova de snapshots: preserva a ficha,
 os IDs dos ingredientes, rendimento, etapas e prazo aprovados. Não adiciona
 colunas a tabelas antigas. Startup cria a tabela pelo caminho existente.
+Exceção única (02/10/2026): importar a planilha de fichas de produção
+(`/receitas/fichas-producao`, `docs/fichas-producao.md`) reescreve só o
+`processo` (as etapas) dos snapshots das ordens ainda em aberto, para o
+fluxograma mostrar a ficha nova; quantidades, ingredientes e prazo do snapshot
+não mudam.
 
 Ordens já enviadas sem snapshot continuam legadas. GET não converte ordens;
 o envio automático preserva as travas do dia corrente e por antecedência dos

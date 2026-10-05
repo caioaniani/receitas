@@ -173,6 +173,9 @@
         <a href="{{ url_for('padeiro.index') }}" class="sidebar-link">
             <i class="bi bi-hammer"></i><span>Tela do padeiro</span>
         </a>
+        <a href="{{ url_for('padeiro.gantt') }}" class="sidebar-link {{ 'active' if request.path.startswith('/padeiro/gantt') }}">
+            <i class="bi bi-diagram-3"></i><span>Sequência da produção (Gantt)</span>
+        </a>
     </div>
     {% endif %}
     {% endif %}{# navegação admin / outros papéis #}

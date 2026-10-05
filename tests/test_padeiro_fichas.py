@@ -86,17 +86,27 @@ def test_padeiro_salva_ficha_com_descricao(app):
         assert etapas[2].descricao == 'Asse a 230 °C com vapor.'
 
 
-def test_padeiro_preenche_do_padrao_da_categoria(app):
+def test_padeiro_acao_padrao_removida_nao_zera_a_ficha(app):
+    """O 'padrão da categoria' (modelo genérico) foi removido em 02/10/2026:
+    o POST de uma aba antiga avisa e NÃO grava — a ficha fica como estava."""
     with app.app_context():
         _padeiro('padl3')
         r = _receita('Sourdough Ficha', categoria='Paes')
+        db.session.add(ReceitaEtapa(receita_id=r.id, ordem=0, nome='Batimento',
+                                    duracao_min=15, equipamento='amassadeira',
+                                    parametros={'velocidade_1_min': 14}))
+        db.session.commit()
         rid = r.id
     c = app.test_client()
     _login(c, 'padl3', '12345678')
     resp = c.post(f'/padeiro/fichas/{rid}', data={'acao': 'padrao'})
-    assert resp.status_code == 302
+    assert resp.status_code == 303
     with app.app_context():
-        assert ReceitaEtapa.query.filter_by(receita_id=rid).count() > 0
+        assert ReceitaEtapa.query.filter_by(receita_id=rid).count() == 1
+    body = c.get(f'/padeiro/fichas/{rid}').get_data(as_text=True)
+    assert 'Começar do padrão da categoria' not in body
+    assert '⚙ V1 14 min' in body                    # parâmetro visível
+    assert 'name="parametros[]"' in body            # e preservado no save
 
 
 def test_funcionario_de_loja_nao_acessa_fichas(app, loja):

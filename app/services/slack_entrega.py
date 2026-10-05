@@ -63,6 +63,28 @@ def _link_mensagem(client, canal, ts):
     return None
 
 
+def info_canal(canal):
+    """Nome do canal e se o aplicativo é membro (conversations.info, só
+    leitura). Timeout curto e sem retentativa: serve a aviso e diagnóstico.
+    Nunca levanta; falha vira {'erro': código}."""
+    if not _canal_valido(canal):
+        return {'erro': 'canal_invalido'}
+    try:
+        resposta = _cliente_leitura().conversations_info(channel=canal)
+        if resposta.get('ok') is not True:
+            return {'erro': 'resposta_slack_invalida'}
+        dados = resposta.get('channel')
+        if not isinstance(dados, dict):
+            return {'erro': 'resposta_slack_invalida'}
+        nome = dados.get('name')
+        return {'nome': nome if isinstance(nome, str) else None,
+                'is_member': dados.get('is_member'),
+                'is_archived': dados.get('is_archived'),
+                'is_private': dados.get('is_private')}
+    except Exception as exc:  # noqa: BLE001 — consulta opcional; o código basta
+        return {'erro': _erro_consulta(exc)['codigo_erro']}
+
+
 def permalink(canal, ts):
     """Link oficial de uma mensagem conhecida; falhas não confirmam ausência."""
     if not _canal_valido(canal) or not _ts_valido(ts):

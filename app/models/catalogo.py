@@ -339,12 +339,18 @@ class ReceitaEtapa(db.Model):
     # O QUE fazer na etapa (passo a passo do padeiro — ficha /padeiro/fichas).
     # ALTER em migrations_legacy deployado ANTES deste modelo (2 commits).
     descricao = db.Column(db.Text)
+    # Parametros estruturados da ficha de producao (02/10/2026): velocidades
+    # do batimento, temperaturas, local/temperatura da fermentacao, dobras,
+    # forno/teto/lastro. Dict JSON; chaves em app/services/etapas_receita.py
+    # (resumo_parametros). ALTER deployado ANTES do modelo (2 commits).
+    parametros = db.Column(db.JSON)
 
     def to_dict(self):
         return {
             'id': self.id, 'ordem': self.ordem, 'nome': self.nome,
             'duracao_min': self.duracao_min, 'equipamento': self.equipamento,
             'ativa': self.ativa, 'descricao': self.descricao,
+            'parametros': self.parametros,
         }
 
     def __repr__(self):

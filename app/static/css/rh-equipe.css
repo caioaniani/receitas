@@ -104,6 +104,22 @@
 .rh-lojas .rh-lojas-pending-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 0 24px; margin: 0; padding: 8px 24px; list-style: none; }
 .rh-lojas .rh-lojas-direction { margin-top: 20px; border-bottom: 1px solid var(--equipe-line); }
 .rh-lojas .rh-lojas-footnote { margin-top: 20px; font-size: 11px; max-width: 105ch; }
+/* Gestos da equipe: painéis <details> sem JavaScript; o form abre abaixo do botão. */
+.rh-lojas .rh-lojas-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 12px; padding: 16px 24px 0; }
+.rh-lojas .rh-lojas-action > summary { list-style: none; }
+.rh-lojas .rh-lojas-action > summary::-webkit-details-marker { display: none; }
+.rh-lojas .rh-lojas-action[open] { flex-basis: 100%; }
+.rh-lojas .rh-lojas-action[open] > summary { border-color: var(--equipe-green); background: var(--equipe-green-soft); }
+.rh-lojas .rh-lojas-action-form { display: grid; gap: 12px; max-width: 560px; margin-top: 10px; padding: 16px; border: 1px solid var(--equipe-line); border-radius: 10px; background: var(--equipe-surface); }
+.rh-lojas .rh-lojas-action-form > label { display: grid; gap: 5px; font-size: 12px; font-weight: 600; }
+.rh-lojas .rh-lojas-action-form select { min-height: 44px; width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--equipe-line); border-radius: 7px; background: var(--equipe-surface); color: var(--equipe-ink); font: inherit; font-size: 13px; }
+.rh-lojas .rh-lojas-check { display: flex !important; align-items: center; gap: 8px; font-weight: 500 !important; }
+.rh-lojas .rh-lojas-check input { width: 17px; height: 17px; margin: 0; accent-color: var(--equipe-green); flex-shrink: 0; }
+.rh-lojas .rh-lojas-help { margin: 0; color: var(--equipe-muted); font-size: 11px; line-height: 1.6; }
+.rh-lojas .rh-lojas-action-form > .rh-equipe-button { justify-self: start; }
+.rh-lojas .rh-lojas-remove { margin-top: 4px; }
+.rh-lojas .rh-lojas-remove-btn { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 4px 8px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--equipe-muted); font: inherit; font-size: 11px; cursor: pointer; }
+.rh-lojas .rh-lojas-remove-btn:hover { color: #9b2c2c; border-color: currentColor; background: #fbf1f1; }
 @media (max-width: 700px) {
     .rh-lojas .rh-lojas-store-heading { align-items: flex-start; flex-direction: column; padding: 18px; gap: 8px; }
     .rh-lojas .rh-lojas-shifts { grid-template-columns: 1fr; padding: 18px; }
@@ -111,6 +127,10 @@
     .rh-lojas .rh-lojas-context { padding: 4px 18px; }
     .rh-lojas .rh-lojas-pending-list { padding: 8px 18px; }
     .rh-lojas .rh-lojas-selector > a { flex: 1 1 auto; justify-content: space-between; }
+    .rh-lojas .rh-lojas-actions { padding: 14px 18px 0; }
+    .rh-lojas .rh-lojas-action { flex: 1 1 100%; }
+    .rh-lojas .rh-lojas-action > summary { width: 100%; }
+    .rh-lojas .rh-lojas-action-form { max-width: none; padding: 14px; }
 }
 .rh-equipe {
     --equipe-ink: var(--v2-ink, var(--text-main, #17221d));

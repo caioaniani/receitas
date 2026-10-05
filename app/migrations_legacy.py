@@ -116,6 +116,7 @@ def _migrate(app):
         _seed_minis_sanduiche(app)
         _seed_acerto_granola_iogurte(app)
         _backfill_totais_orcamento(app)
+        _seed_fichas_producao_2026_10(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1068,6 +1069,60 @@ def _seed_teto_producao_brioche(app):
                     'em %d receita(s)', setados, mantidos, len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed teto producao brioche): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_fichas_producao_2026_10(app):
+    """UMA VEZ (dono 02/10/2026: "cadastrar e usar essas infos no gantt/
+    fluxograma de producao; apagar todos os registros que o gantt usa hoje e
+    trocar por esses dessa planilha"): aplica a planilha de fichas de
+    producao embarcada em app/seeds_data/fichas_producao_2026_10.xlsx pelo
+    MESMO servico da tela /receitas/fichas-producao — SUBSTITUI as etapas de
+    TODAS as receitas (backup JSON em AppConfig antes), reescreve o processo
+    congelado das ordens abertas e grava o marcador da importacao. Marker
+    com contagens (regra: setados=0 nunca passa batido). Roda depois do
+    ALTER de receita_etapa.parametros (commit 1, c6b34b6a)."""
+    try:
+        from app.models import AppConfig
+        from app.services import fichas_producao as svc
+        chave = 'seed_fichas_producao_2026_10'
+        if AppConfig.get(chave):
+            return
+        if not svc.ARQUIVO_SEED.exists():
+            logger.error('seed fichas producao: arquivo %s ausente',
+                         svc.ARQUIVO_SEED)
+            return
+        try:
+            resumo = svc.aplicar_arquivo(svc.ARQUIVO_SEED, origem='seed')
+        except ValueError as e:
+            # Nenhuma receita da planilha casou com o cadastro: nada foi
+            # apagado e o marker NÃO é gravado (o próximo boot tenta de novo;
+            # o erro fica visível no log/Sentry em vez de passar batido).
+            db.session.rollback()
+            logger.error('seed fichas producao NAO aplicado: %s', e)
+            return
+        AppConfig.set(chave,
+                      f"receitas={resumo['receitas_aplicadas']} "
+                      f"etapas={resumo['etapas']} "
+                      f"anteriores={resumo['etapas_anteriores']} "
+                      f"snapshots={resumo['snapshots_reescritos']} "
+                      f"nao_encontradas={len(resumo['nao_encontradas'])} "
+                      f"ambiguas={len(resumo['ambiguas'])} "
+                      f"sha256={resumo['sha256'][:12]}")
+        db.session.commit()
+        logger.info('seed fichas producao: %d receita(s), %d etapa(s), '
+                    '%d anteriores em %s, %d snapshot(s); fora: %s',
+                    resumo['receitas_aplicadas'], resumo['etapas'],
+                    resumo['etapas_anteriores'], resumo['backup'],
+                    resumo['snapshots_reescritos'],
+                    resumo['nao_encontradas'] + resumo['ambiguas'])
+        for aviso in resumo.get('avisos') or []:
+            logger.warning('seed fichas producao: %s', aviso)
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed fichas producao): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001
@@ -3338,6 +3393,16 @@ def _migrate_postgres(app):
         _try("ALTER TABLE treino_item_checklist ADD COLUMN IF NOT EXISTS "
              "ativo BOOLEAN NOT NULL DEFAULT TRUE")
 
+    # Parâmetros estruturados da etapa de produção (02/10/2026, dono: fichas
+    # de produção da padaria — batimento V1/V2, temperaturas, local e
+    # temperatura da fermentação, dobras, forno/teto/lastro). JSON por etapa:
+    # o fluxograma/Gantt e a TV mostram os valores junto do passo; a ficha
+    # em texto (`descricao`) segue livre. Commit 1 do procedimento de 2
+    # commits — o modelo só entra depois deste ALTER estar no ar.
+    if 'parametros' not in _cols('receita_etapa'):
+        _try("ALTER TABLE receita_etapa ADD COLUMN IF NOT EXISTS "
+             "parametros JSON")
+
 
 def _migrate_mp_custo_opcional_sqlite(conn):
     """Relaxa somente o custo, conservando o schema e os vínculos existentes.
@@ -3425,6 +3490,10 @@ def _migrate_sqlite(app):
     cols_re = [row[1] for row in cursor.fetchall()]
     if cols_re and 'descricao' not in cols_re:
         cursor.execute("ALTER TABLE receita_etapa ADD COLUMN descricao TEXT")
+    # receita_etapa.parametros — parâmetros estruturados da etapa (02/10/2026,
+    # fichas de produção: batimento, fermentação, forno). Espelho do Postgres.
+    if cols_re and 'parametros' not in cols_re:
+        cursor.execute("ALTER TABLE receita_etapa ADD COLUMN parametros JSON")
     # receita.sub_na_amassadeira — sub-receita que entra na amassadeira
     # (Levain (pé)); backfill único junto com a criação (15/07/2026).
     if 'sub_na_amassadeira' not in colunas:

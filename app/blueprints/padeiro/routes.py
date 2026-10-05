@@ -1430,9 +1430,10 @@ def fichas():
 @padeiro_required
 def fichas_editar(id):
     """Ficha de preparo de UM pão: o padeiro preenche as etapas (nome,
-    duração, tipo de trabalho) e o passo a passo (descrição) de cada uma.
-    Salva direto — alimenta o fluxograma/Gantt e o mise en place."""
-    from app.constants import etapas_padrao_categoria
+    duração, tipo de trabalho) e o passo a passo (descrição) de cada uma;
+    os parâmetros da ficha de produção (planilha) são preservados. Salva
+    direto — alimenta o fluxograma/Gantt e o mise en place. O "padrão da
+    categoria" (modelo genérico) foi REMOVIDO em 02/10/2026."""
     from app.models import Receita
     from app.services import etapas_receita
 
@@ -1443,14 +1444,10 @@ def fichas_editar(id):
 
     if request.method == 'POST':
         if request.form.get('acao') == 'padrao':
-            etapas_receita.set_etapas(
-                receita.id,
-                etapas_receita.de_tuplas(
-                    etapas_padrao_categoria(receita.categoria)))
-            db.session.commit()
-            flash('Etapas preenchidas com o padrão da categoria — ajuste os '
-                  'tempos e escreva o passo a passo.', 'info')
-            return redirect(url_for('padeiro.fichas_editar', id=receita.id))
+            # Aba antiga: o form chega sem linhas e zeraria a ficha.
+            flash('O padrão genérico por categoria foi removido — as etapas '
+                  'vêm da planilha de fichas de produção.', 'warning')
+            return redirect(url_for('padeiro.fichas_editar', id=receita.id)), 303
         etapas_form = etapas_receita.parse_etapas_form(request.form)
         etapas_receita.set_etapas(receita.id, etapas_form)
         db.session.commit()
@@ -1461,7 +1458,8 @@ def fichas_editar(id):
     etapas_atuais = etapas_receita.listar(receita.id)
     return render_template('padeiro/fichas_editar.html', receita=receita,
                            etapas=etapas_atuais,
-                           recurso_de=etapas_receita.recurso_de_etapa)
+                           recurso_de=etapas_receita.recurso_de_etapa,
+                           resumo_parametros=etapas_receita.resumo_parametros)
 
 
 # ── Spotify (widget 🎵 da tela do padeiro, 15/07/2026) ──────────────────────

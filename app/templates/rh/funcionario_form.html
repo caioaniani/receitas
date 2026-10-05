@@ -91,7 +91,7 @@
             <label class="form-label fw-bold">Lojas</label>
             {% for l in lojas %}
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="lojas[]" value="{{ l.id }}" id="loja-{{ l.id }}">
+                <input class="form-check-input" type="checkbox" name="lojas[]" value="{{ l.id }}" id="loja-{{ l.id }}"{% if l.id in (lojas_marcadas or []) %} checked{% endif %}>
                 <label class="form-check-label small" for="loja-{{ l.id }}">{{ l.nome }}</label>
             </div>
             {% endfor %}

@@ -82,9 +82,11 @@ def _request_meta():
     """IP + user-agent do request atual, ou None se fora de request."""
     if not has_request_context():
         return None, None
-    ip = request.headers.get('X-Forwarded-For') or request.remote_addr or None
-    if ip and ',' in ip:
-        ip = ip.split(',')[0].strip()
+    # O ProxyFix (app/__init__.py, x_for=1) já resolve em `remote_addr` o IP
+    # do último hop confiável; ler o X-Forwarded-For cru aqui registrava o
+    # PRIMEIRO elemento, que o cliente controla (revisão de 02/10/2026).
+    ip = (request.remote_addr or None)
+    ip = ip[:45] if ip else None
     ua = (request.headers.get('User-Agent') or '')[:300]
     return ip, ua
 

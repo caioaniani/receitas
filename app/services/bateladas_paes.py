@@ -106,6 +106,21 @@ def _duracao(minutos):
     return f'{m} min'
 
 
+def processo_da_receita(rec):
+    """Passo a passo da ficha no formato que o Gantt, a TV (mise en place) e o
+    snapshot de batelada consomem — FONTE ÚNICA (fichas_producao reescreve o
+    `processo` das ordens abertas com esta mesma função). Cada etapa leva os
+    `parametros` da ficha de produção e o rótulo pronto (`parametros_label`)."""
+    from app.services.etapas_receita import resumo_parametros
+    return [{
+        'nome': e.nome, 'duracao': _duracao(e.duracao_min),
+        'duracao_min': e.duracao_min, 'equipamento': e.equipamento,
+        'ativa': e.ativa, 'descricao': e.descricao,
+        'parametros': e.parametros,
+        'parametros_label': resumo_parametros(e.parametros, e.duracao_min),
+    } for e in rec.etapas]
+
+
 def padrao_receita(rec, *, resolver_estoque=True, farinha_g=None):
     """Calcula UMA batelada completa, jamais adapta a farinha ao rendimento.
 
@@ -229,11 +244,7 @@ def padrao_receita(rec, *, resolver_estoque=True, farinha_g=None):
                  for sid, qtd in sub_totais.items()],
         'avisos': avisos,
         'etapas': dividir_etapas_preparo(rec.modo_preparo),
-        'processo': [{
-            'nome': e.nome, 'duracao': _duracao(e.duracao_min),
-            'duracao_min': e.duracao_min, 'equipamento': e.equipamento,
-            'ativa': e.ativa, 'descricao': e.descricao,
-        } for e in rec.etapas],
+        'processo': processo_da_receita(rec),
     }
 
 

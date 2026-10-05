@@ -56,7 +56,11 @@ def test_selecao_nao_mistura_pessoas_de_outras_lojas(app, owner_user):
     html = _cliente(app, owner_user).get(
         '/rh/equipe/lojas', query_string={'loja': centro.id}).get_data(as_text=True)
     assert ana.nome in html and lider.nome in html
-    assert bia.nome not in html
+    # Bia não entra na equipe exibida (sem link de ficha nem gesto de remover);
+    # ela só aparece como opção dos formulários "Adicionar" / "Importar".
+    assert f'href="/rh/funcionarios/{bia.id}"' not in html
+    assert f'name="funcionario_id" value="{bia.id}"' not in html
+    assert f'<option value="{bia.id}">Bia visual' in html
     assert jardim.nome in html  # seletor permite trocar a unidade
     assert 'Ver só esta loja' not in html
 

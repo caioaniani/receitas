@@ -816,7 +816,11 @@ def novo_funcionario():
 
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
     cargos = Cargo.query.filter_by(ativo=True).order_by(Cargo.nome, Cargo.salario_base).all()
-    return render_template('rh/funcionario_form.html', func=None, lojas=lojas, cargos=cargos)
+    # "Cadastrar pessoa nova nesta loja" (Equipe por loja) chega com ?loja=:
+    # só pré-marca a caixa da loja; quem salva continua decidindo.
+    loja_marcada = request.args.get('loja', type=int)
+    return render_template('rh/funcionario_form.html', func=None, lojas=lojas, cargos=cargos,
+                           lojas_marcadas={loja_marcada} if loja_marcada else set())
 
 
 # ── Pré-cadastro por QR (23/07/2026) ──────────────────────────────────────

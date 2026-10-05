@@ -253,24 +253,6 @@ def amassadeira():
     return render_template('receitas/amassadeira.html', categorias=categorias)
 
 
-@receitas_bp.route('/amassadeira/etapas-padrao', methods=['POST'])
-@login_required
-@admin_required
-def amassadeira_etapas_padrao():
-    """Aplica as etapas de producao padrao (pesquisadas) a uma categoria.
-    Substitui as etapas existentes das receitas da categoria e preenche o
-    modo_preparo quando vazio. O dono ajusta receita a receita depois."""
-    from app.services.producao import seed_etapas_categoria
-
-    cat = request.form.get('categoria')
-    if cat is None:
-        abort(400)
-    n = seed_etapas_categoria(cat or '')
-    flash('Etapas padrão aplicadas a %d receita(s) de "%s".'
-          % (n, cat or '(sem categoria)'), 'success')
-    return redirect(url_for('receitas.amassadeira'))
-
-
 # Tipo de trabalho da etapa -> (equipamento, ativa). UM só campo no editor:
 #  - padeiro:     mão de obra (a pessoa trabalhando) — ocupa o padeiro.
 #  - amassadeira/forno: MÁQUINA trabalha sozinha — ocupa o equipamento, padeiro
@@ -284,9 +266,6 @@ def amassadeira_etapas_padrao():
 # manter dois parsers divergiria. Os nomes locais viram aliases pra não mexer
 # em todos os call sites deste arquivo.
 from app.services.etapas_receita import (  # noqa: E402
-    de_tuplas as _etapas_de_tuplas,
-)
-from app.services.etapas_receita import (
     parse_etapas_form as _parse_etapas_form,
 )
 from app.services.etapas_receita import (
@@ -302,12 +281,14 @@ from app.services.etapas_receita import (
 @admin_required
 def etapas(id):
     """Editor manual das etapas de produção (fluxograma/Gantt) de uma receita:
-    cada etapa tem nome, duração e o tipo de trabalho (padeiro / máquina /
-    descanso). POST salva a lista inteira (substitui, na ordem das linhas — o
-    arrastar reordena). "padrão da categoria" preenche ESTA com o modelo
-    pesquisado; "aplicar à categoria" copia ESTAS etapas pra todos os produtos
-    da categoria."""
-    from app.constants import etapas_padrao_categoria
+    cada etapa tem nome, duração, o tipo de trabalho (padeiro / máquina /
+    descanso) e os parâmetros da ficha de produção (preservados em
+    `parametros[]`). POST salva a lista inteira (substitui, na ordem das
+    linhas — o arrastar reordena); "aplicar à categoria" copia ESTAS etapas
+    pra todos os produtos da categoria. O antigo "padrão da categoria"
+    (modelo genérico pesquisado) foi REMOVIDO em 02/10/2026: as etapas vêm
+    da planilha de fichas de produção (`receitas.fichas_producao`)."""
+    from app.services.etapas_receita import resumo_parametros
     from app.services.producao import _fmt_dur
 
     receita = Receita.query.get_or_404(id)
@@ -316,13 +297,11 @@ def etapas(id):
         acao = request.form.get('acao')
 
         if acao == 'padrao':
-            # preenche SÓ esta receita com o padrão (pesquisado) da categoria.
-            _set_etapas(receita.id,
-                        _etapas_de_tuplas(etapas_padrao_categoria(receita.categoria)))
-            db.session.commit()
-            flash('Etapas preenchidas com o padrão da categoria. Ajuste e salve.',
-                  'info')
-            return redirect(url_for('receitas.etapas', id=receita.id))
+            # Aba antiga ainda aberta: não salvar nada (o form chega sem as
+            # linhas e zeraria a ficha).
+            flash('O padrão genérico por categoria foi removido — as etapas '
+                  'vêm da planilha de fichas de produção.', 'warning')
+            return redirect(url_for('receitas.etapas', id=receita.id)), 303
 
         if acao == 'aplicar_categoria':
             # Aplica ESTAS etapas (as da tela) a TODOS os produtos ativos da
@@ -333,11 +312,17 @@ def etapas(id):
                       'categoria.', 'warning')
                 return redirect(url_for('receitas.etapas', id=receita.id))
             etapas_form = _parse_etapas_form(request.form)
+            # Os ⚙ parâmetros da ficha de produção são MEDIDOS por receita
+            # (e `origem` aponta a linha dela na planilha): as outras
+            # receitas da categoria recebem só nome/duração/tipo/passo a
+            # passo; parâmetro delas só entra pela planilha.
+            sem_parametros = [dict(e, parametros=None) for e in etapas_form]
             alvos = (Receita.query
                      .filter(Receita.categoria == cat,
                              Receita.arquivada_em.is_(None)).all())
             for r in alvos:
-                _set_etapas(r.id, etapas_form)
+                _set_etapas(r.id, etapas_form if r.id == receita.id
+                            else sem_parametros)
             db.session.commit()
             flash(f'{len(etapas_form)} etapa(s) aplicadas a {len(alvos)} '
                   f'produto(s) da categoria "{cat}".', 'success')
@@ -360,7 +345,122 @@ def etapas(id):
                                Receita.arquivada_em.is_(None)).count())
     return render_template('receitas/etapas.html', receita=receita,
                            etapas=etapas_atuais, fmt_dur=_fmt_dur,
-                           recurso_de=_recurso_de_etapa, n_categoria=n_categoria)
+                           recurso_de=_recurso_de_etapa, n_categoria=n_categoria,
+                           resumo_parametros=resumo_parametros)
+
+
+# ── Fichas de produção (planilha do dono, 02/10/2026) ────────────────────────
+# "cadastrar e usar essas infos no gantt/fluxograma de producao; apagar todos
+# os registros que o gantt usa hoje e trocar por esses dessa planilha". A
+# planilha (abas Batimento / Fermentação / Fermentação final / Forno) vira
+# as etapas de TODAS as receitas — serviço app/services/fichas_producao.py.
+# Fluxo: upload → prévia (o que casa, o que não casa, as etapas que nascem)
+# → confirmar (token assinado, 30 min; só o dono aplica — a troca é global).
+
+_FICHAS_TOKEN_SALT = 'fichas-producao-v1'
+_FICHAS_TOKEN_MAX_AGE = 30 * 60
+
+
+def _fichas_serializer():
+    from itsdangerous import URLSafeTimedSerializer
+    return URLSafeTimedSerializer(current_app.config['SECRET_KEY'],
+                                  salt=_FICHAS_TOKEN_SALT)
+
+
+@receitas_bp.route('/fichas-producao')
+@login_required
+@admin_required
+def fichas_producao():
+    """Estado das fichas de produção: última importação, receitas com e sem
+    etapas (com os parâmetros) e o upload da planilha para a prévia."""
+    from app.services import fichas_producao as svc
+    situacao = svc.situacao_receitas()
+    return render_template(
+        'receitas/fichas_producao.html', modo='estado',
+        importacao=svc.ultima_importacao(), situacao=situacao,
+        sem_etapas=[r for r in situacao if not r['n_etapas']],
+        arquivo_seed=svc.ARQUIVO_SEED.name)
+
+
+@receitas_bp.route('/fichas-producao/previa', methods=['POST'])
+@login_required
+@admin_required
+def fichas_producao_previa():
+    """Lê a planilha enviada e mostra o que seria aplicado, SEM gravar."""
+    from app.services import fichas_producao as svc
+    arq = request.files.get('planilha')
+    if arq is None or not arq.filename:
+        flash('Envie a planilha de fichas de produção (.xlsx).', 'warning')
+        return redirect(url_for('receitas.fichas_producao'))
+    dados = arq.read()
+    if len(dados) > 5 * 1024 * 1024:
+        flash('Planilha maior que 5 MB — confira o arquivo.', 'warning')
+        return redirect(url_for('receitas.fichas_producao'))
+    try:
+        lido = svc.ler_planilha(dados)
+    except svc.PlanilhaInvalida as exc:
+        flash(str(exc), 'warning')
+        return redirect(url_for('receitas.fichas_producao'))
+    casamento = svc.casar(lido['fichas'])
+    sha = svc.sha256_de(dados)
+    token = _fichas_serializer().dumps({
+        'fichas': lido['fichas'], 'arquivo': arq.filename[:120], 'sha256': sha})
+    linhas = []
+    for nome in lido['ordem']:
+        linhas.append({'planilha': nome, 'etapas': lido['fichas'][nome],
+                       'casamento': casamento.get(nome) or {}})
+    from app.services.etapas_receita import resumo_parametros
+    n_atual = ReceitaEtapa.query.count()
+    return render_template(
+        'receitas/fichas_producao.html', modo='previa', linhas=linhas,
+        avisos=lido['avisos'], token=token, arquivo=arq.filename, sha256=sha,
+        n_atual=n_atual, resumo_parametros=resumo_parametros,
+        pode_aplicar=current_user.is_dono(),
+        importacao=svc.ultima_importacao(), arquivo_seed=svc.ARQUIVO_SEED.name)
+
+
+@receitas_bp.route('/fichas-producao/aplicar', methods=['POST'])
+@login_required
+@owner_required
+def fichas_producao_aplicar():
+    """Substitui TODAS as etapas do sistema pelas da planilha conferida na
+    prévia (backup em AppConfig; snapshots das ordens abertas reescritos)."""
+    from itsdangerous import BadData
+
+    from app.services import fichas_producao as svc
+    try:
+        carga = _fichas_serializer().loads(request.form.get('token') or '',
+                                           max_age=_FICHAS_TOKEN_MAX_AGE)
+    except BadData:
+        flash('A prévia expirou ou foi alterada — envie a planilha de novo.',
+              'warning')
+        return redirect(url_for('receitas.fichas_producao'))
+    fichas = carga.get('fichas') if isinstance(carga, dict) else None
+    if not isinstance(fichas, dict) or not fichas:
+        flash('Prévia sem fichas — envie a planilha de novo.', 'warning')
+        return redirect(url_for('receitas.fichas_producao'))
+    casamento = svc.casar(fichas)          # re-casa contra o cadastro ATUAL
+    try:
+        resumo = svc.aplicar(fichas, casamento, usuario_id=current_user.id,
+                             arquivo=carga.get('arquivo'),
+                             sha256=carga.get('sha256'), origem='tela')
+        db.session.commit()
+    except ValueError as exc:              # nenhuma receita casou: nada apagado
+        db.session.rollback()
+        flash(str(exc), 'warning')
+        return redirect(url_for('receitas.fichas_producao'))
+    except Exception:
+        db.session.rollback()
+        raise
+    msg = (f'Fichas aplicadas: {resumo["receitas_aplicadas"]} receita(s), '
+           f'{resumo["etapas"]} etapa(s); {resumo["etapas_anteriores"]} etapa(s) '
+           f'anteriores guardadas em {resumo["backup"]}; '
+           f'{resumo["snapshots_reescritos"]} ordem(ns) aberta(s) atualizada(s).')
+    if resumo['nao_encontradas'] or resumo['ambiguas']:
+        msg += (' Fora: ' + ', '.join(resumo['nao_encontradas'] + resumo['ambiguas'])
+                + ' (nome não casa com uma receita ativa).')
+    flash(msg, 'success')
+    return redirect(url_for('receitas.fichas_producao'))
 
 
 @receitas_bp.route('/massa-base', methods=['GET', 'POST'])
@@ -1138,6 +1238,7 @@ def duplicar(id):
             receita_id=copia.id, ordem=etapa.ordem, nome=etapa.nome,
             duracao_min=etapa.duracao_min, equipamento=etapa.equipamento,
             ativa=etapa.ativa, descricao=etapa.descricao,
+            parametros=etapa.parametros,
         ))
 
     db.session.commit()

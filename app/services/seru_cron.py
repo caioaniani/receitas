@@ -67,6 +67,9 @@ LOCK_KEY_HEARTBEAT = 7762  # advisory lock pro heartbeat diario no Slack (08:00)
 LOCK_KEY_ZAPI_SAUDE = 7763  # advisory lock pro status/assinatura da Z-API
 LOCK_KEY_RECOMPRA = 7764  # advisory lock pro e-mail de recompra do site (10:30)
 LOCK_KEY_KITS_FISCAL = 7765  # preserva a chave histórica; fila de NF de todo o site
+# 7766 = tiny_nf.LOCK_NAMESPACE_NF_KIT; 7767 = fermentacao.LOCK_KEY (envio da
+# lista); 7768 = fichas_producao.LOCK_KEY_APLICAR.
+LOCK_KEY_FERMENTACAO_CONFERENCIA = 7769  # conferência da lista de fermentação (12:10/16:00)
 # 7750 foi reciclado: era do `briefing-dono` (removido 17/07/2026), agora e do
 # marketing (sync da base + campanha de aniversario no Listmonk).
 LOCK_KEY_MARKETING = 7750  # advisory lock pro marketing (Listmonk)
@@ -554,6 +557,18 @@ def iniciar(app):
         lambda: _run_fermentacao(app),
         'cron', hour=12, minute=0, id='slack-fermentacao',
         max_instances=1, coalesce=True, misfire_grace_time=3600,
+    )
+    # Conferência da lista (03/10/2026): 12:10 depois do envio e 16:00 como
+    # última rodada — antes de a equipe tirar a massa no fim da tarde.
+    _scheduler.add_job(
+        lambda: _run_fermentacao_conferencia(app, ultima=False),
+        'cron', hour=12, minute=10, id='slack-fermentacao-conferencia',
+        max_instances=1, coalesce=True, misfire_grace_time=1800,
+    )
+    _scheduler.add_job(
+        lambda: _run_fermentacao_conferencia(app, ultima=True),
+        'cron', hour=16, minute=0, id='slack-fermentacao-conferencia-tarde',
+        max_instances=1, coalesce=True, misfire_grace_time=1800,
     )
 
     # Lembretes de pedido pra amanha, antes do corte de meio-dia.
@@ -1447,7 +1462,28 @@ def _run_fermentacao(app):
             resultado = enviar_amanha()
             logger.info('fermentacao: %s', resultado['mensagem'])
         except Exception as exc:
+            # A conferência das 12:10 reenvia o que ficou sem registro e avisa.
             _falha_de_job('lista de fermentação', exc)
+
+
+def _run_fermentacao_conferencia(app, ultima):
+    """Confere o estado GRAVADO da lista de amanhã, reenvia o que nem foi
+    tentado e avisa o dono do que não ficou confirmado (caso 03/10/2026:
+    a filial ficou 7 dias sem lista e ninguém soube)."""
+    from app.services.fermentacao import verificar_envio_de_amanha
+
+    def _rodar():
+        resultado = verificar_envio_de_amanha(ultima=ultima)
+        aviso = resultado.get('aviso') or {}
+        logger.info('fermentacao conferência: pendentes=%s em_andamento=%s '
+                    'atrasadas=%s reenvio=%s aviso=%s %s',
+                    resultado.get('pendentes'), resultado.get('em_andamento'),
+                    resultado.get('atrasadas'), resultado.get('reenvio'),
+                    aviso.get('enviado'), aviso.get('motivo') or resultado.get('motivo') or '')
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_FERMENTACAO_CONFERENCIA, _rodar,
+                  'conferência da lista de fermentação')
 
 
 def _run_heartbeat_slack(app):

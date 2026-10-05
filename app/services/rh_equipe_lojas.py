@@ -197,6 +197,11 @@ def carregar_lojas():
                    for parceiro in grupo['compartilhados']}),
             'turnos': list(turnos.values()),
             'outros_vinculos': sorted(outros_por_loja[loja.id], key=ordem),
+            # Quem tem vínculo real com a loja (principal ou adicional): só
+            # essas pessoas ganham o gesto "Remover da loja" na tela. Um
+            # líder de outra unidade aparece como referência e não entra.
+            'vinculados': sorted(principais_ids | {
+                pessoa['id'] for pessoa in outros_por_loja[loja.id]}),
         }
 
     return {'lojas': [card_da_loja(loja) for loja in lojas],

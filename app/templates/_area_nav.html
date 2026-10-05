@@ -83,7 +83,8 @@
 {{ _lnk(variant, url_for('producao.painel'), 'Painel de produção', '/producao/painel' in request.path, icon='bi-clipboard-data') }}
 {{ _lnk(variant, url_for('industria_teste.index'), 'Plano de produção', request.endpoint == 'industria_teste.index', icon='bi-calendar-week', primary=true, title='Confira as quantidades e envie as ordens do dia') }}
 {{ _lnk(variant, url_for('industria_teste.auditoria'), 'Auditoria de produção', request.endpoint == 'industria_teste.auditoria', icon='bi-clipboard-data', primary=true, title='Compare o enviado com o confirmado pelo padeiro e resolva as faltas') }}
-{{ _lnk(variant, url_for('padeiro.index'), 'Tela do padeiro', request.path == '/padeiro' or request.path.startswith('/padeiro/'), icon='bi-hammer', title='Veja as ordens e confirme o que foi produzido') }}
+{{ _lnk(variant, url_for('padeiro.index'), 'Tela do padeiro', request.path == '/padeiro' or (request.path.startswith('/padeiro/') and not request.path.startswith('/padeiro/gantt')), icon='bi-hammer', title='Veja as ordens e confirme o que foi produzido') }}
+{{ _lnk(variant, url_for('padeiro.gantt'), 'Sequência da produção (Gantt)', request.path.startswith('/padeiro/gantt'), icon='bi-diagram-3', title='Fluxograma do dia na TV: etapas, tempos e parâmetros das fichas de produção') }}
 {{ _lnk(variant, url_for('producao.pedidos_semana_media'), 'Pedidos semanais das lojas', '/pedidos-semana' in request.path, icon='bi-cart-plus') }}
 {{ _lnk(variant, url_for('producao.perdas_admin'), 'Perdas da produção', '/producao/perdas' in request.path, icon='bi-fire') }}
 {% endif %}
@@ -110,6 +111,7 @@
 {{ _lnk(variant, url_for('receitas.imagens_upload'), 'Subir imagens (zip)', request.path.startswith('/receitas/imagens')) }}
 {% if current_user.is_admin() %}
 {{ _lnk(variant, url_for('produtos.cadastro_ia'), 'Cadastro assistido (IA)', request.path.startswith('/produtos/cadastro-ia'), icon='bi-robot') }}
+{{ _lnk(variant, url_for('receitas.fichas_producao'), 'Fichas de produção (planilha)', request.path.startswith('/receitas/fichas-producao'), title='Etapas e parâmetros do fluxograma do padeiro, importados da planilha de fichas') }}
 {{ _lnk(variant, url_for('main.todo'), 'Pendências do catálogo', request.path == '/todo') }}
 {% endif %}
 {% endmacro %}

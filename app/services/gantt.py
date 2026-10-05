@@ -28,6 +28,7 @@ from app.services.centros_producao import (
     centro_trabalho_receita,
     rotulo_centro,
 )
+from app.services.etapas_receita import resumo_parametros
 from app.services.massa_base import unidade_producao
 from app.services.producao import fornadas_amassadeira
 
@@ -209,10 +210,17 @@ def montar_gantt(dia):
         produtos.append(p)
         return p
 
+    def _params(e):
+        # Parâmetros da ficha de produção (velocidades, temperaturas, forno…):
+        # da receita viva (ReceitaEtapa.parametros) ou do snapshot congelado.
+        p = getattr(e, 'parametros', None)
+        return p if isinstance(p, dict) else None
+
     def _passos(etapas, nf):
         # Etapas ATIVAS escalam com o nº de fornadas; passiva fica na duração base.
         return [{'nome': e.nome, 'equip': e.equipamento, 'ativa': bool(e.ativa),
                  'descricao': e.descricao or '',
+                 'parametros_label': resumo_parametros(_params(e), e.duracao_min),
                  'dur_batelada': int(e.duracao_min or 0),
                  'dur': int(e.duracao_min or 0) * (nf if e.ativa else 1)}
                 for e in etapas]
@@ -306,6 +314,8 @@ def montar_gantt(dia):
             nome = 'Amassar base' if e.equipamento == 'amassadeira' else e.nome
             trunk_passos.append({'nome': nome, 'equip': e.equipamento, 'ativa': ativa,
                                  'descricao': e.descricao or '',
+                                 'parametros_label': resumo_parametros(
+                                     _params(e), e.duracao_min),
                                  'dur': int(e.duracao_min or 0) * (base_nf if ativa else 1)})
 
         # cascata em ordem: incrementos de água (tronco) e retiradas; cada
@@ -400,6 +410,7 @@ def montar_gantt(dia):
                                          _dur_label(p['dur']))
             prod['destino_etapa'] = p['nome']
             prod['destino_descricao'] = p.get('descricao', '')
+            prod['destino_parametros_label'] = p.get('parametros_label', '')
             j['ptr'] = len(j['passos'])      # encerra a receita no dia
             continue
 
@@ -414,6 +425,7 @@ def montar_gantt(dia):
         prod['tarefas'].append({
             'etapa': p['nome'], 'equip': p['equip'], 'ativa': p['ativa'],
             'descricao': p.get('descricao', ''),
+            'parametros_label': p.get('parametros_label', ''),
             'recurso': rec or 'descanso', 'retirada': bool(p.get('desbloqueia')),
             'ini': ini, 'fim': fim, 'dur': p['dur'],
             'ini_hhmm': _hhmm(DIA_INI + ini), 'fim_hhmm': _hhmm(DIA_INI + fim),

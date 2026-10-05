@@ -158,6 +158,36 @@ que nenhuma ordem credita. Nada mudou nisso aqui. Testes:
 produtos.py` e `tests/test_reposicao_produtos_interfaces.py` (os dois
 últimos reescritos para o contrato novo).
 
+## Equipe por loja — adicionar, importar e remover pessoa (dono, 02/10/2026)
+
+Pedido do dono em `/rh/equipe/lojas`: "botão para excluir ou adicionar
+pessoa, ou importar uma pessoa de outra loja". Os três gestos mudam SÓ o
+vínculo `funcionario_loja` (com `loja_principal`) e, se informado, o
+período; nunca cargo, salário, líder, acesso ou a ficha. **Remover da loja
+não desliga ninguém** (desligar é gesto da ficha). Adicionar = pessoa
+ativa já no RH (vira principal se não tinha; senão adicional, salvo
+checkbox); pessoa de loja única que ganha 2º vínculo tem a antiga marcada
+principal explicitamente (sem isso a regra de loja única de
+`unidades_principais` sumiria). Importar = transferência da unidade
+principal (sai da origem por padrão; "manter" conserva como adicional).
+Direção fica fora. Permissão = a da tela (`gestao_rh_required`), endpoints
+em `acesso_gestao_rh.ENDPOINTS_RH`. Serviço
+`app/services/rh_equipe_lojas_acoes.py` sem commit; cada gesto grava
+`AuditLog` tabela `funcionario_loja` (a associação não passa pelo listener
+automático). Escala (`Posicao`) intocada de propósito. Verificado: o salvar
+da ficha (`clear()` + `append`) PRESERVA a marca de principal das lojas que
+continuam marcadas (histórico de coleção do SQLAlchemy) — não há bug ali.
+REVISÃO (02/10, 12 achados aplicados): **loja INATIVA nunca conta como
+principal** no gesto — a tela já lia assim e o serviço divergia; regra
+única em `treino_lideranca` (`escolher_principal`/`vinculos_de`/
+`marcar_unidade_principal`/`validar_periodo`, usados por Organizar
+equipe E Equipe por loja; duas marcas = vale a de maior id nas duas
+leituras); `salvar_estrutura` trava as fichas (`travar_funcionarios`);
+`audit._request_meta` passou a gravar `request.remote_addr` (ProxyFix)
+em vez do `X-Forwarded-For` cru — vale para TODO modelo auditado
+(`handshake/routes.py` ainda lê o header cru, fora deste escopo).
+Docs: `docs/rh-visao-equipe.md`; testes `tests/test_rh_equipe_lojas_acoes.py`.
+
 ## Publicação após testes (autorização do dono, 28/09/2026)
 
 Para alterações do sistema explicitamente solicitadas ou aprovadas pelo dono,
@@ -180,6 +210,32 @@ Anésio mantém a média das últimas três ocorrências. Não altera pedidos da
 lojas, Nebraska ou ordens industriais. Histórico incompleto bloqueia a lista.
 O envio às 12h continua; correção manual atualiza a mesma mensagem no Slack.
 Detalhes e auditoria em `docs/fermentacao.md`.
+
+**Conferência + aviso ao dono + sonda (03/10/2026, caso "não enviou na
+filial")**: o aplicativo nunca foi adicionado a `#fermentadora-filial`; o
+Slack recusou a lista da Anésio todo dia desde 27/09 (`not_in_channel`) e a
+recusa ficou só no registro — sete listas sem ninguém saber (resolvido no
+mesmo dia: o dono mencionou o aplicativo no canal às 14:41, ele entrou e a
+lista de 04/10 saiu às 14:42). Agora
+`fermentacao.verificar_envio_de_amanha` roda às 12:10 e às 16:00 (trava 7769)
+sobre o estado GRAVADO: reenvia loja sem nenhuma tentativa (job perdido no
+deploy) e avisa o dono no WhatsApp (`critico=True`, barrado em cópia de
+homologação) do que não ficou `enviado`, com o gesto que resolve — UM aviso
+por PROBLEMA por dia (claim por loja, tick = data + assinatura: estado, código
+do Slack, erros do cálculo), então as 16:00 só avisam o que for novo. Envio
+"em andamento" (trava 7767 ocupada, `enviando` < 5 min) espera a última
+rodada sem calar a outra loja; lista que só saiu às 16:00 vira aviso
+informativo; exceção na própria conferência avisa às 16:00. O botão manual
+não avisa. Exceção no cálculo de uma loja não impede a outra; tela, sonda,
+recuperação e correção usam `calcular_seguro` (erro interno nunca é 500 nem
+vira mensagem publicada). REGRA: canal novo de envio automático exige o
+aplicativo como MEMBRO (mudar o ID não concede acesso) — conferir com
+`GET /api/claude/fermentacao?slack=1`.
+Venda de produto relevante (croissant/pain/cesta/kit/box/combo no nome, ou
+vínculo que chega a croissant/pain) sem vínculo bloqueia a lista daquele dia
+da semana enquanto a data estiver entre as 7 ocorrências da conta (3 na
+Anésio); feriado excluído alonga — o 27/09 bloqueia os domingos até 22/11.
+"Ignorar" não destrava, só Vincular.
 
 ## Corte de pedidos às 12h (decisão do dono, 24/09/2026)
 
@@ -517,6 +573,10 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   notas lidas com itens; boleto sem itens, leitura falha e compra sem nota
   postada ficam fora. Loja pelo `conta_pagar.mapa_lojas_nf(consultar_slack=
   False)` — fonte única, movida da tela de Contas a Pagar, sem rede.
+- `GET /api/claude/fermentacao?data=&dias=&fontes=1&slack=1` (03/10/2026, caso
+  "não enviou na filial"): envios da lista de fermentação por loja (estado,
+  código do Slack, texto), histórico, cálculo atual por loja e, com `slack=1`,
+  se o aplicativo é membro de cada canal de destino. Só leitura.
 - `GET /api/claude/pedidos-revenda` (01/10/2026): a lista do dry-run de
   `/admin/pedidos-revenda` (Produto que a indústria não fornece em pedido
   loja→indústria pendente/confirmado com entrega a partir de amanhã, com
@@ -7183,6 +7243,13 @@ preparos permanecem disponíveis em sequência.
   sem etapas; dispensados e faltas encerradas não entram. A referência não
   orienta refazer o que já foi produzido.
 - Sem alteração de schema, motor de pedidos, estoque ou confirmação parcial.
+- **Acesso (dono 03/10/2026, "Não encontrei o acesso para gantt")**: até
+  então o `/padeiro/gantt` só tinha link DENTRO da TV ("Ver sequência"), do
+  diário e das telas de ficha. Agora está na área Produção
+  (`_area_nav.html`, link "Sequência da produção (Gantt)"), no atalho da
+  sidebar v2 (`_ui_v2_sidebar.html`, seção Atalhos) e na busca do menu
+  (`busca_navegacao`: "gantt", "fluxograma", "ver sequência"). Testes em
+  `test_area_hub.py` e `test_busca_navegacao.py`.
 
 - Unidade na TV: `massa_base.unidade_producao` identifica o rótulo da quantidade
   sem converter valores: peso unitário 1 → g (ml no cadastro ml/l); outros pesos
@@ -7190,6 +7257,95 @@ preparos permanecem disponíveis em sequência.
   painel, confirmação e modal usam o mesmo rótulo. Ex.: 17338 g de granola,
   não 17338 pães. Teste de registro confirma que 1000 g credita exatamente
   1000 na unidade-base existente.
+
+## Fichas de produção (planilha do dono) — etapas do fluxograma (02/10/2026)
+
+Dono: "cadastrar e usar essas infos no gantt/fluxograma de producao. Apagar
+todos os registros que o gantt usa hoje e trocar por esses dessa planilha".
+A planilha (abas Batimento / Fermentação "CAIXA" / Fermentação final /
+Forno; 12 receitas) virou a FONTE das `ReceitaEtapa`. Serviço
+`app/services/fichas_producao.py` (`ler_planilha` → `casar` → `aplicar`),
+tela `/receitas/fichas-producao` (admin vê a prévia; SÓ o dono aplica, token
+assinado 30 min), seed one-shot `_seed_fichas_producao_2026_10` (planilha
+embarcada em `app/seeds_data/fichas_producao_2026_10.xlsx`, marker com
+contagens), sonda `/api/claude/fichas-producao` (+ `etapas` na sonda
+`receita`). Doc: `docs/fichas-producao.md`.
+
+- **`receita_etapa.parametros` (JSON)**: velocidades V1/V2, ponto da massa,
+  temperaturas (ambiente/líquido/massa ao fim), local e temperatura da
+  fermentação, dobras, alternativas da fermentação final, forno/teto/lastro,
+  mais `origem` (aba · linha). Procedimento de 2 commits (ALTER c6b34b6a
+  confirmado pela sonda antes do modelo). Rótulo legível = FONTE ÚNICA
+  `etapas_receita.resumo_parametros` (Gantt, TV, editores, prévia, sonda —
+  há teste travando o formato). `bateladas_paes.processo_da_receita` é a
+  forma única do `processo` (snapshot, mise en place e Gantt); `parametros`
+  tem de ser propagado explicitamente nas tarefas do Gantt (`_passos`).
+- **Aplicar = wipe GLOBAL com rede**: backup JSON de TODAS as etapas em
+  AppConfig (`fichas_producao_backup_<ts>`) ANTES de apagar; apaga as etapas
+  de todas as receitas (inclusive fora da planilha e arquivadas — só ativas
+  casam, por nome normalizado EXATO); reescreve SÓ `dados['processo']` dos
+  snapshots de batelada das ordens que o Gantt ainda lê (data ≥ hoje−3, com
+  falta, não dispensada/encerrada; reatribuição do dict — `db.JSON` sem
+  Mutable não vê mutação in-place; quantidades/MP/subs intactos — exceção
+  documentada em `docs/bateladas-paes.md`); `expire_all()` antes do
+  reescrever (DELETE em massa não sincroniza coleções já carregadas);
+  marcador `fichas_producao_import`. Célula em branco NUNCA vira valor —
+  vira `avisos` (caixa sem "Duração (h)" usa o tempo até a última dobra).
+- **Revisão independente (02/10/2026, 22 achados, todos aplicados)**: as
+  abas são agrupadas pela MESMA normalização do casamento (grafia diferente
+  entre abas = uma ficha, com aviso; `ordem` segue a aparição na planilha);
+  coluna pelo cabeçalho MAIS ESPECÍFICO (`_coluna`, "teto (valor)" ganha de
+  "unidade teto / lastro" em qualquer ordem) e obrigatória ausente =
+  `PlanilhaInvalida`; traço "–" = célula vazia e "Local" sozinho não é dado
+  (a 1ª linha COM tempo é a fermentação final principal); célula AMARELA da
+  legenda do dono = `parametros['incerto']` + aviso + sufixo no rótulo
+  ("leitura incerta na ficha: temperatura, tempo"; 12 células na planilha
+  real, uma delas EM BRANCO — a aba "Notas" que a legenda cita não veio); "Duração (h)" e MESA
+  em horas (número = h; aceita 1:30/"2 h"/time/datetime de planilha);
+  "Tempo (min)" ≠ texto = vale o número + aviso; linha repetida = vale a 1ª
+  + aviso; duração fora de [0, 100000] = 0 + aviso (régua ÚNICA
+  `etapas_receita.duracao_valida`, a do editor); esquema FECHADO
+  `validar_parametros` em todo caminho de gravação (hidden do editor e
+  planilha) e `resumo_parametros` nunca levanta (RecursionError do JSON
+  aninhado incluído); dobras rotuladas como INTERVALOS ("a cada");
+  `aplicar` recusa com ValueError (nada apagado) sem nenhuma receita casada
+  — a rota avisa, o seed loga ERROR sem marker — e serializa com
+  `pg_advisory_xact_lock(7768)`; `gantt.MAX_LEAD_DIAS` importado (sem
+  cópia); "Aplicar a toda a categoria" NÃO copia os parâmetros (medidos por
+  receita; `origem` apontaria a linha errada); testes de round-trip do
+  hidden pelo HTML renderizado e planilha sintética (`_planilha` em
+  `tests/test_fichas_producao.py`) para cada ramo que a planilha real não
+  exercita.
+- **2ª revisão (02-03/10/2026, parcial por limite de sessão — só a lente do
+  parser rodou; 6 achados, todos aplicados)**: hora ≥ 24 h em célula h:mm
+  (MESA) — o openpyxl devolve `datetime(1900, 1, 1, 2, 0)` para 26:00 (bug
+  do ano bissexto de 1900: serial < 60 ganha um dia), a base é 1899-12-31
+  até 28/02/1900 e 1899-12-30 depois; o teste antigo assertava um datetime
+  que o openpyxl nunca produz (agora round-trip REAL gravando a célula);
+  célula amarela EM BRANCO = aviso "célula amarela em branco … confira",
+  nunca parâmetro (a 12ª amarela da planilha real: Pain au Chocolat,
+  "Duração (h)"); qualquer das três dobras amarela marca `dobras_min` (uma
+  vez); "Local" sozinho na caixa NÃO cria etapa (aviso "etapa não criada";
+  só MESA = só a Mesa); Fermentação final com o MESMO método repetido = vale
+  a 1ª + aviso (antes virava alternativa idêntica em silêncio); amarela na
+  linha de uma alternativa = `'alternativas'` em `incerto` (rótulo
+  "alternativa", chave em `_ROTULO_CHAVE`) + aviso com a linha dela.
+- **Padrão genérico por categoria REMOVIDO** (`ETAPAS_PADRAO`,
+  `etapas_padrao_categoria`, `seed_etapas_categoria`, `de_tuplas`, rota
+  `receitas.amassadeira_etapas_padrao`, botões "Preencher/Começar do padrão"
+  e "Aplicar padrão"): recriaria os registros que o dono mandou apagar.
+  `acao=padrao` numa aba antiga NÃO grava (flash + 303) — o form chega sem
+  linhas e zeraria a ficha. Os editores preservam `parametros[]` (hidden
+  JSON; ilegível = None) e `duplicar` copia os parâmetros.
+- **Consequências literais da planilha (reportadas ao dono)**: Croissant
+  "24h" a 28 °C = 1440 min passiva (dia D só a espera; forno em D+1);
+  croissant/pain sem laminação/modelagem; "Mesa: do corte à modelagem"
+  nasce passiva; sourdoughs com a forma CF 12 h como etapa e "ambiente 6 h"
+  em `alternativas`; receitas fora da planilha ficam SEM etapas (a tela
+  lista). Pão Francês Fermentado tem `dias_producao=1` no cadastro mas a
+  ficha é toda do mesmo dia — ajustar o cadastro é decisão do dono.
+- Testes: `tests/test_fichas_producao.py` (planilha real como fixture),
+  `test_etapas_producao.py` e `test_padeiro_fichas.py` reescritos.
 
 ## Treinamento: avanço e acompanhamento (10/09/2026)
 

@@ -2964,14 +2964,16 @@ def slack_fermentacao():
     alvo = hoje() + timedelta(days=1)
     envio = db.session.get(FermentacaoEnvio, alvo)
     lojas_envio = []
+    # calcular_seguro: erro inesperado aparece como bloqueio na tela, que é
+    # onde o dono resolve o envio — nunca página 500.
     if envio:
-        calculo = fermentacao.calcular(alvo)
+        calculo = fermentacao.calcular_seguro(alvo)
     else:
         for nome, canal in fermentacao.destinos().items():
             lojas_envio.append({
                 'nome': nome, 'canal': canal,
                 'envio': db.session.get(FermentacaoEnvioLoja, (alvo, nome)),
-                'calculo': fermentacao.calcular(alvo, nome_loja=nome),
+                'calculo': fermentacao.calcular_seguro(alvo, nome_loja=nome),
             })
         calculo = {
             'ok': all(l['calculo']['ok'] for l in lojas_envio),

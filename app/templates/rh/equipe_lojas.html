@@ -1,12 +1,35 @@
 {% extends "base.html" %}
 {% block title %}Equipe por loja{% endblock %}
-{% macro pessoa_item(pessoa, contexto=false) %}
+{% macro remover_form(pessoa, loja) %}
+{#- Só quem tem vínculo real com a loja recebe o gesto; o texto do confirm
+    sai de data-confirmar (texto puro, nunca avaliado) porque leva nomes. -#}
+{% if loja and pessoa.id in loja.vinculados %}
+<form method="post" action="{{ url_for('rh.equipe_lojas_remover', loja_id=loja.id) }}" class="rh-lojas-remove" data-confirmar="Remover {{ pessoa.nome }} da equipe de {{ loja.nome }}? A pessoa continua no RH; só o vínculo com esta loja é retirado.">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="funcionario_id" value="{{ pessoa.id }}">
+  <input type="hidden" name="voltar" value="{{ voltar }}">
+  <button type="submit" class="rh-lojas-remove-btn"><i class="bi bi-x-circle" aria-hidden="true"></i> Remover da loja<span class="rh-equipe-sr-only"> ({{ pessoa.nome }})</span></button>
+</form>
+{% endif %}
+{% endmacro %}
+{% macro pessoa_item(pessoa, contexto=false, loja=none) %}
 <li class="rh-lojas-person">
   <a href="{{ url_for('rh.detalhe_funcionario', id=pessoa.id) }}">{{ pessoa.nome }}</a>
   <span>{{ pessoa.cargo }}</span>
   {% if contexto %}<small>{{ pessoa.unidade or 'Unidade principal não definida' }} · {{ pessoa.periodo or 'Período não definido' }}</small>{% endif %}
   {% if pessoa.alerta %}<small class="rh-lojas-warning">{{ pessoa.alerta }}</small>{% endif %}
+  {{ remover_form(pessoa, loja) }}
 </li>
+{% endmacro %}
+{% macro opcoes_pessoas(grupos) %}
+{% for grupo in grupos %}<optgroup label="{{ grupo.titulo }}">{% for p in grupo.pessoas %}<option value="{{ p.id }}">{{ p.nome }} · {{ p.cargo }}{% if p.periodo %} · {{ p.periodo }}{% endif %}</option>{% endfor %}</optgroup>{% endfor %}
+{% endmacro %}
+{% macro periodo_select() %}
+<label>Período de trabalho<select class="form-select" name="periodo">
+  <option value="">Manter o período atual</option>
+  <option value="Manhã">Manhã</option>
+  <option value="Tarde">Tarde</option>
+</select></label>
 {% endmacro %}
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/rh-equipe.css') }}?v={{ static_v.get('css/rh-equipe.css', '1') }}">
@@ -39,13 +62,58 @@
 
   <div class="rh-lojas-stores">
     {% for loja in lojas_exibidas %}
+    {% set cand = candidatos.get(loja.id, {'adicionar': [], 'importar': []}) %}
     <section class="rh-lojas-store" aria-labelledby="loja-{{ loja.id }}">
       <header class="rh-lojas-store-heading">
         <div class="rh-lojas-store-name"><span class="rh-lojas-store-icon"><i class="bi bi-shop" aria-hidden="true"></i></span><div><h2 id="loja-{{ loja.id }}">{{ loja.nome }}</h2><p>{{ loja.total }} pessoa{{ 's' if loja.total != 1 }} na unidade · {{ loja.total_lideres }} líder{{ 'es' if loja.total_lideres != 1 }} de referência</p></div></div>
         {% if not selecionada %}<a class="rh-equipe-text-link" href="{{ url_for('rh.equipe_lojas', loja=loja.id) }}">Ver só esta loja <i class="bi bi-arrow-right" aria-hidden="true"></i></a>{% endif %}
       </header>
 
+      <div class="rh-lojas-actions" role="group" aria-labelledby="loja-{{ loja.id }}">
+        <details class="rh-lojas-action">
+          <summary class="rh-equipe-button"><i class="bi bi-person-plus" aria-hidden="true"></i> Adicionar pessoa</summary>
+          <form method="post" action="{{ url_for('rh.equipe_lojas_adicionar', loja_id=loja.id) }}" class="rh-lojas-action-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="voltar" value="{{ voltar }}">
+            {% if cand.adicionar %}
+            <label>Pessoa já cadastrada no RH<select class="form-select" name="funcionario_id" required>
+              <option value="">Escolha quem entra em {{ loja.nome }}</option>
+              {{ opcoes_pessoas(cand.adicionar) }}
+            </select></label>
+            {{ periodo_select() }}
+            <label class="rh-lojas-check"><input type="checkbox" name="principal" value="1"> Tornar {{ loja.nome }} a unidade principal</label>
+            <p class="rh-lojas-help">Quem ainda não tem unidade principal passa a ter esta. Quem já tem fica com um vínculo adicional, a não ser que você marque a opção acima. Cargo, salário e líder direto não mudam.</p>
+            <button class="rh-equipe-button rh-equipe-button-primary" type="submit"><i class="bi bi-check2" aria-hidden="true"></i> Adicionar à loja</button>
+            {% else %}
+            <p class="rh-lojas-help">Todas as pessoas ativas do RH já estão vinculadas a {{ loja.nome }}.</p>
+            {% endif %}
+            <a class="rh-equipe-text-link" href="{{ url_for('rh.novo_funcionario', loja=loja.id) }}">Cadastrar pessoa nova nesta loja <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+          </form>
+        </details>
+        <details class="rh-lojas-action">
+          <summary class="rh-equipe-button"><i class="bi bi-box-arrow-in-right" aria-hidden="true"></i> Importar de outra loja</summary>
+          <form method="post" action="{{ url_for('rh.equipe_lojas_importar', loja_id=loja.id) }}" class="rh-lojas-action-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="voltar" value="{{ voltar }}">
+            {% if cand.importar %}
+            <label>Pessoa de outra loja<select class="form-select" name="funcionario_id" required>
+              <option value="">Escolha quem vem para {{ loja.nome }}</option>
+              {{ opcoes_pessoas(cand.importar) }}
+            </select></label>
+            {{ periodo_select() }}
+            <label class="rh-lojas-check"><input type="checkbox" name="manter_origem" value="1"> Manter também o vínculo com a loja de origem</label>
+            <p class="rh-lojas-help">{{ loja.nome }} passa a ser a unidade principal. Por padrão a pessoa sai da loja de origem; cargo, salário e líder direto não mudam.</p>
+            <button class="rh-equipe-button rh-equipe-button-primary" type="submit"><i class="bi bi-check2" aria-hidden="true"></i> Trazer para esta loja</button>
+            {% else %}
+            <p class="rh-lojas-help">Nenhuma pessoa de outra loja ativa para importar.</p>
+            {% endif %}
+          </form>
+        </details>
+      </div>
+
       {% if loja.total %}
+      {# Um líder pode encabeçar grupos em dois turnos: o gesto de remover sai uma vez por loja. #}
+      {% set vistos = namespace(ids=[]) %}
       <div class="rh-lojas-shifts">
         {% for turno in loja.turnos %}{% if turno.total or turno.grupos or turno.sem_lider %}
         <section class="rh-lojas-shift" aria-labelledby="turno-{{ loja.id }}-{{ loop.index }}">
@@ -64,14 +132,15 @@
               {% if grupo.compartilhados %}
               <div class="rh-lojas-shared"><span>Liderança compartilhada com</span>{% for parceiro in grupo.compartilhados %}<a href="{{ url_for('rh.detalhe_funcionario', id=parceiro.id) }}">{{ parceiro.nome }}</a>{% endfor %}</div>
               {% endif %}
+              {% if grupo.lider.id not in vistos.ids %}{{ remover_form(grupo.lider, loja) }}{% set vistos.ids = vistos.ids + [grupo.lider.id] %}{% endif %}
             </div>
             {% if grupo.pessoas %}
-            <div class="rh-lojas-reports"><span class="rh-lojas-label">Equipe liderada</span><ul>{% for pessoa in grupo.pessoas %}{{ pessoa_item(pessoa) }}{% endfor %}</ul></div>
+            <div class="rh-lojas-reports"><span class="rh-lojas-label">Equipe liderada</span><ul>{% for pessoa in grupo.pessoas %}{{ pessoa_item(pessoa, loja=loja) }}{% endfor %}</ul></div>
             {% endif %}
           </div>
           {% endfor %}
           {% if turno.sem_lider %}
-          <div class="rh-lojas-unassigned"><h4>Sem líder direto cadastrado</h4><ul>{% for pessoa in turno.sem_lider %}{{ pessoa_item(pessoa) }}{% endfor %}</ul></div>
+          <div class="rh-lojas-unassigned"><h4>Sem líder direto cadastrado</h4><ul>{% for pessoa in turno.sem_lider %}{{ pessoa_item(pessoa, loja=loja) }}{% endfor %}</ul></div>
           {% endif %}
         </section>
         {% endif %}{% endfor %}
@@ -82,7 +151,7 @@
       <details class="rh-lojas-context">
         <summary>Outros vínculos com esta loja <span>{{ loja.outros_vinculos|length }}</span></summary>
         <p>Estas pessoas também estão vinculadas à loja, mas não entram no total da unidade principal acima.</p>
-        <ul>{% for pessoa in loja.outros_vinculos %}{{ pessoa_item(pessoa, true) }}{% endfor %}</ul>
+        <ul>{% for pessoa in loja.outros_vinculos %}{{ pessoa_item(pessoa, true, loja=loja) }}{% endfor %}</ul>
       </details>
       {% endif %}
     </section>
@@ -101,6 +170,6 @@
   {% if not selecionada and direcao %}
   <details class="rh-lojas-direction"><summary>Direção <span>{{ direcao|length }}</span></summary><p>A direção é apresentada separadamente das equipes das lojas.</p><ul>{% for pessoa in direcao %}{{ pessoa_item(pessoa) }}{% endfor %}</ul></details>
   {% endif %}
-  <p class="rh-lojas-footnote">Equipe ativa do RH, mesmo sem login no sistema. Cada pessoa é contada uma vez na sua unidade principal; líderes de outras unidades aparecem como referência.</p>
+  <p class="rh-lojas-footnote">Equipe ativa do RH, mesmo sem login no sistema. Cada pessoa é contada uma vez na sua unidade principal; líderes de outras unidades aparecem como referência. Adicionar, importar ou remover alguém muda só o vínculo com a loja; cargo, salário, líder e acesso ficam como estão.</p>
 </div>
 {% endblock %}
