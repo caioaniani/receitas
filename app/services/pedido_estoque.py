@@ -15,8 +15,10 @@ Regras canônicas:
   Matéria-prima: baixa real com a falta anotada na referência
   (`MovimentacaoEstoque` só tem entrada/saida).
 - `estornar_industria_pedido`: espelho EXATO da baixa — devolve o que os
-  movimentos do pedido dizem que REALMENTE saiu (`saida_pedido` menos
-  `estorno_saida_pedido` anteriores), não a quantidade nominal do item.
+  movimentos do pedido dizem que REALMENTE saiu (`saida_pedido` mais a
+  quitação de falta `saida_pedido_quitada`, menos `estorno_saida_pedido`
+  anteriores), não a quantidade nominal do item, e encerra as faltas
+  abertas do pedido (`faltas_industria`, 05/10/2026).
   Assim baixa saturada em 0 não vira estoque fantasma no estorno, e
   reenviar depois de um estorno não corrompe a conta (o saldo líquido dos
   movimentos é sempre a verdade).
@@ -38,11 +40,18 @@ from app.models import (
 logger = logging.getLogger(__name__)
 
 
-def _ref_base(pedido, ref_extra=None):
+def referencia_saida(pedido, ref_extra=None):
+    """Referência canônica dos movimentos de saída do pedido. O ' →' logo
+    depois do número é o que o estorno e a auditoria procuram (LIKE
+    'Pedido #<id> →%'); a quitação de falta (`faltas_industria`) usa a mesma
+    forma para ser devolvida junto no estorno."""
     ref = f'Pedido #{pedido.id} → {pedido.loja.nome}'
     if ref_extra:
         ref += f' ({ref_extra})'
     return ref
+
+
+_ref_base = referencia_saida
 
 
 def baixar_industria_pedido(pedido, usuario_id, ref_extra=None):
@@ -97,6 +106,10 @@ def baixar_industria_pedido(pedido, usuario_id, ref_extra=None):
             db.session.add(MovEstoqueProducao(
                 estoque_producao_id=ep.id, tipo='saida_pedido_sem_estoque',
                 quantidade=falta, referencia=ref, usuario_id=usuario_id))
+            # Fica registrada para a TV do padeiro mostrar e perguntar, ao
+            # lançar a produção, se ela inclui o que já saiu (05/10/2026).
+            from app.services import faltas_industria
+            faltas_industria.registrar(pedido, ep, falta)
             faltas.append({'item': ep.nome_item, 'pedido': int(qtd),
                            'baixado': baixa, 'faltou': falta})
     return faltas
@@ -111,11 +124,15 @@ def estornar_industria_pedido(pedido, usuario_id, motivo='voltar status'):
     ref_like = f'Pedido #{pedido.id} →%'
     ref_estorno = f'Estorno pedido #{pedido.id} ({motivo})'
 
-    # EstoqueProducao: líquido por linha = saida_pedido − estornos anteriores.
+    # EstoqueProducao: líquido por linha = (saida_pedido + quitação de falta)
+    # − estornos anteriores. A quitação (05/10/2026) é o débito ATRASADO da
+    # mesma saída — o estorno do pedido a devolve junto.
+    from app.services import faltas_industria
     saidas = dict(db.session.query(
         MovEstoqueProducao.estoque_producao_id,
         func.sum(MovEstoqueProducao.quantidade))
-        .filter(MovEstoqueProducao.tipo == 'saida_pedido',
+        .filter(MovEstoqueProducao.tipo.in_(
+                    ('saida_pedido', faltas_industria.TIPO_QUITADA)),
                 MovEstoqueProducao.referencia.like(ref_like))
         .group_by(MovEstoqueProducao.estoque_producao_id).all())
     # 'ajuste' entra por compat: era o tipo do estorno ANTES deste motor —
@@ -166,4 +183,7 @@ def estornar_industria_pedido(pedido, usuario_id, motivo='voltar status'):
         db.session.add(MovimentacaoEstoque(
             materia_prima_id=mp_id, tipo='entrada', quantidade=liquido,
             referencia=ref_estorno, usuario_id=usuario_id))
+    # A saída foi desfeita: as faltas abertas dela deixam de valer (um novo
+    # envio registra as próprias) e nenhuma produção pode quitá-las depois.
+    faltas_industria.encerrar_do_pedido(pedido.id, 'estorno', usuario_id)
     return devolvidas

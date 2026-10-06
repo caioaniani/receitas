@@ -718,7 +718,8 @@ def consumir_ficha(rec, unidades, user_id, referencia_mp, *, saldo_assinado=Fals
 
 
 def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=True,
-                       produzido_esperado=None, referencia_estoque=None):
+                       produzido_esperado=None, referencia_estoque=None,
+                       quitar_faltas=False):
     """OPCAO B: o padeiro produz `unidades` de um item do plano aprovado.
     Numa unica transacao: (1) credita o produto pronto na industria
     (entrada_producao), (2) DESCONTA a MP da ficha tecnica proporcional as
@@ -731,6 +732,12 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=Tr
     some das telas dele e a diferenca fica so na auditoria (admin decide:
     OK/dispensar ou reagendar de volta). So marca se ainda restar falta;
     estoque credita apenas o produzido de verdade.
+
+    `quitar_faltas=True` (05/10/2026, opcao A do dono): quem lancou CONFIRMOU
+    na TV que esta producao inclui itens que ja sairam em pedidos com o
+    estoque zerado no sistema — depois do credito, debita ate `unidades` das
+    faltas abertas do item (`faltas_industria.quitar`). Nunca vale para item
+    de massa (batimentos). Devolve `quitado` no resultado.
     """
     from app.models import PlanejamentoItem, PlanejamentoProducao
     from app.services.estoque_congelados import entrada_producao
@@ -770,6 +777,7 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=Tr
     # Batimentos não são bolas. Credita a massa exata, sem perder o restante
     # fracionário e sem mudar a unidade de fichas/estoque históricos.
     from app.services.viennoiserie import eh_item_massa
+    quitado = 0
     if eh_item_massa(item):
         from decimal import Decimal
 
@@ -783,6 +791,10 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=Tr
     else:
         entrada_producao(receita_id=rec.id, quantidade=unidades, usuario_id=user_id,
                          referencia=referencia_estoque or 'Produção (cronograma) %s' % rec.nome)
+        if quitar_faltas:
+            from app.services import faltas_industria
+            quitado = faltas_industria.quitar(receita_id=rec.id, maximo=unidades,
+                                              usuario_id=user_id)
 
     # 3) avanca o produzido do item.
     item.produzido_qtd = int(item.produzido_qtd or 0) + unidades
@@ -812,6 +824,7 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=Tr
         db.session.commit()
     return {'ok': True, 'produzido': item.produzido_qtd,
             'encerrado': encerrado, 'falta_restante': falta_restante,
+            'quitado': quitado,
             'unidade': 'batimentos' if eh_item_massa(item) else unidade_producao(rec)}
 
 

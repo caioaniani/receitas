@@ -16,14 +16,20 @@ class UsarOrdemDoDia(ValueError):
     pass
 
 
-def registrar_lote(validados, user_id, chave=None):
+def registrar_lote(validados, user_id, chave=None, quitar=None):
     """Tudo ou nada; o recibo único impede repetir um envio após timeout.
 
     O chamador valida catálogo/quantidades e faz rollback em qualquer erro.
     Pães avulsos criam uma ordem manual concluída na quantidade REAL. O
     arredondamento da ficha nunca credita unidades nem deixa sobra prevista.
+
+    `quitar` (05/10/2026, opção A do dono): refs ('receita:<id>' /
+    'produto:<id>') cuja produção o padeiro CONFIRMOU incluir itens que já
+    saíram em pedidos com o estoque zerado no sistema — depois do crédito,
+    `faltas_industria.quitar` debita até a quantidade lançada.
     """
     from app.models import AppConfig, PlanejamentoItem, PlanejamentoProducao
+    from app.services import faltas_industria
     from app.services.bateladas_paes import farinha_padrao_g, normalizar_item
     from app.services.estoque_congelados import entrada_producao
     from app.services.producao import (
@@ -41,6 +47,10 @@ def registrar_lote(validados, user_id, chave=None):
         if not isinstance(chave, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,64}', chave):
             raise ValueError('Identificação do envio inválida. Atualize a tela.')
         conteudo = json.dumps([(t, o.id, q) for t, o, q in validados])
+        if quitar:
+            # Só quando há quitação: recibos antigos (sem ela) continuam
+            # batendo com a mesma assinatura de antes.
+            conteudo = json.dumps([json.loads(conteudo), sorted(quitar)])
         assinatura = hashlib.sha256(conteudo.encode()).hexdigest()
         key = f'producao_tv:{user_id}:{chave}'
 
@@ -97,15 +107,20 @@ def registrar_lote(validados, user_id, chave=None):
             itens_paes[rec.id] = item
         sincronizar_pre_baixa_mp(plano, user_id)
 
+    quitar = set(quitar or ())
     resumo = []
     for tipo, obj, qtd in validados:
+        quitar_item = f'{tipo}:{obj.id}' in quitar
+        quitado = 0
         item = itens_paes.get(obj.id) if tipo == 'receita' else None
         if item is not None:
             resultado = produzir_item_plano(
                 item.id, qtd, user_id, commit=False, produzido_esperado=0,
-                referencia_estoque=f'{REFERENCIA_EXTRA} · ordem {plano.id}')
+                referencia_estoque=f'{REFERENCIA_EXTRA} · ordem {plano.id}',
+                quitar_faltas=quitar_item)
             if not resultado['ok']:
                 raise ValueError(resultado['erro'])
+            quitado = resultado.get('quitado', 0)
             # Esta é uma declaração de produção já concluída, não um pedido
             # futuro: preserve a ficha, mas encerre o alvo no realizado.
             item.qtd_alvo = item.produzido_qtd
@@ -118,7 +133,12 @@ def registrar_lote(validados, user_id, chave=None):
                 referencia='Produção (TV padeiro)')
             if tipo == 'receita':
                 consumir_subreceitas_prontas(obj, qtd, user_id)
-        resumo.append({'nome': obj.nome, 'qtd': qtd})
+            if quitar_item:
+                quitado = faltas_industria.quitar(
+                    receita_id=obj.id if tipo == 'receita' else None,
+                    produto_id=obj.id if tipo == 'produto' else None,
+                    maximo=qtd, usuario_id=user_id)
+        resumo.append({'nome': obj.nome, 'qtd': qtd, 'quitado': quitado})
     if plano is not None:
         sincronizar_pre_baixa_mp(plano, user_id)
         plano.status = 'executado'
