@@ -17,33 +17,44 @@ com a MESMA referência da saída ('Pedido #<id> → ...'), para o estorno do
 pedido devolver a quitação junto com a saída normal.
 
 Regras:
-- Só faltas da janela (`JANELA_DIAS`) entram na pergunta e na quitação. Falta
-  mais antiga quase sempre é produção que nunca foi lançada; quitá-la
-  comeria produção nova. Ela continua aberta até uma contagem.
-- Conferência/balanço da linha ENCERRA as faltas abertas do item: a contagem
-  já reflete o que saiu.
+- Só faltas da janela entram na pergunta e na quitação: criadas a partir da
+  meia-noite de `JANELA_DIAS` dias atrás (falta de sexta ainda vale na
+  segunda inteira). Falta mais antiga quase sempre é produção que nunca foi
+  lançada; quitá-la comeria produção nova. Ela continua aberta até uma
+  contagem.
+- Conferência/balanço da linha ENCERRA as faltas do item criadas ANTES de a
+  contagem começar: a contagem já reflete o que saiu até ali.
 - Massa para folhar fica fora da quitação (o saldo vive em gramas).
-- O servidor recalcula tudo sob trava; o número da tela é só a pergunta.
+- A quitação nunca passa do número que a pessoa confirmou na tela nem do
+  lançado agora; o servidor recalcula sob trava e pode quitar MENOS.
+- Ordem das travas: linha do estoque, depois as faltas (quitação e estorno).
 
 Nenhuma função aqui commita — o chamador controla a transação.
 """
 import logging
-from datetime import timedelta
+from datetime import datetime, time, timedelta
+
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import FaltaSaidaIndustria, MovEstoqueProducao, Receita
-from app.utils import agora
+from app.models import FaltaSaidaIndustria, MovEstoqueProducao, PedidoLoja, Receita
+from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
 
 JANELA_DIAS = 3
 TIPO_QUITADA = 'saida_pedido_quitada'
 REF_QUITACAO = 'falta quitada: produção lançada depois'
-MOTIVOS_SEM_EXIBICAO = ('estorno', 'excluido')
+# Saída desfeita, pedido apagado ou item transferido para matéria-prima:
+# a falta deixa de existir para a tela do QR e para o aviso do Enviar.
+MOTIVOS_SEM_EXIBICAO = ('estorno', 'excluido', 'transferido')
 
 
 def _inicio_janela():
-    return agora() - timedelta(days=JANELA_DIAS)
+    """Meia-noite de `JANELA_DIAS` dias atrás. Por data, não por 72 h
+    corridas: a produção de sexta lançada na segunda ainda é perguntada, e a
+    borda não muda entre o que a TV mostrou e o que o servidor recalcula."""
+    return datetime.combine(hoje() - timedelta(days=JANELA_DIAS), time.min)
 
 
 def _abertas():
@@ -99,6 +110,10 @@ def abertas_recentes():
     """Faltas abertas da janela agrupadas por item, para a TV do padeiro."""
     rows = (_abertas()
             .filter(FaltaSaidaIndustria.criada_em >= _inicio_janela())
+            .options(joinedload(FaltaSaidaIndustria.receita),
+                     joinedload(FaltaSaidaIndustria.produto),
+                     joinedload(FaltaSaidaIndustria.pedido)
+                     .joinedload(PedidoLoja.loja))
             .order_by(FaltaSaidaIndustria.criada_em, FaltaSaidaIndustria.id)
             .all())
     grupos = {}
@@ -115,11 +130,13 @@ def abertas_recentes():
     return sorted(grupos.values(), key=lambda g: g['nome'].lower())
 
 
-def resumo_por_ref():
+def resumo_por_ref(grupos=None):
     """{ref: {'quantidade', 'nome', 'pedidos'}} das faltas QUITÁVEIS da
-    janela — alimenta a pergunta da TV ('receita:<id>' / 'produto:<id>')."""
+    janela — alimenta a pergunta da TV ('receita:<id>' / 'produto:<id>').
+    `grupos` = resultado de `abertas_recentes()` já carregado (evita a
+    segunda consulta na mesma tela)."""
     out = {}
-    for g in abertas_recentes():
+    for g in (abertas_recentes() if grupos is None else grupos):
         if not g['quitavel']:
             continue
         out[g['ref']] = {
@@ -137,8 +154,10 @@ def quitar(*, receita_id=None, produto_id=None, maximo, usuario_id):
     `saida_pedido_quitada` por pedido.
 
     Chamar DEPOIS do crédito da produção, na mesma transação e só quando
-    alguém confirmou que a produção inclui o que já saiu. Nunca deixa saldo
-    negativo. Devolve o total quitado. Não commita."""
+    alguém confirmou que a produção inclui o que já saiu. `maximo` é o MENOR
+    entre o lançado agora e o número que a pessoa viu na pergunta — falta
+    registrada depois da pergunta nunca é quitada sem confirmação. Nunca
+    deixa saldo negativo. Devolve o total quitado. Não commita."""
     maximo = int(maximo or 0)
     if maximo <= 0 or bool(receita_id) == bool(produto_id):
         return 0
@@ -185,10 +204,17 @@ def quitar(*, receita_id=None, produto_id=None, maximo, usuario_id):
     return total
 
 
-def encerrar_por_contagem(itens, usuario_id):
-    """Encerra TODAS as faltas abertas dos itens contados (qualquer idade):
-    a conferência/balanço já reflete o que saiu. `itens` = iterável de
-    (receita_id, produto_id). Devolve quantas foram encerradas."""
+def encerrar_por_contagem(itens, usuario_id, antes_de=None):
+    """Encerra as faltas abertas dos itens contados criadas até `antes_de`
+    (o início da contagem; None = agora), de qualquer idade: a
+    conferência/balanço já reflete o que saiu até ali. Falta de uma saída
+    posterior ao início da contagem continua aberta. `itens` = iterável de
+    (receita_id, produto_id). Devolve quantas foram encerradas.
+
+    Falta travada por uma quitação em andamento é PULADA (`skip_locked`):
+    esperar por ela fecharia um ciclo de travas com a Produção extra de
+    vários itens (a conferência já segura linhas de estoque). A quitação
+    concorrente decide o saldo dela."""
     itens = list(itens)
     rec_ids = sorted({r for r, _p in itens if r})
     prod_ids = sorted({p for r, p in itens if p and not r})
@@ -199,21 +225,79 @@ def encerrar_por_contagem(itens, usuario_id):
         filtros.append(FaltaSaidaIndustria.receita_id.in_(rec_ids))
     if prod_ids:
         filtros.append(FaltaSaidaIndustria.produto_id.in_(prod_ids))
-    rows = (_abertas().filter(db.or_(*filtros))
-            .populate_existing().with_for_update().all())
+    limite = antes_de or agora()
+    rows = (_abertas().filter(db.or_(*filtros),
+                              FaltaSaidaIndustria.criada_em <= limite)
+            .populate_existing().with_for_update(skip_locked=True).all())
     for f in rows:
         _encerrar(f, 'contagem', usuario_id)
     return len(rows)
 
 
-def encerrar_do_pedido(pedido_id, motivo, usuario_id=None):
-    """Encerra as faltas abertas de um pedido ('estorno' quando volta para
-    separado; 'excluido' quando o pedido é apagado)."""
-    rows = (_abertas().filter(FaltaSaidaIndustria.pedido_id == pedido_id)
+def travar_do_pedido(pedido_id):
+    """Trava as faltas do pedido. O estorno chama depois de travar as linhas
+    de estoque (mesma ordem da quitação) e antes de somar os movimentos."""
+    return (FaltaSaidaIndustria.query
+            .filter(FaltaSaidaIndustria.pedido_id == pedido_id)
+            .order_by(FaltaSaidaIndustria.id)
             .populate_existing().with_for_update().all())
+
+
+def encerrar_do_pedido(pedido_id, motivo, usuario_id=None):
+    """Encerra as faltas de um pedido ('estorno' quando volta para
+    separado; 'excluido' quando o pedido é apagado).
+
+    As já encerradas (quitada/contagem) também passam a esse motivo, sem
+    mudar quando nem por quem foram encerradas: o estorno devolve a
+    quitação junto com a saída, e a tela de um novo envio não pode mostrar
+    a falta de uma saída desfeita. A quantidade quitada fica como histórico."""
+    rows = (FaltaSaidaIndustria.query
+            .filter(FaltaSaidaIndustria.pedido_id == pedido_id)
+            .order_by(FaltaSaidaIndustria.id)
+            .populate_existing().with_for_update().all())
+    n = 0
     for f in rows:
-        _encerrar(f, motivo, usuario_id)
+        if f.encerrada_em is None:
+            _encerrar(f, motivo, usuario_id)
+            n += 1
+        elif f.motivo_encerramento not in MOTIVOS_SEM_EXIBICAO:
+            f.motivo_encerramento = motivo
+    return n
+
+
+def soltar_do_pedido(pedido_id):
+    """Antes de apagar o pedido: solta o vínculo das faltas dele (já
+    encerradas com 'excluido'), pelo ORM para ficar no histórico."""
+    rows = FaltaSaidaIndustria.query.filter_by(pedido_id=pedido_id).all()
+    for f in rows:
+        f.pedido_id = None
     return len(rows)
+
+
+def reapontar_receita(origem_id, destino_id):
+    """Fusão de receitas (`vinculos_transferir`): as faltas seguem o
+    estoque, que se funde no destino. Pelo ORM para ficar no histórico."""
+    rows = FaltaSaidaIndustria.query.filter_by(receita_id=origem_id).all()
+    for f in rows:
+        f.receita_id = destino_id
+    return len(rows)
+
+
+def encerrar_da_receita(receita_id, motivo, usuario_id=None):
+    """Receita virou matéria-prima (`_transferir_para_mp`): matéria-prima
+    não gera falta nem quitação, então as faltas abertas dela se encerram e
+    nenhuma (aberta ou não) aparece mais nas telas do pedido."""
+    rows = (FaltaSaidaIndustria.query
+            .filter(FaltaSaidaIndustria.receita_id == receita_id)
+            .populate_existing().with_for_update().all())
+    n = 0
+    for f in rows:
+        if f.encerrada_em is None:
+            _encerrar(f, motivo, usuario_id)
+            n += 1
+        elif f.motivo_encerramento not in MOTIVOS_SEM_EXIBICAO:
+            f.motivo_encerramento = motivo
+    return n
 
 
 def do_pedido(pedido_id):
