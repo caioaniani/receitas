@@ -202,36 +202,69 @@ lança a produção confirma.
 - `FaltaSaidaIndustria` (tabela NOVA via create_all, auditada; chave do
   item = receita_id/produto_id, nunca a linha) registrada pela baixa junto
   do `saida_pedido_sem_estoque`. Serviço `app/services/faltas_industria.py`
-  (sem commit): `abertas_recentes`/`resumo_por_ref` (janela `JANELA_DIAS=3`
-  — falta mais antiga quase sempre é produção nunca lançada; quitá-la
-  comeria produção nova), `quitar` (sob `FOR UPDATE`, mais antiga primeiro,
-  `min(aberta, lançado agora, saldo)`; mov `saida_pedido_quitada` com a
-  MESMA referência da saída, `referencia_saida(pedido, REF_QUITACAO)`, para
-  o estorno do pedido devolvê-la junto), `encerrar_por_contagem`,
-  `encerrar_do_pedido`, `do_pedido`. Massa para folhar NÃO é quitável
+  (sem commit): `abertas_recentes`/`resumo_por_ref` (janela POR DATA: desde
+  a meia-noite de `JANELA_DIAS=3` dias atrás — falta mais antiga quase
+  sempre é produção nunca lançada; quitá-la comeria produção nova),
+  `quitar` (mais antiga primeiro, `min(aberta, limite, saldo)`; mov
+  `saida_pedido_quitada` com a MESMA referência da saída,
+  `referencia_saida(pedido, REF_QUITACAO)`, para o estorno do pedido
+  devolvê-la junto), `encerrar_por_contagem`, `encerrar_do_pedido`,
+  `encerrar_da_receita`, `do_pedido`. Massa para folhar NÃO é quitável
   (saldo em gramas) — só a contagem a encerra.
 - Onde aparece: tela de sucesso do QR de saída (+ `HandshakeAudit`
-  `falta_saida`), flash AMARELO do botão Enviar (`_MSG_SAIDA_COM_FALTA`),
-  cartão vermelho "Saíram sem produção lançada" na TV (só visão de hoje;
-  `/padeiro/faltas.json` a cada 15 s). Pergunta: `confirm` no "Registrar
-  produção" da ordem (`quitar_faltas=1` → `produzir_item_plano(
-  quitar_faltas=True)`) e checkbox NUNCA pré-marcado na gaveta de Produção
-  extra (`quitar_faltas: true` literal → `registrar_lote(quitar=)`; a
-  assinatura do recibo idempotente só muda quando há quitação, recibos
-  antigos continuam batendo). O servidor recalcula tudo; o número da tela é
-  só a pergunta.
-- Encerram: conferência da indústria (todo item CONTADO, mesmo com
-  diferença 0) e `aplicar_balanco` → 'contagem'; estorno do pedido →
-  'estorno' (some da tela do QR); excluir pedido → 'excluido' (vínculo
-  solto antes do delete); `vinculos_transferir` reaponta a receita.
-  Auditoria das baixas trata a quitada como baixa (sai de "com falta").
-  Respostas antigas sem quitação mantêm o formato (`quitado`/`quitada` só
-  aparecem quando > 0 — há testes travando o formato).
+  `falta_saida`), flash AMARELO do botão Enviar (`_MSG_SAIDA_COM_FALTA`,
+  texto único `pedido_estoque.texto_faltas_saida` — só promete a TV para
+  receita/produto), resultado do copilot (`falta_saida`, mostrado no
+  Slack), cartão vermelho "Saíram sem produção lançada" na TV (só visão de
+  hoje; `/padeiro/faltas.json` a cada 15 s). Pergunta: `confirm` no
+  "Registrar produção" da ordem e checkbox NUNCA pré-marcado na gaveta de
+  Produção extra. A tela manda o NÚMERO que a pergunta mostrou
+  (`quitar_faltas=N`); o servidor quita até `min(N, lançado)` e recalcula
+  sob trava — nunca mais do que a pessoa viu (`True`/texto não contam).
+- Recibo idempotente da Produção extra: a CHAVE identifica a produção
+  (itens + quantidades), a quitação entra na assinatura. Mesma chave com
+  outra escolha de quitação = 409 `ja_registrado` (a tela limpa a gaveta e
+  manda conferir o Histórico) — nunca um segundo crédito. Recibos antigos
+  (sem `assinatura_base`) seguem reconhecidos.
+- TRAVAS: linhas do `EstoqueProducao` primeiro, em ordem de id
+  (`estoque_congelados.travar_linhas_producao`), depois as faltas — na
+  quitação, no estorno, na conferência, no balanço e na Produção extra.
+- Encerram: conferência da indústria e `aplicar_balanco` → 'contagem', só
+  das faltas criadas ANTES do início da contagem (`iniciada_em` da tela,
+  `inicio_contagem`; o balanço usa agora), mesmo com diferença 0; estorno
+  do pedido → 'estorno', excluir pedido → 'excluido' (vínculo solto antes
+  do delete), receita virada matéria-prima → 'transferido' — esses três
+  reencerram também as já quitadas/contadas com o quando/quem deles (o
+  anterior fica no AuditLog) e somem da tela do QR. `vinculos_transferir`
+  reaponta a receita (pelo ORM, auditado). Auditoria das baixas trata a
+  quitada como baixa. Respostas antigas sem quitação mantêm o formato
+  (`quitado`/`quitada` só aparecem quando > 0 — há testes travando).
 - LIMITAÇÕES ACEITAS: MP em pedido não gera falta (só a referência do mov);
-  `/pedidos/congelados/entrada` (admin) e o copilot não perguntam; a falta
-  é por item, não por estado; faltas de antes do deploy não existem (o
-  brioche se acerta pela conferência). Testes:
-  `tests/test_faltas_saida_industria.py`. Manual (DIÁRIO).
+  `/pedidos/congelados/entrada` (admin) e o plano manual (`producao.
+  baixar_estoque`) creditam produção sem perguntar; a falta é por item,
+  não por estado; faltas de antes do deploy não existem (o brioche se
+  acerta pela conferência); TV aberta antes do deploy só pergunta depois
+  de um F5. DECISÃO PENDENTE do dono: contagem DEPOIS de uma saída e ANTES
+  de lançar a produção daquela saída encerra a falta (a produção lançada
+  depois entra inteira); a alternativa é só encerrar se houve produção
+  lançada depois da falta. Testes: `tests/test_faltas_saida_industria.py`.
+  Manual (DIÁRIO).
+
+**Calculadora da ficha = motor das bateladas (pão francês, 06/10/2026)**:
+o padeiro conferia 12 kg na ficha e via 215 pães; a ordem dizia 237. A
+ordem estava certa (dono confirmou: levain 2,4 kg = 20% da farinha, pão de
+100 g): a ficha guarda o levain como sub-receita em unidades (200 × 1 g
+para peso base 1000) e a calculadora (`app.js recalcularTudo`) não
+escalava essas linhas. Agora, em receita de massa (há linha em %), as
+linhas `receita`/`mp_direto`/`mp_un` guardam a proporção por grama de
+peso base e acompanham o peso base digitado (campo reescrito: salvar com
+outro peso base preserva a proporção). A proporção só muda quando a
+própria linha é editada; apagar/redigitar o peso base não a toca. Modo
+"Quantidade" acha o peso base exato contando essas linhas. Receita montada
+não escala. Vale para TODA ficha de massa (croissant/Danish incluídos — a
+proporção por unidade não muda; mudar o peso base agora redimensiona a
+batelada inteira). Testes: `tests/test_ficha_lote_escala_js.py` (compara
+com `bateladas_paes.padrao_receita`); doc `docs/bateladas-paes.md`.
 
 ## Publicação após testes (autorização do dono, 28/09/2026)
 
