@@ -68,9 +68,17 @@ def _saldo(receita):
 
 
 def _enviar(app, pedido, user):
+    from flask import g
+
     from app.blueprints.pedidos.routes import _executar_envio_pedido
     with app.test_request_context():
-        return _executar_envio_pedido(pedido, user)
+        res = _executar_envio_pedido(pedido, user)
+    # O app context do conftest fica empilhado o teste inteiro e o `g` é
+    # compartilhado: o audit leu o usuário anônimo deste contexto e o
+    # Flask-Login o deixou em cache — as requisições seguintes do cliente
+    # herdariam o anônimo (armadilha documentada no CLAUDE.md).
+    g.pop('_login_user', None)
+    return res
 
 
 def _creditar(receita, qtd, user):
