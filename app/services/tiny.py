@@ -54,7 +54,54 @@ def _rotulo_contato(contato):
     return f'"{nome}" (id {contato.get("id")}{extra})'
 
 
-def contato_fiscal_por_documento(documento):
+def _chave_fiscal(dados):
+    """(IE, número, CEP) normalizados — o que identifica o destinatário fiscal."""
+    ie = ''.join(c for c in str(dados.get('ie') or '').upper() if c.isalnum())
+    numero = ''.join(str(dados.get('numero') or '').upper().split())
+    return ie, numero, _so_digitos(dados.get('cep'))
+
+
+def _desempatar_por_notas(contatos, documento, referencias):
+    """Cadastros duplicados: escolhe o que bate com as notas JÁ AUTORIZADAS do
+    cliente (dono, 06/10/2026, caso FAT00003 — "é só ver uma NF já emitida").
+
+    `referencias` = callable que devolve os destinatários (dict com ie,
+    numero, cep, cpf_cnpj) das notas autorizadas anteriores. Só escolhe com
+    prova: todas as notas com o MESMO (IE, número, CEP) e EXATAMENTE um
+    cadastro ativo com esses dados. Qualquer outra situação devolve
+    (None, motivo) e a emissão segue bloqueada."""
+    if referencias is None:
+        return None, 'não há notas anteriores para comparar'
+    try:
+        refs = [r for r in (referencias() or [])
+                if isinstance(r, dict) and _so_digitos(r.get('cpf_cnpj')) == documento]
+    except Exception:  # falha na consulta mantém o bloqueio (nunca escolhe às cegas)
+        logger.exception('tiny: falha ao ler notas anteriores para desempate')
+        return None, 'falha ao consultar as notas anteriores'
+    if not refs:
+        return None, 'nenhuma nota autorizada anterior deste cliente'
+    chaves = {_chave_fiscal(r) for r in refs}
+    if len(chaves) != 1:
+        return None, 'as notas anteriores têm IE ou endereço diferentes entre si'
+    alvo = next(iter(chaves))
+    batem = []
+    for cid in list(contatos)[:10]:
+        retorno = _get('contato.obter.php', {'id': cid}, retornar_erro=True)
+        if not retorno or str(retorno.get('status', '')).lower() not in ('ok', '1'):
+            return None, 'não foi possível ler o detalhe dos cadastros no Tiny'
+        det = retorno.get('contato') or {}
+        if (_so_digitos(det.get('cpf_cnpj')) == documento
+                and str(det.get('situacao', '')).lower() in ('a', 'ativo')
+                and _chave_fiscal(det) == alvo):
+            batem.append(cid)
+    if len(batem) != 1:
+        return None, (f'{len(batem)} cadastros batem com IE/endereço das notas anteriores'
+                      f' (IE {alvo[0] or "em branco"}, nº {alvo[1] or "?"})')
+    return batem[0], (f'igual às {len(refs)} nota(s) autorizada(s) anterior(es): '
+                      f'IE {alvo[0] or "em branco"}, nº {alvo[1]}')
+
+
+def contato_fiscal_por_documento(documento, referencias=None):
     """Busca exata, somente leitura. Nunca escolhe por nome ou assume isenção.
 
     Zero cadastros e cadastros duplicados recusam com mensagens DIFERENTES
@@ -95,11 +142,18 @@ def contato_fiscal_por_documento(documento):
             raise ValueError('Muitos cadastros no Tiny para este CPF/CNPJ. Confira as duplicidades.')
         pagina += 1
     if len(contatos) > 1:
-        lista = '; '.join(_rotulo_contato(c) for c in list(contatos.values())[:5])
-        raise ValueError(
-            f'Há {len(contatos)} cadastros ATIVOS no Tiny com o CNPJ/CPF {doc_fmt}: {lista}. '
-            'Inative ou exclua os duplicados no Tiny (Cadastros → Clientes e Fornecedores), '
-            'deixando um só com a IE correta, e emita de novo.')
+        escolhido, motivo = _desempatar_por_notas(contatos, documento, referencias)
+        if escolhido:
+            logger.info('tiny: %d cadastros para %s; usado %s (%s)',
+                        len(contatos), doc_fmt, escolhido, motivo)
+            contatos = {escolhido: contatos[escolhido]}
+        else:
+            lista = '; '.join(_rotulo_contato(c) for c in list(contatos.values())[:5])
+            raise ValueError(
+                f'Há {len(contatos)} cadastros ATIVOS no Tiny com o CNPJ/CPF {doc_fmt}: {lista}. '
+                f'Não deu para escolher sozinho: {motivo}. Inative ou exclua os duplicados no '
+                'Tiny (Cadastros → Clientes e Fornecedores), deixando um só com a IE correta, '
+                'e emita de novo.')
     if not contatos:
         msg = (f'O cliente com CNPJ/CPF {doc_fmt} não está cadastrado (ativo) no Tiny. '
                'Cadastre-o no Tiny (Cadastros → Clientes e Fornecedores) com a inscrição '

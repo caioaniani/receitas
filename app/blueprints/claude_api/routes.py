@@ -3463,8 +3463,12 @@ def tiny_contato():
             'cidade', 'uf', 'email', 'fone', 'data_criacao', 'contribuinte',
             'tipos_contato')})
     out['detalhes'] = detalhes
+    refs = None
+    if fat_id:
+        from app.services import tiny_nf_b2b
+        refs = lambda: tiny_nf_b2b._destinatarios_autorizados(cli, digitos)  # noqa: E731 — mesmo callable da emissão
     try:
-        contato = tiny.contato_fiscal_por_documento(digitos)
+        contato = tiny.contato_fiscal_por_documento(digitos, referencias=refs)
         out['veredito'] = {'ok': True, 'id': contato.get('id'), 'nome': contato.get('nome'),
                            'ie': contato.get('ie'), 'codigo': contato.get('codigo')}
     except ValueError as exc:

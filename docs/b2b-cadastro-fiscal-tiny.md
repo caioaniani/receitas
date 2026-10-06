@@ -13,7 +13,19 @@ Mensagens distintas (caso FAT00003, 06/10/2026): **nenhum cadastro ativo**
 (inclusive o código 20 do Tiny, "consulta sem registros") diz que o cliente
 não está cadastrado e mostra o CNPJ formatado, mais os cadastros de documento
 diferente que o Tiny tenha devolvido; **dois ou mais** lista nome, id e código
-de cada um. O sistema nunca cria o contato fiscal nem escolhe entre duplicados.
+de cada um. O sistema nunca cria o contato fiscal.
+
+**Desempate de duplicados pelas notas já autorizadas** (decisão do dono,
+06/10/2026): havendo dois ou mais cadastros ativos com o mesmo CNPJ, a
+emissão lê o destinatário das notas AUTORIZADAS mais recentes do cliente
+(até 5 vendas e 5 faturas, `tiny_nf_b2b._destinatarios_autorizados`) e usa
+o único cadastro ativo cujo (IE, número, CEP) é igual ao delas. Continua
+bloqueado, com o motivo na mensagem, quando: não há nota autorizada
+anterior; as notas anteriores divergem entre si; nenhum ou mais de um
+cadastro bate; ou o detalhe de algum cadastro não pôde ser lido. Caso que
+originou: Zion Church (FAT00003) — cadastro ISENTO/nº 86 usado nas três
+notas anteriores × cadastro duplicado com IE em branco/nº 80. A sonda
+`/api/claude/tiny-contato?fatura=<id>` aplica a mesma regra no veredito.
 
 Refazer consulta a situação atual antes de descartar a referência anterior.
 Notas autorizadas são sincronizadas; situação desconhecida ou denegada bloqueia

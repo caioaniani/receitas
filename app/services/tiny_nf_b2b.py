@@ -30,6 +30,27 @@ def _payload_cliente(venda):
     return _payload_cliente_b2b(venda.cliente)
 
 
+def _destinatarios_autorizados(cli, doc, limite=5):
+    """Destinatário gravado no Tiny das notas AUTORIZADAS mais recentes do
+    cliente (venda e fatura). Usado só para desempatar cadastro duplicado."""
+    from app.models import FaturaB2B, VendaB2B
+    from app.services import tiny
+    ids = [v.tiny_nota_fiscal_id for v in VendaB2B.query.filter(
+        VendaB2B.cliente_id == cli.id, VendaB2B.tiny_nota_fiscal_id.isnot(None))
+        .order_by(VendaB2B.id.desc()).limit(limite)]
+    ids += [f.tiny_nota_fiscal_id for f in FaturaB2B.query.filter(
+        FaturaB2B.cliente_id == cli.id, FaturaB2B.tiny_nota_fiscal_id.isnot(None))
+        .order_by(FaturaB2B.id.desc()).limit(limite)]
+    destinatarios = []
+    for nid in dict.fromkeys(ids):
+        nf = tiny.obter_nota_fiscal(nid) or {}
+        dest = nf.get('cliente')
+        if (isinstance(dest, dict) and tiny.classificar_situacao_nota(nf)['autorizada']
+                and _so_digitos(dest.get('cpf_cnpj')) == doc):
+            destinatarios.append(dest)
+    return destinatarios
+
+
 def _payload_cliente_b2b(cli):
     """Cliente da NF a partir do ClienteB2B, COM endereço estruturado.
     Usado pela venda avulsa E pela fatura mensal.
@@ -56,7 +77,8 @@ def _payload_cliente_b2b(cli):
     if len(doc) == 14:
         from app.services import tiny
         try:
-            contato = tiny.contato_fiscal_por_documento(doc)
+            contato = tiny.contato_fiscal_por_documento(
+                doc, referencias=lambda: _destinatarios_autorizados(cli, doc))
         except ValueError as exc:
             return None, str(exc)
         # A API de inclusão documenta IE/código, não um indicador de
