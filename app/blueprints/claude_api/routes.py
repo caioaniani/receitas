@@ -2229,6 +2229,13 @@ def estoque_ledger_industria():
     `historico_humano.mov_producao_direcao` (o sinal gravado não é confiável
     para isso — a tela também mostra `abs`). Read-only.
 
+    `saldo_reconstruido_pelo_razao` é APROXIMADO: o razão antigo tem tipos
+    cuja direção a fonte única não captura (`consolidacao_estado` soma saldo
+    mas é classificado neutro; o `ajuste` legado era o estorno de pedido, um
+    crédito) e saldo anterior ao próprio razão. Para fechar uma divergência,
+    ancore num ponto conhecido (um `*_sem_estoque` = saldo zero naquele
+    instante) e some os movimentos da janela, como no caso do brioche.
+
     Params: ?item=<trecho do nome> ou ?receita_id=, ?dias=N (default 30,
     máx 180), ?detalhe=1 (movimentos da janela, cap 400, mais novos
     primeiro).
