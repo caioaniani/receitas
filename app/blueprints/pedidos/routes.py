@@ -1081,8 +1081,9 @@ def _executar_envio_pedido(pedido, user, ref_extra=None):
         quais = '; '.join(f"{f['item']}: pedido {f['pedido']:g}, "
                           f"baixado {f['baixado']:g}" for f in faltas)
         return True, ('Pedido em transporte. ATENÇÃO — saiu com estoque '
-                      f'insuficiente na indústria ({quais}). A falta ficou '
-                      'registrada no histórico (saida_pedido_sem_estoque).')
+                      f'insuficiente na indústria ({quais}). A falta aparece '
+                      'na tela do padeiro: se a produção já foi feita, ao '
+                      'lançá-la ele confirma se ela inclui o que já saiu.')
     return True, 'Pedido em transporte. Estoque da industria baixado.'
 
 
