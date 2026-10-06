@@ -1049,7 +1049,10 @@ def enviar(id):
         current_app.logger.exception('Falha ao enviar pedido %s', id)
         flash(f'Erro ao processar saída do pedido: {exc}. Nada foi alterado.', 'danger')
         return redirect(url_for('pedidos.detalhe', id=id))
-    flash(msg, 'success' if ok else 'warning')
+    # Saída com falta de estoque da indústria (05/10/2026): aviso em amarelo,
+    # não em verde — é o momento em que alguém ainda lembra o que saiu.
+    cat = 'success' if ok and 'ATENÇÃO' not in msg else 'warning'
+    flash(msg, cat)
     return redirect(url_for('pedidos.detalhe', id=id))
 
 
