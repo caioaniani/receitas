@@ -189,11 +189,11 @@ def encerrar_por_contagem(itens, usuario_id):
     """Encerra TODAS as faltas abertas dos itens contados (qualquer idade):
     a conferência/balanço já reflete o que saiu. `itens` = iterável de
     (receita_id, produto_id). Devolve quantas foram encerradas."""
-    chaves = {(r or None, None if r else (p or None)) for r, p in itens if r or p}
-    if not chaves:
+    itens = list(itens)
+    rec_ids = sorted({r for r, _p in itens if r})
+    prod_ids = sorted({p for r, p in itens if p and not r})
+    if not (rec_ids or prod_ids):
         return 0
-    rec_ids = sorted({r for r, _ in chaves if r})
-    prod_ids = sorted({p for _, p in chaves if p})
     filtros = []
     if rec_ids:
         filtros.append(FaltaSaidaIndustria.receita_id.in_(rec_ids))
