@@ -20,6 +20,15 @@ documentada em [bateladas-viennoiserie.md](bateladas-viennoiserie.md).
   tetos automáticos não cortam uma batelada. Impedimentos aparecem na grade.
 - A ficha do padeiro mostra ingredientes **por batelada**, quantas repetições
   fazer e o total de farinha. Não pesar todos os lotes em um único batimento.
+- A calculadora da ficha (tela da receita e calculadora do padeiro) usa a
+  mesma regra: numa receita de massa, as linhas em gramas ou unidades
+  (levain, sub-receitas, MP em gramas/unidades) valem para a batelada do
+  peso base e acompanham o peso base digitado. Ex.: pão francês com 200 g de
+  levain para 1.000 g de farinha; com 12.000 g a ficha mostra 2.400 g de
+  levain e 237 pães, o mesmo número da ordem (antes mantinha 200 g e
+  mostrava 215). Salvar com outro peso base grava as linhas já escaladas, e
+  a proporção da ficha não muda. Receita montada (sem linha em %) continua
+  com quantidades absolutas.
 - Avisos de capacidade comparam a massa final, incluindo levain, ao equipamento.
   Tempos e temperaturas cadastrados não são inventados nem ajustados.
 

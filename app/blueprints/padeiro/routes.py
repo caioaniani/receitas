@@ -241,8 +241,12 @@ def _dados_listas(dia, eh_hoje):
     grupos = Counter((p.loja_id, p.status, p.data_entrega)
                      for p in pedidos if p.status in _A_SEPARAR)
     n_repetidos = sum(c - 1 for c in grupos.values() if c > 1)
+    # Itens que saíram em pedidos com o estoque da indústria zerado no
+    # sistema (05/10/2026): só na visão de hoje, como as demais pendências.
+    faltas_saida = _faltas_saida_seguro() if eh_hoje else []
     return {'a_separar': a_separar, 'aguardando': aguardando,
-            'drivers': drivers, 'n_repetidos': n_repetidos}
+            'drivers': drivers, 'n_repetidos': n_repetidos,
+            'faltas_saida': faltas_saida}
 
 
 def _plano_do_dia(dia):
@@ -391,6 +395,7 @@ def index():
     plano_ontem = _plano_em_aberto(ontem) if eh_hoje else None
     total_pendentes = sum(
         p.get('itens_pendentes', 0) for p in (plano_ontem, plano_dia) if p)
+    listas = _dados_listas(dia, eh_hoje)
     return render_template(
         'padeiro/index.html', dia=dia, eh_hoje=eh_hoje,
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
@@ -401,7 +406,36 @@ def index():
         recados_lousa=recados_lousa,
         resumo_entregas=(_resumo_entregas() if resumo_flag else None),
         resumo_entregas_flag=resumo_flag,
-        **_dados_listas(dia, eh_hoje))
+        # Na visão de hoje reaproveita as faltas já carregadas para o card.
+        faltas_por_ref=_faltas_por_ref(listas['faltas_saida'] if eh_hoje else None),
+        **listas)
+
+
+def _faltas_saida_seguro():
+    """Card "Saíram sem produção lançada" da TV. Falha nunca derruba as
+    listas — o card só não aparece."""
+    from app.services import faltas_industria
+    try:
+        return faltas_industria.abertas_recentes()
+    except Exception:  # noqa: BLE001 — a TV continua; o card só não aparece
+        # Postgres: transação abortada mataria o resto da página (GET, nada
+        # pendente a perder).
+        db.session.rollback()
+        logger.exception('padeiro: faltas de saída indisponíveis')
+        return []
+
+
+def _faltas_por_ref(grupos=None):
+    """Estado inicial da pergunta "esta produção inclui o que já saiu?" — o
+    JS atualiza por /padeiro/faltas.json. Falha aqui nunca derruba a TV.
+    `grupos` = faltas já carregadas para o card (sem segunda consulta)."""
+    from app.services import faltas_industria
+    try:
+        return faltas_industria.resumo_por_ref(grupos)
+    except Exception:  # noqa: BLE001 — a TV continua; o aviso só não aparece
+        db.session.rollback()
+        logger.exception('padeiro: faltas de saída indisponíveis')
+        return {}
 
 
 # ── Resumo das entregas do site (2x/ano: Dia das Mães / Dia dos Pais) ────
@@ -571,6 +605,21 @@ def massa_base_mise(mb_id):
         'cascata': cascata})
 
 
+def _quitar_confirmado(valor, *, do_formulario=False):
+    """Número confirmado na pergunta da falta (05/10/2026): inteiro positivo
+    ou 0. O formulário da ordem manda texto de dígitos; o JSON da Produção
+    extra manda número — lá, texto e booleano não contam."""
+    if isinstance(valor, bool):
+        return 0
+    if isinstance(valor, int):
+        return max(0, valor)
+    if not (do_formulario and isinstance(valor, str)):
+        return 0
+    v = valor.strip()
+    # Até 9 dígitos: número absurdo de POST forjado não derruba a rota.
+    return int(v) if v.isdigit() and v.isascii() and len(v) <= 9 else 0
+
+
 @padeiro_bp.route('/produzir-plano/<int:item_id>', methods=['POST'])
 @login_required
 @padeiro_required
@@ -584,25 +633,46 @@ def produzir_plano(item_id):
     except (TypeError, ValueError):
         unidades = 0
     encerrar = request.form.get('encerrar') == '1'
+    # Confirmado na tela: esta produção inclui N itens que já saíram em
+    # pedidos com o estoque zerado no sistema (05/10/2026). N é o número que
+    # a pergunta mostrou; o servidor recalcula e nunca quita mais que ele.
+    quitar = _quitar_confirmado(request.form.get('quitar_faltas'), do_formulario=True)
     try:
         esperado = request.form.get('produzido_esperado')
         esperado = int(esperado) if esperado is not None else None
         res = produzir_item_plano(item_id, unidades, current_user.id,
-                                  encerrar=encerrar, produzido_esperado=esperado)
+                                  encerrar=encerrar, produzido_esperado=esperado,
+                                  quitar_faltas=quitar)
     except ValueError as exc:
         db.session.rollback()
         res = {'ok': False, 'erro': str(exc)}
     unidade = res.get('unidade', 'un')
+    quitado = res.get('quitado') or 0
+    extra_quit = (' %d %s já tinham saído nos pedidos e foram descontados do '
+                  'estoque.' % (quitado, unidade)) if quitado else ''
     if res.get('ok') and res.get('encerrado'):
         flash('Produzido %d %s — item encerrado; a diferença (%d %s) foi '
-              'para auditoria do admin.' % (unidades, unidade, res['falta_restante'], unidade),
+              'para auditoria do admin.%s' % (unidades, unidade, res['falta_restante'],
+                                              unidade, extra_quit),
               'success')
     elif res.get('ok'):
-        flash('Produzido %d %s — estoque creditado e MP descontada.'
-              % (unidades, unidade), 'success')
+        flash('Produzido %d %s — estoque creditado e MP descontada.%s'
+              % (unidades, unidade, extra_quit), 'success')
     else:
         flash(res.get('erro', 'Erro ao produzir.'), 'warning')
     return redirect(request.referrer or url_for('padeiro.index'))
+
+
+@padeiro_bp.route('/faltas.json')
+@login_required
+@padeiro_required
+def faltas_json():
+    """Faltas de saída abertas (últimos dias) por item — a TV consulta a cada
+    15 s para perguntar, ao lançar a produção, se ela inclui o que já saiu."""
+    from flask import jsonify
+
+    from app.services import faltas_industria
+    return jsonify(ok=True, faltas=faltas_industria.resumo_por_ref())
 
 
 @padeiro_bp.route('/plano/editar', methods=['GET', 'POST'])
@@ -1191,7 +1261,11 @@ def produzir():
     from flask import jsonify
 
     from app.models import Produto, Receita
-    from app.services.producao_avulsa import UsarOrdemDoDia, registrar_lote
+    from app.services.producao_avulsa import (
+        EnvioJaRegistrado,
+        UsarOrdemDoDia,
+        registrar_lote,
+    )
 
     dados = request.get_json(silent=True) or {}
     itens = dados.get('itens') or []
@@ -1200,15 +1274,21 @@ def produzir():
 
     validados = []
     refs = set()
+    quitar = {}
     for i, it in enumerate(itens, 1):
-        ref = (it.get('ref') or '').strip()
-        tipo, _, sid = ref.partition(':')
+        if not isinstance(it, dict):
+            return jsonify(ok=False, erro=f'Item {i}: dados invalidos.'), 400
+        ref = it.get('ref') if isinstance(it.get('ref'), str) else ''
+        tipo, _, sid = ref.strip().partition(':')
         try:
             qtd = int(it.get('quantidade'))
         except (TypeError, ValueError):
             return jsonify(ok=False, erro=f'Item {i}: dados invalidos.'), 400
-        if tipo not in ('receita', 'produto') or not sid.isdigit():
+        if tipo not in ('receita', 'produto') or not (
+                sid.isdigit() and sid.isascii() and len(sid) <= 9):
             return jsonify(ok=False, erro=f'Item {i}: item invalido.'), 400
+        # Forma canônica ('receita:05' → 'receita:5'): é a chave das faltas.
+        ref = f'{tipo}:{int(sid)}'
         if qtd <= 0:
             return jsonify(ok=False, erro=f'Item {i}: quantidade deve ser positiva.'), 400
         if ref in refs:
@@ -1225,13 +1305,21 @@ def produzir():
                     f'{obj.nome}: registre pela ordem de produção, para manter '
                     'a pesagem por batelada e a baixa correta dos ingredientes.')), 400
         validados.append((tipo, obj, qtd))
+        # Número que a pergunta mostrou (05/10/2026): nunca quita mais que ele.
+        confirmado = _quitar_confirmado(it.get('quitar_faltas'))
+        if confirmado:
+            quitar[ref] = confirmado
 
     try:
-        resumo = registrar_lote(validados, current_user.id, dados.get('chave_envio'))
+        resumo = registrar_lote(validados, current_user.id, dados.get('chave_envio'),
+                                quitar=quitar)
     except UsarOrdemDoDia as exc:
         db.session.rollback()
         return jsonify(ok=False, erro=str(exc),
                        ordem_url=url_for('padeiro.index', data=hoje().isoformat())), 409
+    except EnvioJaRegistrado as exc:
+        db.session.rollback()
+        return jsonify(ok=False, erro=str(exc), ja_registrado=True), 409
     except ValueError as exc:
         db.session.rollback()
         return jsonify(ok=False, erro=str(exc)), 400

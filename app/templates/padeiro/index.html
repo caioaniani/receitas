@@ -30,6 +30,14 @@
      pro padeiro saber que e producao, nao separacao de prateleira. */
   .card.online { border-left-color:#d4a017; background:#fffdf3; }
   .online-nota { margin:8px 0 0; font-size:14px; font-weight:600; color:#8a6d0b; }
+  /* Saiu em pedido com o estoque zerado no sistema (05/10/2026): a produção
+     ainda não foi lançada — vermelho pra chamar o lançamento. */
+  .card.falta-saida { border-left-color:#dc3545; background:#fff5f5; }
+  .badge-falta { display:inline-block; background:#dc3545; color:#fff;
+                 font-size:13px; font-weight:800; padding:3px 10px;
+                 border-radius:8px; vertical-align:middle; letter-spacing:.5px; }
+  .prod-quitar { display:block; margin:6px 0 0 24px; font-size:15px; color:#842029; }
+  .prod-quitar input { width:22px; height:22px; vertical-align:middle; margin-right:6px; }
   .badge-ret { display:inline-block; background:#0dcaf0; color:#043b47;
                font-size:13px; font-weight:800; padding:3px 10px;
                border-radius:8px; vertical-align:middle; letter-spacing:.5px; }
@@ -493,10 +501,11 @@
          continua aqui (fornadas em levas). #}
       <form method="POST" action="{{ url_for('padeiro.produzir_plano', item_id=it.item_id) }}"
             class="prod-dia-form" data-unidade="{{ it.unidade }}"
-            data-nome="{{ it.nome }}"
+            data-nome="{{ it.nome }}" data-ref="receita:{{ it.receita_id }}"
             onsubmit="return prodConfirma(this, {{ it.falta }}, this.dataset.nome);">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="encerrar" value="">
+        <input type="hidden" name="quitar_faltas" value="">
         <input type="hidden" name="produzido_esperado" value="{{ it.produzido }}">
         <input type="number" name="unidades" min="1" value="{{ it.falta }}"
                class="prod-dia-qtd" id="qtd-{{ it.item_id }}" aria-label="Quantidade produzida de {{ it.nome }} em {{ it.unidade }}">
@@ -947,7 +956,37 @@
         'OK = encerrar  ·  Cancelar = continuar produzindo depois'
       ) ? '1' : '';
     }
+    // Saiu em pedido com o estoque zerado no sistema (05/10/2026): pergunta
+    // se esta produção inclui o que já saiu. Só a resposta OK desconta, e
+    // no máximo o número mostrado na pergunta (o servidor recalcula e pode
+    // descontar menos, nunca mais).
+    if (f.quitar_faltas) {
+      f.quitar_faltas.value = '';
+      var fa = FALTAS[f.dataset.ref];
+      if (q > 0 && fa && fa.quantidade > 0) {
+        f.quitar_faltas.value = confirm(perguntaFalta(fa, nome, unidade, q))
+          ? String(Math.min(fa.quantidade, q)) : '';
+      }
+    }
     return true;
+  }
+  // Faltas de saída abertas por item ('receita:<id>' / 'produto:<id>').
+  // Começa com o que veio do servidor e se atualiza a cada 15 s.
+  var FALTAS = {{ (faltas_por_ref or {})|tojson }};
+  function perguntaFalta(fa, nome, unidade, q) {
+    var n = Math.min(fa.quantidade, q);
+    return fa.quantidade + ' ' + unidade + ' de ' + nome +
+      ' saíram em pedidos com o estoque zerado no sistema (' + fa.pedidos + ').\n\n' +
+      'Esta produção inclui essas unidades que já saíram?\n\n' +
+      'OK = sim, já saíram (o sistema desconta ' + n + ' ' + unidade + ')  ·  ' +
+      'Cancelar = não, é produção nova';
+  }
+  function atualizarFaltas() {
+    if (document.hidden) return;
+    fetch('{{ url_for("padeiro.faltas_json") }}')
+      .then(function (r) { return (r.ok && !r.redirected) ? r.json() : null; })
+      .then(function (d) { if (d && d.ok) { FALTAS = d.faltas || {}; } })
+      .catch(function () {});
   }
   var audioCtx = null, somAtivo = false, loopId = null, avisosAtivos = [];
   var ultimoToque = 0;
@@ -1665,11 +1704,39 @@
       return;
     }
     if (msg) msg.textContent = '';
+    // Item que saiu em pedido com o estoque zerado no sistema (05/10/2026):
+    // a caixa só desconta se for marcada — nunca vem marcada.
     document.getElementById('prod-confirm-lista').innerHTML = itens.map(function (it) {
-      return '<div class="linha"><b>' + it.quantidade + '×</b> ' + esc(it.nome) + '</div>';
+      var fa = FALTAS[it.ref];
+      var caixa = (fa && fa.quantidade > 0)
+        ? '<label class="prod-quitar"><input type="checkbox" class="prod-quitar-chk" data-ref="'
+          + esc(it.ref) + '" data-n="' + Math.min(fa.quantidade, it.quantidade)
+          + '"> Inclui as ' + fa.quantidade + ' que já saíram em pedidos com o '
+          + 'estoque zerado (' + esc(fa.pedidos) + ') — desconta até '
+          + Math.min(fa.quantidade, it.quantidade) + '</label>'
+        : '';
+      return '<div class="linha"><b>' + it.quantidade + '×</b> ' + esc(it.nome) + caixa + '</div>';
     }).join('');
     prodPendentes = itens.map(function (it) {
       return { ref: it.ref, quantidade: it.quantidade };
+    });
+    document.getElementById('prod-confirm').classList.add('aberto');
+  }
+
+  // Monta o envio com as caixas marcadas (o número enviado é o que a caixa
+  // mostrou). A chave identifica só a PRODUÇÃO (itens e quantidades): repetir
+  // após timeout com a caixa diferente usa a MESMA chave, e o servidor recusa
+  // em vez de creditar de novo.
+  function prodMontarEnvio() {
+    var marcados = {};
+    document.querySelectorAll('#prod-confirm-lista .prod-quitar-chk').forEach(function (el) {
+      var n = parseInt(el.dataset.n, 10) || 0;
+      if (el.checked && n > 0) { marcados[el.dataset.ref] = n; }
+    });
+    var envio = prodPendentes.map(function (it) {
+      var o = { ref: it.ref, quantidade: it.quantidade };
+      if (marcados[it.ref]) { o.quitar_faltas = marcados[it.ref]; }
+      return o;
     });
     var conteudo = JSON.stringify(prodPendentes);
     if (!prodChave || conteudo !== prodConteudo) {
@@ -1678,7 +1745,7 @@
       prodChave = Array.from(bytes).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
       prodConteudo = conteudo;
     }
-    document.getElementById('prod-confirm').classList.add('aberto');
+    return envio;
   }
 
   function prodCancelar() {
@@ -1722,10 +1789,11 @@
     prodEnviando = true;
     var btn = document.getElementById('prod-confirm-ok');
     if (btn) btn.disabled = true;
+    var envio = prodMontarEnvio();
     fetch('/padeiro/produzir', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body: JSON.stringify({ itens: prodPendentes, chave_envio: prodChave })
+      body: JSON.stringify({ itens: envio, chave_envio: prodChave })
     })
       // Mantemos o status pra mostrar uma mensagem util quando o servidor
       // responder 500 com HTML (ex: rota lança antes de chegar no
@@ -1744,12 +1812,24 @@
         var msg = document.getElementById('prod-msg');
         if (d && d.ok) {
           prodReset();
+          var quit = (d.resumo || []).filter(function (r) { return r.quitado > 0; })
+            .map(function (r) { return r.nome + ' ' + r.quitado; });
           if (msg) { msg.style.color = '#0f5132';
-                     msg.textContent = 'Produção registrada no congelado.'; }
-          setTimeout(function () { if (msg) { msg.textContent = ''; msg.style.color = ''; } }, 4000);
+                     msg.textContent = 'Produção registrada no congelado.'
+                       + (quit.length ? ' Já tinham saído nos pedidos e foram descontados: '
+                                        + quit.join(', ') + '.' : ''); }
+          if (quit.length) { atualizarFaltas(); }
+          setTimeout(function () { if (msg) { msg.textContent = ''; msg.style.color = ''; } },
+                     quit.length ? 8000 : 4000);
         } else if (msg) {
           msg.style.color = '';
-          if (d && d.erro) {
+          if (d && d.ja_registrado) {
+            // A produção já foi gravada (resposta perdida antes): limpa a
+            // gaveta para não repetir; o Histórico mostra o que entrou.
+            prodReset();
+            atualizarFaltas();
+            msg.textContent = d.erro;
+          } else if (d && d.erro) {
             msg.textContent = d.erro;
             if (d.ordem_url) {
               var link = document.createElement('a');
@@ -1841,6 +1921,7 @@
   setInterval(atualizarPrep, 60000);
   aplicarChecks();  // estado inicial (o #listas já vem renderizado do servidor)
   setInterval(atualizarListas, 15000);
+  setInterval(atualizarFaltas, 15000);
   setInterval(atualizarLousa, 15000);
   setInterval(autoFecharOcioso, 10000);
 </script>

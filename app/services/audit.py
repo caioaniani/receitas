@@ -58,6 +58,9 @@ AUDITED_MODELS = {
     # Perda de producao do padeiro (13/08/2026): registro mexe em estoque da
     # industria e a EXCLUSAO estorna — dinheiro-adjacente, baixo volume.
     'perda_producao',
+    # Faltas de saída da indústria (05/10/2026): a quitação debita estoque
+    # por confirmação humana na TV — trilha de quem quitou/encerrou.
+    'falta_saida_industria',
 }
 
 

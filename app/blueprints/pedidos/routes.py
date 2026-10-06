@@ -1049,8 +1049,15 @@ def enviar(id):
         current_app.logger.exception('Falha ao enviar pedido %s', id)
         flash(f'Erro ao processar saída do pedido: {exc}. Nada foi alterado.', 'danger')
         return redirect(url_for('pedidos.detalhe', id=id))
-    flash(msg, 'success' if ok else 'warning')
+    # Saída com falta de estoque da indústria (05/10/2026): aviso em amarelo,
+    # não em verde — é o momento em que alguém ainda lembra o que saiu.
+    cat = ('warning' if not ok or msg.startswith(_MSG_SAIDA_COM_FALTA)
+           else 'success')
+    flash(msg, cat)
     return redirect(url_for('pedidos.detalhe', id=id))
+
+
+_MSG_SAIDA_COM_FALTA = 'Pedido em transporte. ATENÇÃO'
 
 
 def _executar_envio_pedido(pedido, user, ref_extra=None):
@@ -1075,11 +1082,8 @@ def _executar_envio_pedido(pedido, user, ref_extra=None):
     pedido.status = 'em_transporte'
     db.session.commit()
     if faltas:
-        quais = '; '.join(f"{f['item']}: pedido {f['pedido']:g}, "
-                          f"baixado {f['baixado']:g}" for f in faltas)
-        return True, ('Pedido em transporte. ATENÇÃO — saiu com estoque '
-                      f'insuficiente na indústria ({quais}). A falta ficou '
-                      'registrada no histórico (saida_pedido_sem_estoque).')
+        from app.services.pedido_estoque import texto_faltas_saida
+        return True, f'{_MSG_SAIDA_COM_FALTA} — {texto_faltas_saida(faltas)}'
     return True, 'Pedido em transporte. Estoque da industria baixado.'
 
 
@@ -1706,6 +1710,12 @@ def excluir(id):
     from app.models import HandshakeAudit
     HandshakeAudit.query.filter_by(pedido_id=pedido.id).update(
         {'pedido_id': None})
+    # Faltas de saída do pedido (05/10/2026): sem o pedido não há referência
+    # para quitar nem estornar — encerra e solta o vínculo antes do delete
+    # (pelo ORM, para ficar no histórico).
+    from app.services import faltas_industria
+    faltas_industria.encerrar_do_pedido(pedido.id, 'excluido', current_user.id)
+    faltas_industria.soltar_do_pedido(pedido.id)
     db.session.delete(pedido)
     erro_corte = salvar_no_prazo([pedido.data_entrega])
     if erro_corte:
@@ -1917,6 +1927,7 @@ def congelados_historico():
         ate = None
 
     tipos_disp = ['entrada', 'saida_pedido', 'saida_pedido_sem_estoque',
+                  'saida_pedido_quitada',
                   'estorno_saida_pedido', 'ajuste', 'ajuste_conferencia',
                   'balanco', 'desperdicio', 'perda_producao',
                   'perda_producao_sem_estoque', 'perda_producao_estorno']
@@ -2153,10 +2164,21 @@ def congelados_conferencia():
     item, digita a quantidade real, ve a divergencia e ajusta pra bater (com
     auditoria em MovEstoqueProducao). Espelha a conferencia de loja. Permite
     adicionar item que apareceu no fisico mas ainda nao tem linha de estoque."""
+    from app.services import faltas_industria
     from app.services.estoque_massa import ajustar_contagem_bolas, eh_massa_folhar
     if request.method == 'POST':
         ajustes = 0
         massa_conferida = False
+        # Itens contados (mesmo sem diferença): a contagem encerra as faltas
+        # de saída abertas deles (05/10/2026) — o físico já reflete o que saiu.
+        contados = []
+        # Linhas contadas travadas antes de tudo, em ordem de id (mesma ordem
+        # da quitação de faltas: linha → faltas).
+        from app.services.estoque_congelados import travar_linhas_producao
+        travar_linhas_producao(ids=[
+            int(k[len('real_'):]) for k, v in request.form.items()
+            if k.startswith('real_') and v.strip() and k[len('real_'):].isdigit()
+            and len(k) <= 20])
         # 1) ajusta os itens existentes (campos real_<id>)
         for key, val in request.form.items():
             if not key.startswith('real_') or not val.strip():
@@ -2171,6 +2193,7 @@ def congelados_conferencia():
             ep = EstoqueProducao.query.get(ep_id)
             if not ep:
                 continue
+            contados.append((ep.receita_id, ep.produto_id))
             if eh_massa_folhar(ep.receita):
                 ajuste = ajustar_contagem_bolas(
                     ep.receita, real, current_user.id,
@@ -2204,6 +2227,7 @@ def congelados_conferencia():
             if tipo not in ('receita', 'produto') or not rid.isdigit():
                 continue
             receita_nova = db.session.get(Receita, int(rid)) if tipo == 'receita' else None
+            contados.append((int(rid), None) if tipo == 'receita' else (None, int(rid)))
             if eh_massa_folhar(receita_nova):
                 ajuste = ajustar_contagem_bolas(
                     receita_nova, qtd, current_user.id,
@@ -2227,7 +2251,12 @@ def congelados_conferencia():
                 usuario_id=current_user.id))
             ep.quantidade = qtd
             ajustes += 1
-        if ajustes or massa_conferida:
+        # Só encerra faltas de saídas ANTERIORES ao início da contagem: uma
+        # saída depois de a tela abrir não está no que foi contado.
+        faltas_encerradas = faltas_industria.encerrar_por_contagem(
+            contados, current_user.id,
+            antes_de=faltas_industria.inicio_contagem(request.form.get('iniciada_em')))
+        if ajustes or massa_conferida or faltas_encerradas:
             # A conversão de fração legada pode registrar falta mesmo quando
             # a contagem inteira já é zero; ela também precisa ser confirmada.
             db.session.commit()
@@ -2235,6 +2264,9 @@ def congelados_conferencia():
             flash(f'Conferência aplicada: {ajustes} ajuste(s) registrado(s).', 'success')
         else:
             flash('Nenhum ajuste necessário — o estoque já bate.', 'info')
+        if faltas_encerradas:
+            flash(f'{faltas_encerradas} falta(s) de saída dos itens contados '
+                  'foram encerradas: a contagem já reflete o que saiu.', 'info')
         return redirect(url_for('pedidos.congelados_conferencia'))
 
     itens = (EstoqueProducao.query
@@ -2260,7 +2292,8 @@ def congelados_conferencia():
     from app.services.estoque_congelados import saldos_massa_para_tela
     return render_template('pedidos/congelados_conferencia.html', itens=itens,
                            receitas_add=receitas_add, produtos_add=produtos_add,
-                           saldos_massa=saldos_massa_para_tela(itens))
+                           saldos_massa=saldos_massa_para_tela(itens),
+                           iniciada_em=agora().isoformat(timespec='seconds'))
 
 
 # ── Estoque de Loja ──

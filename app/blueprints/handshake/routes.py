@@ -288,6 +288,10 @@ def _handshake_saida(qr, pedido, pin):
     pedido.driver_id = driver_match.id
     db.session.commit()
     _audit(qr.token, pedido, qr.tipo, 'sucesso', f'driver:{driver_match.nome}')
+    faltas = _faltas_do_pedido(pedido)
+    if faltas:
+        _audit(qr.token, pedido, qr.tipo, 'falta_saida', '; '.join(
+            f"{f['quantidade']}x {f['nome']}" for f in faltas)[:500])
     # NF de TRANSFERENCIA (20/07/2026): emitida DEPOIS do commit da coleta,
     # best-effort — Tiny/SEFAZ fora do ar NUNCA segura o caminhao (padrao
     # loja_pagamento._emitir_nf_e_enviar). O resultado vira so auditoria;
@@ -312,6 +316,19 @@ def _handshake_saida(qr, pedido, pin):
     # idempotente, nao reenvia o POST. Tela de sucesso reconstroi proximo_url
     # a partir do qr/pedido persistidos.
     return redirect(url_for('handshake.sucesso', token=qr.token), code=303)
+
+
+def _faltas_do_pedido(pedido):
+    """Itens que saíram com o estoque da indústria abaixo do pedido no
+    sistema (05/10/2026, opção A do dono). Aviso informativo: falha aqui
+    nunca derruba a tela de sucesso da saída."""
+    from app.services import faltas_industria
+    try:
+        return faltas_industria.do_pedido(pedido.id) if pedido else []
+    except Exception:  # noqa: BLE001 — aviso some, a saída já foi gravada
+        db.session.rollback()
+        logger.exception('handshake: faltas de saída indisponíveis')
+        return []
 
 
 @handshake_bp.route('/<token>/sucesso')
@@ -352,7 +369,8 @@ def sucesso(token):
                                        pedido_id=pedido.id, _external=True)
                 proximo_label = 'Conferir e entregar na loja'
         return render_template('handshake/sucesso.html', msg=msg, pedido=pedido,
-                                proximo_label=proximo_label, proximo_url=proximo_url)
+                                proximo_label=proximo_label, proximo_url=proximo_url,
+                                faltas=_faltas_do_pedido(pedido))
     # tipo == 'entrega'
     nome_loja = descricao.replace('loja:', '', 1) if descricao.startswith('loja:') else (pedido.loja.nome if pedido.loja else '')
     msg = f'Entrega confirmada em {nome_loja}.' if nome_loja else 'Entrega confirmada.'

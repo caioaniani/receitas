@@ -13,6 +13,27 @@
 </form>
 {% endif %}
 
+{% if faltas_saida %}
+{# Faltas de saída (05/10/2026, decisão do dono, opção A): itens que saíram
+   nos pedidos com o estoque da indústria abaixo do pedido no sistema —
+   normalmente produção feita e ainda não lançada. Ao lançar a produção
+   desses itens, a tela pergunta se ela inclui o que já saiu. #}
+<div class="sec-title">Saíram sem produção lançada ({{ faltas_saida|length }})</div>
+<div class="grid">
+  {% for f in faltas_saida %}
+  <div class="card falta-saida">
+    <p class="loja"><span class="badge-falta">⚠ FALTA NA SAÍDA</span> {{ f.quantidade }}× {{ f.nome }}</p>
+    <p class="itens">{% for p in f.pedidos %}{{ p.quantidade }} no pedido #{{ p.pedido_id }} — {{ p.loja }} ({{ p.quando }}){% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+    {% if f.quitavel %}
+    <p class="meta">Saíram nos pedidos, mas o sistema não tinha esse estoque. Se a produção já foi feita, lance-a: a tela vai perguntar se ela inclui estes itens.</p>
+    {% else %}
+    <p class="meta">Saíram nos pedidos, mas o sistema não tinha esse estoque. Este item é acertado na conferência do estoque.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="sec-title">Para separar ({{ a_separar|length }})</div>
 {% if a_separar %}
 <div class="grid">

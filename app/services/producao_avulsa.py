@@ -16,14 +16,32 @@ class UsarOrdemDoDia(ValueError):
     pass
 
 
-def registrar_lote(validados, user_id, chave=None):
+class EnvioJaRegistrado(ValueError):
+    """A mesma produção (chave do envio) já foi gravada com outra escolha
+    sobre o que já saiu nos pedidos. A tela limpa a gaveta e manda conferir o
+    Histórico — reenviar nunca credita de novo."""
+
+
+def registrar_lote(validados, user_id, chave=None, quitar=None):
     """Tudo ou nada; o recibo único impede repetir um envio após timeout.
 
     O chamador valida catálogo/quantidades e faz rollback em qualquer erro.
     Pães avulsos criam uma ordem manual concluída na quantidade REAL. O
     arredondamento da ficha nunca credita unidades nem deixa sobra prevista.
+
+    `quitar` (05/10/2026, opção A do dono): {ref: N} ('receita:<id>' /
+    'produto:<id>') — o padeiro CONFIRMOU que a produção inclui N unidades
+    que já saíram em pedidos com o estoque zerado no sistema (N = o número
+    que a pergunta mostrou). Depois do crédito, `faltas_industria.quitar`
+    debita até min(N, quantidade lançada).
+
+    A chave do envio identifica a PRODUÇÃO (itens e quantidades); a
+    quitação faz parte da assinatura. Repetir a mesma chave com outra
+    escolha de quitação é recusado — a produção já foi gravada e um novo
+    recibo a creditaria de novo.
     """
     from app.models import AppConfig, PlanejamentoItem, PlanejamentoProducao
+    from app.services import faltas_industria
     from app.services.bateladas_paes import farinha_padrao_g, normalizar_item
     from app.services.estoque_congelados import entrada_producao
     from app.services.producao import (
@@ -41,14 +59,23 @@ def registrar_lote(validados, user_id, chave=None):
         if not isinstance(chave, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,64}', chave):
             raise ValueError('Identificação do envio inválida. Atualize a tela.')
         conteudo = json.dumps([(t, o.id, q) for t, o, q in validados])
-        assinatura = hashlib.sha256(conteudo.encode()).hexdigest()
+        # Só a produção: recibos antigos (sem quitação) batem com ela.
+        assinatura_base = hashlib.sha256(conteudo.encode()).hexdigest()
+        assinatura = assinatura_base
+        if quitar:
+            assinatura = hashlib.sha256(json.dumps(
+                [json.loads(conteudo), sorted(quitar.items())]).encode()).hexdigest()
         key = f'producao_tv:{user_id}:{chave}'
 
         def repetir(anterior):
             dados = json.loads(anterior.value)
-            if dados['assinatura'] != assinatura:
-                raise ValueError('Este envio já foi usado com outras quantidades. Atualize a tela.')
-            return dados['resumo']
+            if dados['assinatura'] == assinatura:
+                return dados['resumo']
+            if dados.get('assinatura_base', dados['assinatura']) == assinatura_base:
+                raise EnvioJaRegistrado(
+                    'Esta produção já foi registrada (com outra escolha sobre o que '
+                    'já saiu nos pedidos). Confira o Histórico antes de lançar de novo.')
+            raise ValueError('Este envio já foi usado com outras quantidades. Atualize a tela.')
 
         anterior = db.session.get(AppConfig, key)
         if anterior is not None:
@@ -65,6 +92,13 @@ def registrar_lote(validados, user_id, chave=None):
             if anterior is None:
                 raise
             return repetir(anterior)
+
+    # Linhas dos itens travadas antes, em ordem de id (mesma ordem do
+    # estorno e da conferência: linhas → faltas).
+    from app.services.estoque_congelados import travar_linhas_producao
+    travar_linhas_producao(
+        receita_ids=[o.id for t, o, _q in validados if t == 'receita'],
+        produto_ids=[o.id for t, o, _q in validados if t == 'produto'])
 
     plano = None
     itens_paes = {}
@@ -97,15 +131,25 @@ def registrar_lote(validados, user_id, chave=None):
             itens_paes[rec.id] = item
         sincronizar_pre_baixa_mp(plano, user_id)
 
+    quitar = dict(quitar or {})
     resumo = []
     for tipo, obj, qtd in validados:
+        # Até o número confirmado na tela e nunca mais que o lançado agora
+        # (bool é int em Python: True não é número confirmado).
+        confirmado = quitar.get(f'{tipo}:{obj.id}')
+        if isinstance(confirmado, bool) or not isinstance(confirmado, int):
+            confirmado = 0
+        limite = max(0, min(confirmado, qtd))
+        quitado = 0
         item = itens_paes.get(obj.id) if tipo == 'receita' else None
         if item is not None:
             resultado = produzir_item_plano(
                 item.id, qtd, user_id, commit=False, produzido_esperado=0,
-                referencia_estoque=f'{REFERENCIA_EXTRA} · ordem {plano.id}')
+                referencia_estoque=f'{REFERENCIA_EXTRA} · ordem {plano.id}',
+                quitar_faltas=limite)
             if not resultado['ok']:
                 raise ValueError(resultado['erro'])
+            quitado = resultado.get('quitado', 0)
             # Esta é uma declaração de produção já concluída, não um pedido
             # futuro: preserve a ficha, mas encerre o alvo no realizado.
             item.qtd_alvo = item.produzido_qtd
@@ -118,12 +162,22 @@ def registrar_lote(validados, user_id, chave=None):
                 referencia='Produção (TV padeiro)')
             if tipo == 'receita':
                 consumir_subreceitas_prontas(obj, qtd, user_id)
-        resumo.append({'nome': obj.nome, 'qtd': qtd})
+            if limite:
+                quitado = faltas_industria.quitar(
+                    receita_id=obj.id if tipo == 'receita' else None,
+                    produto_id=obj.id if tipo == 'produto' else None,
+                    maximo=limite, usuario_id=user_id)
+        linha = {'nome': obj.nome, 'qtd': qtd}
+        if quitado:
+            # Só aparece quando houve quitação: o formato de sempre segue igual.
+            linha['quitado'] = quitado
+        resumo.append(linha)
     if plano is not None:
         sincronizar_pre_baixa_mp(plano, user_id)
         plano.status = 'executado'
     if recibo is not None:
-        recibo.value = json.dumps({'assinatura': assinatura, 'resumo': resumo},
-                                  ensure_ascii=False)
+        recibo.value = json.dumps({'assinatura': assinatura,
+                                   'assinatura_base': assinatura_base,
+                                   'resumo': resumo}, ensure_ascii=False)
     db.session.commit()
     return resumo
