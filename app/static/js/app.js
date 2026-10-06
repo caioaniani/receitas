@@ -569,8 +569,84 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
 
-        // Calcular ao carregar
+        // Calcular ao carregar. Antes, ancora as linhas em gramas/unidades no
+        // peso base GRAVADO (o modo "Quantidade" recalcula o peso base no
+        // primeiro cálculo; a âncora tem de ser a da ficha salva).
+        ancorarIngredientesPorLote(parseFloat(pesoBaseInput.value) || 0);
         recalcularTudo();
+    }
+
+    // Linhas da ficha que NÃO são % da farinha: sub-receita em unidades,
+    // MP em gramas e MP em unidades. Numa receita de massa (há linhas em %)
+    // elas valem para a batelada do peso base, como no motor da produção
+    // (`bateladas_paes.padrao_receita` multiplica TODAS as linhas pela mesma
+    // escala). Caso real 06/10/2026: pão francês com 200 g de levain para
+    // 1.000 g de farinha — com 12 kg a ficha mantinha 200 g e mostrava 215
+    // pães, enquanto a ordem calculava 2,4 kg de levain e 237 pães.
+    var TIPOS_POR_LOTE = ['receita', 'mp_direto', 'mp_un'];
+
+    function _casasDecimais(texto) {
+        var partes = String(texto || '').split('.');
+        return Math.min(4, Math.max(2, partes[1] ? partes[1].length : 0));
+    }
+
+    function _ancorar(row, pctInput, tipo, base) {
+        var atual = pctInput.value;
+        row.dataset.loteTipo = tipo;
+        row.dataset.loteEscrito = atual;
+        row.dataset.loteCasas = String(_casasDecimais(atual));
+        if (base > 0) {
+            row.dataset.lotePorBase = String((parseFloat(atual) || 0) / base);
+        } else {
+            delete row.dataset.lotePorBase;
+        }
+    }
+
+    function ancorarIngredientesPorLote(base) {
+        document.querySelectorAll('.ingrediente-row').forEach(function (row) {
+            var tipoSel = row.querySelector('.ing-tipo');
+            var tipo = tipoSel ? tipoSel.value : 'mp';
+            var pctInput = row.querySelector('.pct-input');
+            if (pctInput && TIPOS_POR_LOTE.indexOf(tipo) >= 0) {
+                _ancorar(row, pctInput, tipo, base);
+            }
+        });
+    }
+
+    // Acompanha o peso base: o campo da linha passa a mostrar (e a gravar) a
+    // quantidade da batelada atual, mantendo a proporção da ficha. Edição
+    // manual da linha vira a nova proporção. Receita MONTADA (sem linha em %)
+    // não escala: lá as linhas são absolutas.
+    function escalarIngredientesPorLote(pesoBase, ehMassa) {
+        document.querySelectorAll('.ingrediente-row').forEach(function (row) {
+            var tipoSel = row.querySelector('.ing-tipo');
+            var tipo = tipoSel ? tipoSel.value : 'mp';
+            var pctInput = row.querySelector('.pct-input');
+            if (!pctInput) return;
+            if (TIPOS_POR_LOTE.indexOf(tipo) < 0) {
+                delete row.dataset.loteTipo;
+                delete row.dataset.lotePorBase;
+                delete row.dataset.loteEscrito;
+                return;
+            }
+            var atual = pctInput.value;
+            var editada = row.dataset.loteTipo !== tipo
+                || row.dataset.loteEscrito !== atual
+                || row.dataset.lotePorBase === undefined;
+            if (editada || !ehMassa || !(pesoBase > 0)) {
+                _ancorar(row, pctInput, tipo, pesoBase);
+                return;
+            }
+            var casas = parseInt(row.dataset.loteCasas, 10) || 2;
+            var fator = Math.pow(10, casas);
+            var novo = Math.round(parseFloat(row.dataset.lotePorBase) * pesoBase * fator) / fator;
+            if (novo !== Math.round((parseFloat(atual) || 0) * fator) / fator) {
+                pctInput.value = String(novo);
+                var texto = row.querySelector('.pct-texto');
+                if (texto) texto.textContent = formatNum(novo, novo % 1 ? casas : 0);
+            }
+            row.dataset.loteEscrito = pctInput.value;
+        });
     }
 
     function aplicarModo() {
