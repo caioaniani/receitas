@@ -251,12 +251,8 @@ def encerrar_do_pedido(pedido_id, motivo, usuario_id=None):
     mudar quando nem por quem foram encerradas: o estorno devolve a
     quitação junto com a saída, e a tela de um novo envio não pode mostrar
     a falta de uma saída desfeita. A quantidade quitada fica como histórico."""
-    rows = (FaltaSaidaIndustria.query
-            .filter(FaltaSaidaIndustria.pedido_id == pedido_id)
-            .order_by(FaltaSaidaIndustria.id)
-            .populate_existing().with_for_update().all())
     n = 0
-    for f in rows:
+    for f in travar_do_pedido(pedido_id):
         if f.encerrada_em is None:
             _encerrar(f, motivo, usuario_id)
             n += 1
