@@ -1274,3 +1274,20 @@ def test_estoque_ledger_industria_por_receita_id_e_validacao(app):
     assert c.get('/api/claude/estoque-ledger-industria', headers=h).status_code == 400
     assert c.get('/api/claude/estoque-ledger-industria?item=inexistente',
                  headers=h).status_code == 404
+
+
+def test_tiny_contato_sonda_le_sem_escrever(app):
+    from unittest.mock import patch
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    h = {'Authorization': f'Bearer {TOKEN}'}
+    retorno = {'status': 'OK', 'numero_paginas': 1, 'contatos': [
+        {'contato': {'id': '1', 'nome': 'A', 'cpf_cnpj': '11.222.333/0001-44'}},
+        {'contato': {'id': '2', 'nome': 'B', 'cpf_cnpj': '11222333000144'}}]}
+    c = app.test_client()
+    with patch('app.services.tiny._get', return_value=retorno):
+        d = c.get('/api/claude/tiny-contato?doc=11.222.333/0001-44', headers=h).get_json()
+    assert d['documento'] == '11222333000144'
+    assert [x['casa_exato'] for x in d['pesquisas'][0]['contatos']] == [True, True]
+    assert d['veredito']['ok'] is False and 'Há 2 cadastros' in d['veredito']['erro']
+    assert c.get('/api/claude/tiny-contato', headers=h).status_code == 400
+    assert c.get('/api/claude/tiny-contato?fatura=999', headers=h).status_code == 404

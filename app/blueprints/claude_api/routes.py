@@ -3367,3 +3367,63 @@ def fermentacao_diag():
                                                   if canal else {'erro': 'canal_nao_configurado'})}
                         for nome, canal in destinos.items()}
     return jsonify(out)
+
+
+@claude_api_bp.route('/tiny-contato')
+@_claude_auth_required
+def tiny_contato():
+    """SONDA read-only do cadastro fiscal no Tiny (06/10/2026, caso FAT00003).
+
+    ?doc=<CPF/CNPJ> ou ?fatura=<id da FaturaB2B> (usa o CNPJ do cliente).
+    Mostra o que `contatos.pesquisa.php` devolve para o documento (id, nome,
+    código, documento, situação), se cada um casa exatamente e o veredito da
+    MESMA função que a emissão da NF usa. Nunca cria nem altera cadastro."""
+    from app.extensions import db
+    from app.models import FaturaB2B
+    from app.services import tiny
+    doc = (request.args.get('doc') or '').strip()
+    out = {'ok': True, 'tiny_disponivel': tiny.disponivel()}
+    fat_id = (request.args.get('fatura') or '').strip()
+    if fat_id:
+        if not fat_id.isdigit():
+            return jsonify(ok=False, erro='fatura deve ser o id numérico'), 400
+        fat = db.session.get(FaturaB2B, int(fat_id))
+        if not fat:
+            return jsonify(ok=False, erro='fatura não encontrada'), 404
+        cli = fat.cliente
+        out['cliente'] = {'id': cli.id, 'nome': cli.nome, 'cnpj_cpf': cli.cnpj_cpf}
+        doc = cli.cnpj_cpf or ''
+    digitos = tiny._so_digitos(doc)
+    if len(digitos) not in (11, 14):
+        out.update(ok=False, erro='passe ?doc=<CPF/CNPJ> ou ?fatura=<id>')
+        return jsonify(out), 400
+    out['documento'] = digitos
+    paginas = []
+    for situacao in ('Ativo', ''):
+        retorno = tiny._get('contatos.pesquisa.php', {
+            'pesquisa': '', 'cpf_cnpj': digitos, 'situacao': situacao, 'pagina': 1,
+        }, retornar_erro=True)
+        bloco = {'filtro_situacao': situacao or '(sem filtro)'}
+        if isinstance(retorno, dict):
+            bloco.update(status=retorno.get('status'),
+                         codigo_erro=retorno.get('codigo_erro'),
+                         numero_paginas=retorno.get('numero_paginas'),
+                         erros=tiny._extrair_erros(retorno) or None)
+            bloco['contatos'] = [{
+                'id': c.get('id'), 'nome': c.get('nome'), 'fantasia': c.get('fantasia'),
+                'codigo': c.get('codigo'), 'cpf_cnpj': c.get('cpf_cnpj'),
+                'situacao': c.get('situacao'),
+                'casa_exato': tiny._so_digitos(c.get('cpf_cnpj')) == digitos,
+            } for c in ((i or {}).get('contato') or {}
+                        for i in (retorno.get('contatos') or []) if isinstance(i, dict))]
+        else:
+            bloco['motivo_falha'] = tiny._consumir_falha()
+        paginas.append(bloco)
+    out['pesquisas'] = paginas
+    try:
+        contato = tiny.contato_fiscal_por_documento(digitos)
+        out['veredito'] = {'ok': True, 'id': contato.get('id'), 'nome': contato.get('nome'),
+                           'ie': contato.get('ie'), 'codigo': contato.get('codigo')}
+    except ValueError as exc:
+        out['veredito'] = {'ok': False, 'erro': str(exc)}
+    return jsonify(out)
