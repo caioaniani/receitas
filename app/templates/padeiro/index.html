@@ -1823,7 +1823,13 @@
                      quit.length ? 8000 : 4000);
         } else if (msg) {
           msg.style.color = '';
-          if (d && d.erro) {
+          if (d && d.ja_registrado) {
+            // A produção já foi gravada (resposta perdida antes): limpa a
+            // gaveta para não repetir; o Histórico mostra o que entrou.
+            prodReset();
+            atualizarFaltas();
+            msg.textContent = d.erro;
+          } else if (d && d.erro) {
             msg.textContent = d.erro;
             if (d.ordem_url) {
               var link = document.createElement('a');

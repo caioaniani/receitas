@@ -21,7 +21,8 @@ function el(value = '') { return {value, textContent:'', className:'', style:{},
   addEventListener(n, fn){this.handlers[n] = fn;}, querySelectorAll(){return [];} }; }
 const elements = {};
 for (const [id, value] of Object.entries({'ficha-body':'', 'peso-base':String(cfg.base),
-  'rendimento-qtd':'19', 'peso-unitario':'100', 'modo-lancamento':'farinha',
+  'rendimento-qtd':String(cfg.rendimento || 19), 'peso-unitario':'100',
+  'modo-lancamento':cfg.modo || 'farinha',
   'multiplicador':'1', 'perda-percentual':'0', 'preco-venda':'0',
   'total-custo':'', 'resumo-custo':'', 'resumo-custo-un':'', 'resumo-peso':'',
   'resumo-unidades':'', 'resumo-margem-venda':'', 'resumo-lucro-un-venda':''})) {
@@ -44,13 +45,23 @@ vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), sandbox);
 const out = {passos: []};
 function foto(rotulo) {
   out.passos.push({rotulo, unidades: Number(elements['resumo-unidades'].textContent),
-                   qtds: rows.map(r => r.f['.pct-input'].value)});
+                   base: elements['peso-base'].value,
+                   qtds: rows.map(r => r.f['.pct-input'].value),
+                   textos: rows.map(r => r.f['.pct-texto'].textContent)});
 }
 foto('carregou');
 for (const passo of cfg.passos) {
+  for (const b of (passo.digitar || [])) {          // tecla a tecla
+    elements['peso-base'].value = String(b);
+    elements['peso-base'].handlers.input();
+  }
   if (passo.base !== undefined) {
     elements['peso-base'].value = String(passo.base);
     elements['peso-base'].handlers.input();
+  }
+  if (passo.rendimento !== undefined) {
+    elements['rendimento-qtd'].value = String(passo.rendimento);
+    elements['rendimento-qtd'].handlers.input();
   }
   if (passo.linha !== undefined) {
     rows[passo.linha].f['.pct-input'].value = String(passo.valor);
@@ -66,12 +77,12 @@ PAO_FRANCES = [['FarinhaT65', 'mp', '100.0'], ['Agua(1L)', 'mp', '75.0'],
                ['Fermento', 'mp', '0.5']]
 
 
-def _rodar(linhas, base, passos):
+def _rodar(linhas, base, passos, **extra):
     node = shutil.which('node')
     if not node:
         pytest.skip('Node indisponível para executar o cálculo da ficha')
     script = Path(__file__).resolve().parents[1] / 'app/static/js/app.js'
-    cfg = {'linhas': linhas, 'base': base, 'passos': passos}
+    cfg = {'linhas': linhas, 'base': base, 'passos': passos, **extra}
     res = subprocess.run([node, '-e', _HARNESS, str(script), json.dumps(cfg)],
                          capture_output=True, text=True, timeout=15, check=False)
     assert res.returncode == 0, res.stdout + res.stderr
@@ -91,11 +102,66 @@ def test_pao_frances_12kg_da_237_como_a_ordem():
     assert passos['volta']['unidades'] == 19
 
 
-def test_bate_com_o_motor_das_bateladas():
-    """A calculadora e o motor da produção dão o mesmo rendimento."""
+def test_bate_com_o_motor_das_bateladas(app):
+    """A calculadora e o MOTOR da produção (`bateladas_paes.padrao_receita`)
+    dão o mesmo rendimento e o mesmo levain para 12 kg."""
+    from app.extensions import db
+    from app.models import Receita, ReceitaIngrediente
+    from app.services.bateladas_paes import padrao_receita
+    levain = Receita(nome='Levain (pé)', categoria='Insumos', peso_base=1000,
+                     rendimento_qtd=1, rendimento_unidade='g', peso_unitario=1,
+                     sub_na_amassadeira=True)
+    pao = Receita(nome='Pão Francês Motor', categoria='Pães', peso_base=1000,
+                  rendimento_qtd=19, rendimento_unidade='un', peso_unitario=100)
+    for nome, tipo, qtd in PAO_FRANCES:
+        pao.ingredientes.append(ReceitaIngrediente(
+            tipo=tipo, ingrediente_nome=nome, porcentagem=float(qtd),
+            eh_base=nome.startswith('Farinha'),
+            sub_receita=levain if tipo == 'receita' else None))
+    db.session.add_all([levain, pao])
+    db.session.commit()
+    motor = padrao_receita(pao, farinha_g=12000, resolver_estoque=False)
+
     passos = _rodar(PAO_FRANCES, 1000, [{'rotulo': '12kg', 'base': 12000}])
-    massa = 12000 * (100 + 75 + 2 + 0.5) / 100 + 12000 * 200 / 1000
-    assert passos['12kg']['unidades'] == int(massa // 100) == 237
+    assert passos['12kg']['unidades'] == motor['unidades'] == 237
+    levain_motor = next(i['qtd'] for i in motor['ingredientes'] if i['nome'] == 'Levain (pé)')
+    assert float(passos['12kg']['qtds'][2]) == levain_motor == 2400
+
+
+@pytest.mark.parametrize('digitar', [
+    ['', '1', '12', '120', '1200', '12000'],     # apagou e digitou de novo
+    ['100', '10', '1', '', '2', '20', '200', '2000', '12000'],   # backspace
+])
+def test_apagar_e_redigitar_o_peso_base_nao_corrompe(digitar):
+    """Peso base vazio ou pequeno no meio da digitação não mexe na proporção
+    (achado da revisão: virava 2.400.000 ou caía pela metade)."""
+    passos = _rodar(PAO_FRANCES, 1000, [{'rotulo': 'fim', 'digitar': digitar}])
+    assert passos['fim']['qtds'][2] == '2400'
+    assert passos['fim']['unidades'] == 237
+
+
+def test_valor_pequeno_que_arredonda_para_zero_volta_depois():
+    linhas = PAO_FRANCES[:2] + [['Batom', 'mp_un', '1']]
+    passos = _rodar(linhas, 1000, [{'rotulo': 'fim', 'digitar': ['1', '12', '1000']}])
+    assert passos['fim']['qtds'][2] == '1'
+
+
+def test_modo_quantidade_acha_o_peso_base_exato():
+    """190 pães pedem a massa de 190 pães, contando o levain (antes ignorava
+    o levain e a ficha pedia ingredientes para ~211)."""
+    passos = _rodar(PAO_FRANCES, 1000, [{'rotulo': '190', 'rendimento': 190}],
+                    modo='quantidade', rendimento=19)
+    base = int(passos['190']['base'])
+    levain = float(passos['190']['qtds'][2])
+    assert levain == pytest.approx(base * 0.2, abs=0.01)
+    massa = base * (100 + 75 + 2 + 0.5) / 100 + levain
+    assert massa / 100 == pytest.approx(190, abs=0.05)
+
+
+def test_texto_da_calculadora_do_padeiro_em_formato_brasileiro():
+    passos = _rodar(PAO_FRANCES, 1000, [{'rotulo': '12kg', 'base': 12000}])
+    assert passos['carregou']['textos'][2] == '200'
+    assert passos['12kg']['textos'][2] == '2400'
 
 
 def test_edicao_manual_vira_a_nova_proporcao():
