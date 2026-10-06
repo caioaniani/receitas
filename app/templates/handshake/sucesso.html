@@ -12,6 +12,24 @@
     {% endif %}
 </div>
 
+{% if faltas %}
+{# Faltas de saída (05/10/2026): o sistema não tinha estoque da indústria
+   para estes itens. A carga saiu normalmente; o aviso é para a produção
+   lançar o que já foi feito. #}
+<div class="card card-soft p-3 mt-3" style="border-left:4px solid #b42318;background:#fff5f4;">
+    <p class="kv mb-1" style="font-weight:700;color:#842029;">
+        <i class="bi bi-exclamation-triangle-fill"></i> Saiu sem estoque no sistema
+    </p>
+    <p class="kv mb-1">
+    {% for f in faltas %}{{ f.quantidade }}× {{ f.nome }}{% if f.quitada %} <small>({{ f.quitada }} já acertado{{ 's' if f.quitada > 1 }})</small>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}
+    </p>
+    <p class="kv mb-0" style="color:#666;font-size:12px;">
+        A carga saiu normalmente. Avise a produção: se esses itens já foram
+        feitos, é preciso lançar a produção na tela do padeiro.
+    </p>
+</div>
+{% endif %}
+
 {% if pedido and pedido.tiny_nota_fiscal_id %}
 <a href="{{ url_for('handshake.danfe', token=request.view_args.token) }}"
    class="btn btn-acao mt-3" target="_blank" rel="noopener"
