@@ -602,6 +602,17 @@ def massa_base_mise(mb_id):
         'cascata': cascata})
 
 
+def _quitar_confirmado(valor):
+    """Número confirmado na pergunta da falta (05/10/2026): inteiro positivo
+    ou 0. Aceita str do formulário e int do JSON; True e texto não contam."""
+    if isinstance(valor, bool):
+        return 0
+    if isinstance(valor, int):
+        return max(0, valor)
+    v = (valor or '').strip() if isinstance(valor, str) else ''
+    return int(v) if v.isdigit() and v.isascii() else 0
+
+
 @padeiro_bp.route('/produzir-plano/<int:item_id>', methods=['POST'])
 @login_required
 @padeiro_required
@@ -615,9 +626,10 @@ def produzir_plano(item_id):
     except (TypeError, ValueError):
         unidades = 0
     encerrar = request.form.get('encerrar') == '1'
-    # Confirmado na tela: esta produção inclui itens que já saíram em pedidos
-    # com o estoque zerado no sistema (05/10/2026). O servidor recalcula.
-    quitar = request.form.get('quitar_faltas') == '1'
+    # Confirmado na tela: esta produção inclui N itens que já saíram em
+    # pedidos com o estoque zerado no sistema (05/10/2026). N é o número que
+    # a pergunta mostrou; o servidor recalcula e nunca quita mais que ele.
+    quitar = _quitar_confirmado(request.form.get('quitar_faltas'))
     try:
         esperado = request.form.get('produzido_esperado')
         esperado = int(esperado) if esperado is not None else None
