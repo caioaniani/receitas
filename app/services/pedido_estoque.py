@@ -167,7 +167,7 @@ def estornar_industria_pedido(pedido, usuario_id, motivo='voltar status'):
         liquido = int(total or 0) - int(estornos.get(ep_id, 0) or 0)
         if liquido <= 0:
             continue
-        ep = db.session.get(EstoqueProducao, ep_id)
+        ep = linhas.get(ep_id) or db.session.get(EstoqueProducao, ep_id)
         if ep is None:
             continue
         ep.quantidade = (ep.quantidade or 0) + liquido
