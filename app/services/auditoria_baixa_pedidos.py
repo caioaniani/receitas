@@ -150,11 +150,15 @@ def auditar(dias=14, max_detalhe=50):
                     .filter(MovEstoqueProducao.tipo == TIPO_QUITADA,
                             func.date(MovEstoqueProducao.data) >= corte_dt)
                     .group_by(MovEstoqueProducao.estoque_producao_id).all())
-    faltas_por_item = sorted(
-        ({'item': ep.nome_item, 'faltou': int(s or 0),
-          'quitada': int(quitadas.get(ep.id) or 0)}
-         for ep, s in faltas_rows if s),
-        key=lambda x: -x['faltou'])
+    faltas_por_item = []
+    for ep, s in faltas_rows:
+        if not s:
+            continue
+        linha = {'item': ep.nome_item, 'faltou': int(s or 0)}
+        if quitadas.get(ep.id):
+            linha['quitada'] = int(quitadas[ep.id])
+        faltas_por_item.append(linha)
+    faltas_por_item.sort(key=lambda x: -x['faltou'])
 
     return {'dias': dias, 'inicio': corte.isoformat(),
             'resumo': resumo, 'pedidos_problema': problemas,

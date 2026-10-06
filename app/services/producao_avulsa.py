@@ -138,7 +138,11 @@ def registrar_lote(validados, user_id, chave=None, quitar=None):
                     receita_id=obj.id if tipo == 'receita' else None,
                     produto_id=obj.id if tipo == 'produto' else None,
                     maximo=qtd, usuario_id=user_id)
-        resumo.append({'nome': obj.nome, 'qtd': qtd, 'quitado': quitado})
+        linha = {'nome': obj.nome, 'qtd': qtd}
+        if quitado:
+            # Só aparece quando houve quitação: o formato de sempre segue igual.
+            linha['quitado'] = quitado
+        resumo.append(linha)
     if plano is not None:
         sincronizar_pre_baixa_mp(plano, user_id)
         plano.status = 'executado'
