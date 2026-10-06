@@ -617,6 +617,7 @@
 .padeiro-v2 #listas .card.b2b { border-left-color: #8064a2; }
 .padeiro-v2 #listas .card.retirada { border-left-color: var(--pad-info); background: var(--pad-info-soft); }
 .padeiro-v2 #listas .card.online { border-left-color: #c99a3d; background: #fffdf7; }
+.padeiro-v2 #listas .card.falta-saida { border-left-color: #b42318; background: #fff5f4; }
 
 .padeiro-v2 .card .loja { color: var(--pad-ink); font-size: 20px; }
 .padeiro-v2 .card .meta { color: var(--pad-muted); font-size: 13px; }
