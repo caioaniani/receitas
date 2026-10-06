@@ -2172,6 +2172,13 @@ def congelados_conferencia():
         # Itens contados (mesmo sem diferença): a contagem encerra as faltas
         # de saída abertas deles (05/10/2026) — o físico já reflete o que saiu.
         contados = []
+        # Linhas contadas travadas antes de tudo, em ordem de id (mesma ordem
+        # da quitação de faltas: linha → faltas).
+        from app.services.estoque_congelados import travar_linhas_producao
+        travar_linhas_producao(ids=[
+            int(k[len('real_'):]) for k, v in request.form.items()
+            if k.startswith('real_') and v.strip() and k[len('real_'):].isdigit()
+            and len(k) <= 20])
         # 1) ajusta os itens existentes (campos real_<id>)
         for key, val in request.form.items():
             if not key.startswith('real_') or not val.strip():

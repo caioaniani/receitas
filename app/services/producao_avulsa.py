@@ -16,6 +16,12 @@ class UsarOrdemDoDia(ValueError):
     pass
 
 
+class EnvioJaRegistrado(ValueError):
+    """A mesma produção (chave do envio) já foi gravada com outra escolha
+    sobre o que já saiu nos pedidos. A tela limpa a gaveta e manda conferir o
+    Histórico — reenviar nunca credita de novo."""
+
+
 def registrar_lote(validados, user_id, chave=None, quitar=None):
     """Tudo ou nada; o recibo único impede repetir um envio após timeout.
 
@@ -66,7 +72,7 @@ def registrar_lote(validados, user_id, chave=None, quitar=None):
             if dados['assinatura'] == assinatura:
                 return dados['resumo']
             if dados.get('assinatura_base', dados['assinatura']) == assinatura_base:
-                raise ValueError(
+                raise EnvioJaRegistrado(
                     'Esta produção já foi registrada (com outra escolha sobre o que '
                     'já saiu nos pedidos). Confira o Histórico antes de lançar de novo.')
             raise ValueError('Este envio já foi usado com outras quantidades. Atualize a tela.')
@@ -86,6 +92,13 @@ def registrar_lote(validados, user_id, chave=None, quitar=None):
             if anterior is None:
                 raise
             return repetir(anterior)
+
+    # Linhas dos itens travadas antes, em ordem de id (mesma ordem do
+    # estorno e da conferência: linhas → faltas).
+    from app.services.estoque_congelados import travar_linhas_producao
+    travar_linhas_producao(
+        receita_ids=[o.id for t, o, _q in validados if t == 'receita'],
+        produto_ids=[o.id for t, o, _q in validados if t == 'produto'])
 
     plano = None
     itens_paes = {}
@@ -121,8 +134,12 @@ def registrar_lote(validados, user_id, chave=None, quitar=None):
     quitar = dict(quitar or {})
     resumo = []
     for tipo, obj, qtd in validados:
-        # Até o número confirmado na tela e nunca mais que o lançado agora.
-        limite = max(0, min(int(quitar.get(f'{tipo}:{obj.id}') or 0), qtd))
+        # Até o número confirmado na tela e nunca mais que o lançado agora
+        # (bool é int em Python: True não é número confirmado).
+        confirmado = quitar.get(f'{tipo}:{obj.id}')
+        if isinstance(confirmado, bool) or not isinstance(confirmado, int):
+            confirmado = 0
+        limite = max(0, min(confirmado, qtd))
         quitado = 0
         item = itens_paes.get(obj.id) if tipo == 'receita' else None
         if item is not None:

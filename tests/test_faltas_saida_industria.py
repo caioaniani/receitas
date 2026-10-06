@@ -413,7 +413,8 @@ def test_mesma_chave_com_outra_escolha_nao_credita_de_novo(app, admin_user, clie
     for repeticao in ([item], [dict(item, quitar_faltas=10)]):
         resp = cliente.post('/padeiro/produzir', json={
             'itens': repeticao, 'chave_envio': chave})
-        assert resp.status_code == 400
+        assert resp.status_code == 409
+        assert resp.get_json()['ja_registrado'] is True
         assert 'já foi registrada' in resp.get_json()['erro']
     assert _saldo(r) == 7
 
@@ -678,3 +679,42 @@ def test_copilot_enviar_avisa_a_falta(app, admin_user):
     assert 'insuficiente na indústria' in res['falta_saida']
     texto = str(build_resultado(res, ok=True))
     assert 'insuficiente na indústria' in texto
+
+
+def test_estorno_reencerra_com_quem_e_quando_do_estorno(app, admin_user):
+    """Falta já contada e depois estornada: motivo, quando e quem passam a
+    ser os do estorno (o histórico anterior fica no AuditLog)."""
+    from app.blueprints.pedidos.routes import _aplicar_voltar_status
+    from app.services import faltas_industria
+    r = _receita()
+    p = _pedido(_loja(), r, 10)
+    _enviar(app, p, admin_user)
+    faltas_industria.encerrar_por_contagem([(r.id, None)], None)
+    db.session.commit()
+    f = FaltaSaidaIndustria.query.one()
+    assert f.motivo_encerramento == 'contagem' and f.encerrada_por_id is None
+    _aplicar_voltar_status(p, admin_user.id)
+    db.session.commit()
+    db.session.refresh(f)
+    assert f.motivo_encerramento == 'estorno' and f.encerrada_por_id == admin_user.id
+
+
+def test_numero_gigante_no_formulario_nao_derruba(app, admin_user, cliente):
+    r = _receita()
+    _enviar(app, _pedido(_loja(), r, 18), admin_user)
+    it = _plano_com_item(r, alvo=30)
+    _login(cliente, admin_user)
+    resp = cliente.post(f'/padeiro/produzir-plano/{it.id}',
+                        data={'unidades': '30', 'quitar_faltas': '9' * 5000})
+    assert resp.status_code == 302
+    assert _saldo(r) == 30                       # número absurdo não quita
+
+
+def test_registrar_lote_trata_true_como_nao_confirmado(app, admin_user):
+    from app.services.producao_avulsa import registrar_lote
+    r = _receita()
+    _enviar(app, _pedido(_loja(), r, 18), admin_user)
+    resumo = registrar_lote([('receita', r, 25)], admin_user.id,
+                            quitar={f'receita:{r.id}': True})
+    assert 'quitado' not in resumo[0]
+    assert _saldo(r) == 25

@@ -27,7 +27,11 @@ Regras:
 - Massa para folhar fica fora da quitação (o saldo vive em gramas).
 - A quitação nunca passa do número que a pessoa confirmou na tela nem do
   lançado agora; o servidor recalcula sob trava e pode quitar MENOS.
-- Ordem das travas: linha do estoque, depois as faltas (quitação e estorno).
+- Ordem das travas: linhas do estoque (em ordem de id quando são várias —
+  `estoque_congelados.travar_linhas_producao`), depois as faltas. Vale para
+  quitação, estorno, conferência, balanço e Produção extra. A produção de
+  uma ordem que consome sub-receitas trava a linha da sub depois; um
+  impasse raro é desfeito pelo banco (uma das operações falha e é repetida).
 
 Nenhuma função aqui commita — o chamador controla a transação.
 """
@@ -155,9 +159,10 @@ def quitar(*, receita_id=None, produto_id=None, maximo, usuario_id):
 
     Chamar DEPOIS do crédito da produção, na mesma transação e só quando
     alguém confirmou que a produção inclui o que já saiu. `maximo` é o MENOR
-    entre o lançado agora e o número que a pessoa viu na pergunta — falta
-    registrada depois da pergunta nunca é quitada sem confirmação. Nunca
-    deixa saldo negativo. Devolve o total quitado. Não commita."""
+    entre o lançado agora e o número que a pessoa viu na pergunta: nunca se
+    quita MAIS do que ela confirmou (se uma falta mudou entre a pergunta e o
+    envio, o total continua limitado ao número visto). Nunca deixa saldo
+    negativo. Devolve o total quitado. Não commita."""
     maximo = int(maximo or 0)
     if maximo <= 0 or bool(receita_id) == bool(produto_id):
         return 0
@@ -225,10 +230,8 @@ def encerrar_por_contagem(itens, usuario_id, antes_de=None):
     posterior ao início da contagem continua aberta. `itens` = iterável de
     (receita_id, produto_id). Devolve quantas foram encerradas.
 
-    Falta travada por uma quitação em andamento é PULADA (`skip_locked`):
-    esperar por ela fecharia um ciclo de travas com a Produção extra de
-    vários itens (a conferência já segura linhas de estoque). A quitação
-    concorrente decide o saldo dela."""
+    Os chamadores travam as linhas contadas ANTES (`travar_linhas_producao`);
+    uma quitação em andamento termina antes ou espera a contagem."""
     itens = list(itens)
     rec_ids = sorted({r for r, _p in itens if r})
     prod_ids = sorted({p for r, p in itens if p and not r})
@@ -242,7 +245,7 @@ def encerrar_por_contagem(itens, usuario_id, antes_de=None):
     limite = antes_de or agora()
     rows = (_abertas().filter(db.or_(*filtros),
                               FaltaSaidaIndustria.criada_em <= limite)
-            .populate_existing().with_for_update(skip_locked=True).all())
+            .populate_existing().with_for_update().all())
     for f in rows:
         _encerrar(f, 'contagem', usuario_id)
     return len(rows)
@@ -261,17 +264,18 @@ def encerrar_do_pedido(pedido_id, motivo, usuario_id=None):
     """Encerra as faltas de um pedido ('estorno' quando volta para
     separado; 'excluido' quando o pedido é apagado).
 
-    As já encerradas (quitada/contagem) também passam a esse motivo, sem
-    mudar quando nem por quem foram encerradas: o estorno devolve a
-    quitação junto com a saída, e a tela de um novo envio não pode mostrar
-    a falta de uma saída desfeita. A quantidade quitada fica como histórico."""
+    As já encerradas (quitada/contagem) também passam a esse motivo, com o
+    quando e o quem DESTE gesto: o estorno devolve a quitação junto com a
+    saída, e a tela de um novo envio não pode mostrar a falta de uma saída
+    desfeita. A quantidade quitada fica; o encerramento anterior fica no
+    histórico (AuditLog)."""
     n = 0
     for f in travar_do_pedido(pedido_id):
         if f.encerrada_em is None:
             _encerrar(f, motivo, usuario_id)
             n += 1
         elif f.motivo_encerramento not in MOTIVOS_SEM_EXIBICAO:
-            f.motivo_encerramento = motivo
+            _encerrar(f, motivo, usuario_id)
     return n
 
 
@@ -306,7 +310,7 @@ def encerrar_da_receita(receita_id, motivo, usuario_id=None):
             _encerrar(f, motivo, usuario_id)
             n += 1
         elif f.motivo_encerramento not in MOTIVOS_SEM_EXIBICAO:
-            f.motivo_encerramento = motivo
+            _encerrar(f, motivo, usuario_id)
     return n
 
 

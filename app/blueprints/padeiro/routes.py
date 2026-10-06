@@ -616,7 +616,8 @@ def _quitar_confirmado(valor, *, do_formulario=False):
     if not (do_formulario and isinstance(valor, str)):
         return 0
     v = valor.strip()
-    return int(v) if v.isdigit() and v.isascii() else 0
+    # Até 9 dígitos: número absurdo de POST forjado não derruba a rota.
+    return int(v) if v.isdigit() and v.isascii() and len(v) <= 9 else 0
 
 
 @padeiro_bp.route('/produzir-plano/<int:item_id>', methods=['POST'])
@@ -1260,7 +1261,11 @@ def produzir():
     from flask import jsonify
 
     from app.models import Produto, Receita
-    from app.services.producao_avulsa import UsarOrdemDoDia, registrar_lote
+    from app.services.producao_avulsa import (
+        EnvioJaRegistrado,
+        UsarOrdemDoDia,
+        registrar_lote,
+    )
 
     dados = request.get_json(silent=True) or {}
     itens = dados.get('itens') or []
@@ -1279,7 +1284,8 @@ def produzir():
             qtd = int(it.get('quantidade'))
         except (TypeError, ValueError):
             return jsonify(ok=False, erro=f'Item {i}: dados invalidos.'), 400
-        if tipo not in ('receita', 'produto') or not (sid.isdigit() and sid.isascii()):
+        if tipo not in ('receita', 'produto') or not (
+                sid.isdigit() and sid.isascii() and len(sid) <= 9):
             return jsonify(ok=False, erro=f'Item {i}: item invalido.'), 400
         # Forma canônica ('receita:05' → 'receita:5'): é a chave das faltas.
         ref = f'{tipo}:{int(sid)}'
@@ -1311,6 +1317,9 @@ def produzir():
         db.session.rollback()
         return jsonify(ok=False, erro=str(exc),
                        ordem_url=url_for('padeiro.index', data=hoje().isoformat())), 409
+    except EnvioJaRegistrado as exc:
+        db.session.rollback()
+        return jsonify(ok=False, erro=str(exc), ja_registrado=True), 409
     except ValueError as exc:
         db.session.rollback()
         return jsonify(ok=False, erro=str(exc)), 400

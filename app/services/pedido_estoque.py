@@ -158,12 +158,8 @@ def estornar_industria_pedido(pedido, usuario_id, motivo='voltar status'):
         MovEstoqueProducao.estoque_producao_id)
         .filter(MovEstoqueProducao.referencia.like(ref_like))
         .distinct().all() if r[0] is not None]
-    linhas = {}
-    if linhas_ids:
-        linhas = {ep.id: ep for ep in (
-            EstoqueProducao.query.filter(EstoqueProducao.id.in_(linhas_ids))
-            .order_by(EstoqueProducao.id)
-            .with_for_update().populate_existing().all())}
+    from app.services.estoque_congelados import travar_linhas_producao
+    linhas = {ep.id: ep for ep in travar_linhas_producao(ids=linhas_ids)}
     faltas_industria.travar_do_pedido(pedido.id)
 
     saidas = dict(db.session.query(

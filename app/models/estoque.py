@@ -406,7 +406,10 @@ class FaltaSaidaIndustria(db.Model):
     criada_em = db.Column(db.DateTime, default=agora, index=True)
     # NULL = aberta. Motivos: 'quitada' (a produção lançada depois cobriu),
     # 'contagem' (conferência/balanço da linha — a contagem já reflete),
-    # 'estorno' (o pedido voltou para separado), 'excluido' (pedido apagado).
+    # 'estorno' (o pedido voltou para separado), 'excluido' (pedido apagado),
+    # 'transferido' (a receita virou matéria-prima). Estorno/exclusão/
+    # transferência também encerram, com o quando/quem deles, as faltas já
+    # quitadas ou contadas — o encerramento anterior fica no AuditLog.
     encerrada_em = db.Column(db.DateTime, nullable=True)
     motivo_encerramento = db.Column(db.String(20), nullable=True)
     encerrada_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),

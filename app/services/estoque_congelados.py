@@ -278,6 +278,14 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
     ignorados = []
     contados = []
 
+    # Linhas contadas travadas antes de tudo, em ordem de id (mesma ordem da
+    # quitação de faltas: linha → faltas).
+    resolvidos = [it.get('resolvido') or {} for it in itens_resolvidos if not it.get('erro')]
+    travar_linhas_producao(
+        ids=[r.get('id') for r in resolvidos if r.get('tipo') == 'pendente'],
+        receita_ids=[r.get('id') for r in resolvidos if r.get('tipo') == 'receita'],
+        produto_ids=[r.get('id') for r in resolvidos if r.get('tipo') == 'produto'])
+
     for item in itens_resolvidos:
         if item.get('erro'):
             ignorados.append({'linha': item.get('linha', '?'), 'motivo': item['erro']})
@@ -370,6 +378,30 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
         db.session.commit()
 
     return {'aplicados': aplicados, 'ignorados': ignorados}
+
+
+def travar_linhas_producao(*, ids=(), receita_ids=(), produto_ids=()):
+    """Trava (FOR UPDATE, em ordem de id) as linhas de EstoqueProducao que já
+    existem para estes itens. Quem mexe em várias linhas e depois nas faltas
+    de saída (conferência, balanço, Produção extra, estorno) trava as linhas
+    PRIMEIRO e sempre na mesma ordem, depois as faltas — a quitação faz
+    linha → faltas. Linha que ainda não existe é criada depois, sem disputa.
+    NAO commita."""
+    filtros = []
+    ids = sorted({int(i) for i in ids if i})
+    receita_ids = sorted({int(i) for i in receita_ids if i})
+    produto_ids = sorted({int(i) for i in produto_ids if i})
+    if ids:
+        filtros.append(EstoqueProducao.id.in_(ids))
+    if receita_ids:
+        filtros.append(EstoqueProducao.receita_id.in_(receita_ids))
+    if produto_ids:
+        filtros.append(EstoqueProducao.produto_id.in_(produto_ids))
+    if not filtros:
+        return []
+    return (EstoqueProducao.query.filter(db.or_(*filtros))
+            .order_by(EstoqueProducao.id)
+            .with_for_update().populate_existing().all())
 
 
 def obter_linha_producao(*, receita_id=None, produto_id=None, usuario_id=None):
