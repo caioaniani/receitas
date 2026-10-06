@@ -3537,14 +3537,16 @@ def executar_mudar_status_pedido(params, user):
         if bloqueado_corte:
             return {'ok': False, 'erro': aviso_corte}
 
+    faltas_saida = []
     try:
         # ENVIAR: baixa estoque da industria pelo MOTOR ÚNICO (03/07/2026) —
         # mesma função da rota web/QR (get-or-create da linha + quantidade
         # real + falta registrada). Antes era uma cópia inline que pulava
-        # item sem linha em silêncio.
+        # item sem linha em silêncio. A falta volta no resultado para quem
+        # pediu ver na hora (05/10/2026), como no botão Enviar.
         if novo == 'enviar':
             from app.services.pedido_estoque import baixar_industria_pedido
-            baixar_industria_pedido(p, user.id, ref_extra='copilot')
+            faltas_saida = baixar_industria_pedido(p, user.id, ref_extra='copilot')
 
         # CANCELAR um pedido que JÁ SAIU (em_transporte): estorna a baixa da
         # industria antes de cancelar — sem isso o estoque ficava baixado
@@ -3608,6 +3610,9 @@ def executar_mudar_status_pedido(params, user):
                  'url': f'/pedidos/{pid}'}
     if aviso_corte:
         resultado['aviso'] = aviso_corte
+    if faltas_saida:
+        from app.services.pedido_estoque import texto_faltas_saida
+        resultado['falta_saida'] = texto_faltas_saida(faltas_saida)
 
     # Se acabou de marcar como separado, ja gera o QR Code de saida e
     # devolve no resultado pro Slack mostrar pro motorista escanear.

@@ -1415,6 +1415,12 @@ def _transferir_para_mp(origem, mp):
 
     swap = {'receita_id': None, 'materia_prima_id': mp.id}
 
+    # Faltas de saída (05/10/2026): matéria-prima não gera falta nem
+    # quitação; as da receita se encerram e saem das telas do pedido.
+    from app.services import faltas_industria
+    _conta('faltas_saida', faltas_industria.encerrar_da_receita(
+        origem.id, 'transferido', getattr(current_user, 'id', None)))
+
     # FKs simples com coluna de MP: histórico intacto, só muda o alvo.
     for chave, modelo in (('pedidos', PedidoItem),
                           ('vendas_manuais', VendaManualLoja),
@@ -1563,11 +1569,13 @@ def vinculos_transferir(id):
         if n:
             movidos[chave] = movidos.get(chave, 0) + n
 
+    # Faltas de saída (05/10/2026) seguem o estoque, que se funde no destino
+    # (pelo ORM, para ficar no histórico).
+    from app.services import faltas_industria
+    _conta('faltas_saida', faltas_industria.reapontar_receita(origem.id, destino.id))
+
     # FKs simples: o registro histórico fica intacto, só muda o alvo.
-    # Faltas de saída (05/10/2026) seguem o estoque, que se funde no destino.
-    from app.models import FaltaSaidaIndustria
-    for chave, modelo in (('faltas_saida', FaltaSaidaIndustria),
-                          ('pedidos', PedidoItem),
+    for chave, modelo in (('pedidos', PedidoItem),
                           ('vendas_b2b', VendaB2BItem),
                           ('vendas_manuais', VendaManualLoja),
                           ('desperdicio', Desperdicio),

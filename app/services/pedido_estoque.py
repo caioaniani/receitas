@@ -57,8 +57,8 @@ _ref_base = referencia_saida
 def baixar_industria_pedido(pedido, usuario_id, ref_extra=None):
     """Baixa EstoqueProducao + MP de todos os itens do pedido.
 
-    Retorna lista de faltas [{'item', 'pedido', 'baixado', 'faltou'}] —
-    vazia quando tudo saiu com saldo. Falta NUNCA bloqueia o envio (o
+    Retorna lista de faltas [{'item', 'pedido', 'baixado', 'faltou'}] (com
+    `mp: True` nas de matéria-prima) — vazia quando tudo saiu com saldo. Falta NUNCA bloqueia o envio (o
     caminhão sai mesmo; a falta fica registrada pra acerto de inventário).
     """
     from app.services.estoque_congelados import obter_linha_producao
@@ -82,8 +82,10 @@ def baixar_industria_pedido(pedido, usuario_id, ref_extra=None):
                 materia_prima_id=mp.id, tipo='saida', quantidade=baixa,
                 referencia=ref_mp, usuario_id=usuario_id))
             if falta > 0:
+                # `mp`: matéria-prima não gera falta na TV do padeiro (só a
+                # anotação na referência) — a mensagem do Enviar distingue.
                 faltas.append({'item': mp.nome, 'pedido': float(qtd),
-                               'baixado': baixa, 'faltou': falta})
+                               'baixado': baixa, 'faltou': falta, 'mp': True})
             continue
         if not (item.receita_id or item.produto_id):
             # Item solto (legado, só nome) — não há linha possível.
@@ -113,6 +115,24 @@ def baixar_industria_pedido(pedido, usuario_id, ref_extra=None):
             faltas.append({'item': ep.nome_item, 'pedido': int(qtd),
                            'baixado': baixa, 'faltou': falta})
     return faltas
+
+
+def texto_faltas_saida(faltas):
+    """Frase única do aviso de saída com estoque insuficiente (botão Enviar
+    e copilot). Só promete a pergunta na TV do padeiro para receita/produto;
+    matéria-prima fica só no registro do estoque de MP."""
+    if not faltas:
+        return ''
+    quais = '; '.join(f"{f['item']}: pedido {f['pedido']:g}, baixado {f['baixado']:g}"
+                      for f in faltas)
+    txt = f'saiu com estoque insuficiente na indústria ({quais}).'
+    if any(not f.get('mp') for f in faltas):
+        txt += (' A falta aparece na tela do padeiro: se a produção já foi feita, '
+                'ao lançá-la ele confirma se ela inclui o que já saiu.')
+    if any(f.get('mp') for f in faltas):
+        txt += (' Matéria-prima com falta não aparece na tela do padeiro: '
+                'acerte pela contagem do estoque de matéria-prima.')
+    return txt
 
 
 def estornar_industria_pedido(pedido, usuario_id, motivo='voltar status'):

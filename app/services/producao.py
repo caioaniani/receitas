@@ -717,9 +717,18 @@ def consumir_ficha(rec, unidades, user_id, referencia_mp, *, saldo_assinado=Fals
     return consumir_subreceitas_prontas(rec, unidades, user_id, produzido_antes=produzido_antes)
 
 
+def _limite_quitacao(confirmado, unidades):
+    """Quanto pode ser quitado: o MENOR entre o numero confirmado na tela e o
+    lancado agora. So inteiro positivo conta (True/'1' nao sao numero
+    confirmado — bool e subclasse de int)."""
+    if isinstance(confirmado, bool) or not isinstance(confirmado, int):
+        return 0
+    return max(0, min(int(confirmado), int(unidades or 0)))
+
+
 def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=True,
                        produzido_esperado=None, referencia_estoque=None,
-                       quitar_faltas=False):
+                       quitar_faltas=0):
     """OPCAO B: o padeiro produz `unidades` de um item do plano aprovado.
     Numa unica transacao: (1) credita o produto pronto na industria
     (entrada_producao), (2) DESCONTA a MP da ficha tecnica proporcional as
@@ -733,11 +742,12 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=Tr
     OK/dispensar ou reagendar de volta). So marca se ainda restar falta;
     estoque credita apenas o produzido de verdade.
 
-    `quitar_faltas=True` (05/10/2026, opcao A do dono): quem lancou CONFIRMOU
-    na TV que esta producao inclui itens que ja sairam em pedidos com o
-    estoque zerado no sistema — depois do credito, debita ate `unidades` das
-    faltas abertas do item (`faltas_industria.quitar`). Nunca vale para item
-    de massa (batimentos). Devolve `quitado` no resultado.
+    `quitar_faltas=N` (05/10/2026, opcao A do dono): quem lancou CONFIRMOU
+    na TV que esta producao inclui N unidades que ja sairam em pedidos com o
+    estoque zerado no sistema (N = o numero que a pergunta mostrou) — depois
+    do credito, debita ate min(N, unidades) das faltas abertas do item
+    (`faltas_industria.quitar`). Nunca vale para item de massa (batimentos).
+    Devolve `quitado` no resultado.
     """
     from app.models import PlanejamentoItem, PlanejamentoProducao
     from app.services.estoque_congelados import entrada_producao
@@ -791,9 +801,10 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=Tr
     else:
         entrada_producao(receita_id=rec.id, quantidade=unidades, usuario_id=user_id,
                          referencia=referencia_estoque or 'Produção (cronograma) %s' % rec.nome)
-        if quitar_faltas:
+        limite = _limite_quitacao(quitar_faltas, unidades)
+        if limite:
             from app.services import faltas_industria
-            quitado = faltas_industria.quitar(receita_id=rec.id, maximo=unidades,
+            quitado = faltas_industria.quitar(receita_id=rec.id, maximo=limite,
                                               usuario_id=user_id)
 
     # 3) avanca o produzido do item.

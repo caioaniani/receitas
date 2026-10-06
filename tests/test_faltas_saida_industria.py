@@ -8,7 +8,7 @@ lançar a produção, só a CONFIRMAÇÃO do padeiro grava o débito
 (`saida_pedido_quitada`, referência do pedido). Contagem encerra; estorno
 devolve a quitação; saldo nunca fica negativo.
 """
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 
@@ -53,7 +53,7 @@ def _loja(nome='Loja Faltas'):
 
 def _pedido(loja, receita, qtd, status='separado'):
     p = PedidoLoja(loja_id=loja.id, status=status,
-                   data_entrega=date.today() + timedelta(days=1))
+                   data_entrega=hoje() + timedelta(days=1))
     db.session.add(p)
     db.session.flush()
     db.session.add(PedidoItem(pedido_id=p.id, receita_id=receita.id,
@@ -310,7 +310,7 @@ def test_produzir_plano_com_confirmacao_quita(app, admin_user, cliente):
     it = _plano_com_item(r, alvo=30)
     _login(cliente, admin_user)
     resp = cliente.post(f'/padeiro/produzir-plano/{it.id}',
-                        data={'unidades': '30', 'quitar_faltas': '1'})
+                        data={'unidades': '30', 'quitar_faltas': '18'})
     assert resp.status_code == 302
     assert _saldo(r) == 12                       # 30 produzidos − 18 que saíram
     f = FaltaSaidaIndustria.query.one()
@@ -338,36 +338,113 @@ def test_producao_extra_com_confirmacao_quita(app, admin_user, cliente):
     _enviar(app, _pedido(_loja(), r, 18), admin_user)
     _login(cliente, admin_user)
     resp = cliente.post('/padeiro/produzir', json={'itens': [
-        {'ref': f'receita:{r.id}', 'quantidade': 25, 'quitar_faltas': True}]})
+        {'ref': f'receita:{r.id}', 'quantidade': 25, 'quitar_faltas': 18}]})
     assert resp.status_code == 200, resp.get_json()
     resumo = resp.get_json()['resumo']
     assert resumo[0]['quitado'] == 18
     assert _saldo(r) == 7
 
 
-def test_producao_extra_quitar_so_com_true_literal(app, admin_user, cliente):
-    """'1'/'sim' não confirmam: só o booleano que a tela manda."""
+@pytest.mark.parametrize('valor', [True, 'sim', '1', 0, -5, None])
+def test_producao_extra_quitar_so_com_numero_confirmado(app, admin_user, cliente, valor):
+    """Só o número que a pergunta mostrou confirma: booleano, texto, zero
+    ou negativo não quitam nada."""
     r = _receita()
     _enviar(app, _pedido(_loja(), r, 18), admin_user)
     _login(cliente, admin_user)
     resp = cliente.post('/padeiro/produzir', json={'itens': [
-        {'ref': f'receita:{r.id}', 'quantidade': 25, 'quitar_faltas': 'sim'}]})
+        {'ref': f'receita:{r.id}', 'quantidade': 25, 'quitar_faltas': valor}]})
     assert resp.status_code == 200
     assert _saldo(r) == 25
 
 
-def test_recibo_com_quitacao_nao_bate_com_envio_sem(app, admin_user):
-    """A mesma chave de envio com e sem quitação é outro conteúdo: recusa."""
-    from app.services.producao_avulsa import registrar_lote
+def test_quitacao_nunca_passa_do_numero_confirmado(app, admin_user, cliente):
+    """A pergunta mostrou 5; enquanto ela estava aberta saiu outro pedido com
+    falta de 20. Confirmar quita só os 5 vistos (achado 2 da revisão)."""
+    r = _receita()
+    loja = _loja()
+    _enviar(app, _pedido(loja, r, 5), admin_user)
+    it = _plano_com_item(r, alvo=30)
+    _enviar(app, _pedido(loja, r, 20), admin_user)     # depois da pergunta
+    _login(cliente, admin_user)
+    cliente.post(f'/padeiro/produzir-plano/{it.id}',
+                 data={'unidades': '30', 'quitar_faltas': '5'})
+    assert _saldo(r) == 25                              # 30 − 5
+    abertas = [f for f in FaltaSaidaIndustria.query.order_by(FaltaSaidaIndustria.id)
+               if f.encerrada_em is None]
+    assert [f.aberta_qtd for f in abertas] == [20]
+
+
+def test_quitacao_nunca_passa_do_lancado(app, admin_user, cliente):
     r = _receita()
     _enviar(app, _pedido(_loja(), r, 18), admin_user)
+    _login(cliente, admin_user)
+    resp = cliente.post('/padeiro/produzir', json={'itens': [
+        {'ref': f'receita:{r.id}', 'quantidade': 10, 'quitar_faltas': 99}]})
+    assert resp.get_json()['resumo'][0]['quitado'] == 10
+    assert _saldo(r) == 0
+
+
+def test_ref_nao_canonica_ainda_quita(app, admin_user, cliente):
+    """'receita:05' vira 'receita:5' (chave das faltas) — antes a quitação
+    sumia sem aviso."""
+    r = _receita()
+    _enviar(app, _pedido(_loja(), r, 18), admin_user)
+    _login(cliente, admin_user)
+    resp = cliente.post('/padeiro/produzir', json={'itens': [
+        {'ref': f'receita:0{r.id}', 'quantidade': 25, 'quitar_faltas': 18}]})
+    assert resp.get_json()['resumo'][0]['quitado'] == 18
+
+
+def test_mesma_chave_com_outra_escolha_nao_credita_de_novo(app, admin_user, cliente):
+    """Timeout: o servidor gravou +25 com quitação; a repetição com a caixa
+    desmarcada usa a MESMA chave (a tela só troca a chave quando a produção
+    muda) e é recusada — nunca um segundo crédito (achado 1 da revisão)."""
+    r = _receita()
+    _enviar(app, _pedido(_loja(), r, 18), admin_user)
+    _login(cliente, admin_user)
+    chave = 'c' * 32
+    item = {'ref': f'receita:{r.id}', 'quantidade': 25}
+    ok = cliente.post('/padeiro/produzir', json={
+        'itens': [dict(item, quitar_faltas=18)], 'chave_envio': chave})
+    assert ok.status_code == 200
+    assert _saldo(r) == 7
+
+    for repeticao in ([item], [dict(item, quitar_faltas=10)]):
+        resp = cliente.post('/padeiro/produzir', json={
+            'itens': repeticao, 'chave_envio': chave})
+        assert resp.status_code == 400
+        assert 'já foi registrada' in resp.get_json()['erro']
+    assert _saldo(r) == 7
+
+    # A MESMA escolha repetida devolve o recibo, sem crédito novo.
+    rep = cliente.post('/padeiro/produzir', json={
+        'itens': [dict(item, quitar_faltas=18)], 'chave_envio': chave})
+    assert rep.status_code == 200 and rep.get_json()['resumo'][0]['quitado'] == 18
+    assert _saldo(r) == 7
+
+
+def test_recibo_antigo_sem_quitacao_continua_batendo(app, admin_user):
+    """Recibo sem `assinatura_base` (gravado antes desta mudança) segue
+    reconhecido como a mesma produção."""
+    import json
+
+    from app.models import AppConfig
+    from app.services.producao_avulsa import registrar_lote
+    r = _receita()
     chave = 'k' * 20
     registrar_lote([('receita', r, 25)], admin_user.id, chave)
+    rec = db.session.get(AppConfig, f'producao_tv:{admin_user.id}:{chave}')
+    dados = json.loads(rec.value)
+    dados.pop('assinatura_base')
+    rec.value = json.dumps(dados)
     db.session.commit()
-    with pytest.raises(ValueError):
+    assert registrar_lote([('receita', r, 25)], admin_user.id, chave)[0]['qtd'] == 25
+    with pytest.raises(ValueError, match='já foi registrada'):
         registrar_lote([('receita', r, 25)], admin_user.id, chave,
-                       quitar={f'receita:{r.id}'})
+                       quitar={f'receita:{r.id}': 5})
     db.session.rollback()
+    assert _saldo(r) == 25
 
 
 def test_faltas_json_e_card_da_tv(app, admin_user, cliente):
@@ -467,3 +544,137 @@ def test_transferir_vinculos_leva_a_falta(app, admin_user, cliente):
     f = FaltaSaidaIndustria.query.one()
     db.session.refresh(f)
     assert f.receita_id == destino.id
+
+
+# ── Achados da revisão (05/10/2026) ──────────────────────────────────────────
+
+def test_estorno_apos_quitacao_total_e_novo_envio_mostra_so_a_saida_atual(app, admin_user):
+    """Falta quitada por inteiro, estorno (que devolve a quitação) e novo
+    envio: a tela do QR mostra só a falta da saída nova (achado 6)."""
+    from app.blueprints.pedidos.routes import _aplicar_voltar_status
+    from app.services import faltas_industria
+    r = _receita()
+    p = _pedido(_loja(), r, 10)
+    _enviar(app, p, admin_user)
+    _creditar(r, 10, admin_user)
+    faltas_industria.quitar(receita_id=r.id, maximo=10, usuario_id=admin_user.id)
+    db.session.commit()
+    assert _saldo(r) == 0
+
+    _aplicar_voltar_status(p, admin_user.id)
+    db.session.commit()
+    assert _saldo(r) == 10                      # quitação devolvida
+    antiga = FaltaSaidaIndustria.query.one()
+    assert antiga.motivo_encerramento == 'estorno' and antiga.quitada == 10
+    assert faltas_industria.do_pedido(p.id) == []
+
+    p.status = 'separado'
+    p.itens[0].quantidade = 14
+    db.session.commit()
+    _enviar(app, p, admin_user)                  # baixa 10, falta 4
+    vistas = faltas_industria.do_pedido(p.id)
+    assert [(v['quantidade'], v['quitada']) for v in vistas] == [(4, 0)]
+
+
+def test_conferencia_nao_encerra_falta_de_saida_posterior_ao_inicio(app, admin_user, cliente):
+    """Tela da conferência aberta ANTES da saída e enviada depois: a falta
+    nova não estava no que foi contado e continua aberta (achado 4)."""
+    r = _receita()
+    db.session.add(EstoqueProducao(receita_id=r.id, quantidade=0))
+    db.session.commit()
+    ep = EstoqueProducao.query.filter_by(receita_id=r.id).one()
+    inicio = (agora() - timedelta(minutes=30)).isoformat(timespec='seconds')
+    _enviar(app, _pedido(_loja(), r, 10), admin_user)
+    _login(cliente, admin_user)
+    cliente.post('/pedidos/congelados/conferencia',
+                 data={f'real_{ep.id}': '0', 'iniciada_em': inicio})
+    f = FaltaSaidaIndustria.query.one()
+    db.session.refresh(f)
+    assert f.encerrada_em is None
+
+
+def test_conferencia_tela_traz_o_inicio_da_contagem(app, admin_user, cliente):
+    r = _receita()
+    db.session.add(EstoqueProducao(receita_id=r.id, quantidade=3))
+    db.session.commit()
+    _login(cliente, admin_user)
+    html = cliente.get('/pedidos/congelados/conferencia').get_data(as_text=True)
+    assert 'name="iniciada_em"' in html
+
+
+@pytest.mark.parametrize('valor', ['', 'lixo', '2999-01-01T00:00:00',
+                                   '2026-10-05T10:00:00+00:00'])
+def test_inicio_contagem_invalido_ou_futuro_vira_agora(app, valor):
+    from app.services import faltas_industria
+    antes = agora()
+    assert faltas_industria.inicio_contagem(valor) >= antes
+
+
+def test_janela_vale_o_dia_inteiro(app, admin_user):
+    """Por data, não por 72 h: falta de 3 dias atrás bem cedo ainda conta."""
+    from datetime import datetime, time
+
+    from app.services import faltas_industria
+    r = _receita()
+    _enviar(app, _pedido(_loja(), r, 10), admin_user)
+    f = FaltaSaidaIndustria.query.one()
+    f.criada_em = datetime.combine(
+        hoje() - timedelta(days=faltas_industria.JANELA_DIAS), time(0, 5))
+    db.session.commit()
+    assert faltas_industria.resumo_por_ref()[f'receita:{r.id}']['quantidade'] == 10
+
+
+def test_transferir_receita_para_mp_encerra_as_faltas(app, admin_user, cliente):
+    from app.models import MateriaPrima
+    from app.services import faltas_industria
+    r = _receita('Recheio Virou MP')
+    mp = MateriaPrima(nome='Recheio MP', unidade='g')
+    db.session.add(mp)
+    db.session.commit()
+    p = _pedido(_loja(), r, 6)
+    _enviar(app, p, admin_user)
+    _login(cliente, admin_user)
+    resp = cliente.post(f'/receitas/{r.id}/vinculos/transferir',
+                        data={'destino': mp.nome, 'tipo_destino': 'mp'})
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    f = FaltaSaidaIndustria.query.one()
+    db.session.refresh(f)
+    assert f.motivo_encerramento == 'transferido'
+    assert faltas_industria.resumo_por_ref() == {}
+    assert faltas_industria.do_pedido(p.id) == []
+
+
+def test_mensagem_do_enviar_nao_promete_tv_para_materia_prima(app, admin_user):
+    from app.models import MateriaPrima
+    mp = MateriaPrima(nome='Manteiga Pedido', unidade='un',
+                      estoque_atual=2, sugerir_pedido_loja=True)
+    db.session.add(mp)
+    loja = _loja()
+    db.session.commit()
+    p = PedidoLoja(loja_id=loja.id, status='separado',
+                   data_entrega=hoje() + timedelta(days=1))
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=p.id, materia_prima_id=mp.id, quantidade=5))
+    db.session.commit()
+    ok, msg = _enviar(app, p, admin_user)
+    assert ok and 'Manteiga Pedido' in msg
+    assert 'tela do padeiro: se a produção' not in msg
+    assert 'não aparece na tela do padeiro' in msg
+    assert FaltaSaidaIndustria.query.count() == 0
+
+
+def test_copilot_enviar_avisa_a_falta(app, admin_user):
+    from app.services.copilot import executar_mudar_status_pedido
+    from app.services.slack_blocks import build_resultado
+    r = _receita()
+    p = _pedido(_loja(), r, 9)
+    with app.test_request_context():
+        res = executar_mudar_status_pedido(
+            {'pedido_id': p.id, 'novo_status': 'enviar'}, admin_user)
+    from flask import g
+    g.pop('_login_user', None)
+    assert res['ok'], res
+    assert 'insuficiente na indústria' in res['falta_saida']
+    texto = str(build_resultado(res, ok=True))
+    assert 'insuficiente na indústria' in texto

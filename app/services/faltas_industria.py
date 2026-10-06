@@ -204,6 +204,20 @@ def quitar(*, receita_id=None, produto_id=None, maximo, usuario_id):
     return total
 
 
+def inicio_contagem(valor):
+    """Início da contagem enviado pela tela (ISO, hora de Brasília). Valor
+    ausente, ilegível ou no futuro vira agora() — o pior caso é o
+    comportamento de sempre (encerrar até o envio)."""
+    limite = agora()
+    try:
+        inicio = datetime.fromisoformat((valor or '').strip())
+    except (TypeError, ValueError):
+        return limite
+    if inicio.tzinfo is not None:
+        return limite
+    return min(inicio, limite)
+
+
 def encerrar_por_contagem(itens, usuario_id, antes_de=None):
     """Encerra as faltas abertas dos itens contados criadas até `antes_de`
     (o início da contagem; None = agora), de qualquer idade: a

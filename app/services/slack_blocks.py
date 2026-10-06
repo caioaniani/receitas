@@ -624,6 +624,10 @@ def build_resultado(resultado, ok=True):
         if resultado.get('pedido_id') and resultado.get('novo_status'):
             label = STATUS_LABEL.get(resultado['novo_status'], resultado['novo_status'])
             partes = [f"✓ pedido #{resultado['pedido_id']} marcado como *{label}*."]
+            # Saiu com estoque insuficiente na indústria (05/10/2026): o
+            # aviso aparece na hora, como no botão Enviar da tela.
+            if resultado.get('falta_saida'):
+                partes.append(f"⚠ {resultado['falta_saida']}")
             label_botao = 'Abrir pedido'
         elif resultado.get('pedido_id'):
             partes = [f"✓ pedido #{resultado['pedido_id']} criado."]

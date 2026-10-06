@@ -41,6 +41,8 @@
 
 <form method="POST" id="form-conf-cong">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {# Início da contagem: a conferência só encerra faltas de saída anteriores. #}
+    <input type="hidden" name="iniciada_em" value="{{ iniciada_em or '' }}">
 
     <div class="d-flex justify-content-end mb-2 gap-2">
         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="zerarTodos()">

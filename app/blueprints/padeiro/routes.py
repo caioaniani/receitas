@@ -395,6 +395,7 @@ def index():
     plano_ontem = _plano_em_aberto(ontem) if eh_hoje else None
     total_pendentes = sum(
         p.get('itens_pendentes', 0) for p in (plano_ontem, plano_dia) if p)
+    listas = _dados_listas(dia, eh_hoje)
     return render_template(
         'padeiro/index.html', dia=dia, eh_hoje=eh_hoje,
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
@@ -405,8 +406,9 @@ def index():
         recados_lousa=recados_lousa,
         resumo_entregas=(_resumo_entregas() if resumo_flag else None),
         resumo_entregas_flag=resumo_flag,
-        faltas_por_ref=_faltas_por_ref(),
-        **_dados_listas(dia, eh_hoje))
+        # Na visão de hoje reaproveita as faltas já carregadas para o card.
+        faltas_por_ref=_faltas_por_ref(listas['faltas_saida'] if eh_hoje else None),
+        **listas)
 
 
 def _faltas_saida_seguro():
@@ -423,12 +425,13 @@ def _faltas_saida_seguro():
         return []
 
 
-def _faltas_por_ref():
+def _faltas_por_ref(grupos=None):
     """Estado inicial da pergunta "esta produção inclui o que já saiu?" — o
-    JS atualiza por /padeiro/faltas.json. Falha aqui nunca derruba a TV."""
+    JS atualiza por /padeiro/faltas.json. Falha aqui nunca derruba a TV.
+    `grupos` = faltas já carregadas para o card (sem segunda consulta)."""
     from app.services import faltas_industria
     try:
-        return faltas_industria.resumo_por_ref()
+        return faltas_industria.resumo_por_ref(grupos)
     except Exception:  # noqa: BLE001 — a TV continua; o aviso só não aparece
         db.session.rollback()
         logger.exception('padeiro: faltas de saída indisponíveis')
@@ -602,14 +605,17 @@ def massa_base_mise(mb_id):
         'cascata': cascata})
 
 
-def _quitar_confirmado(valor):
+def _quitar_confirmado(valor, *, do_formulario=False):
     """Número confirmado na pergunta da falta (05/10/2026): inteiro positivo
-    ou 0. Aceita str do formulário e int do JSON; True e texto não contam."""
+    ou 0. O formulário da ordem manda texto de dígitos; o JSON da Produção
+    extra manda número — lá, texto e booleano não contam."""
     if isinstance(valor, bool):
         return 0
     if isinstance(valor, int):
         return max(0, valor)
-    v = (valor or '').strip() if isinstance(valor, str) else ''
+    if not (do_formulario and isinstance(valor, str)):
+        return 0
+    v = valor.strip()
     return int(v) if v.isdigit() and v.isascii() else 0
 
 
@@ -629,7 +635,7 @@ def produzir_plano(item_id):
     # Confirmado na tela: esta produção inclui N itens que já saíram em
     # pedidos com o estoque zerado no sistema (05/10/2026). N é o número que
     # a pergunta mostrou; o servidor recalcula e nunca quita mais que ele.
-    quitar = _quitar_confirmado(request.form.get('quitar_faltas'))
+    quitar = _quitar_confirmado(request.form.get('quitar_faltas'), do_formulario=True)
     try:
         esperado = request.form.get('produzido_esperado')
         esperado = int(esperado) if esperado is not None else None
@@ -1263,18 +1269,20 @@ def produzir():
 
     validados = []
     refs = set()
-    quitar = set()
+    quitar = {}
     for i, it in enumerate(itens, 1):
         if not isinstance(it, dict):
             return jsonify(ok=False, erro=f'Item {i}: dados invalidos.'), 400
-        ref = (it.get('ref') or '').strip()
-        tipo, _, sid = ref.partition(':')
+        ref = it.get('ref') if isinstance(it.get('ref'), str) else ''
+        tipo, _, sid = ref.strip().partition(':')
         try:
             qtd = int(it.get('quantidade'))
         except (TypeError, ValueError):
             return jsonify(ok=False, erro=f'Item {i}: dados invalidos.'), 400
-        if tipo not in ('receita', 'produto') or not sid.isdigit():
+        if tipo not in ('receita', 'produto') or not (sid.isdigit() and sid.isascii()):
             return jsonify(ok=False, erro=f'Item {i}: item invalido.'), 400
+        # Forma canônica ('receita:05' → 'receita:5'): é a chave das faltas.
+        ref = f'{tipo}:{int(sid)}'
         if qtd <= 0:
             return jsonify(ok=False, erro=f'Item {i}: quantidade deve ser positiva.'), 400
         if ref in refs:
@@ -1291,8 +1299,10 @@ def produzir():
                     f'{obj.nome}: registre pela ordem de produção, para manter '
                     'a pesagem por batelada e a baixa correta dos ingredientes.')), 400
         validados.append((tipo, obj, qtd))
-        if it.get('quitar_faltas') is True:
-            quitar.add(ref)
+        # Número que a pergunta mostrou (05/10/2026): nunca quita mais que ele.
+        confirmado = _quitar_confirmado(it.get('quitar_faltas'))
+        if confirmado:
+            quitar[ref] = confirmado
 
     try:
         resumo = registrar_lote(validados, current_user.id, dados.get('chave_envio'),

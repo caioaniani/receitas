@@ -1082,12 +1082,8 @@ def _executar_envio_pedido(pedido, user, ref_extra=None):
     pedido.status = 'em_transporte'
     db.session.commit()
     if faltas:
-        quais = '; '.join(f"{f['item']}: pedido {f['pedido']:g}, "
-                          f"baixado {f['baixado']:g}" for f in faltas)
-        return True, (f'{_MSG_SAIDA_COM_FALTA} — saiu com estoque '
-                      f'insuficiente na indústria ({quais}). A falta aparece '
-                      'na tela do padeiro: se a produção já foi feita, ao '
-                      'lançá-la ele confirma se ela inclui o que já saiu.')
+        from app.services.pedido_estoque import texto_faltas_saida
+        return True, f'{_MSG_SAIDA_COM_FALTA} — {texto_faltas_saida(faltas)}'
     return True, 'Pedido em transporte. Estoque da industria baixado.'
 
 
@@ -1711,15 +1707,15 @@ def excluir(id):
     # HandshakeAudit referencia pedido_id sem ondelete cascade — em Postgres
     # bloqueia o delete com FK violation. Limpa antes (audits viram orfaos
     # com pedido_id=NULL).
-    from app.models import FaltaSaidaIndustria, HandshakeAudit
+    from app.models import HandshakeAudit
     HandshakeAudit.query.filter_by(pedido_id=pedido.id).update(
         {'pedido_id': None})
     # Faltas de saída do pedido (05/10/2026): sem o pedido não há referência
-    # para quitar nem estornar — encerra e solta o vínculo antes do delete.
+    # para quitar nem estornar — encerra e solta o vínculo antes do delete
+    # (pelo ORM, para ficar no histórico).
     from app.services import faltas_industria
     faltas_industria.encerrar_do_pedido(pedido.id, 'excluido', current_user.id)
-    FaltaSaidaIndustria.query.filter_by(pedido_id=pedido.id).update(
-        {'pedido_id': None}, synchronize_session='fetch')
+    faltas_industria.soltar_do_pedido(pedido.id)
     db.session.delete(pedido)
     erro_corte = salvar_no_prazo([pedido.data_entrega])
     if erro_corte:
@@ -2248,8 +2244,11 @@ def congelados_conferencia():
                 usuario_id=current_user.id))
             ep.quantidade = qtd
             ajustes += 1
+        # Só encerra faltas de saídas ANTERIORES ao início da contagem: uma
+        # saída depois de a tela abrir não está no que foi contado.
         faltas_encerradas = faltas_industria.encerrar_por_contagem(
-            contados, current_user.id)
+            contados, current_user.id,
+            antes_de=faltas_industria.inicio_contagem(request.form.get('iniciada_em')))
         if ajustes or massa_conferida or faltas_encerradas:
             # A conversão de fração legada pode registrar falta mesmo quando
             # a contagem inteira já é zero; ela também precisa ser confirmada.
@@ -2286,7 +2285,8 @@ def congelados_conferencia():
     from app.services.estoque_congelados import saldos_massa_para_tela
     return render_template('pedidos/congelados_conferencia.html', itens=itens,
                            receitas_add=receitas_add, produtos_add=produtos_add,
-                           saldos_massa=saldos_massa_para_tela(itens))
+                           saldos_massa=saldos_massa_para_tela(itens),
+                           iniciada_em=agora().isoformat(timespec='seconds'))
 
 
 # ── Estoque de Loja ──
