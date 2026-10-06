@@ -1051,9 +1051,13 @@ def enviar(id):
         return redirect(url_for('pedidos.detalhe', id=id))
     # Saída com falta de estoque da indústria (05/10/2026): aviso em amarelo,
     # não em verde — é o momento em que alguém ainda lembra o que saiu.
-    cat = 'success' if ok and 'ATENÇÃO' not in msg else 'warning'
+    cat = ('warning' if not ok or msg.startswith(_MSG_SAIDA_COM_FALTA)
+           else 'success')
     flash(msg, cat)
     return redirect(url_for('pedidos.detalhe', id=id))
+
+
+_MSG_SAIDA_COM_FALTA = 'Pedido em transporte. ATENÇÃO'
 
 
 def _executar_envio_pedido(pedido, user, ref_extra=None):
@@ -1080,7 +1084,7 @@ def _executar_envio_pedido(pedido, user, ref_extra=None):
     if faltas:
         quais = '; '.join(f"{f['item']}: pedido {f['pedido']:g}, "
                           f"baixado {f['baixado']:g}" for f in faltas)
-        return True, ('Pedido em transporte. ATENÇÃO — saiu com estoque '
+        return True, (f'{_MSG_SAIDA_COM_FALTA} — saiu com estoque '
                       f'insuficiente na indústria ({quais}). A falta aparece '
                       'na tela do padeiro: se a produção já foi feita, ao '
                       'lançá-la ele confirma se ela inclui o que já saiu.')
