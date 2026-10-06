@@ -221,6 +221,25 @@ def _resolver_alertas_por_historico(conv_id):
         return 0
 
 
+def _episodio_so_de_indisponivel(row, historico):
+    """O episódio da espera (`row.inicio_em` em diante, com 1 min de folga
+    para a diferença entre o relógio do Chatwoot e o nosso) tem fala do
+    cliente, e TODA ela é só conteúdo indisponível? Sem instante numa fala
+    do cliente = não decide (conservador: a espera segue)."""
+    from app.services.chatwoot import fala_indisponivel
+    corte = row.inicio_em - timedelta(minutes=1)
+    no_episodio = []
+    for m in historico or []:
+        if m.get('role') != 'user':
+            continue
+        instante = _instante(m, None)
+        if instante is None:
+            return False
+        if instante >= corte:
+            no_episodio.append(m)
+    return bool(no_episodio) and all(fala_indisponivel(m) for m in no_episodio)
+
+
 def preparar(conversa, historico, *, min_minutos=10):
     from app.services.chatbot_vigia import TEXTO_CONTENCAO_ESPERA, _e_fechamento, _e_mencao_story
 
@@ -254,6 +273,17 @@ def preparar(conversa, historico, *, min_minutos=10):
             row.mensagem = ''
             _salvar_se_inalterada(row, observada)
         return None
+    if row and row.estado in ('aguardando', 'em_atendimento') and not row.grave \
+            and _episodio_so_de_indisponivel(row, historico):
+        # Espera aberta pelo handoff ANTIGO de um placeholder (antes de
+        # 06/10/2026) ou por placeholder sem nenhuma fala real depois do
+        # início: desconsiderada, igual à conversa só de placeholders. Fala
+        # real nova do cliente reabre pelo ramo de `sem_cliente` abaixo.
+        row.estado = 'sem_cliente'
+        row.resolvido_em = base
+        row.proximo_aviso_em = None
+        _salvar_se_inalterada(row, observada)
+        return None
     graves = VigiaVeredito.query.filter(
         VigiaVeredito.conv_id == conv_id, VigiaVeredito.alerta.is_(True),
         VigiaVeredito.gravidade == 'alta',
@@ -262,7 +292,11 @@ def preparar(conversa, historico, *, min_minutos=10):
         graves = graves.filter(VigiaVeredito.criado_em > row.resolvido_em)
     grave = graves.order_by(VigiaVeredito.criado_em.desc()).first()
     # Sem metadata (callers legados) assistant é humano, exceto nossa contenção.
-    efetivas = [m for m in historico if m.get('role') == 'user' or
+    # Fala que o WhatsApp não entregou é desconsiderada (dono 06/10/2026,
+    # conv 2402): não abre nem reabre espera — a equipe não tem como ver.
+    from app.services.chatwoot import fala_indisponivel
+    efetivas = [m for m in historico if (m.get('role') == 'user'
+                                         and not fala_indisponivel(m)) or
                 (m.get('role') == 'assistant' and m.get('humano', True)
                  and TEXTO_CONTENCAO_ESPERA[:40] not in (m.get('content') or ''))]
     if grave or _acompanhar_ate_resolver(row, base, min_minutos):

@@ -76,9 +76,7 @@ def _classificar(texto):
 
 
 def _tem_anexo(mensagem):
-    return any(mensagem.get(chave) for chave in (
-        'imagens', 'images', 'image', 'anexos', 'attachments', 'audio',
-        'audios', 'video', 'videos', 'arquivo', 'files'))
+    return any(mensagem.get(chave) for chave in _CHAVES_ANEXO)
 
 
 def _resultado(acao, texto, motivo):
@@ -95,53 +93,80 @@ def _encaminhar(motivo):
 
 # Mensagem que o WhatsApp não entregou (`type: unsupported` — o Chatwoot
 # grava só um placeholder; ver `chatwoot.MARCADOR_MENSAGEM_INDISPONIVEL`).
-# Aqui "vou passar sua mensagem" seria mentira: não há mensagem. O cliente
-# recebe o fato e o gesto que resolve (reenviar como texto comum) — SEM
-# diagnóstico da causa: o tipo original não chega no evento, e "mensagem
-# temporária" nem gera o placeholder (o Chatwoot descarta `ephemeral`
-# antes). A equipe recebe a conversa com o marcador e o motivo na nota.
+# DECISÃO DO DONO (06/10/2026, caso conv 2402 — um contato mandou ~16
+# mensagens assim em duas semanas e cada uma virou espera humana e cobrança
+# a cada 15 min): "não tem nem como a gente ver a mensagem, tem que
+# desconsiderar isso" / "nós nunca vamos abrir o WhatsApp pra ver essa
+# mensagem". Logo: NÃO passa para a equipe (substitui o encaminhamento de
+# 30/09/2026). O cliente recebe UMA vez por conversa o fato e o único gesto
+# que resolve (reenviar como texto comum), sem diagnóstico da causa e sem
+# prometer equipe; as seguintes ficam em silêncio. Quando ele mandar texto
+# de verdade, o fluxo normal segue (inclusive o encaminhamento).
 TEXTO_MENSAGEM_INDISPONIVEL = (
-    'Sua mensagem chegou sem conteúdo aqui no nosso atendimento. Pode '
-    'reenviar como mensagem de texto comum? Nossa equipe continua o '
-    'atendimento por aqui.')
+    'Sua mensagem chegou sem conteúdo aqui no nosso atendimento e não '
+    'conseguimos ver o que foi enviado. Pode reenviar como mensagem de '
+    'texto comum?')
 # Fora do horário o prefixo genérico ("Vou registrar sua mensagem") também
 # mentiria — não há mensagem a registrar. Texto próprio, mesma janela.
 TEXTO_MENSAGEM_INDISPONIVEL_FORA_HORARIO = (
     'Estamos fora do nosso horário de atendimento aqui no chat '
     '({ini:02d}:00 às {fim:02d}:00). Sua mensagem chegou sem conteúdo aqui '
-    'no nosso atendimento. Pode reenviar como mensagem de texto comum? '
-    'Nossa equipe segue o atendimento por aqui a partir das {ini:02d}:00.')
+    'no nosso atendimento e não conseguimos ver o que foi enviado. Pode '
+    'reenviar como mensagem de texto comum? Respondemos a partir das '
+    '{ini:02d}:00.')
 MOTIVO_MENSAGEM_INDISPONIVEL = (
-    'mensagem indisponível: o WhatsApp entregou a mensagem como tipo não '
-    'suportado e o Chatwoot não recebeu o conteúdo (o tipo original não '
-    'chega; causas conhecidas: formato que a API não entrega, ou número em '
-    'coexistência com o app WhatsApp Business — nesse caso conferir a '
-    'mensagem no aparelho). O cliente foi orientado a reenviar em texto; se '
-    'o número for conhecido, ligar.')
+    'mensagem indisponível desconsiderada: o WhatsApp não entregou o '
+    'conteúdo; cliente orientado a reenviar em texto, sem passar para a '
+    'equipe (decisão do dono 06/10/2026)')
+MOTIVO_INDISPONIVEL_REPETIDA = (
+    'mensagem indisponível desconsiderada: o pedido de reenvio em texto já '
+    'foi feito nesta conversa (decisão do dono 06/10/2026)')
 MOTIVO_ANEXO_COM_INDISPONIVEL = (
     'atendimento restrito: anexo ou mensagem não textual; na mesma rajada '
     'uma mensagem chegou sem conteúdo (mensagem indisponível — o WhatsApp '
     'não entregou; o anexo chegou e está na conversa)')
+# Trecho comum às versões (atual e de 30/09) do pedido de reenvio.
+_TRECHO_PEDIDO_REENVIO = 'chegou sem conteúdo aqui no nosso atendimento'
 
 
-def _mensagem_indisponivel(texto):
-    """True quando TODA a fala do cliente (uma mensagem, ou a rajada que o
-    webhook juntou com quebras de linha) é o marcador de conteúdo não
-    entregue. Texto real misturado segue o fluxo normal."""
-    from app.services.chatwoot import MARCADOR_MENSAGEM_INDISPONIVEL
-    if not isinstance(texto, str):
-        return False   # conteúdo estruturado segue o fluxo normal (equipe)
-    linhas = [ln.strip() for ln in texto.splitlines() if ln.strip()]
-    return bool(linhas) and all(ln == MARCADOR_MENSAGEM_INDISPONIVEL for ln in linhas)
+_CHAVES_ANEXO = ('imagens', 'images', 'image', 'anexos', 'attachments', 'audio',
+                 'audios', 'video', 'videos', 'arquivo', 'files')
 
 
-def _encaminhar_indisponivel():
+def _so_indisponivel(mensagem):
+    """A fala, ignorando anexos, é só conteúdo indisponível? Régua de
+    `chatwoot.fala_indisponivel` (fonte única); o anexo é decidido à parte
+    porque a foto que chegou junto vai para a equipe."""
+    from app.services.chatwoot import fala_indisponivel
+    return fala_indisponivel({k: v for k, v in mensagem.items() if k not in _CHAVES_ANEXO})
+
+
+def _ja_pediu_reenvio(atuais):
+    """O pedido de reenvio já saiu nesta conversa depois da última fala REAL
+    do cliente? Fala real nova zera: se ele escreveu e depois voltou a
+    mandar conteúdo ilegível, o pedido sai de novo."""
+    from app.services.chatwoot import fala_indisponivel
+    for m in reversed(atuais):
+        if m.get('role') == 'user' and not fala_indisponivel(m):
+            return False
+        if (m.get('role') == 'assistant'
+                and _TRECHO_PEDIDO_REENVIO in (m.get('content') or '')):
+            return True
+    return False
+
+
+def responder_indisponivel(atuais):
+    """Fala SÓ indisponível: pede reenvio em texto uma vez, depois ignora.
+    Nunca `handoff` (decisão do dono 06/10/2026). `atuais` = histórico da
+    conversa atual (sem as falas herdadas de conversas anteriores)."""
+    if _ja_pediu_reenvio(atuais):
+        return _resultado('ignorar', '', MOTIVO_INDISPONIVEL_REPETIDA)
     from app.services.chatbot import HORARIO_CHAT_FIM, HORARIO_CHAT_INICIO, _fora_horario_chat
     texto = TEXTO_MENSAGEM_INDISPONIVEL
     if _fora_horario_chat():
         texto = TEXTO_MENSAGEM_INDISPONIVEL_FORA_HORARIO.format(
             ini=HORARIO_CHAT_INICIO, fim=HORARIO_CHAT_FIM)
-    return _resultado('handoff', texto, MOTIVO_MENSAGEM_INDISPONIVEL)
+    return _resultado('responder', texto, MOTIVO_MENSAGEM_INDISPONIVEL)
 
 
 def _enderecos(unidade=None):
@@ -184,21 +209,16 @@ def responder(historico, *, telefone_contato=None, conversa_id=None):
     clientes = [m for m in atuais if m.get('role') == 'user']
     if not clientes:
         return _encaminhar('atendimento restrito: mensagem sem contexto suficiente')
-    # Conteúdo que o WhatsApp não entregou: o texto genérico ("vou passar
-    # sua mensagem") não serve. Vem ANTES da regra do `handoff_em` do
-    # store: num episódio NOVO (conversa resolvida e reaberta pelo Chatwoot)
-    # de contato já encaminhado antes, o cliente recebe o texto próprio em
-    # vez de "vou passar sua mensagem"; dentro do MESMO episódio o webhook
-    # nem chama este serviço (silêncio, a conversa é da equipe). Caso 2339:
-    # sete vezes o mesmo placeholder em 15 dias. Com ANEXO na mesma rajada
-    # (foto sem legenda + placeholder no debounce) o anexo chegou: não se
-    # diz ao cliente que "chegou sem conteúdo" — segue o encaminhamento de
+    # Conteúdo que o WhatsApp não entregou: desconsiderado (dono
+    # 06/10/2026) — pedido de reenvio uma vez por conversa, nunca equipe.
+    # Vem ANTES da regra do `handoff_em`: um encaminhamento antigo não faz
+    # o placeholder virar fila. Com ANEXO na mesma rajada (foto sem legenda
+    # + placeholder no debounce) o anexo chegou: segue o encaminhamento de
     # anexo, com o fato registrado no motivo para a equipe.
-    if (_mensagem_indisponivel(clientes[-1].get('content'))
-            or clientes[-1].get('indisponivel')):
+    if _so_indisponivel(clientes[-1]):
         if _tem_anexo(clientes[-1]):
             return _encaminhar(MOTIVO_ANEXO_COM_INDISPONIVEL)
-        return _encaminhar_indisponivel()
+        return responder_indisponivel(atuais)
     # Uma saudação/agradecimento não apaga venda, ajuste ou dúvida pendente.
     for m in atuais:
         if m.get('handoff_em'):

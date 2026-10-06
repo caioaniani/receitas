@@ -1615,7 +1615,11 @@ def cliente_ja_falou(historico):
     cobrança "Urgente" no painel a manhã inteira — e quando a equipe abria,
     "não tinha conversa nenhuma". Fonte única para follow-up, vigia de
     abandono e espera-humana."""
+    from app.services.chatwoot import fala_indisponivel
+    # Fala que o WhatsApp não entregou não conta (dono 06/10/2026, conv
+    # 2402): contato que só mandou isso nunca falou nada que dê para atender.
     return any(isinstance(m, dict) and m.get('role') == 'user'
+               and not fala_indisponivel(m)
                for m in (historico or []))
 
 
@@ -2931,6 +2935,10 @@ def varrer_pendentes_sem_resposta():
                 resultado = responder(historico, telefone_contato=telefone,
                                       conversa_id=conv_id)
                 acao = (resultado or {}).get('acao')
+                if acao == 'ignorar':
+                    # Mensagem indisponível repetida (dono 06/10/2026): o
+                    # pedido de reenvio já saiu; nada a fazer nem registrar.
+                    continue
                 texto = (resultado or {}).get('texto') or ''
                 finalidade = None
                 if acao == 'handoff':

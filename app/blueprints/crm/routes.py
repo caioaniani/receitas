@@ -706,7 +706,21 @@ def bot_webhook():
                     # do lock, o marcador persistido vence o status antigo do
                     # webhook: guarda a fala e mantem o bot em silencio.
                     from app.services import presenca_humana
-                    if presenca_humana.humano_presente(conv_id):
+                    # Fala SÓ indisponível (o WhatsApp não entregou o
+                    # conteúdo) é desconsiderada — dono 06/10/2026, conv
+                    # 2402: nunca abre fila nem muda status. Com a equipe
+                    # já na conversa, nem o pedido de reenvio sai.
+                    indisponivel = chatwoot.fala_indisponivel(msg_atual)
+                    if indisponivel and (
+                            presenca_humana.humano_presente(conv_id)
+                            or atendimento_humano.encaminhamento_pendente(conv_id)):
+                        resultado = {
+                            'acao': 'ignorar',
+                            'texto': '',
+                            'motivo': 'mensagem indisponível desconsiderada',
+                            'politica_atendimento': atendimento_humano.POLITICA_ATENDIMENTO,
+                        }
+                    elif presenca_humana.humano_presente(conv_id):
                         # Equipe falando em nota privada (regra do dono
                         # 20/09/2026): o bot NAO fala. A fala do cliente
                         # entra no store e a conversa vai pra fila humana.
@@ -755,7 +769,9 @@ def bot_webhook():
                                     'conv=%s — %s descartado', conv_id,
                                     resultado.get('acao'))
                         anotar_mesmo_calado = resultado.get('acao') == 'handoff'
-                        resultado = dict(resultado, acao='silencio_humano', texto='',
+                        resultado = dict(resultado, acao=('ignorar' if indisponivel
+                                                          else 'silencio_humano'),
+                                         texto='',
                                          motivo=(resultado.get('motivo')
                                                  or 'equipe em nota privada durante o turno'))
                     nova_passagem = False
@@ -853,7 +869,7 @@ def bot_webhook():
                         and 'loop' in (resultado.get('motivo') or ''))
                     if encerrou_por_loop or (
                             resultado is not None
-                            and resultado.get('acao') == 'silencio_humano'):
+                            and resultado.get('acao') in ('silencio_humano', 'ignorar')):
                         # Loop bot-a-bot silenciado: o vigia alertando aqui era
                         # exatamente o ruido (6 ALTAs sem cliente real, 03/07).
                         # Silencio por nota privada: nao ha turno do bot pra

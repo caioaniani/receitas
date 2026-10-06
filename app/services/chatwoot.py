@@ -481,6 +481,29 @@ def mensagem_indisponivel(m):
     return texto_indisponivel(m.get('content'))
 
 
+def fala_indisponivel(m):
+    """True quando uma fala JÁ NORMALIZADA do cliente (store, histórico da
+    API ou rajada do webhook) é SÓ conteúdo que o WhatsApp não entregou:
+    flag `indisponivel` ou toda linha igual ao marcador/placeholder, sem
+    imagem nem anexo junto. Fonte única da regra do dono de 06/10/2026
+    (caso conv 2402): essa fala é DESCONSIDERADA — não abre espera humana,
+    não passa a conversa para a equipe e não conta como "cliente falou". A
+    equipe nunca abre o aparelho para conferir, então não há o que atender.
+    Texto real misturado na rajada NÃO é indisponível."""
+    if not isinstance(m, dict) or m.get('role') != 'user':
+        return False
+    if any(m.get(k) for k in ('imagens', 'images', 'anexos', 'attachments')):
+        return False
+    if m.get('indisponivel'):
+        return True
+    content = m.get('content')
+    if not isinstance(content, str):
+        return False
+    linhas = [ln.strip() for ln in content.splitlines() if ln.strip()]
+    return bool(linhas) and all(
+        ln == MARCADOR_MENSAGEM_INDISPONIVEL or texto_indisponivel(ln) for ln in linhas)
+
+
 def anexos_exigem_equipe(anexos):
     """Legenda não substitui áudio, vídeo ou arquivo que a equipe deve abrir."""
     return any(not isinstance(a, dict) or a.get('file_type') != 'image'
@@ -542,8 +565,10 @@ def buscar_historico(conversation_id, limite=20, *, incluir_autoria=False,
         # 400 mensagens cruas sem NENHUMA do cliente não existe na prática.
         lote = msgs
         for _ in range(_MAX_PAGINAS_HISTORICO):
+            # Placeholder de mensagem indisponível não é fala do cliente
+            # (mesma régua de `cliente_ja_falou`, dono 06/10/2026).
             cliente = any(not m.get('private') and m.get('message_type') in ('incoming', 0)
-                          for m in lote)
+                          and not mensagem_indisponivel(m) for m in lote)
             humano = any(not m.get('private') and _mensagem_humana(m) for m in lote)
             if cliente or (somente_bot and humano):
                 break

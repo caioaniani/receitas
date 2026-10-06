@@ -383,6 +383,29 @@ fica em silêncio (a conversa é da equipe). Revisão de 30/09 (18 achados
 aplicados): store legado, corte de 120, preview da lista, causa afirmada
 sem prova, fora do horário e rajada com foto. Testes:
 `tests/test_mensagem_indisponivel.py`.
+**SUBSTITUÍDO em 06/10/2026 (caso conv 2402, dono: "não tem nem como a
+gente ver a mensagem, tem que desconsiderar isso" / "nós nunca vamos abrir
+o WhatsApp pra ver essa mensagem")**: o contato +5511978506319 mandou ~16
+placeholders em duas semanas, cada um virou handoff + cobrança a cada
+15 min — inclusive "esperando há 26 min" logo depois de a equipe responder.
+Agora a fala SÓ indisponível é DESCONSIDERADA. Fonte única
+`chatwoot.fala_indisponivel` (flag `indisponivel` ou toda linha = marcador/
+placeholder, SEM imagem/anexo). `atendimento_restrito.responder_indisponivel`:
+pedido de reenvio UMA vez por conversa (`acao='responder'`, texto sem
+prometer equipe), depois `acao='ignorar'` (silêncio, sem status, sem fila);
+fala real do cliente zera o "já pedi"; falas herdadas não contam. Webhook:
+com a equipe na conversa (`encaminhamento_pendente`/nota privada) nem o
+pedido sai (`ignorar`); vigia não avalia; vassoura pula `ignorar`.
+`chatbot.cliente_ja_falou` e `atendimento_pendente.preparar` ignoram essas
+falas (contato só de placeholders = `sem_cliente`; espera cujo episódio só
+tem placeholder — inclusive as abertas pelo handoff antigo — fecha como
+`sem_cliente`, e fala real nova reabre); a paginação de `buscar_historico
+(incluir_autoria=True)` não para em placeholder. Foto + placeholder na mesma
+rajada segue indo para a equipe (`MOTIVO_ANEXO_COM_INDISPONIVEL`). ACEITOS:
+placeholder em conversa ainda tida como pendente da equipe fica `pending`
+sem pedido de reenvio; a vassoura relê uma conversa `ignorar` a cada ciclo
+por até 12 h (só GETs). O texto do marcador ("pedir reenvio em texto ou
+ligar") ficou igual de propósito: stores gravados comparam por ele.
 
 ## Kits de café da manhã (decisão do dono, 14/09/2026)
 

@@ -228,33 +228,71 @@ def test_store_legado_com_o_placeholder_cru_e_lido_com_o_marcador(app):
 # ── 3. Atendimento restrito: texto próprio, nunca "vou passar sua mensagem"
 
 def test_restrito_responde_com_o_motivo_e_o_gesto(app, sem_motor):
+    """Dono 06/10/2026 (conv 2402): desconsiderada — pede reenvio, NUNCA
+    passa para a equipe nem promete atendimento."""
     out = atendimento.responder([_m(MARCADOR)])
-    assert out['acao'] == 'handoff'
+    assert out['acao'] == 'responder'
     assert out['texto'] == atendimento.TEXTO_MENSAGEM_INDISPONIVEL
     assert 'chegou sem conteúdo' in out['texto']
     assert 'texto comum' in out['texto']
     assert 'Vou passar sua mensagem' not in out['texto']
+    assert 'equipe' not in out['texto']
     assert 'http' not in out['texto']
     # O tipo original não chega no evento: o texto ao cliente não diagnostica.
     for palavra in ('temporár', 'enquete', 'visualização única', '131051'):
         assert palavra not in out['texto']
     assert out['motivo'] == atendimento.MOTIVO_MENSAGEM_INDISPONIVEL
-    assert 'coexistência' in out['motivo'] and 'ligar' in out['motivo']
-    assert 'mensagem indisponível' in out['motivo']
+    assert 'desconsiderada' in out['motivo']
     assert out['tools_usadas'] == []
     assert out['politica_atendimento'] == atendimento.POLITICA
 
 
-def test_restrito_texto_proprio_mesmo_em_conversa_ja_encaminhada(app, sem_motor):
-    """Caso 2339: sete placeholders em 15 dias. A continuidade com a equipe
-    não pode esconder do cliente o único gesto que resolve (reenviar)."""
+def test_restrito_pede_reenvio_uma_vez_e_depois_ignora(app, sem_motor):
+    hist = [_m(MARCADOR), {'role': 'assistant',
+                           'content': atendimento.TEXTO_MENSAGEM_INDISPONIVEL},
+            _m(MARCADOR)]
+    out = atendimento.responder(hist)
+    assert out['acao'] == 'ignorar' and out['texto'] == ''
+    assert out['motivo'] == atendimento.MOTIVO_INDISPONIVEL_REPETIDA
+
+
+def test_restrito_reconhece_o_pedido_de_reenvio_antigo(app, sem_motor):
+    """O texto de 30/09 ("Nossa equipe continua...") já está nos stores."""
+    antigo = ('Sua mensagem chegou sem conteúdo aqui no nosso atendimento. Pode '
+              'reenviar como mensagem de texto comum? Nossa equipe continua o '
+              'atendimento por aqui.')
+    out = atendimento.responder([_m(MARCADOR), {'role': 'assistant', 'content': antigo},
+                                 _m(MARCADOR)])
+    assert out['acao'] == 'ignorar'
+
+
+def test_restrito_fala_real_no_meio_zera_o_pedido(app, sem_motor):
+    hist = [_m(MARCADOR), {'role': 'assistant',
+                           'content': atendimento.TEXTO_MENSAGEM_INDISPONIVEL},
+            _m('oi'), {'role': 'assistant', 'content': 'Olá!'}, _m(MARCADOR)]
+    out = atendimento.responder(hist)
+    assert out['acao'] == 'responder'
+    assert out['texto'] == atendimento.TEXTO_MENSAGEM_INDISPONIVEL
+
+
+def test_restrito_pedido_herdado_de_outra_conversa_nao_conta(app, sem_motor):
+    hist = [_m(MARCADOR, herdada=True),
+            {'role': 'assistant', 'content': atendimento.TEXTO_MENSAGEM_INDISPONIVEL,
+             'herdada': True},
+            _m(MARCADOR)]
+    assert atendimento.responder(hist)['acao'] == 'responder'
+
+
+def test_restrito_encaminhamento_antigo_nao_vira_fila(app, sem_motor):
+    """Caso 2339/2402: placeholder em conversa já encaminhada antes não volta
+    para a equipe — só o pedido de reenvio."""
     hist = [_m(MARCADOR, handoff_em='2026-09-26T10:09:55'),
             {'role': 'assistant', 'content': 'Obrigada pelo contato. Vou passar '
              'sua mensagem para nossa equipe continuar o atendimento por aqui.',
              'handoff_em': '2026-09-26T10:09:55'},
             _m(MARCADOR)]
     out = atendimento.responder(hist)
-    assert out['acao'] == 'handoff'
+    assert out['acao'] == 'responder'
     assert out['texto'] == atendimento.TEXTO_MENSAGEM_INDISPONIVEL
 
 
@@ -267,9 +305,10 @@ def test_restrito_flag_da_listagem_da_api_tambem_vale(app, sem_motor):
     """A flag decide sozinha: mesmo conteúdo que não é o marcador."""
     out = atendimento.responder([_m(PLACEHOLDER_EN, indisponivel=True)])
     assert out['texto'] == atendimento.TEXTO_MENSAGEM_INDISPONIVEL
+    # Fonte única `chatwoot.fala_indisponivel`: o placeholder cru também vale.
     sem_flag = atendimento.responder([_m(PLACEHOLDER_EN)])
-    assert sem_flag['acao'] == 'handoff'
-    assert sem_flag['texto'] != atendimento.TEXTO_MENSAGEM_INDISPONIVEL
+    assert sem_flag['acao'] == 'responder'
+    assert sem_flag['texto'] == atendimento.TEXTO_MENSAGEM_INDISPONIVEL
 
 
 def test_restrito_marcador_com_foto_na_rajada_nao_diz_que_nada_chegou(app, sem_motor):
@@ -306,9 +345,10 @@ def test_marcador_antigo_nao_muda_a_resposta_a_mensagem_nova(app, sem_motor):
 
 def test_placeholder_cru_nunca_chega_ao_cliente_como_fala_normal(app, sem_motor):
     """Defesa em profundidade: se o texto em inglês escapar do webhook (ex.
-    seed antigo no store), o restrito ainda encaminha — nunca responde FAQ."""
+    seed antigo no store), vale como indisponível — nunca responde FAQ."""
     out = atendimento.responder([_m(PLACEHOLDER_EN)])
-    assert out['acao'] == 'handoff'
+    assert out['acao'] == 'responder'
+    assert out['texto'] == atendimento.TEXTO_MENSAGEM_INDISPONIVEL
 
 
 def test_fora_do_horario_avisa_sem_prometer_registrar_mensagem(app, monkeypatch):
@@ -316,6 +356,7 @@ def test_fora_do_horario_avisa_sem_prometer_registrar_mensagem(app, monkeypatch)
     mensagem. Texto próprio com a janela, o fato e o gesto."""
     monkeypatch.setattr('app.services.chatbot._fora_horario_chat', lambda: True)
     out = atendimento.responder([_m(MARCADOR)])
+    assert out['acao'] == 'responder'
     assert out['texto'].startswith('Estamos fora do nosso horário')
     assert '07:00 às 20:00' in out['texto']
     assert 'chegou sem conteúdo' in out['texto'] and 'texto comum' in out['texto']
@@ -330,7 +371,8 @@ def test_fora_do_horario_avisa_sem_prometer_registrar_mensagem(app, monkeypatch)
     (PLACEHOLDER_EN, {'content_attributes': {'is_unsupported': True}}),
     (PLACEHOLDER_PT, {}),
 ])
-def test_webhook_placeholder_vira_marcador_texto_proprio_e_equipe(app, canais, content, extra):
+def test_webhook_placeholder_pede_reenvio_sem_equipe(app, canais, content, extra):
+    """Dono 06/10/2026 (conv 2402): sem fila, sem status `open`, sem nota."""
     from app.models import EsperaAtendimento, VigiaVeredito
     from app.services.chatbot import carregar_historico
     client, enviar, status, nota = canais
@@ -338,38 +380,43 @@ def test_webhook_placeholder_vira_marcador_texto_proprio_e_equipe(app, canais, c
         assert _post(client, content, **extra).status_code == 200
     modelo.assert_not_called()
     assert VigiaVeredito.query.count() == 0
-    # Cliente: o motivo e o gesto, pela política restrita.
     enviar.assert_called_once()
     assert enviar.call_args.args[1] == atendimento.TEXTO_MENSAGEM_INDISPONIVEL
     assert enviar.call_args.kwargs['politica_atendimento'] == POLITICA_ATENDIMENTO
-    assert enviar.call_args.kwargs['finalidade'] == 'encaminhamento_inicial'
-    # Equipe: conversa na fila + nota privada com o motivo.
-    status.assert_called_once_with(2339, 'open')
-    nota.assert_called_once()
-    assert nota.call_args.args[1]['motivo'] == atendimento.MOTIVO_MENSAGEM_INDISPONIVEL
-    # Store e fila de espera guardam o MARCADOR, nunca o texto em inglês.
+    assert enviar.call_args.kwargs['finalidade'] is None
+    status.assert_not_called()
+    nota.assert_not_called()
     with app.app_context():
         hist = carregar_historico(2339)
-        row = EsperaAtendimento.query.filter_by(conversa_id='2339').one()
+        assert EsperaAtendimento.query.filter_by(conversa_id='2339').count() == 0
     falas = [m['content'] for m in hist if m['role'] == 'user']
     assert falas == [MARCADOR]
-    assert row.estado == 'aguardando'
-    assert 'mensagem indisponível' in row.mensagem
-    assert PLACEHOLDER_EN not in row.mensagem and PLACEHOLDER_PT not in row.mensagem
+    assert not any(m.get('handoff_em') for m in hist)
 
 
-def test_webhook_segundo_placeholder_no_mesmo_episodio_fica_com_a_equipe(app, canais):
-    """Já encaminhada: o segundo placeholder não repete o texto (a conversa é
-    da equipe), mas entra no store e mantém a fila."""
+def test_webhook_segundo_placeholder_fica_em_silencio(app, canais):
+    from app.models import EsperaAtendimento
     from app.services.chatbot import carregar_historico
     client, enviar, status, _ = canais
     _post(client, PLACEHOLDER_EN, content_attributes={'is_unsupported': True})
     n = enviar.call_count
     _post(client, PLACEHOLDER_EN, content_attributes={'is_unsupported': True})
     assert enviar.call_count == n
+    status.assert_not_called()
     with app.app_context():
         hist = carregar_historico(2339)
+        assert EsperaAtendimento.query.count() == 0
     assert [m['content'] for m in hist if m['role'] == 'user'] == [MARCADOR, MARCADOR]
+
+
+def test_webhook_placeholder_com_equipe_na_conversa_nao_fala_nem_mexe(app, canais):
+    from app.services import atendimento_humano
+    client, enviar, status, nota = canais
+    with patch.object(atendimento_humano, 'encaminhamento_pendente', return_value=True):
+        _post(client, PLACEHOLDER_EN, content_attributes={'is_unsupported': True})
+    enviar.assert_not_called()
+    status.assert_not_called()
+    nota.assert_not_called()
 
 
 def test_webhook_content_attributes_torto_nao_derruba_e_decide_pelo_texto(app, canais):
@@ -394,41 +441,145 @@ def test_webhook_foto_e_placeholder_na_mesma_rajada_vao_como_anexo(app, canais):
     assert hist[0]['content'] == MARCADOR   # o store guarda só o texto; a foto fica no Chatwoot
 
 
-def test_store_legado_nao_leva_o_texto_em_ingles_a_fila_nem_ao_dono(app, canais):
-    """Achado da revisão (30/09/2026): o store da conv 2339 já tinha sete
-    placeholders crus; `registrar_encaminhamento` grava as 3 últimas falas
-    e a cobrança ao dono (`Assunto:`) repetia o inglês a cada 15 min."""
+def test_espera_humana_desconsidera_conversa_so_de_placeholders(app):
+    """Caso 2402 (06/10/2026): a equipe respondeu e o cliente mandou outra
+    mensagem indisponível; o aviso "esperando ATENDENTE há 26 min" seguia.
+    Conversa em que o cliente só mandou conteúdo ilegível não é espera."""
     from app.models import EsperaAtendimento
     from app.services import chatbot_vigia
-    client, enviar, status, nota = canais
+    from app.utils import agora
     with app.app_context():
-        _semear_store_legado()
-    _post(client, PLACEHOLDER_EN, content_attributes={'is_unsupported': True})
-    with app.app_context():
-        row = EsperaAtendimento.query.filter_by(conversa_id='2339').one()
-        assert row.estado == 'aguardando'
-        assert PLACEHOLDER_EN not in row.mensagem
-        assert row.mensagem.count(MARCADOR) == 3
-        # Equipe respondeu no Chatwoot antes do próximo ciclo: o aviso ao
-        # dono ("ainda aberto") sai com `espera.mensagem` — o marcador
-        # inteiro cabe nos 120 caracteres.
+        db.session.add(EsperaAtendimento(conversa_id='2402', inicio_em=agora(),
+                                         estado='aguardando', mensagem=MARCADOR))
+        db.session.commit()
         agora_s = time.time()
         historico = [{'role': 'user', 'content': MARCADOR, 'humano': False,
                       'created_at': agora_s - 1800, 'indisponivel': True},
-                     {'role': 'assistant', 'content': 'Oi! Aqui é a equipe da O Pão.',
-                      'humano': True, 'created_at': agora_s - 60}]
-        conversa = {'id': 2339, 'nome_contato': 'Contato', 'minutos_paradas': 30,
-                    'status': 'open', 'telefone': '12134098546'}
+                     {'role': 'assistant', 'content': 'Boa noite, tudo bem?',
+                      'humano': True, 'created_at': agora_s - 600},
+                     {'role': 'user', 'content': MARCADOR, 'humano': False,
+                      'created_at': agora_s - 500, 'indisponivel': True}]
+        conversa = {'id': 2402, 'nome_contato': 'Contato', 'minutos_paradas': 30,
+                    'status': 'open', 'telefone': '5511978506319'}
         with patch('app.services.chatbot_vigia._numero_destino', return_value='5511999990000'), \
                 patch('app.services.chatwoot.listar_conversas_paradas', return_value=[conversa]), \
+                patch('app.services.chatwoot.consultar_conversa', return_value={'status': 'open'}), \
                 patch('app.services.chatwoot.buscar_historico', return_value=historico), \
                 patch('app.services.zapi.enviar_texto', return_value={'ok': True}) as zapi:
             chatbot_vigia.alertar_clientes_esperando_humano(min_minutos=0)
-        textos = [c.args[1] for c in zapi.call_args_list]
-        assert textos, 'a cobrança ao dono continua até resolver'
-        for texto in textos:
-            assert PLACEHOLDER_EN not in texto
-            assert MARCADOR in texto
+        zapi.assert_not_called()
+        row = EsperaAtendimento.query.filter_by(conversa_id='2402').one()
+        assert row.estado == 'sem_cliente'
+
+
+def test_espera_humana_placeholder_nao_reabre_conversa_ja_respondida(app):
+    """Texto real respondido pela equipe + placeholder depois: não há espera."""
+    from app.services import atendimento_pendente
+    agora_s = time.time()
+    historico = [{'role': 'user', 'content': 'Quero 10 croissants', 'humano': False,
+                  'created_at': agora_s - 3600},
+                 {'role': 'assistant', 'content': 'Anotado!', 'humano': True,
+                  'created_at': agora_s - 3000},
+                 {'role': 'user', 'content': MARCADOR, 'humano': False,
+                  'created_at': agora_s - 1800, 'indisponivel': True}]
+    with app.app_context():
+        out = atendimento_pendente.preparar(
+            {'id': 77, 'nome_contato': 'X', 'minutos_paradas': 30}, historico)
+    assert out is None
+
+
+def test_espera_aberta_pelo_handoff_antigo_de_placeholder_fecha(app):
+    """Achado da revisão: espera já aberta (antes do deploy) por um
+    placeholder, com texto real anterior já respondido, seguia cobrando."""
+    from datetime import timedelta
+
+    from app.models import EsperaAtendimento
+    from app.services import atendimento_pendente
+    from app.utils import agora
+    agora_s = time.time()
+    with app.app_context():
+        db.session.add(EsperaAtendimento(
+            conversa_id='88', inicio_em=agora() - timedelta(minutes=30),
+            estado='aguardando', mensagem=MARCADOR, proximo_aviso_em=agora()))
+        db.session.commit()
+        historico = [{'role': 'user', 'content': 'quero bolo', 'humano': False,
+                      'created_at': agora_s - 7200},
+                     {'role': 'assistant', 'content': 'Claro!', 'humano': True,
+                      'created_at': agora_s - 7000},
+                     {'role': 'user', 'content': MARCADOR, 'humano': False,
+                      'created_at': agora_s - 1800, 'indisponivel': True}]
+        out = atendimento_pendente.preparar(
+            {'id': 88, 'nome_contato': 'X', 'minutos_paradas': 30}, historico)
+        assert out is None
+        row = EsperaAtendimento.query.filter_by(conversa_id='88').one()
+        assert row.estado == 'sem_cliente' and row.proximo_aviso_em is None
+        # Fala REAL nova reabre a espera normalmente.
+        historico.append({'role': 'user', 'content': 'oi, e o bolo?', 'humano': False,
+                          'created_at': agora_s - 900})
+        out = atendimento_pendente.preparar(
+            {'id': 88, 'nome_contato': 'X', 'minutos_paradas': 15}, historico)
+        assert out is not None and out.estado == 'aguardando'
+
+
+def test_espera_com_fala_real_no_episodio_continua(app):
+    from datetime import timedelta
+
+    from app.models import EsperaAtendimento
+    from app.services import atendimento_pendente
+    from app.utils import agora
+    agora_s = time.time()
+    with app.app_context():
+        db.session.add(EsperaAtendimento(
+            conversa_id='89', inicio_em=agora() - timedelta(minutes=30),
+            estado='aguardando', mensagem='quero bolo'))
+        db.session.commit()
+        historico = [{'role': 'user', 'content': 'quero bolo', 'humano': False,
+                      'created_at': agora_s - 1800},
+                     {'role': 'user', 'content': MARCADOR, 'humano': False,
+                      'created_at': agora_s - 1700, 'indisponivel': True}]
+        out = atendimento_pendente.preparar(
+            {'id': 89, 'nome_contato': 'X', 'minutos_paradas': 30}, historico)
+        assert out is not None and out.estado == 'aguardando'
+
+
+def test_paginacao_do_historico_nao_para_no_placeholder(app):
+    """Achado da revisão: a página recente só com placeholders não pode
+    esconder a fala real anterior (senão a espera vira `sem_cliente`)."""
+    app.config.update(CHATWOOT_URL='https://atendimento.test', CHATWOOT_ACCOUNT_ID='1',
+                      CHATWOOT_API_TOKEN='u')
+    pag1 = [{'id': 20, 'message_type': 'incoming', 'content': PLACEHOLDER_EN,
+             'content_attributes': {'is_unsupported': True}, 'created_at': 2000}]
+    pag2 = [{'id': 10, 'message_type': 'incoming', 'content': 'quero bolo',
+             'created_at': 1000}]
+
+    class _R:
+        def __init__(self, data):
+            self.status_code, self._d, self.text = 200, data, 'x'
+
+        def json(self):
+            return {'payload': self._d}
+
+        def raise_for_status(self):
+            pass
+    chamadas = []
+
+    def fake_get(url, params=None, **kw):
+        chamadas.append(params or {})
+        return _R(pag2 if (params or {}).get('before') else pag1)
+    with app.app_context(), patch('app.services.chatwoot.requests.get', side_effect=fake_get):
+        hist = chatwoot.buscar_historico(2402, incluir_autoria=True)
+    assert len(chamadas) >= 2
+    assert any(m['content'] == 'quero bolo' for m in hist)
+
+
+def test_fala_indisponivel_fonte_unica():
+    assert chatwoot.fala_indisponivel(_m(MARCADOR))
+    assert chatwoot.fala_indisponivel(_m(MARCADOR + '\n' + MARCADOR))
+    assert chatwoot.fala_indisponivel(_m('x', indisponivel=True))
+    assert chatwoot.fala_indisponivel(_m(PLACEHOLDER_EN))
+    assert not chatwoot.fala_indisponivel(_m(MARCADOR + '\nQuero pão'))
+    assert not chatwoot.fala_indisponivel(_m(MARCADOR, imagens=['data:x']))
+    assert not chatwoot.fala_indisponivel({'role': 'assistant', 'content': MARCADOR})
 
 
 def test_webhook_texto_normal_nao_e_afetado(app, canais):
