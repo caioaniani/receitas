@@ -25,7 +25,7 @@ for (const [id, value] of Object.entries({'ficha-body':'', 'peso-base':'1000',
 }
 const fields = {'.nome-input':el('  aZEITONAS  '), '.ing-tipo':el(cfg.tipo),
   '.pct-input':el(String(cfg.qtd)), '.qtd-calc':el(), '.custo-kg-calc':el(), '.custo-rs-calc':el()};
-const row = {querySelector:s => fields[s] || null};
+const row = {dataset:{}, querySelector:s => fields[s] || null};
 const sandbox = {
   document:{getElementById:id => elements[id] || null,
     querySelectorAll:s => s === '.ingrediente-row' ? [row] : [],

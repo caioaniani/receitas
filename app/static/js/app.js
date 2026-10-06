@@ -583,7 +583,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // escala). Caso real 06/10/2026: pão francês com 200 g de levain para
     // 1.000 g de farinha — com 12 kg a ficha mantinha 200 g e mostrava 215
     // pães, enquanto a ordem calculava 2,4 kg de levain e 237 pães.
-    var TIPOS_POR_LOTE = ['receita', 'mp_direto', 'mp_un'];
+    // Função (e não `var`): a inicialização da ficha pode rodar antes de o
+    // restante do arquivo ser avaliado, e declaração de função já existe.
+    function _tipoPorLote(tipo) {
+        return tipo === 'receita' || tipo === 'mp_direto' || tipo === 'mp_un';
+    }
 
     function _casasDecimais(texto) {
         var partes = String(texto || '').split('.');
@@ -607,7 +611,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var tipoSel = row.querySelector('.ing-tipo');
             var tipo = tipoSel ? tipoSel.value : 'mp';
             var pctInput = row.querySelector('.pct-input');
-            if (pctInput && TIPOS_POR_LOTE.indexOf(tipo) >= 0) {
+            if (pctInput && _tipoPorLote(tipo)) {
                 _ancorar(row, pctInput, tipo, base);
             }
         });
@@ -623,7 +627,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var tipo = tipoSel ? tipoSel.value : 'mp';
             var pctInput = row.querySelector('.pct-input');
             if (!pctInput) return;
-            if (TIPOS_POR_LOTE.indexOf(tipo) < 0) {
+            if (!_tipoPorLote(tipo)) {
                 delete row.dataset.loteTipo;
                 delete row.dataset.lotePorBase;
                 delete row.dataset.loteEscrito;
