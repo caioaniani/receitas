@@ -1711,9 +1711,15 @@ def excluir(id):
     # HandshakeAudit referencia pedido_id sem ondelete cascade — em Postgres
     # bloqueia o delete com FK violation. Limpa antes (audits viram orfaos
     # com pedido_id=NULL).
-    from app.models import HandshakeAudit
+    from app.models import FaltaSaidaIndustria, HandshakeAudit
     HandshakeAudit.query.filter_by(pedido_id=pedido.id).update(
         {'pedido_id': None})
+    # Faltas de saída do pedido (05/10/2026): sem o pedido não há referência
+    # para quitar nem estornar — encerra e solta o vínculo antes do delete.
+    from app.services import faltas_industria
+    faltas_industria.encerrar_do_pedido(pedido.id, 'excluido', current_user.id)
+    FaltaSaidaIndustria.query.filter_by(pedido_id=pedido.id).update(
+        {'pedido_id': None}, synchronize_session='fetch')
     db.session.delete(pedido)
     erro_corte = salvar_no_prazo([pedido.data_entrega])
     if erro_corte:
@@ -2161,10 +2167,14 @@ def congelados_conferencia():
     item, digita a quantidade real, ve a divergencia e ajusta pra bater (com
     auditoria em MovEstoqueProducao). Espelha a conferencia de loja. Permite
     adicionar item que apareceu no fisico mas ainda nao tem linha de estoque."""
+    from app.services import faltas_industria
     from app.services.estoque_massa import ajustar_contagem_bolas, eh_massa_folhar
     if request.method == 'POST':
         ajustes = 0
         massa_conferida = False
+        # Itens contados (mesmo sem diferença): a contagem encerra as faltas
+        # de saída abertas deles (05/10/2026) — o físico já reflete o que saiu.
+        contados = []
         # 1) ajusta os itens existentes (campos real_<id>)
         for key, val in request.form.items():
             if not key.startswith('real_') or not val.strip():
@@ -2179,6 +2189,7 @@ def congelados_conferencia():
             ep = EstoqueProducao.query.get(ep_id)
             if not ep:
                 continue
+            contados.append((ep.receita_id, ep.produto_id))
             if eh_massa_folhar(ep.receita):
                 ajuste = ajustar_contagem_bolas(
                     ep.receita, real, current_user.id,
@@ -2212,6 +2223,7 @@ def congelados_conferencia():
             if tipo not in ('receita', 'produto') or not rid.isdigit():
                 continue
             receita_nova = db.session.get(Receita, int(rid)) if tipo == 'receita' else None
+            contados.append((int(rid), None) if tipo == 'receita' else (None, int(rid)))
             if eh_massa_folhar(receita_nova):
                 ajuste = ajustar_contagem_bolas(
                     receita_nova, qtd, current_user.id,
@@ -2235,7 +2247,9 @@ def congelados_conferencia():
                 usuario_id=current_user.id))
             ep.quantidade = qtd
             ajustes += 1
-        if ajustes or massa_conferida:
+        faltas_encerradas = faltas_industria.encerrar_por_contagem(
+            contados, current_user.id)
+        if ajustes or massa_conferida or faltas_encerradas:
             # A conversão de fração legada pode registrar falta mesmo quando
             # a contagem inteira já é zero; ela também precisa ser confirmada.
             db.session.commit()
@@ -2243,6 +2257,9 @@ def congelados_conferencia():
             flash(f'Conferência aplicada: {ajustes} ajuste(s) registrado(s).', 'success')
         else:
             flash('Nenhum ajuste necessário — o estoque já bate.', 'info')
+        if faltas_encerradas:
+            flash(f'{faltas_encerradas} falta(s) de saída dos itens contados '
+                  'foram encerradas: a contagem já reflete o que saiu.', 'info')
         return redirect(url_for('pedidos.congelados_conferencia'))
 
     itens = (EstoqueProducao.query
