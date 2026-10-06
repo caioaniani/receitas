@@ -188,6 +188,51 @@ em vez do `X-Forwarded-For` cru — vale para TODO modelo auditado
 (`handshake/routes.py` ainda lê o header cru, fora deste escopo).
 Docs: `docs/rh-visao-equipe.md`; testes `tests/test_rh_equipe_lojas_acoes.py`.
 
+## Faltas de saída da indústria — aviso na hora + quitação confirmada (dono, 05/10/2026)
+
+Caso brioche: sistema 76, físico 22. Pedidos de 29/09 a 01/10 saíram com o
+`EstoqueProducao` zerado (`pedido_estoque.baixar_industria_pedido` desconta
+só o saldo; o resto vira `saida_pedido_sem_estoque`, neutro) e a produção
+daqueles dias foi lançada DEPOIS, entrando inteira: +54 fantasmas. Provado
+pela sonda `/api/claude/estoque-ledger-industria` (o saldo reconstruído
+dela é aproximado — ver docstring). Escolha do dono: **opção A** — saldo
+NUNCA negativo, SEM quitação automática; a falta aparece na hora e quem
+lança a produção confirma.
+
+- `FaltaSaidaIndustria` (tabela NOVA via create_all, auditada; chave do
+  item = receita_id/produto_id, nunca a linha) registrada pela baixa junto
+  do `saida_pedido_sem_estoque`. Serviço `app/services/faltas_industria.py`
+  (sem commit): `abertas_recentes`/`resumo_por_ref` (janela `JANELA_DIAS=3`
+  — falta mais antiga quase sempre é produção nunca lançada; quitá-la
+  comeria produção nova), `quitar` (sob `FOR UPDATE`, mais antiga primeiro,
+  `min(aberta, lançado agora, saldo)`; mov `saida_pedido_quitada` com a
+  MESMA referência da saída, `referencia_saida(pedido, REF_QUITACAO)`, para
+  o estorno do pedido devolvê-la junto), `encerrar_por_contagem`,
+  `encerrar_do_pedido`, `do_pedido`. Massa para folhar NÃO é quitável
+  (saldo em gramas) — só a contagem a encerra.
+- Onde aparece: tela de sucesso do QR de saída (+ `HandshakeAudit`
+  `falta_saida`), flash AMARELO do botão Enviar (`_MSG_SAIDA_COM_FALTA`),
+  cartão vermelho "Saíram sem produção lançada" na TV (só visão de hoje;
+  `/padeiro/faltas.json` a cada 15 s). Pergunta: `confirm` no "Registrar
+  produção" da ordem (`quitar_faltas=1` → `produzir_item_plano(
+  quitar_faltas=True)`) e checkbox NUNCA pré-marcado na gaveta de Produção
+  extra (`quitar_faltas: true` literal → `registrar_lote(quitar=)`; a
+  assinatura do recibo idempotente só muda quando há quitação, recibos
+  antigos continuam batendo). O servidor recalcula tudo; o número da tela é
+  só a pergunta.
+- Encerram: conferência da indústria (todo item CONTADO, mesmo com
+  diferença 0) e `aplicar_balanco` → 'contagem'; estorno do pedido →
+  'estorno' (some da tela do QR); excluir pedido → 'excluido' (vínculo
+  solto antes do delete); `vinculos_transferir` reaponta a receita.
+  Auditoria das baixas trata a quitada como baixa (sai de "com falta").
+  Respostas antigas sem quitação mantêm o formato (`quitado`/`quitada` só
+  aparecem quando > 0 — há testes travando o formato).
+- LIMITAÇÕES ACEITAS: MP em pedido não gera falta (só a referência do mov);
+  `/pedidos/congelados/entrada` (admin) e o copilot não perguntam; a falta
+  é por item, não por estado; faltas de antes do deploy não existem (o
+  brioche se acerta pela conferência). Testes:
+  `tests/test_faltas_saida_industria.py`. Manual (DIÁRIO).
+
 ## Publicação após testes (autorização do dono, 28/09/2026)
 
 Para alterações do sistema explicitamente solicitadas ou aprovadas pelo dono,
