@@ -37,24 +37,54 @@ def _consumir_falha():
     return motivo
 
 
+def _fmt_documento(documento):
+    """CNPJ/CPF formatado para a mensagem (o dono procura assim no Tiny)."""
+    d = _so_digitos(documento)
+    if len(d) == 14:
+        return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
+    if len(d) == 11:
+        return f'{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}'
+    return d
+
+
+def _rotulo_contato(contato):
+    nome = str(contato.get('nome') or contato.get('fantasia') or 'sem nome').strip()
+    codigo = str(contato.get('codigo') or '').strip()
+    extra = f', código {codigo}' if codigo else ''
+    return f'"{nome}" (id {contato.get("id")}{extra})'
+
+
 def contato_fiscal_por_documento(documento):
-    """Busca exata, somente leitura. Nunca escolhe por nome ou assume isenção."""
+    """Busca exata, somente leitura. Nunca escolhe por nome ou assume isenção.
+
+    Zero cadastros e cadastros duplicados recusam com mensagens DIFERENTES
+    (caso FAT00003, 06/10/2026: a mensagem única "não localizado ou
+    duplicado" não dizia ao dono qual dos dois corrigir no Tiny)."""
     documento = _so_digitos(documento)
     if len(documento) not in (11, 14):
         raise ValueError('CPF/CNPJ inválido para consultar o cadastro fiscal no Tiny.')
+    doc_fmt = _fmt_documento(documento)
     contatos = {}
+    divergentes = {}
     pagina = 1
     while True:
         retorno = _get('contatos.pesquisa.php', {
             'pesquisa': '', 'cpf_cnpj': documento, 'situacao': 'Ativo', 'pagina': pagina,
         }, retornar_erro=True)
+        if isinstance(retorno, dict) and str(retorno.get('codigo_erro')) == '20':
+            # Código documentado pelo Tiny: a consulta não retornou registros.
+            break
         if not retorno or str(retorno.get('status', '')).lower() not in ('ok', '1'):
             raise ValueError('Não foi possível consultar o cadastro fiscal no Tiny. '
                              + (_extrair_erros(retorno) or 'Tente novamente após conferir a conexão.'))
         for item in retorno.get('contatos') or []:
-            contato = item.get('contato') or {}
-            if _so_digitos(contato.get('cpf_cnpj')) == documento and contato.get('id'):
+            contato = (item.get('contato') if isinstance(item, dict) else None) or {}
+            if not contato.get('id'):
+                continue
+            if _so_digitos(contato.get('cpf_cnpj')) == documento:
                 contatos[str(contato['id'])] = contato
+            else:
+                divergentes[str(contato['id'])] = contato
         try:
             paginas = int(retorno.get('numero_paginas') or 1)
         except (ValueError, TypeError):
@@ -64,9 +94,22 @@ def contato_fiscal_por_documento(documento):
         if pagina >= 10:
             raise ValueError('Muitos cadastros no Tiny para este CPF/CNPJ. Confira as duplicidades.')
         pagina += 1
-    if len(contatos) != 1:
-        raise ValueError('Cadastro fiscal não localizado ou duplicado no Tiny para este CPF/CNPJ. '
-                         'Confira o cadastro antes de criar a nota.')
+    if len(contatos) > 1:
+        lista = '; '.join(_rotulo_contato(c) for c in list(contatos.values())[:5])
+        raise ValueError(
+            f'Há {len(contatos)} cadastros ATIVOS no Tiny com o CNPJ/CPF {doc_fmt}: {lista}. '
+            'Inative ou exclua os duplicados no Tiny (Cadastros → Clientes e Fornecedores), '
+            'deixando um só com a IE correta, e emita de novo.')
+    if not contatos:
+        msg = (f'O cliente com CNPJ/CPF {doc_fmt} não está cadastrado (ativo) no Tiny. '
+               'Cadastre-o no Tiny (Cadastros → Clientes e Fornecedores) com a inscrição '
+               'estadual correta e emita de novo — o sistema não cria o cadastro fiscal sozinho.')
+        if divergentes:
+            msg += (' O Tiny devolveu cadastros com documento parecido, mas diferente: '
+                    + '; '.join(f'{_rotulo_contato(c)} = {c.get("cpf_cnpj") or "sem documento"}'
+                                for c in list(divergentes.values())[:3])
+                    + ' — confira se o CNPJ está digitado certo aqui ou lá.')
+        raise ValueError(msg)
     contato_id = next(iter(contatos))
     retorno = _get('contato.obter.php', {'id': contato_id}, retornar_erro=True)
     if not retorno or str(retorno.get('status', '')).lower() not in ('ok', '1'):

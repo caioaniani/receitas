@@ -95,3 +95,40 @@ def test_erro_certificado_permanece_no_detalhe(app, owner_user, contato_fiscal_t
     resposta = _client(app, owner_user).get(f'/b2b/vendas/{v.id}')
     assert resposta.status_code == 200
     assert 'Certificado expirado' in resposta.get_data(as_text=True)
+
+
+# --- Caso FAT00003 (06/10/2026): zero × duplicado com mensagens distintas ---
+
+def test_sem_cadastro_codigo_20_diz_que_nao_esta_cadastrado(app):
+    with patch('app.services.tiny._get', return_value={
+            'status': 'Erro', 'codigo_erro': '20',
+            'erros': [{'erro': 'A consulta não retornou registros'}]}):
+        with pytest.raises(ValueError) as exc:
+            tiny.contato_fiscal_por_documento('11222333000144')
+    msg = str(exc.value)
+    assert 'não está cadastrado' in msg
+    assert '11.222.333/0001-44' in msg
+    assert 'duplicad' not in msg
+
+
+def test_duplicados_listam_os_cadastros(app):
+    retorno = {'status': 'OK', 'numero_paginas': 1, 'contatos': [
+        {'contato': {'id': '1', 'nome': 'Zion A', 'codigo': 'Z1', 'cpf_cnpj': '11.222.333/0001-44'}},
+        {'contato': {'id': '2', 'nome': 'Zion B', 'cpf_cnpj': '11222333000144'}}]}
+    with patch('app.services.tiny._get', return_value=retorno):
+        with pytest.raises(ValueError) as exc:
+            tiny.contato_fiscal_por_documento('11222333000144')
+    msg = str(exc.value)
+    assert 'Há 2 cadastros ATIVOS' in msg
+    assert '"Zion A" (id 1, código Z1)' in msg and '"Zion B" (id 2)' in msg
+
+
+def test_documento_divergente_aparece_na_mensagem(app):
+    retorno = {'status': 'OK', 'numero_paginas': 1, 'contatos': [
+        {'contato': {'id': '9', 'nome': 'Outro', 'cpf_cnpj': '11222333000145'}}]}
+    with patch('app.services.tiny._get', return_value=retorno):
+        with pytest.raises(ValueError) as exc:
+            tiny.contato_fiscal_por_documento('11222333000144')
+    msg = str(exc.value)
+    assert 'não está cadastrado' in msg
+    assert '"Outro" (id 9) = 11222333000145' in msg

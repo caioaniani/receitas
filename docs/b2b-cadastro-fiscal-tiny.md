@@ -9,6 +9,12 @@ indicador de contribuinte. A nota leva `atualizar_cliente=N`, preservando o
 cadastro fiscal do Tiny. Campos de endereço continuam vindo do cadastro B2B.
 Se a consulta falhar ou houver duplicidade, nenhuma nova nota é criada.
 
+Mensagens distintas (caso FAT00003, 06/10/2026): **nenhum cadastro ativo**
+(inclusive o código 20 do Tiny, "consulta sem registros") diz que o cliente
+não está cadastrado e mostra o CNPJ formatado, mais os cadastros de documento
+diferente que o Tiny tenha devolvido; **dois ou mais** lista nome, id e código
+de cada um. O sistema nunca cria o contato fiscal nem escolhe entre duplicados.
+
 Refazer consulta a situação atual antes de descartar a referência anterior.
 Notas autorizadas são sincronizadas; situação desconhecida ou denegada bloqueia
 a recriação. A rejeição confirmada permite montar novamente o payload com o
