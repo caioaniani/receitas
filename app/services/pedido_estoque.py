@@ -128,6 +128,24 @@ def estornar_industria_pedido(pedido, usuario_id, motivo='voltar status'):
     # − estornos anteriores. A quitação (05/10/2026) é o débito ATRASADO da
     # mesma saída — o estorno do pedido a devolve junto.
     from app.services import faltas_industria
+
+    # Travas ANTES de somar, na mesma ordem da quitação (linha do estoque,
+    # depois as faltas): uma quitação concorrente ou termina antes — e a
+    # soma abaixo já enxerga o movimento dela — ou espera este estorno e
+    # encontra as faltas encerradas. Sem isso a quitação podia comitar entre
+    # a soma e o encerramento e ficar fora da devolução.
+    linhas_ids = [r[0] for r in db.session.query(
+        MovEstoqueProducao.estoque_producao_id)
+        .filter(MovEstoqueProducao.referencia.like(ref_like))
+        .distinct().all() if r[0] is not None]
+    linhas = {}
+    if linhas_ids:
+        linhas = {ep.id: ep for ep in (
+            EstoqueProducao.query.filter(EstoqueProducao.id.in_(linhas_ids))
+            .order_by(EstoqueProducao.id)
+            .with_for_update().populate_existing().all())}
+    faltas_industria.travar_do_pedido(pedido.id)
+
     saidas = dict(db.session.query(
         MovEstoqueProducao.estoque_producao_id,
         func.sum(MovEstoqueProducao.quantidade))
