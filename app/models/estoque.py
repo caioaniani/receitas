@@ -375,4 +375,65 @@ class PerdaProducao(db.Model):
     criado_por = db.relationship('Usuario')
 
 
+class FaltaSaidaIndustria(db.Model):
+    """Pedido loja→indústria que saiu com o estoque da indústria abaixo do
+    pedido (05/10/2026, caso brioche 76 x 22; opção A do dono).
+
+    `pedido_estoque.baixar_industria_pedido` desconta só o saldo do sistema e
+    anota o resto como `saida_pedido_sem_estoque` (neutro). Quando a
+    produção que já saiu é lançada DEPOIS, o crédito ficava inteiro e virava
+    estoque que não existe. Esta tabela guarda cada falta para a TV do
+    padeiro mostrar e perguntar, ao lançar a produção, se ela inclui o que
+    já saiu; a confirmação humana grava o débito (`saida_pedido_quitada`,
+    referência 'Pedido #<id> → ...') pelo serviço `faltas_industria`.
+
+    Chave do item = receita_id/produto_id, não a linha do estoque: a linha
+    pode ser consolidada ou trocada (`obter_linha_producao`). Tabela nova
+    via db.create_all (sem ALTER).
+    """
+    __tablename__ = 'falta_saida_industria'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_id = db.Column(db.Integer,
+                          db.ForeignKey('pedido_loja.id', ondelete='SET NULL'),
+                          nullable=True, index=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'),
+                           nullable=True, index=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'),
+                           nullable=True, index=True)
+    quantidade = db.Column(db.Integer, nullable=False)
+    quitada = db.Column(db.Integer, nullable=False, default=0)
+    criada_em = db.Column(db.DateTime, default=agora, index=True)
+    # NULL = aberta. Motivos: 'quitada' (a produção lançada depois cobriu),
+    # 'contagem' (conferência/balanço da linha — a contagem já reflete),
+    # 'estorno' (o pedido voltou para separado), 'excluido' (pedido apagado).
+    encerrada_em = db.Column(db.DateTime, nullable=True)
+    motivo_encerramento = db.Column(db.String(20), nullable=True)
+    encerrada_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                                 nullable=True)
+
+    pedido = db.relationship('PedidoLoja')
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+
+    @property
+    def aberta_qtd(self):
+        if self.encerrada_em is not None:
+            return 0
+        return max(0, int(self.quantidade or 0) - int(self.quitada or 0))
+
+    @property
+    def ref(self):
+        return (f'receita:{self.receita_id}' if self.receita_id
+                else f'produto:{self.produto_id}')
+
+    @property
+    def nome_item(self):
+        if self.receita is not None:
+            return self.receita.nome
+        if self.produto is not None:
+            return self.produto.nome
+        return '?'
+
+
 # ── Slack bot (copilot via DM/@mention) ───────────────────────────────
