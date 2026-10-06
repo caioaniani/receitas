@@ -115,7 +115,8 @@
                 </td>
                 <td class="text-end">
                     <input type="hidden" class="pct-input" value="{{ ing.porcentagem }}">
-                    {{ ing.porcentagem }}
+                    {# Linhas em gramas/unidades acompanham o peso base (app.js). #}
+                    <span class="pct-texto">{{ ing.porcentagem }}</span>
                 </td>
                 <td class="qtd-calc valor-calc text-end fw-bold">-</td>
                 <td class="custo-kg-calc" style="display:none;">-</td>
