@@ -1564,7 +1564,10 @@ def vinculos_transferir(id):
             movidos[chave] = movidos.get(chave, 0) + n
 
     # FKs simples: o registro histórico fica intacto, só muda o alvo.
-    for chave, modelo in (('pedidos', PedidoItem),
+    # Faltas de saída (05/10/2026) seguem o estoque, que se funde no destino.
+    from app.models import FaltaSaidaIndustria
+    for chave, modelo in (('faltas_saida', FaltaSaidaIndustria),
+                          ('pedidos', PedidoItem),
                           ('vendas_b2b', VendaB2BItem),
                           ('vendas_manuais', VendaManualLoja),
                           ('desperdicio', Desperdicio),
