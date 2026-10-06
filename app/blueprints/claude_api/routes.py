@@ -3420,6 +3420,26 @@ def tiny_contato():
             bloco['motivo_falha'] = tiny._consumir_falha()
         paginas.append(bloco)
     out['pesquisas'] = paginas
+    # Detalhe de cada cadastro que casa (IE, endereço, datas) — para decidir
+    # qual manter quando há duplicidade. Só leitura (contato.obter.php).
+    ids = []
+    for bloco in paginas:
+        for c in bloco.get('contatos') or []:
+            if c['casa_exato'] and c['id'] and c['id'] not in ids:
+                ids.append(c['id'])
+    detalhes = []
+    for cid in ids[:5]:
+        ret = tiny._get('contato.obter.php', {'id': cid}, retornar_erro=True)
+        ct = (ret or {}).get('contato') if isinstance(ret, dict) else None
+        if not isinstance(ct, dict):
+            detalhes.append({'id': cid, 'erro': tiny._extrair_erros(ret) or 'sem resposta'})
+            continue
+        detalhes.append({k: ct.get(k) for k in (
+            'id', 'nome', 'fantasia', 'tipo_pessoa', 'cpf_cnpj', 'ie', 'rg', 'im',
+            'situacao', 'endereco', 'numero', 'complemento', 'bairro', 'cep',
+            'cidade', 'uf', 'email', 'fone', 'data_criacao', 'contribuinte',
+            'tipos_contato')})
+    out['detalhes'] = detalhes
     try:
         contato = tiny.contato_fiscal_por_documento(digitos)
         out['veredito'] = {'ok': True, 'id': contato.get('id'), 'nome': contato.get('nome'),
