@@ -1931,6 +1931,7 @@ def congelados_historico():
         ate = None
 
     tipos_disp = ['entrada', 'saida_pedido', 'saida_pedido_sem_estoque',
+                  'saida_pedido_quitada',
                   'estorno_saida_pedido', 'ajuste', 'ajuste_conferencia',
                   'balanco', 'desperdicio', 'perda_producao',
                   'perda_producao_sem_estoque', 'perda_producao_estorno']

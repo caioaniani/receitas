@@ -58,6 +58,9 @@ TIPOS_MOV_PRODUCAO = {
     'perda_producao': 'Perda (padeiro)',
     'perda_producao_sem_estoque': 'Perda sem saldo',
     'perda_producao_estorno': 'Estorno de perda',
+    # Falta de saída quitada (05/10/2026): débito confirmado na TV quando a
+    # produção que já tinha saído no pedido é lançada depois.
+    'saida_pedido_quitada': 'Falta quitada (produção lançada depois)',
 }
 
 TIPOS_MOV_MP = {
@@ -79,6 +82,7 @@ HANDSHAKE_ETAPAS = {
     'erro_tipo': 'Tipo de QR inválido',
     'scan_falha': 'Falha ao escanear',
     'forcar_entrega': 'Entrega forçada (admin)',
+    'falta_saida': 'Saiu sem estoque no sistema',
 }
 
 HANDSHAKE_TIPOS = {

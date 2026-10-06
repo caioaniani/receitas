@@ -9,7 +9,9 @@ de verdade (mesma família de referência do motor único de baixa —
 Read-only estrito. Classificação por pedido:
 - ok              baixado líquido + falta registrada == esperado
 - com_falta       idem, mas parte saiu como `saida_pedido_sem_estoque`
-                  (caminhão saiu sem saldo — diferença LEGÍTIMA e visível)
+                  (caminhão saiu sem saldo — diferença LEGÍTIMA e visível).
+                  A parte quitada depois na TV (`saida_pedido_quitada`,
+                  05/10/2026) conta como baixa, não como falta.
 - sem_movimento   pedido saiu e NENHUM movimento existe (escapou da baixa —
                   pedido antigo pré-motor-único ou bug)
 - divergente      movimentos existem mas não fecham com o pedido
@@ -27,6 +29,7 @@ from app.models import (
     MovimentacaoEstoque,
     PedidoLoja,
 )
+from app.services.faltas_industria import TIPO_QUITADA
 from app.utils import hoje
 
 _STATUS_SAIU = ('em_transporte', 'entregue', 'recebido')
@@ -51,9 +54,15 @@ def _movs_do_pedido(pedido_id):
                   .filter(MovimentacaoEstoque.tipo == 'saida',
                           MovimentacaoEstoque.referencia.like(ref_like))
                   .scalar())
+    # Falta quitada (05/10/2026): a produção lançada depois cobriu parte da
+    # falta e a TV gravou o débito com a referência do pedido — vira baixa
+    # real e sai da falta, sem mudar o total que fecha com o pedido.
+    quitada = por_tipo.get(TIPO_QUITADA, 0)
     return {
-        'baixado': por_tipo.get('saida_pedido', 0),
-        'falta_registrada': por_tipo.get('saida_pedido_sem_estoque', 0),
+        'baixado': por_tipo.get('saida_pedido', 0) + quitada,
+        'falta_registrada': max(
+            0, por_tipo.get('saida_pedido_sem_estoque', 0) - quitada),
+        'quitada': quitada,
         'estornado': int(estornos or 0),
         'mp_baixada': float(mp_baixada or 0),
     }
@@ -118,6 +127,7 @@ def auditar(dias=14, max_detalhe=50):
                     'baixado': m['baixado'],
                     'estornado': m['estornado'],
                     'falta_registrada': m['falta_registrada'],
+                    'falta_quitada': m['quitada'],
                     'esperado_mp': esperado_mp,
                     'mp_baixada': m['mp_baixada'],
                     'itens_sem_fk': sem_fk,
@@ -135,8 +145,14 @@ def auditar(dias=14, max_detalhe=50):
                            == 'saida_pedido_sem_estoque',
                            func.date(MovEstoqueProducao.data) >= corte_dt)
                    .group_by(EstoqueProducao.id).all())
+    quitadas = dict(db.session.query(MovEstoqueProducao.estoque_producao_id,
+                                     func.sum(MovEstoqueProducao.quantidade))
+                    .filter(MovEstoqueProducao.tipo == TIPO_QUITADA,
+                            func.date(MovEstoqueProducao.data) >= corte_dt)
+                    .group_by(MovEstoqueProducao.estoque_producao_id).all())
     faltas_por_item = sorted(
-        ({'item': ep.nome_item, 'faltou': int(s or 0)}
+        ({'item': ep.nome_item, 'faltou': int(s or 0),
+          'quitada': int(quitadas.get(ep.id) or 0)}
          for ep, s in faltas_rows if s),
         key=lambda x: -x['faltou'])
 

@@ -276,6 +276,7 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
     ref = (referencia or 'Balanço de inventário').strip()
     aplicados = []
     ignorados = []
+    contados = []
 
     for item in itens_resolvidos:
         if item.get('erro'):
@@ -350,6 +351,8 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
                     usuario_id=getattr(user, 'id', None),
                 ))
 
+        if ep.receita_id or ep.produto_id:
+            contados.append((ep.receita_id, ep.produto_id))
         aplicados.append({
             'nome': nome_resultado,
             'tipo': tipo_resultado,
@@ -358,6 +361,11 @@ def aplicar_balanco(itens_resolvidos, user, referencia=None):
             'delta': delta,
         })
 
+    if contados:
+        # O balanço é contagem física: encerra as faltas de saída abertas dos
+        # itens contados (05/10/2026) — o número novo já reflete o que saiu.
+        from app.services import faltas_industria
+        faltas_industria.encerrar_por_contagem(contados, getattr(user, 'id', None))
     if aplicados:
         db.session.commit()
 
