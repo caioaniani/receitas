@@ -3393,6 +3393,29 @@ def tiny_contato():
         cli = fat.cliente
         out['cliente'] = {'id': cli.id, 'nome': cli.nome, 'cnpj_cpf': cli.cnpj_cpf}
         doc = cli.cnpj_cpf or ''
+        out['cliente'].update(numero=cli.endereco_numero, ie=getattr(cli, 'inscricao_estadual', None))
+        # Notas JÁ emitidas para o cliente (venda e fatura): o destinatário
+        # gravado nelas mostra qual cadastro do Tiny foi usado antes.
+        from app.models import VendaB2B
+        notas = []
+        refs = [('venda', v.id, v.tiny_nota_fiscal_id, v.nf_numero, v.nf_status)
+                for v in VendaB2B.query.filter(VendaB2B.cliente_id == cli.id,
+                                               VendaB2B.tiny_nota_fiscal_id.isnot(None))
+                .order_by(VendaB2B.id.desc()).limit(5)]
+        refs += [('fatura', f.id, f.tiny_nota_fiscal_id, f.nf_numero, None)
+                 for f in FaturaB2B.query.filter(FaturaB2B.cliente_id == cli.id,
+                                                 FaturaB2B.tiny_nota_fiscal_id.isnot(None))
+                 .order_by(FaturaB2B.id.desc()).limit(5)]
+        for origem, oid, nid, numero, status in refs:
+            nf = tiny.obter_nota_fiscal(nid) or {}
+            dest = nf.get('cliente') if isinstance(nf.get('cliente'), dict) else {}
+            notas.append({'origem': origem, 'id': oid, 'tiny_id': nid, 'nf_numero': numero,
+                          'nf_status': status, 'situacao_tiny': nf.get('situacao'),
+                          'data_emissao': nf.get('data_emissao'),
+                          'destinatario': {k: dest.get(k) for k in (
+                              'codigo', 'nome', 'cpf_cnpj', 'ie', 'endereco', 'numero',
+                              'bairro', 'cep', 'cidade', 'uf', 'email', 'fone')}})
+        out['notas_emitidas'] = notas
     digitos = tiny._so_digitos(doc)
     if len(digitos) not in (11, 14):
         out.update(ok=False, erro='passe ?doc=<CPF/CNPJ> ou ?fatura=<id>')
