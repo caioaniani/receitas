@@ -21,7 +21,7 @@
         <i class="bi bi-exclamation-triangle-fill"></i> Saiu sem estoque no sistema
     </p>
     <p class="kv mb-1">
-    {% for f in faltas %}{{ f.quantidade }}× {{ f.nome }}{% if f.quitada %} <small>({{ f.quitada }} já acertado{{ 's' if f.quitada > 1 }})</small>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}
+    {% for f in faltas %}{{ f.quantidade }}× {{ f.nome }}{% if f.motivo == 'contagem' %} <small>(acertado na conferência do estoque)</small>{% elif f.quitada %} <small>({{ f.quitada }} já lançado{{ 's' if f.quitada > 1 }} pela produção)</small>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}
     </p>
     <p class="kv mb-0" style="color:#666;font-size:12px;">
         A carga saiu normalmente. Avise a produção: se esses itens já foram
