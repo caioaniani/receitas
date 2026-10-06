@@ -731,6 +731,9 @@ document.addEventListener('DOMContentLoaded', function () {
             rendimento = parseFloat(rendimentoInput.value) || 1;
         }
 
+        // Linhas em gramas/unidades acompanham o peso base (receita de massa).
+        escalarIngredientesPorLote(pesoBase, sumPct > 0);
+
         // Receita MONTADA (so MP g/un, sem % de padeiro) lancada por "Quantidade
         // de Produtos": cada linha e "por unidade", entao a Quantidade multiplica
         // os ingredientes (alem das Fornadas). Em receita de massa (com %) a
