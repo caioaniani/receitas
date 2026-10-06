@@ -581,6 +581,13 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   `/admin/pedidos-revenda` (Produto que a indústria não fornece em pedido
   loja→indústria pendente/confirmado com entrega a partir de amanhã, com
   `sob_corte`). Só leitura; a remoção é gesto do dono na rota admin.
+- `GET /api/claude/estoque-ledger-industria?item=|receita_id=&dias=&detalhe=1`
+  (05/10/2026, caso "sistema diz 76 brioches, o físico é 22"): razão do
+  `EstoqueProducao` de um item — saldo atual, saldo reconstruído pelo razão
+  inteiro, somas por tipo na janela (direção pela fonte única
+  `historico_humano.mov_producao_direcao`) e, com `detalhe=1`, cada
+  movimento com referência e autor. A `/estoque-ledger` cobre só a LOJA.
+  Só leitura.
 - Testes: `tests/test_claude_api.py`.
 
 ## Cockpit do dono — briefing diario + home + manual (16/07/2026)
