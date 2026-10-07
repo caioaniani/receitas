@@ -116,3 +116,55 @@ def test_tela_salva_e_limpa_vender_ate(app, admin_user):
     assert db.session.get(Produto, p.id).site_ate == datetime(2026, 10, 12, 18, 0)
     c.post(url, data={'nome': 'Caixa X', 'site_ate': ''})
     assert db.session.get(Produto, p.id).site_ate is None
+
+
+# --- D+2 (regra da Caixa de Mini) + SKU do Abraço no Tiny (07/10/2026) ---
+
+def _kit_e_abraco(sku_abraco='ABR-01', confirmado=True):
+    from app.models import TinyProdutoMap
+    from app.utils import agora
+    _base()
+    r = kit_dia_criancas.criar(subir_foto=False)
+    ab = Produto(nome='Abraço em Forma de Pães', categoria='Cestas', ativo=True)
+    cx = Produto(nome='Caixa de Mini', categoria='Cestas', ativo=True, sob_encomenda=True)
+    db.session.add_all([ab, cx])
+    db.session.flush()
+    if sku_abraco:
+        db.session.add(TinyProdutoMap(canal='site', kind='produto', item_id=ab.id,
+                                      tiny_sku=sku_abraco, tiny_nome='ABRACO PAES',
+                                      auto_match=not confirmado,
+                                      confirmado_em=agora() if confirmado else None))
+    db.session.commit()
+    return db.session.get(Produto, r['kit_id'])
+
+
+def test_kit_vira_sob_encomenda_e_usa_sku_do_abraco(app):
+    from app.services import tiny_nf
+    kit = _kit_e_abraco()
+    r = kit_dia_criancas.ajustar_d2_e_fiscal()
+    db.session.commit()
+    assert kit.sob_encomenda is True and r['caixa_mini_sob_encomenda'] is True
+    assert r['sku_motivo'] == 'copiado_do_abraco'
+    assert tiny_nf.sku_do_item('produto', kit.id) == 'ABR-01'
+
+
+@pytest.mark.parametrize('sku, confirmado', [(None, True), ('ABR-01', False)])
+def test_sku_do_abraco_ausente_ou_nao_confirmado_nao_e_copiado(app, sku, confirmado):
+    from app.services import tiny_nf
+    kit = _kit_e_abraco(sku, confirmado)
+    r = kit_dia_criancas.ajustar_d2_e_fiscal()
+    assert kit.sob_encomenda is True
+    assert r['sku_motivo'] == 'abraco_sem_sku_confirmado'
+    assert tiny_nf.sku_do_item('produto', kit.id) is None
+
+
+def test_sku_definido_por_humano_no_kit_nao_e_sobrescrito(app, admin_user):
+    from app.models import TinyProdutoMap
+    from app.services import tiny_nf
+    kit = _kit_e_abraco()
+    db.session.add(TinyProdutoMap(canal='site', kind='produto', item_id=kit.id,
+                                  tiny_sku='KIT-99', confirmado_por=admin_user.id))
+    db.session.commit()
+    r = kit_dia_criancas.ajustar_d2_e_fiscal()
+    assert r['sku_motivo'] == 'kit_ja_tem_sku_definido_por_humano'
+    assert tiny_nf.sku_do_item('produto', kit.id) == 'KIT-99'

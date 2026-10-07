@@ -133,3 +133,58 @@ def criar(subir_foto=True):
             'brioche_novo': brioche_novo,
             'mps': {mp.nome: (mp.id, novo) for mp, novo in mps},
             'componentes': len(itens), 'foto': foto}
+
+
+NOME_ABRACO = 'Abraço em Forma de Pães'
+NOME_CAIXA_MINI = 'Caixa de Mini'
+
+
+def ajustar_d2_e_fiscal():
+    """Dono 07/10/2026: "No kit do dia das crianças adotar o mesmo ncm do
+    abraço em forma de pães e colocar para o cliente conseguir comprar com
+    D+2, mesma regra e processo da caixa de mini".
+
+    - D+2 = `Produto.sob_encomenda` (a regra da Caixa de Mini): data mínima
+      D+2, sem express, não abate a prateleira, entra na produção do padeiro
+      (card, pré-preparo, demanda firme) e baixa a indústria na saída.
+    - NCM: o fiscal mora no cadastro do produto no Tiny e a nota manda só o
+      SKU; o kit passa a usar o SKU (canal site) do Abraço — a descrição da
+      nota continua sendo o nome do kit. Só copia SKU CONFIRMADO (mesma régua
+      de `tiny_nf_transf._sku_confirmado`) e nunca sobrescreve SKU do kit que
+      um humano tenha definido.
+    Sem commit. Devolve resumo (o seed grava no marcador)."""
+    from app.models import TinyProdutoMap
+    from app.utils import agora
+    kit = _unico(Produto.query.all(), NOME_KIT, 'Produto')
+    if not kit:
+        raise ValueError(f'Produto "{NOME_KIT}" não encontrado.')
+    abraco = _unico(Produto.query.all(), NOME_ABRACO, 'Produto')
+    caixa = _unico(Produto.query.all(), NOME_CAIXA_MINI, 'Produto')
+    kit.sob_encomenda = True
+    resumo = {'kit_id': kit.id, 'sob_encomenda': True,
+              'caixa_mini_sob_encomenda': bool(caixa and caixa.sob_encomenda),
+              'sku': None, 'sku_motivo': ''}
+    if not abraco:
+        resumo['sku_motivo'] = 'abraco_nao_encontrado'
+        return resumo
+    m_ab = TinyProdutoMap.query.filter_by(canal='site', kind='produto',
+                                          item_id=abraco.id).first()
+    sku = (m_ab.tiny_sku or '').strip() if m_ab else ''
+    if not sku or (m_ab.auto_match and not m_ab.confirmado_em):
+        resumo['sku_motivo'] = 'abraco_sem_sku_confirmado'
+        return resumo
+    m_kit = TinyProdutoMap.query.filter_by(canal='site', kind='produto',
+                                           item_id=kit.id).first()
+    if m_kit and m_kit.confirmado_por and (m_kit.tiny_sku or '').strip() not in ('', sku):
+        resumo['sku_motivo'] = 'kit_ja_tem_sku_definido_por_humano'
+        resumo['sku'] = m_kit.tiny_sku
+        return resumo
+    if not m_kit:
+        m_kit = TinyProdutoMap(canal='site', kind='produto', item_id=kit.id)
+        db.session.add(m_kit)
+    m_kit.tiny_sku = sku
+    m_kit.tiny_nome = m_ab.tiny_nome
+    m_kit.auto_match = False
+    m_kit.confirmado_em = agora()
+    resumo.update(sku=sku, sku_motivo='copiado_do_abraco', abraco_id=abraco.id)
+    return resumo

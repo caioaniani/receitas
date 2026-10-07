@@ -118,6 +118,7 @@ def _migrate(app):
         _backfill_totais_orcamento(app)
         _seed_fichas_producao_2026_10(app)
         _seed_kit_dia_criancas_2026(app)
+        _seed_kit_dia_criancas_d2_fiscal(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1070,6 +1071,36 @@ def _seed_teto_producao_brioche(app):
                     'em %d receita(s)', setados, mantidos, len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed teto producao brioche): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_kit_dia_criancas_d2_fiscal(app):
+    """UMA VEZ (dono 07/10/2026): Kit Dia das Criancas vira sob encomenda
+    D+2 (regra da Caixa de Mini) e usa o SKU do Tiny do Abraco em Forma de
+    Paes (mesmo NCM). Marker com o resumo — inclusive se o SKU NAO foi
+    copiado e por que (nunca passa batido)."""
+    try:
+        from app.models import AppConfig
+        from app.services import kit_dia_criancas as svc
+        chave = 'seed_kit_dia_criancas_d2_fiscal'
+        if AppConfig.get(chave) or not AppConfig.get('seed_kit_dia_criancas_2026'):
+            return
+        try:
+            r = svc.ajustar_d2_e_fiscal()
+        except ValueError as e:
+            db.session.rollback()
+            logger.error('seed kit d2/fiscal NAO aplicado: %s', e)
+            return
+        AppConfig.set(chave, ' '.join(f'{k}={v}' for k, v in r.items()))
+        db.session.commit()
+        if r.get('sku_motivo') != 'copiado_do_abraco':
+            logger.error('seed kit d2/fiscal: SKU nao copiado (%s)', r.get('sku_motivo'))
+        logger.info('seed kit d2/fiscal: %s', r)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed kit d2/fiscal): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001
