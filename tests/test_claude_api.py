@@ -1313,3 +1313,7 @@ def test_catalogo_precos_lista_ativos_com_precos(app):
     assert 'Pão Arquivado' not in nomes and 'Inativo' not in nomes
     d = app.test_client().get('/api/claude/catalogo-precos?busca=pao', headers=h).get_json()
     assert [i['nome'] for i in d['itens']] == ['Pão Ativo']
+    assert 'composicao' not in nomes['Coca Zero']
+    d = app.test_client().get('/api/claude/catalogo-precos?busca=coca&composicao=1',
+                              headers=h).get_json()
+    assert d['itens'][0]['composicao'] == []

@@ -3482,10 +3482,12 @@ def catalogo_precos():
     """SONDA read-only (07/10/2026, conferência do cardápio impresso da loja
     contra o cadastro): TODAS as receitas ativas e produtos ativos com
     categoria e os quatro preços (loja, site, atacado, interno). ?busca=
-    filtra por trecho do nome (sem acento/caixa). Só leitura."""
-    from app.models import Produto, Receita
+    filtra por trecho do nome (sem acento/caixa); ?composicao=1 inclui a
+    composição dos produtos. Só leitura."""
+    from app.models import Produto, ProdutoItem, Receita
     from app.utils import normalizar_busca
     busca = normalizar_busca(request.args.get('busca') or '').strip()
+    composicao = request.args.get('composicao') == '1'
     out = []
     for r in Receita.ativas().order_by(Receita.nome).all():
         if busca and busca not in normalizar_busca(r.nome):
@@ -3496,7 +3498,15 @@ def catalogo_precos():
     for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all():
         if busca and busca not in normalizar_busca(p.nome):
             continue
-        out.append({'kind': 'produto', 'id': p.id, 'nome': p.nome,
-                    'categoria': p.categoria, 'preco_loja': p.preco_loja,
-                    'preco_site': p.preco_site, 'preco_atacado': p.preco_atacado})
+        linha = {'kind': 'produto', 'id': p.id, 'nome': p.nome,
+                 'categoria': p.categoria, 'preco_loja': p.preco_loja,
+                 'preco_site': p.preco_site, 'preco_atacado': p.preco_atacado}
+        if composicao:
+            linha['composicao'] = [
+                {'tipo': i.tipo, 'receita_id': i.receita_id,
+                 'produto_componente_id': i.produto_componente_id,
+                 'materia_prima_id': i.materia_prima_id,
+                 'nome': i.nome_resolvido, 'quantidade': i.quantidade}
+                for i in ProdutoItem.query.filter_by(produto_id=p.id).all()]
+        out.append(linha)
     return jsonify(ok=True, total=len(out), itens=out)
