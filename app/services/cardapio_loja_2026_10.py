@@ -99,15 +99,20 @@ def _criar_queijo_quente_croissant(resumo, produtos):
         return i.tipo == 'receita' and 'brioche' in _norm(nome)
 
     brioches = [i for i in itens if _e_brioche(i)]
-    if len(brioches) != 1:
-        resumo['qq_croissant'] = f'nao_criado: brioches_na_composicao={len(brioches)}'
+    ja_croissant = [i for i in itens if i.tipo == 'receita' and i.receita_id == croissant.id]
+    # Em prod (07/10/2026) a base já tinha Croissant Tradicional no lugar do
+    # brioche (cadastro do dono, intocado aqui): copia como está.
+    if not (len(brioches) == 1 or (not brioches and len(ja_croissant) == 1)):
+        resumo['qq_croissant'] = (f'nao_criado: brioches_na_composicao={len(brioches)} '
+                                  f'croissants={len(ja_croissant)}')
         return
+    trocar = brioches[0] if brioches else ja_croissant[0]
     novo = Produto(nome=NOME_QQ_CROISSANT, categoria=base.categoria, ativo=True,
                    preco_loja=PRECO_QQ_CROISSANT, descricao=base.descricao)
     db.session.add(novo)
     db.session.flush()
     for i in itens:
-        if i is brioches[0]:
+        if i is trocar:
             db.session.add(ProdutoItem(produto_id=novo.id, tipo='receita',
                                        receita_id=croissant.id,
                                        item_nome=croissant.nome, quantidade=1))
@@ -120,6 +125,15 @@ def _criar_queijo_quente_croissant(resumo, produtos):
     db.session.flush()
     resumo['criados'].append(f'{NOME_QQ_CROISSANT}#{novo.id}')
     resumo['qq_croissant'] = f'componentes={len(itens)}'
+
+
+def criar_queijo_quente_croissant():
+    """Só a criação do Queijo Quente no Croissant (seed v2: a 1ª rodada não
+    criou porque a base não tinha brioche na composição)."""
+    resumo = {'criados': [], 'ja_existiam': [], 'qq_croissant': ''}
+    _criar_queijo_quente_croissant(resumo, Produto.query.all())
+    db.session.flush()
+    return resumo
 
 
 def aplicar():

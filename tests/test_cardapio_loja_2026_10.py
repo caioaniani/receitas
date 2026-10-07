@@ -83,3 +83,28 @@ def test_sem_brioche_unico_nao_cria_queijo_quente(app):
     r = svc.aplicar()
     assert r['qq_croissant'].startswith('nao_criado')
     assert Produto.query.filter_by(nome='Queijo Quente no Croissant').count() == 0
+
+
+def test_base_com_croissant_no_lugar_do_brioche_copia_como_esta(app):
+    """Estado real de prod: 'Queijo Quente no Brioche' tem Croissant Tradicional."""
+    croissant = _rec('Croissant Tradicional')
+    queijo = MateriaPrima(nome='Queijo prato', unidade='g')
+    base = Produto(nome='Queijo Quente no Brioche', categoria='Cestas', ativo=True)
+    db.session.add_all([queijo, base])
+    db.session.flush()
+    db.session.add_all([
+        ProdutoItem(produto_id=base.id, tipo='receita', receita_id=croissant.id,
+                    item_nome='Croissant Tradicional', quantidade=1),
+        ProdutoItem(produto_id=base.id, tipo='mp', materia_prima_id=queijo.id,
+                    item_nome='Queijo prato', quantidade=60)])
+    db.session.commit()
+    r = svc.criar_queijo_quente_croissant()
+    db.session.commit()
+    assert r['criados'] and r['qq_croissant'] == 'componentes=2'
+    qq = Produto.query.filter_by(nome='Queijo Quente no Croissant').one()
+    assert qq.preco_loja == 35.0
+    comp = {(i.receita_id or i.materia_prima_id, i.quantidade)
+            for i in ProdutoItem.query.filter_by(produto_id=qq.id)}
+    assert comp == {(croissant.id, 1), (queijo.id, 60)}
+    assert ProdutoItem.query.filter_by(produto_id=base.id).count() == 2  # base intocada
+    assert svc.criar_queijo_quente_croissant()['ja_existiam'] == ['Queijo Quente no Croissant']

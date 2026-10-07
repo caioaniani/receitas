@@ -120,6 +120,7 @@ def _migrate(app):
         _seed_kit_dia_criancas_2026(app)
         _seed_kit_dia_criancas_d2_fiscal(app)
         _seed_cardapio_loja_2026_10(app)
+        _seed_cardapio_loja_2026_10_v2(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1072,6 +1073,31 @@ def _seed_teto_producao_brioche(app):
                     'em %d receita(s)', setados, mantidos, len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed teto producao brioche): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_cardapio_loja_2026_10_v2(app):
+    """UMA VEZ: cria o Queijo Quente no Croissant que a 1a rodada recusou
+    (a base "Queijo Quente no Brioche" ja tem Croissant Tradicional na
+    composicao, sem brioche — copia como esta). Marker com o resumo."""
+    try:
+        from app.models import AppConfig
+        from app.services import cardapio_loja_2026_10 as svc
+        chave = 'seed_cardapio_loja_2026_10_v2'
+        if AppConfig.get(chave) or not AppConfig.get('seed_cardapio_loja_2026_10'):
+            return
+        r = svc.criar_queijo_quente_croissant()
+        AppConfig.set(chave, ' | '.join(
+            f'{k}={",".join(v) if isinstance(v, list) else v}' for k, v in r.items()))
+        db.session.commit()
+        if 'nao_criado' in r['qq_croissant']:
+            logger.error('seed cardapio loja v2: %s', r)
+        logger.info('seed cardapio loja v2: %s', r)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed cardapio loja v2): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001
