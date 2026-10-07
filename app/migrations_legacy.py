@@ -122,6 +122,7 @@ def _migrate(app):
         _seed_cardapio_loja_2026_10(app)
         _seed_cardapio_loja_2026_10_v2(app)
         _seed_cardapio_loja_2026_10_v3(app)
+        _seed_cardapio_loja_2026_10_v4(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1074,6 +1075,30 @@ def _seed_teto_producao_brioche(app):
                     'em %d receita(s)', setados, mantidos, len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed teto producao brioche): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_cardapio_loja_2026_10_v4(app):
+    """UMA VEZ (dono 07/10/2026): queijo quente no cranberry leva 60 g de
+    queijo prato + 60 g de queijo branco, como os demais. Marker com o
+    resumo."""
+    try:
+        from app.models import AppConfig
+        from app.services import cardapio_loja_2026_10 as svc
+        chave = 'seed_cardapio_loja_2026_10_v4'
+        if AppConfig.get(chave):
+            return
+        r = svc.acertar_recheio_cranberry()
+        AppConfig.set(chave, ' | '.join(f'{k}={v}' for k, v in r.items()))
+        db.session.commit()
+        if r['motivo']:
+            logger.error('seed cardapio loja v4 NAO aplicado: %s', r)
+        logger.info('seed cardapio loja v4: %s', r)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed cardapio loja v4): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001

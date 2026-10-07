@@ -143,3 +143,39 @@ def test_nao_unifica_se_base_tem_brioche(app):
     r = svc.unificar_queijo_quente_croissant()
     assert r['motivo'].startswith('composicao_inesperada')
     assert db.session.get(Produto, base.id).nome == 'Queijo Quente no Brioche'
+
+
+def _cranberry(qtd_prato=40, com_branco=False):
+    pao = _rec('Pão de Cranberry')
+    prato = MateriaPrima(nome='Queijo Prato', unidade='g')
+    branco = MateriaPrima(nome='Queijo Branco', unidade='g')
+    p = Produto(nome='Queijo quente no cranberry', ativo=True, preco_loja=35.0)
+    db.session.add_all([prato, branco, p])
+    db.session.flush()
+    db.session.add_all([
+        ProdutoItem(produto_id=p.id, tipo='receita', receita_id=pao.id,
+                    item_nome='Pão de Cranberry', quantidade=0.2),
+        ProdutoItem(produto_id=p.id, tipo='mp', materia_prima_id=prato.id,
+                    item_nome='Queijo Prato', quantidade=qtd_prato)])
+    if com_branco:
+        db.session.add(ProdutoItem(produto_id=p.id, tipo='mp', materia_prima_id=branco.id,
+                                   item_nome='Queijo Branco', quantidade=60))
+    db.session.commit()
+    return p, pao, prato, branco
+
+
+def test_cranberry_ganha_60g_de_prato_e_de_branco(app):
+    p, pao, prato, branco = _cranberry()
+    r = svc.acertar_recheio_cranberry()
+    db.session.commit()
+    assert not r['motivo']
+    comp = {(i.receita_id or i.materia_prima_id, i.quantidade)
+            for i in ProdutoItem.query.filter_by(produto_id=p.id)}
+    assert comp == {(pao.id, 0.2), (prato.id, 60), (branco.id, 60)}
+
+
+def test_cranberry_ja_editado_nao_mexe(app):
+    p, _, _, _ = _cranberry(qtd_prato=60, com_branco=True)
+    r = svc.acertar_recheio_cranberry()
+    assert r['motivo'].startswith('composicao_inesperada')
+    assert ProdutoItem.query.filter_by(produto_id=p.id).count() == 3

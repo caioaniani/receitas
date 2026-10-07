@@ -183,3 +183,35 @@ def unificar_queijo_quente_croissant():
     db.session.flush()
     resumo['renomeado'] = f'#{base.id}'
     return resumo
+
+
+NOME_QQ_CRANBERRY = 'Queijo quente no cranberry'
+
+
+def acertar_recheio_cranberry():
+    """Dono 07/10/2026: o queijo quente no cranberry "leva os mesmos 60g" dos
+    outros (60 g de queijo prato + 60 g de queijo branco). O cadastro tinha
+    40 g de prato e nenhum queijo branco. Só age se o prato ainda é 40 e não
+    há queijo branco (edição do dono manda)."""
+    from app.models import MateriaPrima
+    resumo = {'prato': '', 'branco': '', 'motivo': ''}
+    base = _achar(Produto.query.filter(Produto.ativo.is_(True)).all(), NOME_QQ_CRANBERRY)
+    mps = MateriaPrima.query.filter(MateriaPrima.arquivada_em.is_(None)).all()
+    prato, branco = _achar(mps, 'Queijo Prato'), _achar(mps, 'Queijo Branco')
+    if len(base) != 1 or len(prato) != 1 or len(branco) != 1:
+        resumo['motivo'] = f'base={len(base)} prato={len(prato)} branco={len(branco)}'
+        return resumo
+    base, prato, branco = base[0], prato[0], branco[0]
+    itens = ProdutoItem.query.filter_by(produto_id=base.id, tipo='mp').all()
+    i_prato = [i for i in itens if i.materia_prima_id == prato.id]
+    i_branco = [i for i in itens if i.materia_prima_id == branco.id]
+    if len(i_prato) != 1 or i_prato[0].quantidade != 40 or i_branco:
+        resumo['motivo'] = (f'composicao_inesperada prato={[i.quantidade for i in i_prato]} '
+                            f'branco={len(i_branco)}')
+        return resumo
+    i_prato[0].quantidade = 60
+    db.session.add(ProdutoItem(produto_id=base.id, tipo='mp', materia_prima_id=branco.id,
+                               item_nome=branco.nome, quantidade=60))
+    db.session.flush()
+    resumo.update(prato='40->60', branco='+60')
+    return resumo
