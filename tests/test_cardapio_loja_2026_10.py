@@ -225,3 +225,21 @@ def test_tira_do_cardapio_o_que_nao_esta_no_papel(app):
     granola = Produto.query.filter_by(nome='Granola Artesanal 500g').one()
     assert granola.preco_loja is None and granola.preco_site == 56.0 and granola.ativo
     assert f'r{choconana.id} Choconana=29.0' in r['removidos'] and len(r['removidos']) == 4
+
+
+def test_fotos_mistos(app):
+    from unittest.mock import patch
+    for nome, _ in svc.FOTOS_MISTO:
+        db.session.add(Produto(nome=nome, ativo=True, preco_loja=30.0))
+    db.session.commit()
+    with patch('app.services.dropbox_storage.disponivel', return_value=True), \
+            patch('app.services.dropbox_storage.upload_publico',
+                  side_effect=lambda b, path, **k: {'url': f'https://dl{path}?raw=1',
+                                                     'storage_path': path}) as up:
+        r = svc.fotos_mistos()
+    db.session.commit()
+    assert len(r['fotos']) == 4 and not r['erros'] and up.call_count == 4
+    p = Produto.query.filter_by(nome='Misto no Croissant').one()
+    assert p.imagem_dropbox_url == f'https://dl/cardapio/produto/{p.id}.jpg?raw=1'
+    with patch('app.services.dropbox_storage.disponivel', return_value=False):
+        assert svc.fotos_mistos()['dropbox_indisponivel'] is True

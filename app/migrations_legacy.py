@@ -126,6 +126,7 @@ def _migrate(app):
         _seed_cardapio_loja_2026_10_v5(app)
         _seed_cardapio_loja_2026_10_v6(app)
         _seed_minis_fora_pedido_loja(app)
+        _seed_fotos_misto_2026_10(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1078,6 +1079,35 @@ def _seed_teto_producao_brioche(app):
                     'em %d receita(s)', setados, mantidos, len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed teto producao brioche): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_fotos_misto_2026_10(app):
+    """UMA VEZ (dono 07/10/2026): fotos do Misto no croissant, sourdough
+    integral, pao frances e 7 graos no menu. Dropbox fora ou foto com erro =
+    sem marker (tenta no proximo boot)."""
+    try:
+        from app.models import AppConfig
+        from app.services import cardapio_loja_2026_10 as svc
+        chave = 'seed_fotos_misto_2026_10'
+        if AppConfig.get(chave):
+            return
+        r = svc.fotos_mistos()
+        if r['dropbox_indisponivel'] or r['erros']:
+            db.session.commit()  # grava as fotos que subiram
+            logger.error('seed fotos misto incompleto: %s', r)
+            return
+        AppConfig.set(chave, ' | '.join(
+            f'{k}={";".join(v) if isinstance(v, list) else v}' for k, v in r.items()))
+        db.session.commit()
+        if r['nao_achados']:
+            logger.error('seed fotos misto: nao achados %s', r['nao_achados'])
+        logger.info('seed fotos misto: %s', r)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed fotos misto): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001

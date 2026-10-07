@@ -322,3 +322,49 @@ def tirar_do_cardapio_o_que_nao_esta_no_papel():
             item.preco_loja = None
     db.session.flush()
     return resumo
+
+
+# Dono 07/10/2026: fotos dos mistos (presunto e queijo) para o menu.
+_PASTA_FOTOS = __import__('pathlib').Path(__file__).resolve().parent.parent \
+    / 'seeds_data' / 'fotos_misto_2026_10'
+FOTOS_MISTO = (
+    ('Misto no Croissant', 'misto_croissant.jpg'),
+    ('Misto no Sourdough Integral', 'misto_sourdough_integral.jpg'),
+    ('Misto no Pão Francês', 'misto_pao_frances.jpg'),
+    ('Misto no Sourdough 7 Grãos', 'misto_sourdough_7_graos.jpg'),
+)
+
+
+def fotos_mistos():
+    """Sobe cada foto pro Dropbox no mesmo caminho/compressão do upload da
+    tela do produto e grava no cadastro. Sem Dropbox, nada é gravado e o
+    resumo diz `dropbox_indisponivel` (o seed tenta de novo no próximo
+    boot). Sem commit."""
+    from app.services import dropbox_storage
+    from app.utils import comprimir_imagem
+    resumo = {'fotos': [], 'nao_achados': [], 'erros': [], 'dropbox_indisponivel': False}
+    if not dropbox_storage.disponivel():
+        resumo['dropbox_indisponivel'] = True
+        return resumo
+    produtos = Produto.query.filter(Produto.ativo.is_(True)).all()
+    for nome, arquivo in FOTOS_MISTO:
+        achados = _achar(produtos, nome)
+        if len(achados) != 1:
+            resumo['nao_achados'].append(f'{nome}({len(achados)})')
+            continue
+        p = achados[0]
+        try:
+            final = comprimir_imagem((_PASTA_FOTOS / arquivo).read_bytes(),
+                                     max_size=1600, quality=88)
+            info = dropbox_storage.upload_publico(
+                final, f'/cardapio/produto/{p.id}.jpg', mode='overwrite',
+                autorename=False)
+        except Exception as e:  # noqa: BLE001 — uma foto não derruba as outras
+            resumo['erros'].append(f'{nome}: {e}')
+            continue
+        p.imagem_dropbox_url = info['url']
+        p.imagem_storage_path = info['storage_path']
+        p.imagem_mimetype = 'image/jpeg'
+        resumo['fotos'].append(f'p{p.id} {nome}')
+    db.session.flush()
+    return resumo
