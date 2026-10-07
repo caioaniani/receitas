@@ -3474,3 +3474,29 @@ def tiny_contato():
     except ValueError as exc:
         out['veredito'] = {'ok': False, 'erro': str(exc)}
     return jsonify(out)
+
+
+@claude_api_bp.route('/catalogo-precos')
+@_claude_auth_required
+def catalogo_precos():
+    """SONDA read-only (07/10/2026, conferência do cardápio impresso da loja
+    contra o cadastro): TODAS as receitas ativas e produtos ativos com
+    categoria e os quatro preços (loja, site, atacado, interno). ?busca=
+    filtra por trecho do nome (sem acento/caixa). Só leitura."""
+    from app.models import Produto, Receita
+    from app.utils import normalizar_busca
+    busca = normalizar_busca(request.args.get('busca') or '').strip()
+    out = []
+    for r in Receita.ativas().order_by(Receita.nome).all():
+        if busca and busca not in normalizar_busca(r.nome):
+            continue
+        out.append({'kind': 'receita', 'id': r.id, 'nome': r.nome,
+                    'categoria': r.categoria, 'preco_loja': r.preco_loja,
+                    'preco_site': r.preco_site, 'preco_atacado': r.preco_venda})
+    for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all():
+        if busca and busca not in normalizar_busca(p.nome):
+            continue
+        out.append({'kind': 'produto', 'id': p.id, 'nome': p.nome,
+                    'categoria': p.categoria, 'preco_loja': p.preco_loja,
+                    'preco_site': p.preco_site, 'preco_atacado': p.preco_atacado})
+    return jsonify(ok=True, total=len(out), itens=out)

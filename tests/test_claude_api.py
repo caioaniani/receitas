@@ -1291,3 +1291,25 @@ def test_tiny_contato_sonda_le_sem_escrever(app):
     assert d['veredito']['ok'] is False and 'Há 2 cadastros' in d['veredito']['erro']
     assert c.get('/api/claude/tiny-contato', headers=h).status_code == 400
     assert c.get('/api/claude/tiny-contato?fatura=999', headers=h).status_code == 404
+
+
+def test_catalogo_precos_lista_ativos_com_precos(app):
+    from app.extensions import db
+    from app.models import Produto, Receita
+    from app.utils import agora
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    db.session.add_all([
+        Receita(nome='Pão Ativo', categoria='Pães', rendimento_qtd=1,
+                rendimento_unidade='unidades', peso_base=1000, preco_loja=3.0),
+        Receita(nome='Pão Arquivado', categoria='Pães', rendimento_qtd=1,
+                rendimento_unidade='unidades', peso_base=1000, arquivada_em=agora()),
+        Produto(nome='Coca Zero', categoria='Bebidas', ativo=True, preco_loja=10.0),
+        Produto(nome='Inativo', ativo=False)])
+    db.session.commit()
+    h = {'Authorization': f'Bearer {TOKEN}'}
+    d = app.test_client().get('/api/claude/catalogo-precos', headers=h).get_json()
+    nomes = {i['nome']: i for i in d['itens']}
+    assert nomes['Pão Ativo']['preco_loja'] == 3.0 and nomes['Coca Zero']['preco_loja'] == 10.0
+    assert 'Pão Arquivado' not in nomes and 'Inativo' not in nomes
+    d = app.test_client().get('/api/claude/catalogo-precos?busca=pao', headers=h).get_json()
+    assert [i['nome'] for i in d['itens']] == ['Pão Ativo']
