@@ -1787,6 +1787,9 @@ def _migrate_postgres(app):
                 'reaproveitavel': 'ALTER TABLE produto ADD COLUMN reaproveitavel BOOLEAN NOT NULL DEFAULT FALSE',
                 # Sob encomenda D+2 (dono 21/07/2026) — espelho da Receita.
                 'sob_encomenda': 'ALTER TABLE produto ADD COLUMN sob_encomenda BOOLEAN NOT NULL DEFAULT FALSE',
+                # Venda no site com HORÁRIO DE ENCERRAMENTO (dono 07/10/2026,
+                # Kit Dia das Crianças "até dia 12 às 18:00"). NULL = sem limite.
+                'site_ate': 'ALTER TABLE produto ADD COLUMN IF NOT EXISTS site_ate TIMESTAMP',
             }
             for col, sql in migrações_produto.items():
                 if col not in cols_prod:
@@ -3714,6 +3717,8 @@ def _migrate_sqlite(app):
     if cols_prod and 'sob_encomenda' not in cols_prod:
         cursor.execute("ALTER TABLE produto ADD COLUMN sob_encomenda "
                        "BOOLEAN NOT NULL DEFAULT 0")
+    if cols_prod and 'site_ate' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN site_ate TIMESTAMP")
 
     # Migração receita.modo_preparo
     if 'modo_preparo' not in colunas:
