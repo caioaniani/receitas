@@ -108,3 +108,38 @@ def test_base_com_croissant_no_lugar_do_brioche_copia_como_esta(app):
     assert comp == {(croissant.id, 1), (queijo.id, 60)}
     assert ProdutoItem.query.filter_by(produto_id=base.id).count() == 2  # base intocada
     assert svc.criar_queijo_quente_croissant()['ja_existiam'] == ['Queijo Quente no Croissant']
+
+
+def test_unifica_brioche_que_era_croissant(app):
+    croissant = _rec('Croissant Tradicional')
+    base = Produto(nome='Queijo Quente no Brioche', categoria='Cestas', ativo=True,
+                   preco_loja=35.0)
+    db.session.add(base)
+    db.session.flush()
+    db.session.add(ProdutoItem(produto_id=base.id, tipo='receita', receita_id=croissant.id,
+                               item_nome='Croissant Tradicional', quantidade=1))
+    db.session.commit()
+    svc.criar_queijo_quente_croissant()
+    db.session.commit()
+    r = svc.unificar_queijo_quente_croissant()
+    db.session.commit()
+    assert not r['motivo'] and r['renomeado'] == f'#{base.id}'
+    ativos = Produto.query.filter_by(nome='Queijo Quente no Croissant', ativo=True).all()
+    assert [p.id for p in ativos] == [base.id]
+    assert Produto.query.filter_by(nome='Queijo Quente no Croissant (duplicado)',
+                                   ativo=False).count() == 1
+    assert Produto.query.filter_by(nome='Queijo Quente no Brioche').count() == 0
+
+
+def test_nao_unifica_se_base_tem_brioche(app):
+    _rec('Croissant Tradicional')
+    brioche = _rec('Brioche')
+    base = Produto(nome='Queijo Quente no Brioche', ativo=True)
+    db.session.add(base)
+    db.session.flush()
+    db.session.add(ProdutoItem(produto_id=base.id, tipo='receita', receita_id=brioche.id,
+                               item_nome='Brioche', quantidade=0.2))
+    db.session.commit()
+    r = svc.unificar_queijo_quente_croissant()
+    assert r['motivo'].startswith('composicao_inesperada')
+    assert db.session.get(Produto, base.id).nome == 'Queijo Quente no Brioche'

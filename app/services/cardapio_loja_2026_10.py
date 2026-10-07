@@ -145,3 +145,41 @@ def aplicar():
     _criar_queijo_quente_croissant(resumo, produtos)
     db.session.flush()
     return resumo
+
+
+NOME_DUPLICADO = 'Queijo Quente no Croissant (duplicado)'
+
+
+def unificar_queijo_quente_croissant():
+    """Dono 07/10/2026: "O queijo quente é os lanches, tem ele em todas as
+    opções de pães sourdough e croissant tradicional" — não existe queijo
+    quente no brioche; o "Queijo Quente no Brioche" (que já baixava 1
+    Croissant Tradicional) É o do croissant. Renomeia ele (preserva vínculos
+    do PDV e histórico de vendas) e desativa a cópia criada no seed v2.
+    Só age se a base tem Croissant Tradicional e nenhum brioche."""
+    resumo = {'renomeado': '', 'desativado': '', 'motivo': ''}
+    produtos = Produto.query.all()
+    base = _achar(produtos, NOME_QQ_BRIOCHE)
+    croissant = _achar(Receita.ativas().all(), 'Croissant Tradicional')
+    if len(base) != 1 or len(croissant) != 1:
+        resumo['motivo'] = f'base={len(base)} croissant={len(croissant)}'
+        return resumo
+    base, croissant = base[0], croissant[0]
+    itens = ProdutoItem.query.filter_by(produto_id=base.id).all()
+    tem_croissant = any(i.tipo == 'receita' and i.receita_id == croissant.id for i in itens)
+    tem_brioche = any(i.tipo == 'receita' and 'brioche' in _norm(
+        i.receita.nome if i.receita else i.item_nome) for i in itens)
+    if not tem_croissant or tem_brioche:
+        resumo['motivo'] = f'composicao_inesperada croissant={tem_croissant} brioche={tem_brioche}'
+        return resumo
+    for copia in _achar(produtos, NOME_QQ_CROISSANT):
+        if copia.id != base.id:
+            copia.ativo = False
+            copia.nome = NOME_DUPLICADO
+            resumo['desativado'] = f'#{copia.id}'
+    base.nome = NOME_QQ_CROISSANT
+    for ref in ProdutoItem.query.filter_by(produto_componente_id=base.id).all():
+        ref.item_nome = NOME_QQ_CROISSANT
+    db.session.flush()
+    resumo['renomeado'] = f'#{base.id}'
+    return resumo
