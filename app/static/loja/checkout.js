@@ -142,12 +142,17 @@
     // Cartinha só aparece se houver uma CESTA no carrinho. Regra: categoria
     // contém "cesta" (pega 'Cestas' e 'Cestas Personalizadas'). Pães/itens
     // avulsos não levam cartinha de presente.
+    // Menu montável (minis) também leva cartinha, e a cartinha que o bot já
+    // escreveu no WhatsApp (link de carrinho) nunca fica escondida.
     function aplicarCartinha() {
       var temCesta = Carrinho.ler().some(function (it) {
-        return (it.categoria || '').toLowerCase().indexOf('cesta') >= 0;
+        return (it.categoria || '').toLowerCase().indexOf('cesta') >= 0 ||
+               (it.comp && it.comp.length > 0);
       });
+      var campo = document.getElementById('cartinha');
+      var preenchida = !!(campo && campo.value.trim());
       var blocoCart = document.getElementById('bloco-cartinha');
-      if (blocoCart) blocoCart.style.display = temCesta ? 'block' : 'none';
+      if (blocoCart) blocoCart.style.display = (temCesta || preenchida) ? 'block' : 'none';
     }
     aplicarCartinha();
 

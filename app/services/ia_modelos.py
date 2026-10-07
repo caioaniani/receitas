@@ -444,8 +444,10 @@ def modelos_por_funcao():
         # Funções migradas que hoje não chamam a API em produção (decisão de
         # 24/09/2026, atendimento restrito): o modelo vale se forem religadas.
         'desligadas_nos_canais': {
-            'bot_atendimento': 'motor de IA do atendimento só roda em teste '
-                               'offline desde 24/09/2026',
+            'bot_atendimento': 'motor antigo do atendimento só roda em teste '
+                               'offline desde 24/09/2026; desde 07/10/2026 '
+                               'a VENDA pelo WhatsApp (atendimento_venda) '
+                               'usa esta função',
             'followup': 'retomada automática desativada em 24/09/2026',
         },
     }

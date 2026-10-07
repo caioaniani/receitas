@@ -81,8 +81,13 @@
                 o robô pede uma vez o reenvio em texto comum e, se vier outra igual, fica em
                 silêncio. A conversa <strong>não</strong> vai para a equipe e não gera cobrança de
                 cliente esperando. Quando o cliente escrever em texto, o atendimento segue normal.
-                Um pedido de 15 lanches e 15 croissants é encaminhado para atendimento;
-                o robô não manda o cliente comprar no site. Ele não consulta nem confirma
+                <strong>Venda pelo WhatsApp (07/10/2026)</strong>: quem quer comprar é atendido
+                pelo robô, que mostra opções e preços do site, monta o carrinho (inclusive
+                minis, sourdough fatiado e o texto da cartinha) e manda o link; o cliente confere,
+                escolhe entrega/retirada e paga no site — o robô nunca cria pedido nem cobra.
+                Pedido grande de evento, preço especial, reclamação, alergia, dúvida de pedido já
+                feito e pedido de atendente vão para a equipe. Para desligar a venda e voltar a
+                encaminhar toda compra: variável <code>BOT_VENDA=0</code> no Railway. Ele não consulta nem confirma
                 entrega, não monta carrinho e não encerra a conversa sozinho.</li>
             <li><strong>Depois de encaminhar, o robô fica em silêncio.</strong> A fila aparece
                 no painel mesmo se houver falha de comunicação com o Chatwoot. Novas mensagens

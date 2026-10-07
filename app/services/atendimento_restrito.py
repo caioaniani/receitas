@@ -1,8 +1,12 @@
 """Atendimento público limitado a informações simples e encaminhamento.
 
-Não usa modelo, catálogo, pedidos ou carrinho. Uma frase fora da lista de
-perguntas reconhecidas fica com a equipe, inclusive quando vem antes de uma
-saudação na mesma conversa. O histórico recebido continua com o chamador.
+FAQ determinística (saudação, endereço, link pedido). Fora dela, desde
+07/10/2026 (decisão do dono) a conversa vai ao atendente de VENDAS
+(`atendimento_venda`: catálogo + link de carrinho, nada mais), que passa
+para a equipe tudo o que não é montar uma compra. Equipe já na conversa,
+anexo e fala humana seguem sempre com a equipe. Com a venda desligada
+(`BOT_VENDA=0` ou sem chave da API), tudo fora da FAQ fica com a equipe,
+como em 24/09/2026. O histórico recebido continua com o chamador.
 """
 import logging
 import re
@@ -169,6 +173,18 @@ def responder_indisponivel(atuais):
     return _resultado('responder', texto, MOTIVO_MENSAGEM_INDISPONIVEL)
 
 
+def _espera_aberta(conversa_id):
+    """A equipe ainda está com esta conversa (fila não resolvida)? Erro de
+    leitura = sim (conservador)."""
+    from app.services import atendimento_humano
+    try:
+        return atendimento_humano.encaminhamento_pendente(conversa_id)
+    except Exception:  # noqa: BLE001
+        logger.exception('atendimento restrito: fila ilegível conv=%s',
+                         conversa_id)
+        return True
+
+
 def _enderecos(unidade=None):
     """Cadastro das lojas, sem assumir horário ou habilitação para retirada."""
     from app.models import Loja
@@ -220,17 +236,43 @@ def responder(historico, *, telefone_contato=None, conversa_id=None):
             return _encaminhar(MOTIVO_ANEXO_COM_INDISPONIVEL)
         return responder_indisponivel(atuais)
     # Uma saudação/agradecimento não apaga venda, ajuste ou dúvida pendente.
+    motivo, bloqueio_duro = None, False
     for m in atuais:
         if m.get('handoff_em'):
-            return _encaminhar('atendimento restrito: continuidade com a equipe')
+            # Encaminhamento ANTIGO de um episódio que a equipe já resolveu
+            # não prende o cliente fora da venda para sempre (revisão
+            # 07/10/2026): só a espera AINDA aberta é bloqueio duro. Sem o id
+            # da conversa não dá para saber — conservador.
+            motivo = 'atendimento restrito: continuidade com a equipe'
+            if not conversa_id or _espera_aberta(conversa_id):
+                bloqueio_duro = True
+                break
+            continue
         if _tem_anexo(m) or not isinstance(m.get('content', ''), str):
-            return _encaminhar('atendimento restrito: anexo ou mensagem não textual')
-        if m.get('role') == 'user' and _classificar(m.get('content'))[0] is None:
-            return _encaminhar('atendimento restrito: solicitação requer equipe')
+            motivo, bloqueio_duro = 'atendimento restrito: anexo ou mensagem não textual', True
+            break
         if m.get('role') == 'assistant' and (
-                m.get('handoff') or m.get('humano') is True
-                or _PENDENCIA_ASSISTANT.search(_normalizar(m.get('content')))):
-            return _encaminhar('atendimento restrito: continuidade com a equipe')
+                m.get('handoff') or m.get('humano') is True):
+            motivo, bloqueio_duro = 'atendimento restrito: continuidade com a equipe', True
+            break
+        if motivo:
+            continue
+        if m.get('role') == 'user' and _classificar(m.get('content'))[0] is None:
+            motivo = 'atendimento restrito: solicitação requer equipe'
+        elif m.get('role') == 'assistant' and _PENDENCIA_ASSISTANT.search(
+                _normalizar(m.get('content'))):
+            motivo = 'atendimento restrito: continuidade com a equipe'
+    if motivo:
+        # Venda pelo WhatsApp (dono 07/10/2026): o que não é FAQ e não está
+        # com a equipe vai ao atendente de vendas, que monta o carrinho ou
+        # passa para a equipe. Equipe já na conversa, anexo ou fala humana
+        # continuam sendo da equipe (bloqueio duro).
+        if not bloqueio_duro:
+            from app.services import atendimento_venda
+            if atendimento_venda.disponivel():
+                return atendimento_venda.responder(
+                    historico, conversa_id=conversa_id)
+        return _encaminhar(motivo)
 
     tipo, unidade = _classificar(clientes[-1].get('content'))
     if tipo == 'saudacao':

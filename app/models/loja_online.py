@@ -958,3 +958,33 @@ class LojaDataEspecial(db.Model):
     def __repr__(self):
         return (f'<LojaDataEspecial {self.data} '
                 f'{"FECHADO" if self.fechado else self.lista_janelas()}>')
+
+
+class CarrinhoLink(db.Model):
+    """Carrinho montado pelo BOT de atendimento e entregue ao cliente como
+    link curto (decisão do dono 07/10/2026: o bot atende quem quer comprar
+    no WhatsApp, monta o carrinho e o cliente finaliza e paga no site).
+
+    O link leva só o `token`; o conteúdo fica aqui porque a URL não comporta
+    a composição dos minis nem a cartinha, e porque os `pi_id` do menu mudam
+    a cada edição do cadastro — por isso a composição é guardada pelo ALVO
+    do mini (`col` + `alvo_id`), estável, e convertida para os `pi_id`
+    correntes no resgate (`carrinho_link.resgatar`).
+
+    `itens` = [{'kind', 'id', 'qtd', 'fatiado', 'comp': [[col, alvo_id, qtd]]}]
+    — preço NÃO é guardado: o carrinho e o checkout recalculam no servidor.
+    Tabela NOVA via `db.create_all` (sem ALTER)."""
+    __tablename__ = 'carrinho_link'
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(24), unique=True, nullable=False, index=True)
+    itens = db.Column(db.JSON, nullable=False)
+    cartinha = db.Column(db.Text, nullable=True)
+    conversa_id = db.Column(db.String(40), nullable=True, index=True)
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    expira_em = db.Column(db.DateTime, nullable=False)
+    aberto_em = db.Column(db.DateTime, nullable=True)
+    aberturas = db.Column(db.Integer, default=0, nullable=False)
+
+    def __repr__(self):
+        return f'<CarrinhoLink {self.token} conv={self.conversa_id}>'

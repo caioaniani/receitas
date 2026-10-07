@@ -126,6 +126,9 @@ class Config:
     # de venda). Liga/desliga sem mexer em codigo. Destino do alerta:
     # CHATBOT_VIGIA_NUMERO ou, na ausencia, ZAPI_NUMERO_DESTINO.
     CHATBOT_VIGIA = os.environ.get('CHATBOT_VIGIA', '1') == '1'
+    # Venda pelo WhatsApp (dono 07/10/2026): o bot monta o carrinho e manda
+    # o link do site. '0' volta ao atendimento restrito puro.
+    BOT_VENDA = os.environ.get('BOT_VENDA', '1')
     CHATBOT_VIGIA_NUMERO = os.environ.get('CHATBOT_VIGIA_NUMERO', '')
     # Detector de abandono: minutos sem resposta na conversa pra acionar o vigia
     # (default 15). Roda no cron de 5 em 5 min via seru_cron.

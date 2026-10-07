@@ -347,6 +347,44 @@ transacional. Esta decisão substitui as orientações históricas de autonomia
 do bot abaixo; o motor anterior só pode executar em testes offline.
 Detalhes: `docs/atendimento-chatwoot.md`.
 
+**VENDA pelo WhatsApp com link de carrinho (dono 07/10/2026 — "O bot pode
+montar o carrinho e mandar o link do site"; opção A, o cliente paga no site;
+"Tudo, inclusive minis e faz cartinhas")**: SUBSTITUI, só para compras, o
+"nunca montar carrinho / insistir no site" acima. `atendimento_restrito.
+responder` mantém a FAQ; fora dela e sem bloqueio duro (`handoff_em`, anexo,
+fala humana) chama `atendimento_venda.responder` — modelo com SÓ quatro
+tools (catálogo enriquecido com fatiável/sob encomenda/minis por `pi_id`,
+frete, `montar_link_carrinho`, `transferir_para_humano`), travas antes do
+modelo (manipulação, pedido de atendente, falha operacional, reclamação),
+link na resposta só se veio de ferramenta (senão equipe), recusa/erro/limite
+= equipe, resultado com a `politica_atendimento` restrita (gateway e vigia
+inalterados). Reusa `chatbot._chamar_com_retry_sobrecarga` com a função
+`bot_atendimento` (contagem por AST intacta). O link é `CarrinhoLink`
+(tabela nova; `carrinho_link.criar/resgatar`): valida ao criar e ao abrir,
+composição guardada pelo MINI (col+alvo_id — `pi_id` muda a cada edição do
+menu), 7 dias, `/loja/carrinho?link=` mescla uma vez por sessão
+(`_links_bot`), cartinha vai para `session['_checkout_cartinha']` e
+pré-preenche o checkout; o bloco da cartinha agora aparece também para menu
+montável e quando já vem preenchido. O `?add=` antigo segue igual.
+Kill-switch `BOT_VENDA=0`. Testes `tests/test_venda_whatsapp.py`;
+doc `docs/atendimento-chatwoot.md`; manual atualizado.
+REVISÃO (07/10, aplicados): o link SUBSTITUI o carrinho (somava: "troca
+para 3" virava 2+3) com aviso, e link sem cartinha limpa a anterior; item
+que não coube no carrinho vira aviso; composição com mini repetido ou acima
+do teto é RECUSADA (sem conserto silencioso do `normalizar`); detecção de
+link pega endereço sem esquema e tolera formatação do WhatsApp (`*`, `_`,
+crase, colchete); texto que promete a equipe sem a tool vira handoff;
+alergia/restrição alimentar é trava antes do modelo; resposta PÚBLICA da
+equipe no Chatwoot (autoria via `buscar_historico(incluir_autoria=True)`)
+cala a venda; `handoff_em` antigo só bloqueia se a espera ainda está aberta
+(`encaminhamento_pendente`); rollback quando ferramenta falha; retry de
+`max_tokens` 4000→8000; limite da cartinha vem de `CARTINHA_MAX_CHARS`;
+conftest apaga `ANTHROPIC_API_KEY` do ambiente (sem isso 34 testes do
+restrito chamariam a API). ACEITOS: preço não é congelado no link (o site
+recalcula — o que o cliente paga é o do site); a prévia do link no WhatsApp
+conta como abertura; a vassoura pode criar um link e desistir de enviar
+(link órfão, inofensivo).
+
 **Mensagem que o WhatsApp não entregou (caso conv 2339, 30/09/2026)**: a
 Cloud API entrega o evento como `type: unsupported` e o Chatwoot grava só o
 placeholder "This message is unavailable." (`content_attributes.

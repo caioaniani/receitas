@@ -158,6 +158,15 @@ def _localhost_como_host_de_loja(request, _app_session, monkeypatch):
         monkeypatch.setitem(_app_session.config, 'LOJA_HOSTS', 'localhost')
 
 
+@pytest.fixture(autouse=True)
+def _sem_chave_anthropic_do_ambiente(monkeypatch):
+    """A suíte NUNCA usa a chave da API exportada no shell de quem roda:
+    com ela, o atendimento de vendas (`atendimento_venda.disponivel`) ligaria
+    e os testes do atendimento restrito chamariam a Anthropic de verdade
+    (revisão 07/10/2026). Teste que precisa da chave a define sozinho."""
+    monkeypatch.delenv('ANTHROPIC_API_KEY', raising=False)
+
+
 @pytest.fixture
 def app(_app_session, _config_baseline):
     from app.extensions import db, limiter

@@ -79,6 +79,19 @@ def _composicao_do_pedido(produto, item, linha):
         raise LinkInvalido(
             f'Os itens {alheios} não fazem parte do {nome}. Consulte o '
             f'produto de novo e use os pi_id que ele mostrar.')
+    # Nada de "conserto" silencioso pelo normalizar (que corta no teto e
+    # sobrescreve repetidos): o que o bot mostrou ao cliente tem de ser
+    # exatamente o que fica gravado.
+    ids = [p for p, _q in pares]
+    if len(ids) != len(set(ids)):
+        raise LinkInvalido(f'Composição do {nome} repete um mini — some as '
+                           f'quantidades numa linha só.')
+    _total, teto = loja_menu.regras(produto)
+    if any(q > teto for _p, q in pares):
+        raise LinkInvalido(f'O {nome} aceita no máximo {teto} unidades de '
+                           f'cada mini.')
+    if any(q <= 0 for _p, q in pares):
+        raise LinkInvalido('Quantidade de mini deve ser maior que zero.')
     comp = loja_menu.normalizar(produto, pares)
     erro = loja_menu.validar(produto, comp)
     if erro:

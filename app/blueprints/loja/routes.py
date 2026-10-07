@@ -54,6 +54,10 @@ def _ctx_checkout(erros=None, form=None):
         'agendada', lead_dias=lead_encomenda)
     base = agora()
     form = dict(form or {})
+    # Cartinha que o bot já escreveu com o cliente no WhatsApp (link de
+    # carrinho, `carrinho_link`): pré-preenche; o que o cliente digitar manda.
+    if session.get('_checkout_cartinha'):
+        form.setdefault('cartinha', session['_checkout_cartinha'])
     cli = loja_auth.cliente_atual()
     if cli:
         # Nome salvo (campo único) → divide em nome + sobrenome pros 2 campos
@@ -876,6 +880,9 @@ def carrinho():
     LINK DE 1 CLIQUE (`?add=r5:2,p83:1`): o servidor resolve cada item (preço +
     estoque REAIS, autoritativo), MESCLA no carrinho da sessão e redireciona pra
     URL limpa (PRG — um refresh não soma de novo). `r`=receita, `p`=produto."""
+    link = (request.args.get('link') or '').strip()
+    if link:
+        return _resgatar_link_do_bot(link)
     add = (request.args.get('add') or '').strip()
     if add:
         novos, esgotados = _resolver_prefill_carrinho(add)
@@ -890,8 +897,55 @@ def carrinho():
             session['_carrinho_esg'] = esgotados
         return redirect(url_for('loja.carrinho'))
     esgotados = session.pop('_carrinho_esg', [])
+    avisos = session.pop('_carrinho_avisos', [])
     return render_template('loja/carrinho.html', em_teste=_em_teste(),
-                           prefill_esgotados=esgotados)
+                           prefill_esgotados=esgotados,
+                           prefill_avisos=avisos)
+
+
+# Links do bot já resgatados nesta sessão: abrir o mesmo link de novo (o
+# cliente toca duas vezes no WhatsApp) não soma os itens outra vez.
+_LINKS_RESGATADOS_MAX = 10
+
+
+def _resgatar_link_do_bot(token):
+    """`?link=<token>`: carrinho montado pelo bot no WhatsApp (dono
+    07/10/2026; `carrinho_link`). Revalida no servidor, mescla na sessão,
+    guarda a cartinha para o checkout e redireciona (PRG)."""
+    from app.services import carrinho_link
+    vistos = list(session.get('_links_bot') or [])
+    if token in vistos:
+        return redirect(url_for('loja.carrinho'))
+    dados = carrinho_link.resgatar(token)
+    if dados is None:
+        session['_carrinho_avisos'] = [
+            'Este link de carrinho venceu ou não existe mais. Fale com a '
+            'gente no WhatsApp que montamos de novo.']
+        return redirect(url_for('loja.carrinho'))
+    avisos = list(dados['avisos'])
+    if dados['itens']:
+        # O link é o pedido COMBINADO no WhatsApp: SUBSTITUI o carrinho
+        # (somar faria o link corrigido "troca para 3" virar 2 + 3 — achado
+        # da revisão 07/10/2026). Havia itens antes → o cliente é avisado.
+        if _carrinho_sessao():
+            avisos.insert(0, 'Seu carrinho foi trocado pelo que você combinou '
+                             'com a gente no WhatsApp.')
+        _set_carrinho_sessao(dados['itens'])
+        if len(_carrinho_sessao()) < len(dados['itens']):
+            avisos.append('Nem todos os itens do link couberam no carrinho. '
+                          'Fale com a gente no WhatsApp.')
+        # Cartinha acompanha o link: link sem cartinha limpa a de um link
+        # anterior (nunca reaproveitar mensagem de presente esquecida).
+        if dados.get('cartinha'):
+            session['_checkout_cartinha'] = dados['cartinha']
+        else:
+            session.pop('_checkout_cartinha', None)
+        session['_links_bot'] = (vistos + [token])[-_LINKS_RESGATADOS_MAX:]
+    if dados['esgotados']:
+        session['_carrinho_esg'] = dados['esgotados']
+    if avisos:
+        session['_carrinho_avisos'] = avisos
+    return redirect(url_for('loja.carrinho'))
 
 
 def _resolver_prefill_carrinho(add):
@@ -1170,6 +1224,7 @@ def checkout():
             except Exception:  # noqa: BLE001 — analytics nunca trava o checkout
                 current_app.logger.exception('checkout: captura do _ga falhou')
             session.pop('carrinho', None)  # pedido criado → carrinho zerado
+            session.pop('_checkout_cartinha', None)
             return redirect(url_for('loja.pedido_pagamento',
                                     codigo=pedido.codigo))
         return render_template(

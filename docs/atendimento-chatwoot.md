@@ -1,5 +1,35 @@
 # Atendimento omnichannel via Chatwoot (runbook)
 
+## Venda pelo WhatsApp com link de carrinho — 07/10/2026
+
+Decisão do dono: o bot pode atender quem quer COMPRAR, montar o carrinho e
+mandar o link do site; o cliente confere, escolhe entrega ou retirada, data
+e horário e paga no site. Isso substitui, só para compras, a frase "o robô
+não monta carrinho" da política de 24/09 abaixo. O restante continua valendo.
+
+- Entrada: `atendimento_restrito.responder` mantém a FAQ determinística;
+  fora dela, sem bloqueio duro, chama `atendimento_venda.responder`.
+  Bloqueio duro (sempre equipe): conversa já encaminhada (`handoff_em`),
+  anexo ou conteúdo não textual, fala humana da equipe na conversa.
+- Travas antes do modelo (`atendimento_venda.motivo_para_equipe`): tentativa
+  de manipulação, pedido de atendente, falha de pedido/entrega e reclamação.
+- O modelo de vendas só tem quatro ferramentas: `consultar_produtos`
+  (catálogo + fatiável, sob encomenda, minis com `pi_id`), `consultar_frete`,
+  `montar_link_carrinho` e `transferir_para_humano`. Não consulta pedido,
+  nota fiscal nem cadastro, e nunca cria pedido nem cobra.
+- Link: `carrinho_link.criar` valida no servidor (publicado, estoque do
+  site, fatiado só em sourdough fatiável, composição dos minis com total
+  exato, cartinha até 250 caracteres) e grava `CarrinhoLink` (7 dias). A
+  composição é guardada pelo mini, não pelo `pi_id`, e sobrevive à edição
+  do menu. `/loja/carrinho?link=<token>` revalida tudo, mescla uma vez por
+  sessão e pré-preenche a cartinha no checkout; item que saiu ou menu que
+  mudou vira aviso visível.
+- Link na resposta do bot só se veio de ferramenta (nesta conversa);
+  qualquer outro passa a conversa para a equipe.
+- Kill-switch `BOT_VENDA=0` (ou sem `ANTHROPIC_API_KEY`): volta ao
+  atendimento restrito puro. Custo em `UsoIA` como `bot_atendimento`.
+- Testes: `tests/test_venda_whatsapp.py`.
+
 ## Política atual: atendimento com a equipe — 24/09/2026
 
 O robô fica limitado a saudações, endereços do cadastro ativo e envio do
