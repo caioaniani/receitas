@@ -49,7 +49,7 @@ def desmarcar_minis():
         for el in EstoqueLoja.query.filter(EstoqueLoja.receita_id.in_(ids)).all():
             if el.pedido_minimo_diario or el.estoque_minimo:
                 el.pedido_minimo_diario = None
-                el.estoque_minimo = 0
+                el.estoque_minimo = None
                 resumo['pisos_zerados'] += 1
     db.session.flush()
     return resumo

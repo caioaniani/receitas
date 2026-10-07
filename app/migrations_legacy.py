@@ -125,6 +125,7 @@ def _migrate(app):
         _seed_cardapio_loja_2026_10_v4(app)
         _seed_cardapio_loja_2026_10_v5(app)
         _seed_cardapio_loja_2026_10_v6(app)
+        _seed_minis_fora_pedido_loja(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1077,6 +1078,46 @@ def _seed_teto_producao_brioche(app):
                     'em %d receita(s)', setados, mantidos, len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed teto producao brioche): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_minis_fora_pedido_loja(app):
+    """UMA VEZ (dono 07/10/2026: "O robo ainda continua pedindo mini como
+    pedido da loja fazendo para a industria, nao pode"): minis viram "a loja
+    nao pede" (flag da ficha), piso/minimo de loja zerados e os itens de mini
+    ja lancados em pedidos futuros saem (corte das 12h respeitado; vazio =
+    cancelado). Servico `minis_pedido_loja`; marker com as contagens."""
+    try:
+        from app.models import AppConfig
+        from app.services import minis_pedido_loja as svc
+        from app.services import pedidos_revenda
+        from app.services.pedido_corte import salvar_no_prazo
+        from app.services.pedido_lock import travar_pedidos_lojas
+        from app.utils import hoje
+        chave = 'seed_minis_fora_pedido_loja_2026_10'
+        if AppConfig.get(chave):
+            return
+        r = svc.desmarcar_minis()
+        linhas = svc.itens_em_pedidos_futuros(hoje())
+        if linhas:
+            travar_pedidos_lojas(sorted({li['_item'].pedido.loja_id for li in linhas}))
+            linhas = svc.itens_em_pedidos_futuros(hoje())
+        removidos, cancelados, datas = pedidos_revenda.remover(linhas)
+        pulados = [f"{li['loja']} {li['data_entrega']}" for li in linhas if li['sob_corte']]
+        AppConfig.set(chave, (
+            f"desmarcados={','.join(r['desmarcados'])} | pisos_zerados={r['pisos_zerados']} "
+            f"| itens_removidos={removidos} | pedidos_cancelados={cancelados} "
+            f"| pulados_corte={';'.join(pulados)}"))
+        erro = salvar_no_prazo(datas)
+        if erro:
+            logger.error('seed minis fora do pedido NAO aplicado (corte): %s', erro)
+            return
+        logger.info('seed minis fora do pedido: %s removidos=%d', r, removidos)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed minis fora do pedido): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001
