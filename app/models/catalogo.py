@@ -463,6 +463,11 @@ class Produto(db.Model):
     # vende pra data >= D+2, e produzido pro pedido (nao abate prateleira) e
     # entra na producao do padeiro. ALTER em migrations_legacy (commit 1).
     sob_encomenda = db.Column(db.Boolean, default=False, nullable=False)
+    # Venda no site com HORÁRIO DE ENCERRAMENTO (dono 07/10/2026, Kit Dia
+    # das Crianças "até dia 12 às 18:00"): a partir deste instante (BRT
+    # naive, `app.utils.agora()`) o item sai da vitrine e o checkout recusa.
+    # NULL = sem limite. ALTER em migrations_legacy (commit 1, de6a794).
+    site_ate = db.Column(db.DateTime, nullable=True)
     # ── Menu degustacao CONFIGURAVEL no site (26/07/2026, pedido do dono) ──
     # Cesta cujo cliente ajusta as quantidades de cada componente: a
     # `ProdutoItem.quantidade` do cadastro vira a PRE-SELECAO, o total tem

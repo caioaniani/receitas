@@ -282,6 +282,19 @@
                 </div>
             </label>
         </div>
+        <div class="mt-2">
+            <label class="form-label small mb-1" for="site-ate-produto">
+                <strong>Vender no site até</strong>
+                <span class="text-muted">(em branco = sem limite)</span>
+            </label>
+            <input class="form-control form-control-sm" type="datetime-local" name="site_ate"
+                   id="site-ate-produto" style="max-width: 260px"
+                   value="{{ produto.site_ate.strftime('%Y-%m-%dT%H:%M') if produto.site_ate else '' }}">
+            <div class="text-muted small">
+                A partir deste horário (Brasília) o item sai da vitrine e o checkout recusa.
+                Pedidos já feitos não mudam.
+            </div>
+        </div>
         {# Menu degustacao CONFIGURAVEL (26/07/2026, pedido do dono) #}
         <div class="form-check mt-2">
             <input class="form-check-input" type="checkbox" name="menu_configuravel"

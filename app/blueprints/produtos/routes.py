@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required
 
@@ -348,6 +350,18 @@ def salvar_composicao(id):
     # Sob encomenda D+2 (dono 21/07/2026): so vende D+2 no site, produzido pro
     # pedido (nao abate prateleira), entra na producao do padeiro.
     produto.sob_encomenda = bool(request.form.get('sob_encomenda'))
+    # Vender no site até (07/10/2026): só mexe se o campo veio no form (POST
+    # antigo/legado não apaga); vazio = sem limite; ilegível mantém o valor.
+    if 'site_ate' in request.form:
+        bruto = (request.form.get('site_ate') or '').strip()
+        if not bruto:
+            produto.site_ate = None
+        else:
+            try:
+                produto.site_ate = datetime.strptime(bruto[:16], '%Y-%m-%dT%H:%M')
+            except ValueError:
+                flash('Data/hora de "Vender no site até" inválida — mantida a anterior.',
+                      'warning')
     # Menu configuravel no site (26/07/2026): cliente escolhe as quantidades
     # de cada componente, com total obrigatorio e teto por item; o preco vira
     # a soma do `preco_menu` do que ele escolher. Campo em branco = usa o

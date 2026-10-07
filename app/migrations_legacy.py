@@ -117,6 +117,7 @@ def _migrate(app):
         _seed_acerto_granola_iogurte(app)
         _backfill_totais_orcamento(app)
         _seed_fichas_producao_2026_10(app)
+        _seed_kit_dia_criancas_2026(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1069,6 +1070,35 @@ def _seed_teto_producao_brioche(app):
                     'em %d receita(s)', setados, mantidos, len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed teto producao brioche): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_kit_dia_criancas_2026(app):
+    """UMA VEZ (dono 07/10/2026: "Cadastra esse Kit Dia das Criancas para
+    vender R$120,00 ... ate dia 12 as 18:00"). Cria o produto, a receita
+    nova Brioche do Mickey e as MPs das bisnagas (custo pendente), com a
+    foto enviada. Servico `kit_dia_criancas`; marker com os ids (regra: seed
+    nunca passa batido). Roda depois do ALTER de produto.site_ate (de6a794)."""
+    try:
+        from app.models import AppConfig
+        from app.services import kit_dia_criancas as svc
+        chave = 'seed_kit_dia_criancas_2026'
+        if AppConfig.get(chave):
+            return
+        try:
+            r = svc.criar()
+        except ValueError as e:
+            db.session.rollback()
+            logger.error('seed kit dia das criancas NAO aplicado: %s', e)
+            return
+        AppConfig.set(chave, ' '.join(f'{k}={v}' for k, v in r.items()))
+        db.session.commit()
+        logger.info('seed kit dia das criancas: %s', r)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed kit dia das criancas): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001

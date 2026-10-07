@@ -202,6 +202,16 @@ def _serializar_produto(p):
     }
 
 
+def _dentro_do_prazo_site():
+    """Filtro de `Produto.site_ate` (venda com horário de encerramento,
+    07/10/2026): NULL = sem limite; senão só enquanto `agora()` < site_ate.
+    Fonte única da vitrine e do checkout (`por_id_publicado`)."""
+    from sqlalchemy import or_
+
+    from app.utils import agora
+    return or_(Produto.site_ate.is_(None), Produto.site_ate > agora())
+
+
 def produtos_publicados():
     """Devolve lista combinada (cestas + pães/doces) prontos pra vitrine.
 
@@ -221,7 +231,8 @@ def produtos_publicados():
                 .filter(Produto.ativo.is_(True),
                         Produto.site_ativo.is_(True),
                         Produto.preco_site.isnot(None),
-                        Produto.preco_site > 0)
+                        Produto.preco_site > 0,
+                        _dentro_do_prazo_site())
                 .order_by(Produto.ordem_site.asc().nullslast(),
                           Produto.nome.asc())
                 .all())
@@ -619,7 +630,8 @@ def por_id_publicado(kind, item_id):
             Produto.ativo.is_(True),
             Produto.site_ativo.is_(True),
             Produto.preco_site.isnot(None),
-            Produto.preco_site > 0).first()
+            Produto.preco_site > 0,
+            _dentro_do_prazo_site()).first()
         if not p:
             return None
         d = _serializar_produto(p)
