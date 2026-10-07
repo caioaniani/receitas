@@ -179,3 +179,28 @@ def test_cranberry_ja_editado_nao_mexe(app):
     r = svc.acertar_recheio_cranberry()
     assert r['motivo'].startswith('composicao_inesperada')
     assert ProdutoItem.query.filter_by(produto_id=p.id).count() == 3
+
+
+def test_separa_cestas_de_lanches(app):
+    db.session.add_all([
+        Produto(nome='Misto no Croissant', categoria='Cestas', ativo=True),
+        Produto(nome='Misto branco no cranberry', categoria='Cestas', ativo=True),
+        Produto(nome='Misto branco no cranberry', categoria='Cestas', ativo=True),
+        Produto(nome='Croissant Francês na Chapa', categoria='Cestas', ativo=True),
+        Produto(nome='Granola 50g', categoria='Cestas', ativo=True),
+        Produto(nome='Box Mimo', categoria='Cestas', ativo=True),
+        Produto(nome='Queijo Quente no Francês', categoria='Lanchinhos', ativo=True)])
+    db.session.commit()
+    r = svc.separar_cestas_de_lanches()
+    db.session.commit()
+    cat = {}
+    for p in Produto.query.all():
+        cat.setdefault(p.nome, set()).add(p.categoria)
+    assert cat['Misto no Croissant'] == {'Lanches'}
+    assert cat['Misto branco no cranberry'] == {'Lanches'}
+    assert cat['Croissant Francês na Chapa'] == {'Pães na Chapa'}
+    assert cat['Granola 50g'] == {'Acompanhamentos'}
+    assert cat['Box Mimo'] == {'Cestas'}
+    assert cat['Queijo Quente no Francês'] == {'Lanchinhos'}  # dono já mudou: fica
+    assert r['movidos'] == 5 and r['ficam_em_cestas'] == ['Box Mimo']
+    assert 'Queijo Quente no Francês' in r['ja_fora']

@@ -215,3 +215,53 @@ def acertar_recheio_cranberry():
     db.session.flush()
     resumo.update(prato='40->60', branco='+60')
     return resumo
+
+
+# Dono 07/10/2026: "Cestas só tem que estar as cestas, o restante é lanche".
+# Só move quem ainda está em 'Cestas' (mudança posterior do dono manda).
+NOVA_CATEGORIA = {
+    'Lanches': (
+        'Misto branco no cranberry', 'Misto no Brioche', 'Misto no cranberry',
+        'Misto no Croissant', 'Misto no Pão Francês', 'Misto no Sourdough 7 Grãos',
+        'Misto no Sourdough Integral', 'Misto no Sourdough Nozes e Azeitonas',
+        'Misto no Sourdough Tradicional', 'Peito de Peru no Brioche',
+        'Peito de Peru no Croissant', 'Peito de Peru no Pão Francês',
+        'Peito de Peru no Sourdough 7 Grãos', 'Peito de Peru no Sourdough Integral',
+        'Peito de Peru no Sourdough Nozes', 'Peito de Peru no Sourdough Tradicional',
+        'Peito de peru queijo branco no cranberry', 'Queijo branco no cranberry',
+        'Queijo quente no cranberry', 'Queijo Quente no Croissant',
+        'Queijo Quente no Francês', 'Queijo Quente no Sourdough 7 grãos',
+        'Queijo Quente no Sourdough Integral', 'Queijo Quente no Sourdough nozes',
+        'Queijo Quente no Sourdough Tradicional', 'Ovos Orgânicos Mexidos (3 ovos)',
+        'Cone de Pão de Queijo (10un)', 'Cone de Pão de Queijo (5un)'),
+    'Pães na Chapa': (
+        'Brioche com Manteiga e Requeijão', 'Brioche na Chapa (3 fatias)',
+        'Cranberry na chapa com manteiga', 'Cranberry na chapa com manteiga e requeijão',
+        'Croissant Francês com Manteiga e Requeijão', 'Croissant Francês na Chapa',
+        'Pão Francês com Manteiga (2 fatias)', 'Pão Francês com Manteiga e Requeijão',
+        'Sourdough com Manteiga (2 fatias)', 'Sourdough com Manteiga e Requeijão'),
+    'Bowls': ('Açaí com Banana Batido', 'Adicional de Banana'),
+    'Acompanhamentos': ('Granola 50g', 'Nozes caramelizadas'),
+    'Bebidas': ('Água Prata 370ml',),
+    'molhos': ('Molho Pesto 600ml',),
+}
+
+
+def separar_cestas_de_lanches():
+    resumo = {'movidos': 0, 'ja_fora': [], 'nao_achados': []}
+    produtos = Produto.query.filter(Produto.ativo.is_(True)).all()
+    for categoria, nomes in NOVA_CATEGORIA.items():
+        for nome in nomes:
+            achados = _achar(produtos, nome)
+            if not achados:
+                resumo['nao_achados'].append(nome)
+            for p in achados:  # homônimos (ex.: 2x Misto branco no cranberry) vão juntos
+                if (p.categoria or '').strip() == 'Cestas':
+                    p.categoria = categoria
+                    resumo['movidos'] += 1
+                else:
+                    resumo['ja_fora'].append(nome)
+    db.session.flush()
+    resumo['ficam_em_cestas'] = sorted(p.nome for p in produtos
+                                       if (p.categoria or '').strip() == 'Cestas')
+    return resumo
