@@ -1068,19 +1068,23 @@ def _cardapio_categorias(tipo):
     return _aplicar_ordem_categorias(categorias), regras
 
 
+def contexto_cardapio(tipo):
+    """Contexto do template `main/cardapio.html` — FONTE ÚNICA da tela
+    interna (/cardapio) e do cardápio PÚBLICO do QR (/loja/menu, 07/10/2026)."""
+    categorias, regras = _cardapio_categorias(tipo)
+    preparo = _preparo_atacado() if tipo == 'atacado' else []
+    return dict(categorias=categorias, tipo=tipo, regras=regras,
+                preparo=preparo, quem_somos=_quem_somos(),
+                quem_somos_foto=_quem_somos_foto_src(),
+                ordem_secoes=_ordem_secoes(), slogan=_slogan(),
+                logo=_cardapio_logo())
+
+
 @main_bp.route('/cardapio')
 @login_required
 def cardapio():
     tipo = request.args.get('tipo', 'atacado')
-    categorias, regras = _cardapio_categorias(tipo)
-    preparo = _preparo_atacado() if tipo == 'atacado' else []
-    return render_template('main/cardapio.html', categorias=categorias,
-                           tipo=tipo, regras=regras, preparo=preparo,
-                           quem_somos=_quem_somos(),
-                           quem_somos_foto=_quem_somos_foto_src(),
-                           ordem_secoes=_ordem_secoes(),
-                           slogan=_slogan(),
-                           logo=_cardapio_logo())
+    return render_template('main/cardapio.html', **contexto_cardapio(tipo))
 
 
 @main_bp.route('/cardapio.pdf')

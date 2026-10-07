@@ -499,13 +499,20 @@ def create_app(config_class=None):
         # buscam ali; sem isso vira 404 HTML e o Search Console acusa
         # "sitemap em HTML". A rota mora em /loja/sitemap.xml mas Google
         # espera /sitemap.xml — servimos os dois (alias top-level).
+        # /cardapio-img/ (07/10/2026): fotos do cardápio PÚBLICO do QR
+        # (/loja/menu) — rota de imagem sem login, só leitura.
         if (p == '/loja' or p.startswith('/loja/')
                 or p.startswith('/static/')
+                or p.startswith('/cardapio-img/')
                 or p in ('/health', '/favicon.ico',
                          '/sitemap.xml', '/robots.txt')):
             return None
         if p == '/':
             return redirect('/loja/', code=302)
+        # QR Code impresso nas lojas aponta pra opao.online/menu (dono
+        # 07/10/2026): cardápio da LOJA, público.
+        if p in ('/menu', '/menu/'):
+            return redirect('/loja/menu', code=302)
         abort(404)
 
     @app.before_request

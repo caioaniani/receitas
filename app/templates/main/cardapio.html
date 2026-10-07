@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>O Pão — Padaria Artesanal</title>
+<title>{% if publico %}Cardápio — {% endif %}O Pão — Padaria Artesanal</title>
 <meta name="description" content="Padaria artesanal no Brooklin. Pão de fermentação natural, croissants, café e mais."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet"/>
@@ -373,6 +373,7 @@ footer p { margin: 0; }
 
 {% set tipos_label = {'atacado': 'Atacado', 'loja': 'Loja', 'site': 'Site/Delivery'} %}
 
+{% if not publico %}
 <div class="toolbar">
     <span>{{ tipos_label.get(tipo, 'Atacado') }}</span>
     <a href="{{ url_for('main.cardapio', tipo='atacado') }}" class="tipo-btn {% if tipo == 'atacado' %}active{% endif %}">Atacado</a>
@@ -404,6 +405,7 @@ footer p { margin: 0; }
     <a href="{{ url_for('main.cardapio_pdf_export', tipo=tipo, formato='mobile') }}" class="tipo-btn"
        target="_blank" title="Página estreita, ideal pra mandar por WhatsApp"><i class="bi bi-phone"></i> PDF celular</a>
 </div>
+{% endif %}
 
 <section class="hero">
     <div class="hero-content">

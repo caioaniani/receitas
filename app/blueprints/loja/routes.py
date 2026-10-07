@@ -516,6 +516,9 @@ def _gate_acesso():
             # expoem dado sensivel (manifest e estatico; SW e script).
             'loja.pwa_manifest_loja',
             'loja.pwa_service_worker_loja',
+            # Cardápio da LOJA pelo QR Code (opao.online/menu, 07/10/2026):
+            # público em qualquer estado de cutover — é o cardápio impresso.
+            'loja.menu',
     ):
         return None
     from app.utils import host_atual_eh_loja
@@ -1805,3 +1808,15 @@ def sitemap():
     linhas.append('</urlset>')
     return ('\n'.join(linhas), 200,
             {'Content-Type': 'application/xml; charset=utf-8'})
+
+
+@loja_bp.route('/menu')
+def menu():
+    """Cardápio da LOJA para o cliente que escaneia o QR (dono 07/10/2026:
+    "esse cardápio precisa aparecer para os clientes quando escanearem o QR
+    Code, a página escaneada é https://opao.online/menu"). Mesmo conteúdo
+    de /cardapio?tipo=loja (fonte única `contexto_cardapio`), sem a barra
+    de administração."""
+    from app.blueprints.main.routes import contexto_cardapio
+    return render_template('main/cardapio.html', publico=True,
+                           **contexto_cardapio('loja'))
