@@ -265,3 +265,60 @@ def separar_cestas_de_lanches():
     resumo['ficam_em_cestas'] = sorted(p.nome for p in produtos
                                        if (p.categoria or '').strip() == 'Cestas')
     return resumo
+
+
+# Dono 07/10/2026: "O que não tem no cardápio remover o preço pra não mostrar
+# no menu". Itens com preço de loja que o cardápio de papel não tem. O
+# produto continua ativo (caixa, estoque e site intactos); só sai do QR.
+# Mantidos de propósito: Queijo quente no cranberry ("Francês e cranberry
+# mantém") e os chocolates por sabor Padre/Toddy quente e frio (linhas do
+# papel) — sai o "Chocolate Quente" genérico, que duplicava a linha.
+SEM_PRECO_LOJA = (
+    ('receita', 'Geleia de Morango'),
+    ('produto', 'Granola Artesanal 500g'),
+    ('produto', 'Salada de Frutas 100g'),
+    ('produto', 'Chocolate do Toddy Frio Desnatado'),
+    ('produto', 'Chocolate do Toddy Frio leite vegetal'),
+    ('produto', 'Chocolate do padre Frio Leite vegetal'),
+    ('produto', 'Chocolate do padre Frio desnatado'),
+    ('produto', 'Chocolate do Toddy Quente leite vegetal'),
+    ('produto', 'Chocolate do padre Quente Desnatado'),
+    ('produto', 'Chocolate do padre quente Leite vegetal'),
+    ('produto', 'Suco verde 1 Litro'),
+    ('produto', 'Cappuccino leite vegetal com Chocolate Belga'),
+    ('produto', 'Chocolate Quente'),
+    ('receita', 'Baguette de mussarela e calabresa'),
+    ('produto', 'Misto branco no cranberry'),
+    ('produto', 'Misto no cranberry'),
+    ('produto', 'Peito de peru queijo branco no cranberry'),
+    ('produto', 'Queijo branco no cranberry'),
+    ('produto', 'Cranberry na chapa com manteiga'),
+    ('produto', 'Cranberry na chapa com manteiga e requeijão'),
+    ('produto', 'Mentos Pure Garrafa Fresh Mint 335g'),
+    ('receita', 'Choconana'),
+    ('receita', 'Cinnamon Roll Doce de leite'),
+    ('receita', 'Croissant bicolor'),
+    ('receita', 'Pain au chocolat Bicolor'),
+    ('receita', 'Danish de Maçã'),
+    ('receita', 'Danish de alho poró'),
+)
+
+
+def tirar_do_cardapio_o_que_nao_esta_no_papel():
+    """Zera `preco_loja` (único campo tocado). O preço antigo vai no resumo
+    (marker do seed) para restaurar se o dono pedir."""
+    resumo = {'removidos': [], 'ja_sem_preco': [], 'nao_achados': []}
+    receitas = Receita.ativas().all()
+    produtos = Produto.query.filter(Produto.ativo.is_(True)).all()
+    for kind, nome in SEM_PRECO_LOJA:
+        achados = _achar(receitas if kind == 'receita' else produtos, nome)
+        if not achados:
+            resumo['nao_achados'].append(nome)
+        for item in achados:  # homônimos (2x Misto branco no cranberry) vão juntos
+            if item.preco_loja is None:
+                resumo['ja_sem_preco'].append(nome)
+                continue
+            resumo['removidos'].append(f'{kind[0]}{item.id} {nome}={item.preco_loja}')
+            item.preco_loja = None
+    db.session.flush()
+    return resumo

@@ -124,6 +124,7 @@ def _migrate(app):
         _seed_cardapio_loja_2026_10_v3(app)
         _seed_cardapio_loja_2026_10_v4(app)
         _seed_cardapio_loja_2026_10_v5(app)
+        _seed_cardapio_loja_2026_10_v6(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1076,6 +1077,30 @@ def _seed_teto_producao_brioche(app):
                     'em %d receita(s)', setados, mantidos, len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed teto producao brioche): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_cardapio_loja_2026_10_v6(app):
+    """UMA VEZ (dono 07/10/2026: "O que nao tem no cardapio remover o preco
+    pra nao mostrar no menu"): zera preco_loja dos itens fora do cardapio de
+    papel. Marker guarda o preco antigo de cada um (restauravel)."""
+    try:
+        from app.models import AppConfig
+        from app.services import cardapio_loja_2026_10 as svc
+        chave = 'seed_cardapio_loja_2026_10_v6'
+        if AppConfig.get(chave):
+            return
+        r = svc.tirar_do_cardapio_o_que_nao_esta_no_papel()
+        AppConfig.set(chave, ' | '.join(f'{k}={";".join(v)}' for k, v in r.items()))
+        db.session.commit()
+        if r['nao_achados']:
+            logger.error('seed cardapio loja v6: nao achados %s', r['nao_achados'])
+        logger.info('seed cardapio loja v6: %s', r)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed cardapio loja v6): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001

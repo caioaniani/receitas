@@ -204,3 +204,24 @@ def test_separa_cestas_de_lanches(app):
     assert cat['Queijo Quente no Francês'] == {'Lanchinhos'}  # dono já mudou: fica
     assert r['movidos'] == 5 and r['ficam_em_cestas'] == ['Box Mimo']
     assert 'Queijo Quente no Francês' in r['ja_fora']
+
+
+def test_tira_do_cardapio_o_que_nao_esta_no_papel(app):
+    choconana = _rec('Choconana', preco_loja=29.0)
+    croissant = _rec('Croissant Tradicional', preco_loja=21.0)
+    db.session.add_all([
+        Produto(nome='Misto branco no cranberry', ativo=True, preco_loja=27.0),
+        Produto(nome='Misto branco no cranberry', ativo=True, preco_loja=32.0),
+        Produto(nome='Queijo quente no cranberry', ativo=True, preco_loja=35.0),
+        Produto(nome='Granola Artesanal 500g', ativo=True, preco_loja=56.0,
+                preco_site=56.0)])
+    db.session.commit()
+    r = svc.tirar_do_cardapio_o_que_nao_esta_no_papel()
+    db.session.commit()
+    assert choconana.preco_loja is None and croissant.preco_loja == 21.0
+    assert all(p.preco_loja is None
+               for p in Produto.query.filter_by(nome='Misto branco no cranberry'))
+    assert Produto.query.filter_by(nome='Queijo quente no cranberry').one().preco_loja == 35.0
+    granola = Produto.query.filter_by(nome='Granola Artesanal 500g').one()
+    assert granola.preco_loja is None and granola.preco_site == 56.0 and granola.ativo
+    assert f'r{choconana.id} Choconana=29.0' in r['removidos'] and len(r['removidos']) == 4
