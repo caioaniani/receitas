@@ -119,6 +119,7 @@ def _migrate(app):
         _seed_fichas_producao_2026_10(app)
         _seed_kit_dia_criancas_2026(app)
         _seed_kit_dia_criancas_d2_fiscal(app)
+        _seed_cardapio_loja_2026_10(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1071,6 +1072,33 @@ def _seed_teto_producao_brioche(app):
                     'em %d receita(s)', setados, mantidos, len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed teto producao brioche): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_cardapio_loja_2026_10(app):
+    """UMA VEZ (dono 07/10/2026: "Cadastrar e Atualizar precos e cadastrar
+    produtos que nao temos ainda, lembrando que e cardapio de loja"). Acerta
+    `preco_loja` pelo cardapio de papel e cria Guarana, Adicional de
+    Manteiga e Queijo Quente no Croissant. Servico `cardapio_loja_2026_10`;
+    marker com o resumo (inclusive divergentes/nao achados)."""
+    try:
+        from app.models import AppConfig
+        from app.services import cardapio_loja_2026_10 as svc
+        chave = 'seed_cardapio_loja_2026_10'
+        if AppConfig.get(chave):
+            return
+        r = svc.aplicar()
+        AppConfig.set(chave, ' | '.join(
+            f'{k}={",".join(v) if isinstance(v, list) else v}' for k, v in r.items()))
+        db.session.commit()
+        if r['divergentes'] or r['nao_achados'] or 'nao_criado' in r['qq_croissant']:
+            logger.error('seed cardapio loja: pendencias %s', r)
+        logger.info('seed cardapio loja: %s', r)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed cardapio loja): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001
