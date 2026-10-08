@@ -1317,3 +1317,24 @@ def test_catalogo_precos_lista_ativos_com_precos(app):
     d = app.test_client().get('/api/claude/catalogo-precos?busca=coca&composicao=1',
                               headers=h).get_json()
     assert d['itens'][0]['composicao'] == []
+
+
+def test_fornecedores_conta_ativos_e_inativos(app):
+    from app.extensions import db
+    from app.models import Fornecedor
+    with app.app_context():
+        db.session.add_all([Fornecedor(nome='A', ativo=True),
+                            Fornecedor(nome='B', ativo=True),
+                            Fornecedor(nome='C', ativo=False)])
+        db.session.commit()
+        app.config['CLAUDE_API_TOKEN'] = 'tok-forn'
+        c = app.test_client()
+        h = {'Authorization': 'Bearer tok-forn'}
+        d = c.get('/api/claude/fornecedores', headers=h).get_json()
+        assert (d['ativos'], d['inativos'], d['total']) == (2, 1, 3)
+        assert 'fornecedores' not in d
+        d = c.get('/api/claude/fornecedores?lista=1', headers=h).get_json()
+        assert [f['nome'] for f in d['fornecedores']] == ['A', 'B']
+        d = c.get('/api/claude/fornecedores?lista=1&todos=1', headers=h).get_json()
+        assert len(d['fornecedores']) == 3
+        assert c.get('/api/claude/fornecedores').status_code == 401

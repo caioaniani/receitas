@@ -2561,6 +2561,32 @@ def drivers():
                    drivers=itens)
 
 
+@claude_api_bp.route('/fornecedores')
+@_claude_auth_required
+def fornecedores():
+    """SONDA read-only do cadastro de fornecedores (08/10/2026, dono:
+    "quantos fornecedores eu tenho?" -> "faz dos ativos").
+
+    COBERTURA: so a tabela `fornecedor` (tela de Fornecedores). Emitente de
+    NF lido pela IA em Contas a Pagar que nunca foi cadastrado NAO entra
+    aqui — para esse lado use /contas-pagar-itens (modo descoberta).
+
+    Default = so ativos; ?todos=1 lista tambem os inativos; ?lista=1 devolve
+    os nomes (sem telefone/e-mail/CNPJ: so contagem e nome)."""
+    from app.models import Fornecedor
+
+    todos = Fornecedor.query.order_by(Fornecedor.nome).all()
+    ativos = [f for f in todos if f.ativo is not False]
+    inativos = [f for f in todos if f.ativo is False]
+    out = dict(ok=True, ativos=len(ativos), inativos=len(inativos),
+               total=len(todos))
+    if request.args.get('lista') == '1':
+        lista = todos if request.args.get('todos') == '1' else ativos
+        out['fornecedores'] = [{'id': f.id, 'nome': f.nome,
+                                'ativo': f.ativo is not False} for f in lista]
+    return jsonify(**out)
+
+
 @claude_api_bp.route('/ordens-producao')
 @_claude_auth_required
 def ordens_producao():

@@ -726,6 +726,10 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   "não enviou na filial"): envios da lista de fermentação por loja (estado,
   código do Slack, texto), histórico, cálculo atual por loja e, com `slack=1`,
   se o aplicativo é membro de cada canal de destino. Só leitura.
+- `GET /api/claude/fornecedores?lista=1&todos=1` (08/10/2026, dono: "quantos
+  fornecedores eu tenho?"): contagem de ativos/inativos da tabela
+  `fornecedor` (e nomes com `lista=1`). COBERTURA: só o cadastro — emitente
+  de NF nunca cadastrado fica de fora (use `contas-pagar-itens`). Só leitura.
 - `GET /api/claude/pedidos-revenda` (01/10/2026): a lista do dry-run de
   `/admin/pedidos-revenda` (Produto que a indústria não fornece em pedido
   loja→indústria pendente/confirmado com entrega a partir de amanhã, com
