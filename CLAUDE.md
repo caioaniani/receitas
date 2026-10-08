@@ -250,6 +250,16 @@ lança a produção confirma.
   lançada depois da falta. Testes: `tests/test_faltas_saida_industria.py`.
   Manual (DIÁRIO).
 
+**Zerar congelados para recontagem (dono, 08/10/2026)**: "tem muito erro,
+vamos acompanhar de perto". `GET /admin/congelados-zerar` (owner; dry-run;
+`?executar=1`) zera TODO `EstoqueProducao` com `ajuste_conferencia` assinado
+por linha (massa para folhar pelo `ajustar_contagem_bolas(…, 0)`) e encerra
+as faltas de saída abertas como 'contagem'. Serviço
+`app/services/congelados_zerar.py`. Avisado e escolhido pelo dono: até a
+contagem impressa ser lançada em `/pedidos/congelados/conferencia`, o
+planejamento vê estoque zero e as ordens automáticas saem infladas.
+Testes: `tests/test_congelados_zerar.py`.
+
 **Calculadora da ficha = motor das bateladas (pão francês, 06/10/2026)**:
 o padeiro conferia 12 kg na ficha e via 215 pães; a ordem dizia 237. A
 ordem estava certa (dono confirmou: levain 2,4 kg = 20% da farinha, pão de

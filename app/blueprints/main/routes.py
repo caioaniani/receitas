@@ -3669,6 +3669,25 @@ def acerto_despacho():
     return jsonify(ok=True, **plano)
 
 
+@main_bp.route('/admin/congelados-zerar')
+@owner_required
+def congelados_zerar():
+    """Zera TODO o estoque de congelados da indústria para recontagem manual
+    (owner-only, decisão do dono 08/10/2026 — regras em
+    `app/services/congelados_zerar.py`).
+
+    Sem parâmetro = DRY-RUN (lista o que seria zerado). ?executar=1 zera com
+    movimento de ajuste por linha e encerra as faltas de saída abertas. A
+    contagem impressa entra depois em /pedidos/congelados/conferencia."""
+    from app.services import congelados_zerar as svc
+
+    executar = request.args.get('executar') == '1'
+    resultado = svc.zerar(executar=executar, usuario_id=current_user.id)
+    if executar:
+        db.session.commit()
+    return jsonify(ok=True, **resultado)
+
+
 @main_bp.route('/admin/arquivadas-saldo')
 @owner_required
 def arquivadas_saldo():
