@@ -72,6 +72,24 @@ def _card_b2b(v):
                       for it in v.itens]}
 
 
+def _composicao_producao(it):
+    """(componentes, rotulo) do que o padeiro prepara para um item do site:
+    MENU = a composição que o cliente escolheu; CESTA/KIT = os componentes
+    do cadastro (caso Kit Dia das Crianças, 08/10/2026 — o card mostrava só
+    "1x Kit" e o padeiro não sabia o que produzir); item simples = None.
+    Mesmas fontes da saída de produção (`saida_producao_site.composicao_item`)."""
+    from app.services.cestas import componentes_de_cesta
+    from app.services.loja_estoque_reserva import composicao_escolhida
+    comps = composicao_escolhida(it)
+    if comps:
+        return comps, 'montado pelo cliente:'
+    if it.produto is not None and it.produto.itens:
+        comps = componentes_de_cesta(it.produto)
+        if comps:
+            return comps, 'composição do kit:'
+    return None, None
+
+
 def _card_online(p, itens_saida=None):
     """Pedido do SITE com item SOB ENCOMENDA (produzido pro pedido, D+2):
     aparece na fila do padeiro pra garantir que sera preparado (decisao do
@@ -89,7 +107,6 @@ def _card_online(p, itens_saida=None):
     (`composicao_escolhida`); cesta comum (sem composicao no pedido) segue
     mostrando o nome do cadastro."""
     from app.services.loja_estoque_reserva import (
-        composicao_escolhida,
         item_sob_encomenda,
     )
     if itens_saida is None:
@@ -99,11 +116,11 @@ def _card_online(p, itens_saida=None):
     for it in p.itens:
         if it.id in itens_saida or not item_sob_encomenda(it):
             continue
-        comps = composicao_escolhida(it)
+        comps, rotulo = _composicao_producao(it)
         if comps:
             qtd_item = int(it.quantidade or 1)
             itens.append({'id': it.id, 'qtd': qtd_item, 'nome': it.nome,
-                          'obs': 'montado pelo cliente:'})
+                          'obs': rotulo})
             itens.extend(
                 {'id': f'{it.id}c{i}',
                  'qtd': int(round(qtd_item * float(qtd_por or 0))),
@@ -1137,7 +1154,6 @@ def preparar_json():
     # sempre aparecer (a producao propria e o lembrete que o dono pediu).
     from app.models import PedidoOnline, PedidoOnlineItem, Receita, SaidaProducaoSite
     from app.services.loja_estoque_reserva import (
-        composicao_escolhida,
         item_sob_encomenda,
     )
     itens_online = (PedidoOnlineItem.query.join(PedidoOnline)
@@ -1156,7 +1172,7 @@ def preparar_json():
         # Menu configuravel (fix 31/07/2026): o pre-preparo listava
         # "1x Menu Degustacao" com estado chutado — o padeiro precisa dos
         # MINIS que o cliente escolheu, cada um com o SEU estado_padrao.
-        comps = composicao_escolhida(it)
+        comps, _rotulo = _composicao_producao(it)
         if comps:
             qtd_item = int(it.quantidade or 1)
             for col, comp_id, nome, qtd_por in comps:

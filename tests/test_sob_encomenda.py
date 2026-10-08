@@ -560,6 +560,67 @@ def test_pre_preparo_do_menu_lista_os_minis(app):
         assert 'Menu Degustação dos Minis' not in por_nome
 
 
+def _kit_pago(dias=2, qtd=2):
+    """Kit (cesta de composição FIXA) sob encomenda pago — caso Kit Dia das
+    Crianças, 08/10/2026."""
+    from app.models import PedidoOnline, PedidoOnlineItem, Produto, ProdutoItem
+    brioche = _receita(nome='Mini Brioche Kit', estado_padrao='assado')
+    cookie = _receita(nome='Cookie Kit')
+    kit = Produto(nome='Kit Dia das Crianças', categoria='Cestas',
+                  preco_site=150.0, ativo=True, sob_encomenda=True)
+    db.session.add(kit)
+    db.session.flush()
+    db.session.add_all([
+        ProdutoItem(produto_id=kit.id, tipo='receita', item_nome=brioche.nome,
+                    quantidade=3, receita_id=brioche.id),
+        ProdutoItem(produto_id=kit.id, tipo='receita', item_nome=cookie.nome,
+                    quantidade=2, receita_id=cookie.id)])
+    p = PedidoOnline(codigo=f'KIT{dias}', nome_cliente='Cliente Kit',
+                     email_cliente='k@x.com', modo_entrega='agendada',
+                     status='pago', data_entrega=hoje() + timedelta(days=dias))
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoOnlineItem(pedido_id=p.id, kind='produto',
+                                    produto_id=kit.id, nome=kit.nome,
+                                    preco_unitario=150, quantidade=qtd,
+                                    subtotal=150 * qtd))
+    db.session.commit()
+    return p
+
+
+def test_card_do_kit_lista_o_que_produzir(app):
+    """"1x Kit Dia das Crianças" não diz ao padeiro o que fazer: o card abre
+    o kit nos componentes do cadastro, multiplicados pela quantidade."""
+    from app.blueprints.padeiro.routes import _dados_listas
+    with app.app_context():
+        _kit_pago(dias=2, qtd=2)
+        dados = _dados_listas(hoje(), eh_hoje=True)
+        card = [c for c in dados['a_separar'] if c['tipo'] == 'online'][0]
+        linhas = {i['nome'].lstrip('· '): i['qtd'] for i in card['itens']}
+        assert linhas.get('Mini Brioche Kit') == 6
+        assert linhas.get('Cookie Kit') == 4
+        assert card['itens'][0]['obs'] == 'composição do kit:'
+
+
+def test_pre_preparo_do_kit_lista_os_componentes(app):
+    from app.models import Usuario
+    with app.app_context():
+        _kit_pago(dias=1, qtd=1)
+        u = Usuario(nome='Pad', login='padk', papel='padeiro')
+        u.set_senha('x' * 8)
+        db.session.add(u)
+        db.session.commit()
+        c = app.test_client()
+        with c.session_transaction() as s:
+            s['_user_id'] = str(u.id)
+            s['_fresh'] = True
+        data = c.get(f'/padeiro/preparar.json?data={hoje().isoformat()}').get_json()
+        por_nome = {x['nome']: x['qtd'] for x in data['itens']}
+        assert por_nome.get('Mini Brioche Kit') == 3
+        assert por_nome.get('Cookie Kit') == 2
+        assert 'Kit Dia das Crianças' not in por_nome
+
+
 # ── Plano-do-dia no CHECKOUT e na RESERVA (contrato novo 07/08/2026) ──
 
 def test_checkout_barra_encomenda_em_dia_zerado_no_plano(app):
