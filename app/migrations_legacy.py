@@ -2078,6 +2078,9 @@ def _migrate_postgres(app):
                 # Venda no site com HORÁRIO DE ENCERRAMENTO (dono 07/10/2026,
                 # Kit Dia das Crianças "até dia 12 às 18:00"). NULL = sem limite.
                 'site_ate': 'ALTER TABLE produto ADD COLUMN IF NOT EXISTS site_ate TIMESTAMP',
+                # Prazo de encomenda POR PRODUTO (dono 11/10/2026, Kit Dia das
+                # Crianças D+1). NULL = padrão ENCOMENDA_LEAD_DIAS (2).
+                'encomenda_lead_dias': 'ALTER TABLE produto ADD COLUMN IF NOT EXISTS encomenda_lead_dias INTEGER',
             }
             for col, sql in migrações_produto.items():
                 if col not in cols_prod:
@@ -4007,6 +4010,8 @@ def _migrate_sqlite(app):
                        "BOOLEAN NOT NULL DEFAULT 0")
     if cols_prod and 'site_ate' not in cols_prod:
         cursor.execute("ALTER TABLE produto ADD COLUMN site_ate TIMESTAMP")
+    if cols_prod and 'encomenda_lead_dias' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN encomenda_lead_dias INTEGER")
 
     # Migração receita.modo_preparo
     if 'modo_preparo' not in colunas:
