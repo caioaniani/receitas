@@ -69,16 +69,18 @@ DIAS_AGENDA = 14
 # Sob encomenda (dono 21/07/2026): item marcado `sob_encomenda` só pode ser
 # entregue/retirado a partir de D+2 (dois dias à frente, desde a janela das
 # 08:00). Ex: comprou na segunda → entrega/retirada válida a partir de
-# quarta. FIXO (decisão do dono: não varia por receita). O carrinho todo
-# herda o MAIOR lead dos seus itens (uma data de entrega por pedido).
+# quarta. É o PADRÃO; desde 11/10/2026 o Produto pode ter prazo próprio
+# (`Produto.encomenda_lead_dias`, lido por `loja_catalogo.lead_encomenda`).
+# O carrinho todo herda o MAIOR lead dos seus itens (uma data por pedido).
 ENCOMENDA_LEAD_DIAS = 2
 
 
 def lead_do_carrinho(itens_raw):
-    """Lead mínimo (em dias) que o carrinho exige: ENCOMENDA_LEAD_DIAS se
-    QUALQUER item for `sob_encomenda`, senão 0. Recebe a lista crua
+    """Lead mínimo (em dias) que o carrinho exige: o MAIOR prazo dos itens
+    sob encomenda (`loja_catalogo.lead_do_item`), senão 0. Recebe a lista crua
     [{kind,id,...}] (mesma de `montar_itens`) e consulta o catálogo. Best-
     effort: item inválido/fora de catálogo é ignorado (não força lead)."""
+    lead = 0
     for raw in (itens_raw if isinstance(itens_raw, list) else []):
         if not isinstance(raw, dict):
             continue
@@ -87,9 +89,8 @@ def lead_do_carrinho(itens_raw):
             item_id = int(raw.get('id'))
         except (TypeError, ValueError):
             continue
-        if loja_catalogo.item_e_sob_encomenda(kind, item_id):
-            return ENCOMENDA_LEAD_DIAS
-    return 0
+        lead = max(lead, loja_catalogo.lead_do_item(kind, item_id))
+    return lead
 
 
 def lojas_retirada():
@@ -510,6 +511,7 @@ def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
             # carrinho (D+2). Desde 07/08/2026 a checagem do plano-do-dia
             # vale pra encomenda tambem (não é mais pulada).
             'sob_encomenda': sob_encomenda,
+            'lead_dias': int(cat.get('lead_dias') or 0),
             # Menu configurável (26/07): a escolha JÁ sanitizada. None em
             # item comum. É ela que o pedido persiste e que a baixa de
             # estoque explode — nunca o cadastro da cesta.
@@ -868,12 +870,13 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
     # pedido inteiro só entrega/retira a partir de D+2 (o item precisa de
     # antecedência pra ser produzido) e NÃO pode express (same-day). O lead
     # do carrinho é o MAIOR dos itens — uma data de entrega por pedido.
-    lead_encomenda = (ENCOMENDA_LEAD_DIAS
-                      if any(it.get('sob_encomenda') for it in itens) else 0)
+    lead_encomenda = max(
+        [(it.get('lead_dias') or ENCOMENDA_LEAD_DIAS)
+         for it in itens if it.get('sob_encomenda')] or [0])
     if lead_encomenda > 0 and modo == 'express':
         erros.append('Este pedido tem item sob encomenda e não pode ser '
                      'entrega express (no mesmo dia). Escolha entrega '
-                     'agendada ou retirada, a partir de D+2.')
+                     f'agendada ou retirada, a partir de D+{lead_encomenda}.')
 
     # ── Por modo: endereço/loja + frete (servidor manda) ───────────────
     loja_retirada_id = None
@@ -1044,7 +1047,8 @@ def criar_pedido(form, itens_raw, *, base=None, commit=True,
         if data_str not in disponiveis:
             if lead_encomenda > 0:
                 erros.append('Item sob encomenda: escolha uma data a partir '
-                             'de D+2 (dois dias à frente).')
+                             f'de D+{lead_encomenda} ({lead_encomenda} '
+                             f'dia{"s" if lead_encomenda > 1 else ""} à frente).')
             else:
                 erros.append('Escolha uma data de entrega válida.')
         else:

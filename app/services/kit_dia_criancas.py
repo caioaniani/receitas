@@ -188,3 +188,18 @@ def ajustar_d2_e_fiscal():
     m_kit.confirmado_em = agora()
     resumo.update(sku=sku, sku_motivo='copiado_do_abraco', abraco_id=abraco.id)
     return resumo
+
+
+def liberar_d1():
+    """Dono 11/10/2026: "Pode liberar o kit do dia das crianças para o pessoal
+    comprar hoje e ser entregue amanhã". Mantém `sob_encomenda` (produção do
+    padeiro, demanda firme, não abate prateleira, sem express) e põe o prazo
+    em 1 dia (`Produto.encomenda_lead_dias`). Sem commit."""
+    kit = _unico(Produto.query.all(), NOME_KIT, 'Produto')
+    if not kit:
+        raise ValueError(f'Produto "{NOME_KIT}" não encontrado.')
+    if not kit.sob_encomenda:
+        raise ValueError(f'"{NOME_KIT}" não está sob encomenda — nada a ajustar.')
+    antes = kit.encomenda_lead_dias
+    kit.encomenda_lead_dias = 1
+    return {'kit_id': kit.id, 'lead_antes': antes, 'lead': 1}

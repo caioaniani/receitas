@@ -119,6 +119,7 @@ def _migrate(app):
         _seed_fichas_producao_2026_10(app)
         _seed_kit_dia_criancas_2026(app)
         _seed_kit_dia_criancas_d2_fiscal(app)
+        _seed_kit_dia_criancas_d1(app)
         _seed_cardapio_loja_2026_10(app)
         _seed_cardapio_loja_2026_10_v2(app)
         _seed_cardapio_loja_2026_10_v3(app)
@@ -1328,6 +1329,35 @@ def _seed_kit_dia_criancas_d2_fiscal(app):
         logger.info('seed kit d2/fiscal: %s', r)
     except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
         logger.warning('migrate skip (seed kit d2/fiscal): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_kit_dia_criancas_d1(app):
+    """UMA VEZ (dono 11/10/2026: "Pode liberar o kit do dia das criancas
+    para o pessoal comprar hoje e ser entregue amanha"): o kit segue sob
+    encomenda (producao do padeiro, nao abate prateleira) com prazo de 1 dia.
+    Roda DEPOIS do d2/fiscal (que marca sob_encomenda). Marker com o resumo;
+    nao ressuscita — edicao do dono no cadastro manda."""
+    try:
+        from app.models import AppConfig
+        from app.services import kit_dia_criancas as svc
+        chave = 'seed_kit_dia_criancas_d1'
+        if AppConfig.get(chave) or not AppConfig.get('seed_kit_dia_criancas_d2_fiscal'):
+            return
+        try:
+            r = svc.liberar_d1()
+        except ValueError as e:
+            db.session.rollback()
+            logger.error('seed kit d1 NAO aplicado: %s', e)
+            return
+        AppConfig.set(chave, ' '.join(f'{k}={v}' for k, v in r.items()))
+        db.session.commit()
+        logger.info('seed kit d1: %s', r)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed kit d1): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001

@@ -46,7 +46,7 @@ disponibilidade. Nunca invente produto, preço, peso, composição ou data.
 - Pergunte só o necessário (qual item, quantas unidades). Se o pedido estiver \
 claro, monte o carrinho direto.
 - Datas: diga o que o consultar_produtos informar (indisponivel_em, \
-sob_encomenda = pedir com 2 dias de antecedência). Não confirme data, horário \
+sob_encomenda = pedir com antecedencia_dias de antecedência). Não confirme data, horário \
 nem entrega: quem confirma é o site, na hora de finalizar.
 - Frete: use o consultar_frete se o cliente perguntar; o valor é estimado e o \
 definitivo aparece no site.
@@ -188,6 +188,7 @@ def consultar_produtos(busca):
             d['fatiavel'] = True
         if item.get('sob_encomenda'):
             d['sob_encomenda'] = True
+            d['antecedencia_dias'] = int(item.get('lead_dias') or 2)
         menu = item.get('menu')
         if menu:
             d['menu'] = {

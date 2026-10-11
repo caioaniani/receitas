@@ -81,7 +81,7 @@
     {% if item.sob_encomenda %}
     <p class="produto-encomenda" style="background:#fffdf3;border:1px solid #e6cf7a;border-radius:10px;padding:8px 12px;font-size:14px;color:#8a6d0b;margin:8px 0;">
       📅 <strong>Sob encomenda</strong> — preparado especialmente pro seu
-      pedido. A entrega/retirada começa <strong>2 dias</strong> após a compra
+      pedido. A entrega/retirada começa <strong>{{ item.lead_dias or 2 }} dia{{ 's' if (item.lead_dias or 2) > 1 }}</strong> após a compra
       (você escolhe a data no checkout).
     </p>
     {% endif %}

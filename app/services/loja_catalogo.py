@@ -88,6 +88,7 @@ def _serializar_receita(r):
         # em 07/08/2026): so vende pra data >= D+2, e produzido pro pedido
         # e a venda nao abate EstoqueLoja fisico.
         'sob_encomenda': bool(getattr(r, 'sob_encomenda', False)),
+        'lead_dias': lead_encomenda(r),
         'preco': float(r.preco_site) if r.preco_site else None,
         'imagem': r.imagem_dropbox_url or r.imagem_url or '',
         # descricao_seo: editorial, gerada com IA e revisada pelo dono em
@@ -189,6 +190,7 @@ def _serializar_produto(p):
         'categoria': p.categoria or 'Outros',
         # Sob encomenda D+2 (espelho da receita) — ver _serializar_receita.
         'sob_encomenda': bool(getattr(p, 'sob_encomenda', False)),
+        'lead_dias': lead_encomenda(p),
         'preco': float(p.preco_site) if p.preco_site else None,
         'imagem': p.imagem_dropbox_url or p.imagem_url or '',
         # descricao_seo (editorial) prevalece sobre `descricao` curta — vai
@@ -388,7 +390,8 @@ def anotar_esgotado(itens):
             from datetime import timedelta
 
             from app.services.loja_checkout import ENCOMENDA_LEAD_DIAS
-            minimo = dia_hoje + timedelta(days=ENCOMENDA_LEAD_DIAS)
+            minimo = dia_hoje + timedelta(
+                days=it.get('lead_dias') or ENCOMENDA_LEAD_DIAS)
             primeiro = None
             for d in datas:
                 if d < minimo:
@@ -486,6 +489,39 @@ def saldo_do_plano(kind, item_id, data):
     if s is None:
         return None
     return max(0, int(s))
+
+
+LEAD_ENCOMENDA_MAX = 14
+
+
+def lead_encomenda(obj):
+    """Dias de antecedência que o item exige no site: 0 se não é sob
+    encomenda; senão `Produto.encomenda_lead_dias` (dono 11/10/2026, prazo
+    por produto) ou o padrão `loja_checkout.ENCOMENDA_LEAD_DIAS`. Receita não
+    tem a coluna (sempre o padrão). Valor fora de 1..LEAD_ENCOMENDA_MAX no
+    banco cai no padrão — sob encomenda nunca vira mesmo-dia por dado torto.
+    FONTE ÚNICA: catálogo, carrinho, checkout e página do produto."""
+    from app.services.loja_checkout import ENCOMENDA_LEAD_DIAS
+    if not obj or not getattr(obj, 'sob_encomenda', False):
+        return 0
+    v = getattr(obj, 'encomenda_lead_dias', None)
+    if isinstance(v, int) and 1 <= v <= LEAD_ENCOMENDA_MAX:
+        return v
+    return ENCOMENDA_LEAD_DIAS
+
+
+def lead_do_item(kind, item_id):
+    """`lead_encomenda` pelo (kind, id), com o catálogo em lote quando
+    houver (mesmo caminho do `item_e_sob_encomenda`)."""
+    from app.services import loja_leitura
+    leitura = loja_leitura.atual()
+    if leitura and (kind, item_id) in leitura['catalogo']:
+        return int(leitura['catalogo'][(kind, item_id)].get('lead_dias') or 0)
+    if kind == 'receita':
+        return lead_encomenda(Receita.query.get(item_id))
+    if kind == 'produto':
+        return lead_encomenda(Produto.query.get(item_id))
+    return 0
 
 
 def item_e_sob_encomenda(kind, item_id):

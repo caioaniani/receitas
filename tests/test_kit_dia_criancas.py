@@ -168,3 +168,23 @@ def test_sku_definido_por_humano_no_kit_nao_e_sobrescrito(app, admin_user):
     r = kit_dia_criancas.ajustar_d2_e_fiscal()
     assert r['sku_motivo'] == 'kit_ja_tem_sku_definido_por_humano'
     assert tiny_nf.sku_do_item('produto', kit.id) == 'KIT-99'
+
+
+# --- D+1 (dono 11/10/2026: "comprar hoje e ser entregue amanhã") ---
+
+def test_liberar_d1_mantem_sob_encomenda_com_prazo_de_um_dia(app):
+    from app.services import loja_catalogo
+    kit = _kit_e_abraco()
+    kit_dia_criancas.ajustar_d2_e_fiscal()
+    r = kit_dia_criancas.liberar_d1()
+    db.session.commit()
+    assert kit.sob_encomenda is True and kit.encomenda_lead_dias == 1
+    assert r == {'kit_id': kit.id, 'lead_antes': None, 'lead': 1}
+    assert loja_catalogo.lead_encomenda(kit) == 1
+
+
+def test_liberar_d1_recusa_kit_fora_de_encomenda(app):
+    _base()
+    kit_dia_criancas.criar(subir_foto=False)
+    with pytest.raises(ValueError):
+        kit_dia_criancas.liberar_d1()

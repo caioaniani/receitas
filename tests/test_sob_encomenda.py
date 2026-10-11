@@ -755,3 +755,100 @@ def test_divulgacao_de_item_comum_segue_FORA_da_esteira(app):
         _divulgacao(r, qtd=2, dias=0)
         dados = _dados_listas(_hoje(), eh_hoje=True)
         assert not [c for c in dados['a_separar'] if c['tipo'] == 'online']
+
+
+# ── Prazo de encomenda POR PRODUTO (dono 11/10/2026, Kit Dia das Crianças
+#    "comprar hoje e ser entregue amanhã") ────────────────────────────
+
+def _produto_enc(lead=None, nome='Kit Teste'):
+    from app.models import Produto
+    p = Produto(nome=nome, categoria='Cestas', preco_site=120, ativo=True,
+                sob_encomenda=True, encomenda_lead_dias=lead)
+    db.session.add(p)
+    db.session.commit()
+    return p
+
+
+def test_lead_encomenda_por_produto_e_padrao(app):
+    from app.models import Produto
+    from app.services import loja_catalogo
+    with app.app_context():
+        assert loja_catalogo.lead_encomenda(_produto_enc(None, 'A')) == 2
+        assert loja_catalogo.lead_encomenda(_produto_enc(1, 'B')) == 1
+        # dado torto (0 ou acima do teto) nunca vira mesmo-dia: cai no padrão
+        assert loja_catalogo.lead_encomenda(_produto_enc(0, 'C')) == 2
+        assert loja_catalogo.lead_encomenda(_produto_enc(99, 'D')) == 2
+        normal = Produto(nome='N', categoria='Cestas', preco_site=10,
+                         ativo=True, encomenda_lead_dias=1)
+        db.session.add(normal)
+        db.session.commit()
+        assert loja_catalogo.lead_encomenda(normal) == 0
+        assert loja_catalogo.por_id_publicado('produto', normal.id)['lead_dias'] == 0
+
+
+def test_lead_do_carrinho_usa_o_maior_prazo(app):
+    from app.services import loja_checkout
+    with app.app_context():
+        d1 = _produto_enc(1, 'D1')
+        d2 = _receita(nome='Enc D2', sob_encomenda=True)
+        assert loja_checkout.lead_do_carrinho(
+            [{'kind': 'produto', 'id': d1.id}]) == 1
+        assert loja_checkout.lead_do_carrinho(
+            [{'kind': 'produto', 'id': d1.id},
+             {'kind': 'receita', 'id': d2.id}]) == 2
+
+
+def test_criar_pedido_d1_aceita_amanha_e_recusa_hoje_e_express(app):
+    from app.services import loja_checkout
+    with app.app_context():
+        loja = _loja_origem()
+        p = _produto_enc(1)
+        base = datetime(2026, 6, 15, 10, 0)
+        itens = [{'kind': 'produto', 'id': p.id, 'qtd': 1}]
+        amanha = (base.date() + timedelta(days=1)).isoformat()
+        pedido, erros = loja_checkout.criar_pedido(
+            _form_retirada(loja, amanha), itens, base=base)
+        assert erros == [] and pedido.data_entrega == base.date() + timedelta(days=1)
+        pedido, erros = loja_checkout.criar_pedido(
+            _form_retirada(loja, base.date().isoformat(),
+                           email='outra@x.com'), itens, base=base)
+        assert pedido is None and any('D+1' in e for e in erros)
+        form = {'nome': 'Maria Silva', 'email': 'm3@x.com',
+                'cpf': '529.982.247-25', 'aceite_lgpd': '1',
+                'modo_entrega': 'express', **_END_NF}
+        pedido, erros = loja_checkout.criar_pedido(form, itens, base=base)
+        assert pedido is None and any('express' in e.lower() for e in erros)
+
+
+@pytest.mark.loja_host
+def test_pagina_do_produto_d1_abre_amanha(app, monkeypatch):
+    from app.utils import hoje as _hoje
+    with app.app_context():
+        p = _produto_enc(1, 'Caixa Amanha')
+        pid = p.id
+        esperado = (_hoje() + timedelta(days=1)).isoformat()
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    corpo = app.test_client().get(f'/loja/caixa-amanha-p{pid}').get_data(as_text=True)
+    assert f'min="{esperado}"' in corpo
+    assert '<strong>1 dia</strong>' in corpo
+
+
+def test_tela_do_produto_salva_prazo_da_encomenda(app, admin_user):
+    from app.models import Produto
+    p = _produto_enc(None, 'Caixa Y')
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    assert 'name="encomenda_lead_dias"' in c.get(f'/produtos/{p.id}').get_data(as_text=True)
+    app.config['WTF_CSRF_ENABLED'] = False
+    url = f'/produtos/{p.id}/salvar'
+    base = {'nome': 'Caixa Y', 'sob_encomenda': '1'}
+    c.post(url, data={**base, 'encomenda_lead_dias': '1'})
+    assert db.session.get(Produto, p.id).encomenda_lead_dias == 1
+    c.post(url, data={**base, 'encomenda_lead_dias': '0'})       # inválido mantém
+    assert db.session.get(Produto, p.id).encomenda_lead_dias == 1
+    c.post(url, data=base)                                       # campo ausente não mexe
+    assert db.session.get(Produto, p.id).encomenda_lead_dias == 1
+    c.post(url, data={**base, 'encomenda_lead_dias': ''})        # vazio = padrão
+    assert db.session.get(Produto, p.id).encomenda_lead_dias is None

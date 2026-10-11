@@ -1497,7 +1497,7 @@ def produto(slug_completo):
     # checkout aplica (`loja_checkout.datas_disponiveis(lead_dias=…)`).
     # Sem isso o seletor abria em HOJE dizendo "✓ disponível pra essa data"
     # e o cliente só descobria o bloqueio no checkout (26/07/2026).
-    lead = (loja_checkout.ENCOMENDA_LEAD_DIAS
+    lead = (int(item.get('lead_dias') or loja_checkout.ENCOMENDA_LEAD_DIAS)
             if item.get('sob_encomenda') else 0)
     data_min = data_hoje + timedelta(days=lead)
     data_max = data_min + timedelta(days=14)

@@ -95,6 +95,7 @@ def duplicar(id):
         observacao=original.observacao,
         reaproveitavel=original.reaproveitavel,
         sob_encomenda=original.sob_encomenda,
+        encomenda_lead_dias=original.encomenda_lead_dias,
         # Menu configuravel: as travas viajam com a copia (o preco_site nao
         # vem, entao a copia so publica quando o admin revisar).
         **({'menu_configuravel': original.menu_configuravel,
@@ -350,6 +351,19 @@ def salvar_composicao(id):
     # Sob encomenda D+2 (dono 21/07/2026): so vende D+2 no site, produzido pro
     # pedido (nao abate prateleira), entra na producao do padeiro.
     produto.sob_encomenda = bool(request.form.get('sob_encomenda'))
+    # Prazo da encomenda (11/10/2026): só mexe se o campo veio; vazio =
+    # padrão (2 dias); fora de 1..14 ou ilegível mantém o valor com aviso.
+    if 'encomenda_lead_dias' in request.form:
+        from app.services.loja_catalogo import LEAD_ENCOMENDA_MAX
+        bruto = (request.form.get('encomenda_lead_dias') or '').strip()
+        if not bruto:
+            produto.encomenda_lead_dias = None
+        elif bruto.isdigit() and 1 <= int(bruto) <= LEAD_ENCOMENDA_MAX:
+            produto.encomenda_lead_dias = int(bruto)
+        else:
+            flash(f'Prazo da encomenda inválido ({bruto}): use de 1 a '
+                  f'{LEAD_ENCOMENDA_MAX} dias. Valor anterior mantido.',
+                  'warning')
     # Vender no site até (07/10/2026): só mexe se o campo veio no form (POST
     # antigo/legado não apaga); vazio = sem limite; ilegível mantém o valor.
     if 'site_ate' in request.form:

@@ -468,6 +468,12 @@ class Produto(db.Model):
     # naive, `app.utils.agora()`) o item sai da vitrine e o checkout recusa.
     # NULL = sem limite. ALTER em migrations_legacy (commit 1, de6a794).
     site_ate = db.Column(db.DateTime, nullable=True)
+    # Prazo de encomenda POR PRODUTO (dono 11/10/2026, Kit Dia das Crianças
+    # "comprar hoje e ser entregue amanhã"): dias de antecedência quando
+    # `sob_encomenda`. NULL = padrão `loja_checkout.ENCOMENDA_LEAD_DIAS` (2).
+    # Fonte única de leitura: `loja_catalogo.lead_encomenda`. ALTER em
+    # migrations_legacy (commit 1, de8242b).
+    encomenda_lead_dias = db.Column(db.Integer, nullable=True)
     # ── Menu degustacao CONFIGURAVEL no site (26/07/2026, pedido do dono) ──
     # Cesta cujo cliente ajusta as quantidades de cada componente: a
     # `ProdutoItem.quantidade` do cadastro vira a PRE-SELECAO, o total tem

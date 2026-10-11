@@ -109,7 +109,7 @@
               endereço (mais distante), pode levar até 2 horas.
             {% elif encomenda_no_carrinho %}
               Indisponível: seu carrinho tem item sob encomenda (só a partir
-              de D+2).
+              de D+{{ encomenda_lead_dias }}).
             {% elif hoje_fechado %}
               Hoje não estamos entregando — escolha uma
               <strong>data mais pra frente</strong>.
