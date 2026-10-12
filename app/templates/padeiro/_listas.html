@@ -5,6 +5,17 @@
 <p class="itens">{% for it in c.itens %}{{ it.qtd }}× {{ it.nome }}{% if it.obs %} <span class="obs-item">→ {{ it.obs }}</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
 {%- endif -%}
 {% endmacro %}
+{% macro encomendas_junto(c) %}
+{%- if c.encomendas %}
+<div class="encomendas-junto">
+  <p class="online-nota">🌐 Vão junto neste pedido — encomendas do site:</p>
+  {% for e in c.encomendas %}
+  <p class="meta">{{ e.codigo }} · {{ e.titulo[7:] if e.titulo.startswith('Site · ') else e.titulo }}{% if e.modo %} · {{ e.modo }}{% endif %}</p>
+  {{ lista_itens(e) }}
+  {% endfor %}
+</div>
+{%- endif %}
+{% endmacro %}
 {% if n_repetidos %}
 <form method="POST" action="{{ url_for('padeiro.juntar_repetidos') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -81,13 +92,18 @@
     <p class="loja">🌐 {{ c.titulo }}</p>
     <p class="meta">Encomenda site {{ c.codigo }}{% if c.data_entrega %} · entrega {{ c.data_entrega.strftime('%d/%m') }}{% endif %}{% if c.modo %} · {{ c.modo }}{% endif %}</p>
     {{ lista_itens(c) }}
-    <p class="online-nota">Produzir pro pedido (sai pelo painel de entregas — não separar aqui).</p>
+    {% if c.sem_pedido_loja %}
+    <p class="online-nota">⚠ Entrega no dia e {{ c.sem_pedido_loja }}: separar e mandar à parte{% if c.vai_com %} para {{ c.vai_com }}{% endif %}.</p>
+    {% else %}
+    {% if c.vai_com %}<p class="online-nota">Produzir pro pedido. No dia da entrega vai junto com o pedido da {{ c.vai_com }}.</p>{% else %}<p class="online-nota">Produzir pro pedido (sai pelo painel de entregas — não separar aqui).</p>{% endif %}
+    {% endif %}
   </div>
   {% else %}
   <div class="card{% if c.tipo == 'b2b' %} b2b{% endif %}" data-order="{{ c.tipo }}-{{ c.id }}">
     <p class="loja">{{ c.titulo }}</p>
     <p class="meta">{{ 'Venda B2B' if c.tipo == 'b2b' else 'Pedido' }} #{{ c.id }}{% if c.data_entrega %} · entrega {{ c.data_entrega.strftime('%d/%m') }}{% endif %} <span class="chk-count" data-chk-count></span></p>
     {{ lista_itens(c, marcar=true) }}
+    {{ encomendas_junto(c) }}
     <form method="POST" action="{{ url_for('padeiro.separar_b2b', id=c.id) if c.tipo == 'b2b' else url_for('padeiro.separar', id=c.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="data" value="{{ dia.isoformat() }}">
@@ -109,6 +125,7 @@
     <p class="loja">{{ c.titulo }}</p>
     <p class="meta">{{ 'Venda B2B' if c.tipo == 'b2b' else 'Pedido' }} #{{ c.id }}{% if c.data_entrega %} · entrega {{ c.data_entrega.strftime('%d/%m') }}{% endif %}</p>
     {{ lista_itens(c) }}
+    {{ encomendas_junto(c) }}
     {% if c.tipo == 'b2b' %}
     <form method="POST" action="{{ url_for('padeiro.entregar_b2b', id=c.id) }}"
           onsubmit="return confirm('Marcar venda B2B #{{ c.id }} como entregue?')">

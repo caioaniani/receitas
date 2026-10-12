@@ -1068,8 +1068,20 @@ def _executar_envio_pedido(pedido, user, ref_extra=None):
     falha pra caller fazer rollback. `ref_extra` adiciona texto na
     referencia do movimento (ex: 'via QR / motorista Joao').
     """
+    if pedido.status != 'separado':
+        return False, f'Pedido precisa estar separado (atual: {pedido.status}).'
+    # Encomendas do site do dia vão junto com o pedido da loja (dono
+    # 12/10/2026). Registradas ANTES de travar a loja: a saída do site trava
+    # global → pedido do site → estoque (→ loja), e a ordem inversa aqui
+    # podia travar com o motorista iniciando a rota ao mesmo tempo.
+    from app.services import encomendas_loja
+    junto = encomendas_loja.registrar_saida_junto(pedido, getattr(user, 'id', None))
+    extra = encomendas_loja.texto_saida_junto(junto)
+    extra = f' {extra}' if extra else ''
+
     pedido = reler_pedido_travado(pedido)
     if pedido.status != 'separado':
+        db.session.rollback()  # desfaz a saída das encomendas acima
         return False, f'Pedido precisa estar separado (atual: {pedido.status}).'
 
     # Motor único de baixa (03/07/2026): get-or-create da linha + movimento
@@ -1083,8 +1095,8 @@ def _executar_envio_pedido(pedido, user, ref_extra=None):
     db.session.commit()
     if faltas:
         from app.services.pedido_estoque import texto_faltas_saida
-        return True, f'{_MSG_SAIDA_COM_FALTA} — {texto_faltas_saida(faltas)}'
-    return True, 'Pedido em transporte. Estoque da industria baixado.'
+        return True, f'{_MSG_SAIDA_COM_FALTA} — {texto_faltas_saida(faltas)}{extra}'
+    return True, f'Pedido em transporte. Estoque da industria baixado.{extra}'
 
 
 @pedidos_bp.route('/<int:id>/atribuir-motorista', methods=['POST'])
@@ -1567,6 +1579,10 @@ def _aplicar_voltar_status(pedido, usuario_id):
         # vira estoque fantasma no estorno (fix 03/07/2026).
         from app.services.pedido_estoque import estornar_industria_pedido
         estornar_industria_pedido(pedido, usuario_id, motivo='voltar status')
+        # As encomendas do site que saíram junto voltam para a indústria e
+        # para a TV (12/10/2026).
+        from app.services.encomendas_loja import estornar_saida_junto
+        estornar_saida_junto(pedido, usuario_id, motivo='voltar status')
         novo_status = 'separado'
     elif status_atual == 'separado':
         novo_status = 'confirmado'

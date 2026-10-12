@@ -260,6 +260,22 @@ contagem impressa ser lançada em `/pedidos/congelados/conferencia`, o
 planejamento vê estoque zero e as ordens automáticas saem infladas.
 Testes: `tests/test_congelados_zerar.py`.
 
+**Encomenda do site vai junto com o pedido da loja (dono, 12/10/2026)**:
+"na TV tem que carregar o pedido de daqui 2 dias, depois o de daqui um dia e
+no dia do pedido tem que ir para a loja Anesio junto com o pedido que a loja
+faz". Serviço `app/services/encomendas_loja.py`. TV do padeiro: encomenda
+sozinha só de D-2 até a véspera (`JANELA_DIAS`); no dia ela entra no cartão do
+pedido da loja de onde o site baixa (entrega = Anesio; retirada = loja
+escolhida), no de MENOR id ainda por sair (`pedido_destino`, mesma regra na
+TV e na saída). Saída do pedido da loja (QR, Enviar, copilot) registra antes
+da trava da loja a `SaidaProducaoSite` (origem `pedido_loja #id`) — baixa da
+INDÚSTRIA, nunca do estoque da loja; a entrega posterior não baixa de novo.
+Voltar o pedido de "em transporte"/cancelar depois de sair desfaz
+(`estornar_saida_junto`, ref "Estorno encomenda site …", fora do LIKE do
+estorno da loja). Kit de café (`EntregaKit`) e cortesia não vão junto. Sem
+pedido da loja no dia (ou ele já saiu sem ela) o cartão fica sozinho com
+aviso. Testes: `tests/test_encomendas_loja.py`.
+
 **Calculadora da ficha = motor das bateladas (pão francês, 06/10/2026)**:
 o padeiro conferia 12 kg na ficha e via 215 pães; a ordem dizia 237. A
 ordem estava certa (dono confirmou: levain 2,4 kg = 20% da farinha, pão de

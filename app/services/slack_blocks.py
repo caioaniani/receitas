@@ -628,6 +628,8 @@ def build_resultado(resultado, ok=True):
             # aviso aparece na hora, como no botão Enviar da tela.
             if resultado.get('falta_saida'):
                 partes.append(f"⚠ {resultado['falta_saida']}")
+            if resultado.get('encomendas_site'):
+                partes.append(f"🌐 {resultado['encomendas_site']}")
             label_botao = 'Abrir pedido'
         elif resultado.get('pedido_id'):
             partes = [f"✓ pedido #{resultado['pedido_id']} criado."]

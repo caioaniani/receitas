@@ -3478,6 +3478,12 @@ def executar_mudar_status_pedido(params, user):
     p = PedidoLoja.query.get(pid)
     if not p:
         return {'ok': False, 'erro': f'Pedido #{pid} nao encontrado'}
+    # ENVIAR leva junto as encomendas do site do dia (12/10/2026). Registradas
+    # ANTES da trava da loja — mesma ordem da rota web (`_executar_envio_pedido`).
+    junto = None
+    if novo == 'enviar' and p.status in ('pendente', 'confirmado', 'separado'):
+        from app.services import encomendas_loja
+        junto = encomendas_loja.registrar_saida_junto(p, user.id)
     from app.services.pedido_lock import reler_pedido_travado
     p = reler_pedido_travado(p)
 
@@ -3501,6 +3507,8 @@ def executar_mudar_status_pedido(params, user):
     if isinstance(de, str):
         de = (de,)
     if p.status not in de:
+        if junto is not None:
+            db.session.rollback()  # desfaz a saída das encomendas
         STATUS_LABEL = {
             'pendente': 'pedido feito', 'confirmado': 'pedido feito',
             'separado': 'enviado', 'em_transporte': 'enviado',
@@ -3555,6 +3563,8 @@ def executar_mudar_status_pedido(params, user):
         if novo == 'cancelar' and p.status == 'em_transporte':
             from app.services.pedido_estoque import estornar_industria_pedido
             estornar_industria_pedido(p, user.id, motivo='cancelado via copilot')
+            from app.services.encomendas_loja import estornar_saida_junto
+            estornar_saida_junto(p, user.id, motivo='cancelado via copilot')
 
         # RECEBER: soma no estoque da loja (qtd conforme pedido, sem divergencia)
         if novo == 'receber':
@@ -3613,6 +3623,10 @@ def executar_mudar_status_pedido(params, user):
     if faltas_saida:
         from app.services.pedido_estoque import texto_faltas_saida
         resultado['falta_saida'] = texto_faltas_saida(faltas_saida)
+    if junto:
+        from app.services.encomendas_loja import texto_saida_junto
+        if texto_saida_junto(junto):
+            resultado['encomendas_site'] = texto_saida_junto(junto)
 
     # Se acabou de marcar como separado, ja gera o QR Code de saida e
     # devolve no resultado pro Slack mostrar pro motorista escanear.

@@ -18,6 +18,7 @@ from app.blueprints.padeiro import padeiro_bp
 from app.decorators import admin_required, padeiro_required
 from app.extensions import csrf, db
 from app.models import Driver, PedidoLoja, VendaB2B
+from app.services.encomendas_loja import STATUS_PRODUCAO as STATUS_ENCOMENDA_PRODUCAO
 from app.utils import hoje
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ _STATUS_ONLINE_ATIVO = ('pago', 'em_preparo', 'a_caminho')
 # está aparecendo na tela de pré-preparo para o padeiro tirar para
 # fermentar"). O "divulgação fora" vale pra FATURAMENTO/previsão, não pra
 # produzir: item sob encomenda de cortesia precisa ser assado igual.
-_STATUS_ONLINE_PRODUCAO = _STATUS_ONLINE_ATIVO + ('divulgacao',)
+_STATUS_ONLINE_PRODUCAO = STATUS_ENCOMENDA_PRODUCAO  # = ATIVO + divulgação
 
 
 def _eager_itens_receita():
@@ -58,6 +59,8 @@ def _card_loja(p):
     return {'tipo': 'loja', 'id': p.id,
             'titulo': (p.loja.nome if p.loja else '—'),
             'data_entrega': p.data_entrega,
+            # Encomendas do site que vão junto no dia (12/10/2026).
+            'encomendas': [],
             'itens': [{'id': it.id, 'qtd': it.quantidade,
                        'nome': it.nome_item_com_estado, 'obs': it.observacao}
                       for it in p.itens]}
@@ -180,7 +183,7 @@ def _dados_listas(dia, eh_hoje):
                      | (PedidoLoja.data_entrega.is_(None)))
     else:
         q = q.filter(PedidoLoja.data_entrega == dia)
-    pedidos = q.order_by(PedidoLoja.data_entrega).all()
+    pedidos = q.order_by(PedidoLoja.data_entrega, PedidoLoja.id).all()
 
     # B2B so entra na fila quando tem data de entrega (senao e venda imediata).
     from app.models import VendaB2BItem
@@ -214,50 +217,69 @@ def _dados_listas(dia, eh_hoje):
         qr_ = qr_.filter(RetiradaSobra.data_retirada == dia)
     retiradas = qr_.order_by(RetiradaSobra.data_retirada).all()
 
-    # Pedidos do SITE com item sob encomenda (D+2, dono 21/07/2026): entram
-    # na fila do padeiro como lembrete de producao — pagos (nao cancelado/
-    # entregue/aguardando_pagamento), com data de entrega, e que contenham ao
-    # menos um item sob encomenda. Divulgacao fica de fora (nao produz pro
-    # cliente).
-    #
-    # Na visao de HOJE entram TAMBEM as encomendas de data FUTURA (fix
-    # 31/07/2026, caso real: menu de minis vendido na sexta pra entrega no
-    # domingo e a TV muda ate domingo). Diferente dos pedidos de loja/B2B, o
-    # sob encomenda existe JUSTAMENTE pra ser produzido com antecedencia
-    # (D+2) — o cronograma ja agenda fornadas dias antes da entrega, entao o
-    # lembrete visivel tem que aparecer do pagamento ate a entrega, nao so
-    # no dia. O card mostra a data de entrega; o pedido some quando vira
-    # 'entregue'/'cancelado'.
-    from app.models import PedidoOnline, PedidoOnlineItem, SaidaProducaoSite
-    from app.services.loja_estoque_reserva import item_sob_encomenda
-    qo = PedidoOnline.query.options(
-        selectinload(PedidoOnline.itens).selectinload(PedidoOnlineItem.receita),
-        selectinload(PedidoOnline.itens).selectinload(PedidoOnlineItem.produto),
-        selectinload(PedidoOnline.itens)
-        .selectinload(PedidoOnlineItem.componentes),
-    ).filter(
-        PedidoOnline.status.in_(_STATUS_ONLINE_PRODUCAO),
-        PedidoOnline.data_entrega.isnot(None))
-    if eh_hoje:
-        # Encomenda de data JÁ PASSADA sai da TV (12/10/2026, "tá cheio de
-        # pedido na tela dele"): a produção daquele dia acabou e quem fecha o
-        # pedido é o painel de entregas. Sem isto, retirada (ninguém marca
-        # entregue) e entrega não confirmada ficavam na fila para sempre.
-        qo = qo.filter(PedidoOnline.data_entrega >= hj)
-    else:
-        qo = qo.filter(PedidoOnline.data_entrega == dia)
-    onlines = [p for p in qo.order_by(PedidoOnline.data_entrega).all()
-               if any(item_sob_encomenda(it) for it in p.itens)]
+    # Encomendas do SITE (dono 12/10/2026, `app/services/encomendas_loja.py`):
+    # sozinhas na TV de 2 dias antes até a véspera; no DIA da entrega entram
+    # no cartão do pedido da loja de onde o site baixa (Anesio; retirada = a
+    # loja escolhida) e saem junto com ele. Sem pedido da loja no dia, o
+    # cartão continua sozinho. Some quando é entregue/cancelado ou quando o
+    # item já tem saída registrada (`SaidaProducaoSite`).
+    from app.models import SaidaProducaoSite
+    from app.services import encomendas_loja
+    base = hj if eh_hoje else dia
+    de, ate = encomendas_loja.janela_tv(base)
+    onlines = encomendas_loja.encomendas_ativas(de, ate)
     itens_saida = {item_id for (item_id,) in db.session.query(
         SaidaProducaoSite.pedido_item_id).filter(
             SaidaProducaoSite.pedido_id.in_([p.id for p in onlines])).all()}
-    cards_online = [_card_online(p, itens_saida) for p in onlines]
+
+    cards_loja = {p.id: _card_loja(p) for p in pedidos}
+    # Destino = pedido da loja do dia de MENOR id ainda por sair — a mesma
+    # regra de `encomendas_loja.pedido_destino`, usada na saída.
+    destino = {}
+    for p in pedidos:
+        if p.data_entrega == base:
+            destino.setdefault(p.loja_id, cards_loja[p.id])
+    lojas_com_pedido = {lid for (lid,) in db.session.query(PedidoLoja.loja_id)
+                        .filter(PedidoLoja.data_entrega == base,
+                                PedidoLoja.status != 'cancelado').distinct()}
+    from app.models import Loja
+    origem_id = encomendas_loja.origem_site_id()
+    kits_cafe = encomendas_loja.ids_kit_cafe([p.id for p in onlines])
+    nomes_loja = {}
+    cards_online = []
+    for p in onlines:
+        card = _card_online(p, itens_saida)
+        if not card['itens']:
+            continue
+        if p.id in kits_cafe:
+            # Kit de café tem coleta própria na loja — segue sozinho.
+            cards_online.append(card)
+            continue
+        lid = encomendas_loja.loja_id_da_encomenda(p, origem_id)
+        if lid not in nomes_loja:
+            lj = db.session.get(Loja, lid) if lid else None
+            nomes_loja[lid] = lj.nome if lj else None
+        card['vai_com'] = nomes_loja[lid]
+        if p.data_entrega > base:
+            cards_online.append(card)
+        elif lid in destino:
+            destino[lid]['encomendas'].append(card)
+        elif lid in lojas_com_pedido:
+            # O pedido da loja do dia já saiu e esta encomenda não foi junto
+            # (paga depois, ou saída recusada): segue sozinha, com aviso. A
+            # cortesia baixou na criação e foi com a carga.
+            if not p.divulgacao:
+                card['sem_pedido_loja'] = 'o pedido da loja do dia já saiu sem ela'
+                cards_online.append(card)
+        else:
+            card['sem_pedido_loja'] = 'não há pedido da loja para o dia'
+            cards_online.append(card)
 
     a_separar = ([_card_retirada(r) for r in retiradas]
-                 + [_card_loja(p) for p in pedidos if p.status in _A_SEPARAR]
+                 + [cards_loja[p.id] for p in pedidos if p.status in _A_SEPARAR]
                  + [_card_b2b(v) for v in vendas if v.status_entrega == 'pendente']
-                 + [c for c in cards_online if c['itens']])
-    aguardando = ([_card_loja(p) for p in pedidos if p.status == 'separado']
+                 + cards_online)
+    aguardando = ([cards_loja[p.id] for p in pedidos if p.status == 'separado']
                   + [_card_b2b(v) for v in vendas if v.status_entrega == 'separado'])
     drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
     # Repetidos = pedidos de loja a mais por (loja, status, data) pra juntar.
