@@ -238,7 +238,13 @@ def _dados_listas(dia, eh_hoje):
     ).filter(
         PedidoOnline.status.in_(_STATUS_ONLINE_PRODUCAO),
         PedidoOnline.data_entrega.isnot(None))
-    if not eh_hoje:
+    if eh_hoje:
+        # Encomenda de data JÁ PASSADA sai da TV (12/10/2026, "tá cheio de
+        # pedido na tela dele"): a produção daquele dia acabou e quem fecha o
+        # pedido é o painel de entregas. Sem isto, retirada (ninguém marca
+        # entregue) e entrega não confirmada ficavam na fila para sempre.
+        qo = qo.filter(PedidoOnline.data_entrega >= hj)
+    else:
         qo = qo.filter(PedidoOnline.data_entrega == dia)
     onlines = [p for p in qo.order_by(PedidoOnline.data_entrega).all()
                if any(item_sob_encomenda(it) for it in p.itens)]

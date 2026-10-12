@@ -512,6 +512,19 @@ def test_padeiro_hoje_mostra_encomenda_de_data_futura(app):
         assert cards[0]['data_entrega'] == hoje() + timedelta(days=2)
 
 
+def test_padeiro_hoje_nao_mostra_encomenda_de_data_passada(app):
+    """Pedido pago que ninguém marcou entregue (ex.: retirada) não pode
+    ficar na TV para sempre: data de entrega já passada sai da fila."""
+    from app.blueprints.padeiro.routes import _dados_listas
+    with app.app_context():
+        r = _receita(sob_encomenda=True)
+        _pedido_pago(r, qtd=3, dias=-1)
+        hojes = _pedido_pago(r, qtd=4, dias=0)
+        dados = _dados_listas(hoje(), eh_hoje=True)
+        cards = [c for c in dados['a_separar'] if c['tipo'] == 'online']
+        assert [c['id'] for c in cards] == [hojes.id]
+
+
 def test_padeiro_hoje_nao_mostra_encomenda_entregue(app):
     """O card some quando o pedido conclui — senão a fila acumula lixo."""
     from app.blueprints.padeiro.routes import _dados_listas
