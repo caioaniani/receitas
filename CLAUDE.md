@@ -164,9 +164,21 @@ produto — saldos são inteiros; corrigir o cadastro (componente na unidade,
 ex. 600 g, com a unidade do estoque de "Molho pesto" acertada) faz explodir.
 O estorno da LOJA (voltar status de entregue) passou a ser pelos movimentos
 `entrada_pedido` do pedido (`estornar_loja_recebimento`; sem movimento =
-estorno nominal antigo); o da indústria já era. Pedidos que saíram antes
-seguem no regime antigo (a auditoria lê o regime pelos movimentos). NF de
-transferência continua pelo SKU do produto. Testes:
+estorno nominal antigo); o da indústria já era. Cada ponta vale pelo
+momento do gesto: pedido que SAIU antes do deploy debitou a linha do
+produto e, recebido depois, credita componentes na loja (estornos são por
+movimento, fecham sozinhos); a auditoria lê o regime da saída pelos
+movimentos. Planejamento: pote/cesta PENDENTE entra na demanda firme da
+receita componente (`_demanda_firme_por_dia` e o detalhamento por receita,
+via `componentes_receita_de_pedidos`); o histórico do motor "pedidos"
+segue só com receitas. A saída trava as linhas existentes em ordem de id
+antes de debitar (linha compartilhada por vários potes). Falta da receita
+leva a origem no aviso ("Produção - Granola (de Granola 50g ×30)").
+PENDENTES (decisão do dono): saldo antigo das linhas de Produto-cesta no
+EstoqueLoja (recebimentos antigos que venda nenhuma drena) e conferência
+física que conta potes; devolução de cesta não desmonta; cesta dentro de
+cesta (componente `produto` que é cesta) debita a linha do componente.
+NF de transferência continua pelo SKU do produto. Testes:
 `tests/test_pedido_cesta_componentes.py`. Demais testes da régua:
 `tests/test_pedido_so_industria.py`, `tests/test_pedidos_por_venda_
 produtos.py` e `tests/test_reposicao_produtos_interfaces.py` (os dois

@@ -135,21 +135,34 @@ def baixar_industria_pedido(pedido, usuario_id, ref_extra=None):
 
     ref = _ref_base(pedido, ref_extra)
     faltas = []
-    for item in pedido.itens:
+    # Travas das linhas que já existem PRIMEIRO e em ordem de id (mesma
+    # ordem da quitação, estorno, conferência e balanço): com a cesta
+    # desmontada, uma linha compartilhada (ex.: "Produção - Granola") é
+    # tocada por vários itens — travar na ordem dos itens abriria deadlock.
+    from app.services.estoque_congelados import travar_linhas_producao
+    planos = [(item, composicao_do_item(item)) for item in pedido.itens]
+    travar_linhas_producao(
+        receita_ids=[cid for _i, cs in planos for col, cid, _n, _f in cs
+                     if col == 'receita_id'],
+        produto_ids=[cid for _i, cs in planos for col, cid, _n, _f in cs
+                     if col == 'produto_id'])
+    for item, comps in planos:
         qtd = item.quantidade or 0
         if qtd <= 0:
             continue
-        comps = composicao_do_item(item)
         if not comps:
             # Item solto (legado, só nome) — não há linha possível.
             logger.warning('baixar_industria_pedido: item #%s do pedido #%s '
                            'sem FK (receita/produto/MP) — sem baixa', item.id,
                            pedido.id)
             continue
-        ref_item = _ref_componente(ref, item, item_explodido(item, comps), qtd)
+        explodido = item_explodido(item, comps)
+        ref_item = _ref_componente(ref, item, explodido, qtd)
+        origem = f' (de {item.nome_item} ×{int(qtd)})' if explodido else ''
         for col, cid, _nome, fator in comps:
             if col == 'materia_prima_id':
-                _baixar_mp(cid, float(qtd) * fator, ref_item, usuario_id, faltas)
+                _baixar_mp(cid, float(qtd) * fator, ref_item, usuario_id,
+                           faltas, origem)
                 continue
             q = int(qtd) * fator
             ep = obter_linha_producao(usuario_id=usuario_id, **{col: cid})
@@ -169,12 +182,12 @@ def baixar_industria_pedido(pedido, usuario_id, ref_extra=None):
                 # lançar a produção, se ela inclui o que já saiu (05/10/2026).
                 from app.services import faltas_industria
                 faltas_industria.registrar(pedido, ep, falta)
-                faltas.append({'item': ep.nome_item, 'pedido': q,
+                faltas.append({'item': ep.nome_item + origem, 'pedido': q,
                                'baixado': baixa, 'faltou': falta})
     return faltas
 
 
-def _baixar_mp(mp_id, qtd, ref, usuario_id, faltas):
+def _baixar_mp(mp_id, qtd, ref, usuario_id, faltas, origem=''):
     mp = db.session.get(MateriaPrima, mp_id)
     if mp is None:
         return
@@ -189,7 +202,7 @@ def _baixar_mp(mp_id, qtd, ref, usuario_id, faltas):
     if falta > 0:
         # `mp`: matéria-prima não gera falta na TV do padeiro (só a
         # anotação na referência) — a mensagem do Enviar distingue.
-        faltas.append({'item': mp.nome, 'pedido': float(qtd),
+        faltas.append({'item': mp.nome + origem, 'pedido': float(qtd),
                        'baixado': baixa, 'faltou': falta, 'mp': True})
 
 
@@ -372,3 +385,22 @@ def estornar_loja_recebimento(pedido, usuario_id):
         db.session.add(MovEstoqueLoja(
             estoque_loja_id=el_id, tipo='ajuste_negativo', quantidade=liquido,
             referencia=ref_estorno, usuario_id=usuario_id))
+
+
+def componentes_receita_de_pedidos(rows):
+    """Desmonta itens de CESTA de pedidos loja→indústria em demanda de
+    RECEITA componente, para o planejamento ver o que a saída vai debitar.
+    `rows` = [(produto_id, qtd, *extra)]; devolve [(receita_id, qtd_comp,
+    *extra)]. Cesta que segue pela linha dela (fator não inteiro/órfão) não
+    entra — continua fora do balanço, como sempre esteve."""
+    from app.models import Produto
+    cache = {}
+    out = []
+    for pid, qtd, *extra in rows:
+        if pid not in cache:
+            cache[pid] = componentes_explodiveis(db.session.get(Produto, pid)) or []
+        for col, cid, _nome, fator in cache[pid]:
+            q = int(qtd or 0) * fator
+            if col == 'receita_id' and q > 0:
+                out.append((cid, q, *extra))
+    return out

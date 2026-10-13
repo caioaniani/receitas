@@ -8,7 +8,7 @@ linha do produto e a venda baixava os componentes. Agora a indústria
 debita e a loja recebe o que o pote leva por dentro (mesma composição da
 venda); cesta com fator não inteiro segue pela linha do produto.
 """
-from datetime import date, timedelta
+from datetime import timedelta
 from unittest.mock import patch
 
 from app.extensions import db
@@ -28,6 +28,7 @@ from app.models import (
     Receita,
 )
 from app.services import pedido_estoque as pe
+from app.utils import hoje
 
 _FOTO = [{'imagem': b'\xff\xd8\xff\xfake-jpeg', 'mimetype': 'image/jpeg'}]
 
@@ -70,7 +71,7 @@ def _base():
 
 def _pedido(loja, itens, status='separado'):
     p = PedidoLoja(loja_id=loja.id, status=status,
-                   data_entrega=date.today() + timedelta(days=1))
+                   data_entrega=hoje() + timedelta(days=1))
     db.session.add(p)
     db.session.flush()
     for prod, qtd in itens:
@@ -116,7 +117,7 @@ def test_saida_debita_componentes_e_falta_vai_para_a_receita(app, admin_user):
     assert _ep(produto_id=b['g50'].id) is None and _ep(produto_id=b['i200'].id) is None
     falta = FaltaSaidaIndustria.query.filter_by(pedido_id=p.id).one()
     assert falta.receita_id == b['iog'].id and falta.quantidade == 200
-    assert 'Produção - Iogurte' in msg
+    assert 'Produção - Iogurte (de Iogurte 200ml ×6)' in msg
     mov = MovEstoqueProducao.query.filter_by(tipo='saida_pedido').filter(
         MovEstoqueProducao.referencia.like('%Granola 50g ×30%')).one()
     assert mov.quantidade == 1500 and mov.referencia.startswith(f'Pedido #{p.id} →')
@@ -225,3 +226,16 @@ def test_auditoria_reconhece_os_dois_regimes(app, admin_user):
     assert res['resumo']['divergente'] == 0 and res['resumo']['sem_movimento'] == 0
     assert MovimentacaoEstoque.query.filter(
         MovimentacaoEstoque.referencia.like(f'Pedido #{novo.id} →%')).one().quantidade == 1
+
+
+def test_pote_pendente_reserva_a_receita_componente_no_planejamento(app):
+    from app.services.previsao_producao import _demanda_firme_por_dia
+    b = _base()
+    p = _pedido(b['loja'], [(b['g50'], 30), (b['p600'], 2)], status='confirmado')
+    receitas = {r.id: r for r in Receita.query.all()}
+    totais, origens = _demanda_firme_por_dia(p.data_entrega, p.data_entrega,
+                                             receitas)
+    assert totais[b['gran'].id][p.data_entrega] == 1500
+    assert origens[b['gran'].id][p.data_entrega][(b['loja'].id, b['loja'].nome)] == 1500
+    # Fator 0,6 segue fora (linha do próprio produto), como antes.
+    assert b['pesto'].id not in totais

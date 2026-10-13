@@ -669,6 +669,21 @@ def _demanda_firme_por_dia(inicio, fim, receitas):
                     PedidoLoja.data_entrega >= inicio,
                     PedidoLoja.data_entrega <= fim)
             .all())
+    # Pote/cesta pedido (13/10/2026): a saída debita os COMPONENTES
+    # (`pedido_estoque.composicao_do_item`) — a receita componente tem de
+    # estar reservada aqui, senão o saldo parece livre e o pote sai em falta.
+    from app.services.pedido_estoque import componentes_receita_de_pedidos
+    rows_cesta = (db.session.query(PedidoItem.produto_id, PedidoItem.quantidade,
+                                   PedidoLoja.loja_id, PedidoLoja.data_entrega)
+                  .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
+                  .filter(PedidoItem.produto_id.isnot(None),
+                          PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
+                          PedidoLoja.data_entrega >= inicio,
+                          PedidoLoja.data_entrega <= fim)
+                  .all())
+    rows = list(rows) + [
+        (rid, loja_id, data_ent, q) for rid, q, loja_id, data_ent
+        in componentes_receita_de_pedidos(rows_cesta) if rid in receitas]
     for rid, loja_id, data_ent, qtd in rows:
         _contrib(rid, data_ent, int(qtd or 0),
                  (loja_id, nomes_loja.get(loja_id, '?')))
@@ -1250,6 +1265,20 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
                     PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= horizonte_fim)
             .all())
+    # Mesma regra do `_demanda_firme_por_dia`: pote/cesta pedido conta na
+    # receita componente.
+    from app.services.pedido_estoque import componentes_receita_de_pedidos
+    rows_cesta = (db.session.query(PedidoItem.produto_id, PedidoItem.quantidade,
+                                   PedidoLoja.loja_id, PedidoLoja.data_entrega)
+                  .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
+                  .filter(PedidoItem.produto_id.isnot(None),
+                          PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
+                          PedidoLoja.data_entrega >= inicio_d,
+                          PedidoLoja.data_entrega <= horizonte_fim)
+                  .all())
+    rows = list(rows) + [
+        (loja_id, data_ent, q) for rid, q, loja_id, data_ent
+        in componentes_receita_de_pedidos(rows_cesta) if rid == receita_id]
     for loja_id, data_ent, qtd in rows:
         if data_ent is None:
             continue
