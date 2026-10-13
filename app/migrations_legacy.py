@@ -128,6 +128,7 @@ def _migrate(app):
         _seed_cardapio_loja_2026_10_v6(app)
         _seed_minis_fora_pedido_loja(app)
         _seed_fotos_misto_2026_10(app)
+        _seed_pesto_pote_2026_10(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1109,6 +1110,43 @@ def _seed_fotos_misto_2026_10(app):
         logger.info('seed fotos misto: %s', r)
     except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
         logger.warning('migrate skip (seed fotos misto): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_pesto_pote_2026_10(app):
+    """UMA VEZ (dono 13/10/2026: "1 de Molho pesto" = "Pote de 600ml de
+    molho"): o Produto "Molho Pesto 600ml" levava 0,6 de "Molho pesto" (como
+    se 1 = 1 kg). Com 1 = 1 pote, o componente vira 1 — o pote pedido passa
+    a debitar/receber 1 de "Molho pesto" (`pedido_estoque.composicao_do_item`,
+    fator inteiro) e a venda do pote baixa 1. Só altera se ainda estiver em
+    0,6 (edição do dono manda); marker com o resultado."""
+    try:
+        from app.models import AppConfig, Produto
+        from app.utils import normalizar_busca
+        chave = 'seed_pesto_pote_2026_10'
+        if AppConfig.get(chave):
+            return
+        alterados = []
+        for prod in Produto.query.all():
+            if normalizar_busca(prod.nome or '').strip() != 'molho pesto 600ml':
+                continue
+            for pi in prod.itens:
+                rec = pi.receita
+                if (pi.tipo == 'receita' and rec is not None
+                        and normalizar_busca(rec.nome or '').strip() == 'molho pesto'
+                        and float(pi.quantidade or 0) == 0.6):
+                    pi.quantidade = 1.0
+                    alterados.append(f'produto#{prod.id}/item#{pi.id}')
+        AppConfig.set(chave, f"alterados={','.join(alterados) or 'nenhum'}")
+        db.session.commit()
+        if not alterados:
+            logger.error('seed pesto pote: nenhum componente 0,6 encontrado')
+        logger.info('seed pesto pote: %s', alterados)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed pesto pote): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001

@@ -159,9 +159,13 @@ baixas) desmonta a cesta pela MESMA composição da venda (um nível,
 Granola" (falta vai para a RECEITA, que o padeiro quita produzindo) e a loja
 recebe 1500 g; Iogurte 200ml leva 200 ml + 1 pote (MP). Movimentos com a
 referência do pedido + "· <cesta> ×N". Cesta com fator NÃO inteiro (Molho
-Pesto 600ml = 0,6 de "Molho pesto") ou componente órfão segue pela linha do
-produto — saldos são inteiros; corrigir o cadastro (componente na unidade,
-ex. 600 g, com a unidade do estoque de "Molho pesto" acertada) faz explodir.
+Pesto 600ml era 0,6 de "Molho pesto") ou componente órfão segue pela linha
+do produto — saldos são inteiros. PESTO resolvido no mesmo dia: dono, "1 de
+Molho pesto" = "Pote de 600ml de molho" → seed `_seed_pesto_pote_2026_10`
+(marker com o item alterado; só troca se ainda estiver 0,6) põe o
+componente em 1 e o pote passa a explodir. Saldos de "Molho pesto" nas LOJAS
+(601/566/207 em 13/10, sem venda nenhuma em 120 dias) não parecem potes —
+acerto pela contagem.
 O estorno da LOJA (voltar status de entregue) passou a ser pelos movimentos
 `entrada_pedido` do pedido (`estornar_loja_recebimento`; sem movimento =
 estorno nominal antigo); o da indústria já era. Cada ponta vale pelo

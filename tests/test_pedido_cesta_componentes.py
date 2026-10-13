@@ -239,3 +239,20 @@ def test_pote_pendente_reserva_a_receita_componente_no_planejamento(app):
     assert origens[b['gran'].id][p.data_entrega][(b['loja'].id, b['loja'].nome)] == 1500
     # Fator 0,6 segue fora (linha do próprio produto), como antes.
     assert b['pesto'].id not in totais
+
+
+def test_seed_pesto_pote_vira_um_por_pote_e_passa_a_explodir(app):
+    from app.migrations_legacy import _seed_pesto_pote_2026_10
+    from app.models import AppConfig
+    b = _base()
+    _seed_pesto_pote_2026_10(app)
+    db.session.expire_all()
+    p = _pedido(b['loja'], [(b['p600'], 2)])
+    assert pe.composicao_do_item(p.itens[0]) == [
+        ('receita_id', b['pesto'].id, b['pesto'].nome, 1)]
+    assert 'alterados=produto#' in AppConfig.get('seed_pesto_pote_2026_10')
+    pi = ProdutoItem.query.filter_by(produto_id=b['p600'].id).one()
+    pi.quantidade = 0.5          # edição posterior do dono manda
+    db.session.commit()
+    _seed_pesto_pote_2026_10(app)   # uma vez só
+    assert ProdutoItem.query.filter_by(produto_id=b['p600'].id).one().quantidade == 0.5
