@@ -177,7 +177,7 @@ def test_venda_do_pote_consome_o_que_o_recebimento_creditou(app, admin_user):
     p = _pedido(b['loja'], [(b['g50'], 30)], status='em_transporte')
     with patch('app.services.dropbox_storage.disponivel', return_value=False):
         assert _executar_recebimento_pedido(p, admin_user, fotos=_FOTO)[0]
-    aplicar_venda('site', loja_id=b['loja'].id, qtd=30, produto_id=b['g50'].id,
+    aplicar_venda(b['loja'].id, produto_id=b['g50'].id, qtd=30, canal='site',
                   referencia='Venda teste', pedido_ref='venda-teste')
     db.session.commit()
     assert _el(b['loja'], receita_id=b['gran'].id).quantidade == 0

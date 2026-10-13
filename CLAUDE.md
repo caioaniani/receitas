@@ -148,12 +148,26 @@ NÃO é avisada da remoção — decisão separada). Serviço
 `GET /api/claude/pedidos-revenda` devolve a mesma lista para conferir de
 fora (o assistente não tem login de owner).
 
-ACHADO PRÉ-EXISTENTE, decisão separada do dono: cesta pedida à indústria
-é debitada/creditada na linha do PRÓPRIO Produto (`pedido_estoque.
-baixar_industria_pedido`, `_executar_recebimento_pedido`), enquanto a
-venda baixa os COMPONENTES — pedir "Granola 500g" cria saldo da cesta na
-loja que a venda nunca consome e débito numa linha de Produto na indústria
-que nenhuma ordem credita. Nada mudou nisso aqui. Testes:
+CESTA PEDIDA MOVIMENTA OS COMPONENTES (dono 13/10/2026, "Pode corrigir" —
+caso TV "Está dizendo que não tem mas tem": Granola 50g e Molho Pesto 600ml
+em "Saíram sem produção lançada" com a granola produzida parada em gramas).
+Antes a saída e o recebimento usavam a linha do PRÓPRIO Produto enquanto a
+venda baixa os componentes. Agora `pedido_estoque.composicao_do_item` (FONTE
+ÚNICA: saída da indústria, recebimento web/QR e copilot, auditoria das
+baixas) desmonta a cesta pela MESMA composição da venda (um nível,
+`componentes_de_cesta`): Granola 50g ×30 debita 1500 g de "Produção -
+Granola" (falta vai para a RECEITA, que o padeiro quita produzindo) e a loja
+recebe 1500 g; Iogurte 200ml leva 200 ml + 1 pote (MP). Movimentos com a
+referência do pedido + "· <cesta> ×N". Cesta com fator NÃO inteiro (Molho
+Pesto 600ml = 0,6 de "Molho pesto") ou componente órfão segue pela linha do
+produto — saldos são inteiros; corrigir o cadastro (componente na unidade,
+ex. 600 g, com a unidade do estoque de "Molho pesto" acertada) faz explodir.
+O estorno da LOJA (voltar status de entregue) passou a ser pelos movimentos
+`entrada_pedido` do pedido (`estornar_loja_recebimento`; sem movimento =
+estorno nominal antigo); o da indústria já era. Pedidos que saíram antes
+seguem no regime antigo (a auditoria lê o regime pelos movimentos). NF de
+transferência continua pelo SKU do produto. Testes:
+`tests/test_pedido_cesta_componentes.py`. Demais testes da régua:
 `tests/test_pedido_so_industria.py`, `tests/test_pedidos_por_venda_
 produtos.py` e `tests/test_reposicao_produtos_interfaces.py` (os dois
 últimos reescritos para o contrato novo).

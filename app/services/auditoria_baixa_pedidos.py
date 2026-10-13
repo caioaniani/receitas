@@ -30,6 +30,7 @@ from app.models import (
     PedidoLoja,
 )
 from app.services.faltas_industria import TIPO_QUITADA
+from app.services.pedido_estoque import composicao_do_item
 from app.utils import hoje
 
 _STATUS_SAIU = ('em_transporte', 'entregue', 'recebido')
@@ -68,6 +69,17 @@ def _movs_do_pedido(pedido_id):
     }
 
 
+def _produtos_baixados_na_linha(pedido_id):
+    """produto_id das linhas de PRODUTO que os movimentos do pedido tocaram."""
+    rows = (db.session.query(EstoqueProducao.produto_id)
+            .join(MovEstoqueProducao,
+                  MovEstoqueProducao.estoque_producao_id == EstoqueProducao.id)
+            .filter(EstoqueProducao.produto_id.isnot(None),
+                    MovEstoqueProducao.referencia.like(f'Pedido #{pedido_id} →%'))
+            .distinct().all())
+    return {r[0] for r in rows}
+
+
 def auditar(dias=14, max_detalhe=50):
     corte = hoje() - timedelta(days=max(1, dias) - 1)
     pedidos = (PedidoLoja.query
@@ -84,16 +96,26 @@ def auditar(dias=14, max_detalhe=50):
         esperado = 0
         esperado_mp = 0.0
         sem_fk = []
+        # Cesta pedida baixa os COMPONENTES desde 13/10/2026
+        # (`pedido_estoque.composicao_do_item`); pedido que saiu antes disso
+        # baixou a linha do próprio produto — o regime de cada item é o que
+        # os movimentos do pedido mostram.
+        legado = _produtos_baixados_na_linha(p.id)
         for it in p.itens:
             qtd = it.quantidade or 0
             if qtd <= 0:
                 continue
-            if it.materia_prima_id:
-                esperado_mp += float(qtd)
-            elif it.receita_id or it.produto_id:
-                esperado += int(qtd)
+            if it.produto_id and it.produto_id in legado:
+                comps = [('produto_id', it.produto_id, None, 1)]
             else:
+                comps = composicao_do_item(it)
+            if not comps:
                 sem_fk.append(it.item_nome or f'item #{it.id}')
+            for col, _cid, _nome, fator in comps:
+                if col == 'materia_prima_id':
+                    esperado_mp += float(qtd) * fator
+                else:
+                    esperado += int(qtd) * fator
         resumo['itens_sem_fk'] += len(sem_fk)
 
         m = _movs_do_pedido(p.id)

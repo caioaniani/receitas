@@ -3469,8 +3469,6 @@ def _read_consultar_vendas_itens(params, user):
 
 def executar_mudar_status_pedido(params, user):
     from app.models import (
-        EstoqueLoja,
-        MovEstoqueLoja,
         PedidoLoja,
     )
     pid = params.get('pedido_id')
@@ -3570,29 +3568,12 @@ def executar_mudar_status_pedido(params, user):
         if novo == 'receber':
             from app.services.estoque_helpers import serializar_loja
             serializar_loja(p.loja_id)  # lock por loja antes dos UPDATE
+            from app.services.pedido_estoque import creditar_loja_recebimento
             for item in p.itens:
                 qtd = item.quantidade
                 item.quantidade_recebida = qtd
-                el = EstoqueLoja.query.filter_by(
-                    loja_id=p.loja_id,
-                    receita_id=item.receita_id,
-                    produto_id=item.produto_id,
-                    materia_prima_id=item.materia_prima_id,
-                ).first()
-                if not el:
-                    el = EstoqueLoja(loja_id=p.loja_id,
-                                     receita_id=item.receita_id,
-                                     produto_id=item.produto_id,
-                                     materia_prima_id=item.materia_prima_id)
-                    db.session.add(el)
-                    db.session.flush()
-                el.quantidade = (el.quantidade or 0) + qtd
-                db.session.add(MovEstoqueLoja(
-                    estoque_loja_id=el.id, tipo='entrada_pedido',
-                    quantidade=qtd,
-                    referencia=f'Pedido #{pid} (copilot)',
-                    usuario_id=user.id,
-                ))
+                creditar_loja_recebimento(p, item, qtd,
+                                          f'Pedido #{pid} (copilot)', user.id)
 
         p.status = para
         # Carimbo do gesto humano (10/08/2026, auto-pedidos): confirmar/

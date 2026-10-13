@@ -1269,16 +1269,8 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
 
         # Estoque de loja eh por PRODUTO (sem estado): o estado eh instrucao do
         # pedido (industria prepara fora do padrao), nao dimensao de estoque.
-        # Soma sempre na linha unica do produto.
-        from app.services.estoque_helpers import obter_linha_loja
-        el = obter_linha_loja(
-            pedido.loja_id,
-            receita_id=item.receita_id,
-            produto_id=item.produto_id,
-            materia_prima_id=item.materia_prima_id,
-            usuario_id=getattr(user, 'id', None),
-        )
-        el.quantidade = (el.quantidade or 0) + qtd_rec
+        # Soma na linha unica do produto — ou, se for cesta explodivel, nos
+        # COMPONENTES (pedido_estoque.composicao_do_item, 13/10/2026).
         ref_div = ' (divergente)' if qtd_rec != item.quantidade else ''
         # Tag de estado fica so na referencia (auditoria), nao na linha.
         from app.constants import estado_label
@@ -1286,12 +1278,9 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
         ref = f'Pedido #{pedido.id}{ref_div} {ref_estado}'.rstrip()
         if ref_extra:
             ref += f' ({ref_extra})'
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id, tipo='entrada_pedido',
-            quantidade=qtd_rec,
-            referencia=ref,
-            usuario_id=getattr(user, 'id', None),
-        ))
+        from app.services.pedido_estoque import creditar_loja_recebimento
+        creditar_loja_recebimento(pedido, item, qtd_rec, ref,
+                                  getattr(user, 'id', None))
 
     pedido.status = 'entregue'
     # Momento REAL do recebimento (14/08/2026): o digest das 12:00 usa
@@ -1551,26 +1540,11 @@ def _aplicar_voltar_status(pedido, usuario_id):
     if status_atual in ('entregue', 'recebido'):
         from app.services.estoque_helpers import serializar_loja
         serializar_loja(pedido.loja_id)  # lock por loja antes do estorno
-        # Estorna o que somou no estoque da loja
+        # Estorna o que o recebimento REALMENTE somou no estoque da loja
+        # (pelos movimentos — cobre a cesta desmontada nos componentes).
+        from app.services.pedido_estoque import estornar_loja_recebimento
+        estornar_loja_recebimento(pedido, usuario_id)
         for item in pedido.itens:
-            qtd = item.quantidade_recebida or 0
-            if qtd <= 0:
-                continue
-            el = EstoqueLoja.query.filter_by(
-                loja_id=pedido.loja_id,
-                receita_id=item.receita_id,
-                produto_id=item.produto_id,
-                materia_prima_id=item.materia_prima_id,
-            ).first()
-            if el:
-                el.quantidade = max(0, (el.quantidade or 0) - qtd)
-                db.session.add(MovEstoqueLoja(
-                    estoque_loja_id=el.id,
-                    tipo='ajuste_negativo',
-                    quantidade=qtd,
-                    referencia=f'Estorno pedido #{pedido.id} (voltar status)',
-                    usuario_id=usuario_id,
-                ))
             item.quantidade_recebida = None
         novo_status = 'em_transporte'
     elif status_atual == 'em_transporte':

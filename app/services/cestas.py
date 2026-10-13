@@ -13,12 +13,9 @@ Este helper centraliza a logica que era duplicada em varios servicos:
 - copilot.py::executar_registrar_desperdicio
 - pedidos/routes.py::desperdicio
 
-ATENCAO (conferido 01/10/2026): o ENVIO e o RECEBIMENTO de pedido loja->
-industria (`pedido_estoque.baixar_industria_pedido` e
-`pedidos/routes._executar_recebimento_pedido`) NAO explodem cesta — debitam/
-creditam a linha do PROPRIO Produto (EstoqueProducao/EstoqueLoja com
-produto_id), enquanto a venda baixa os componentes. Cesta pedida a industria
-e, portanto, uma inconsistencia conhecida (decisao separada do dono).
+Pedido loja->industria (13/10/2026): a saida e o recebimento desmontam a
+cesta pela MESMA composicao (`pedido_estoque.composicao_do_item`); cesta
+com fator nao inteiro segue pela linha do proprio Produto.
 
 DESDE A MIGRATION B5 (efb6e5837fd0): vinculo eh via FK
 (`ProdutoItem.receita_id` / `materia_prima_id`). `item_nome` continua
