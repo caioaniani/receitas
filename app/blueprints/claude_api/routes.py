@@ -3536,3 +3536,76 @@ def catalogo_precos():
                 for i in ProdutoItem.query.filter_by(produto_id=p.id).all()]
         out.append(linha)
     return jsonify(ok=True, total=len(out), itens=out)
+
+
+@claude_api_bp.route('/pedidos-site-vencidos')
+@_claude_auth_required
+def pedidos_site_vencidos():
+    """Pedidos do site PAGOS com entrega vencida e ainda não entregues
+    (14/10/2026, dono: "colocar como entregue os pedidos que deveriam ter
+    sido entregues até ontem, e ver o porquê quando marcam na TV como
+    entregue ele volta os status"). Cobertura: TODOS os PedidoOnline em
+    pago/em_preparo/a_caminho com `data_entrega <= ate` (sem janela de
+    criação — a `/pedidos-site` filtra por `criado_em` e trunca em 200).
+    Para cada um: status do card no painel (`PainelPedidoStatus`), saídas
+    de produção já gravadas, atribuição de motorista, corrida Lalamove e
+    `saida_producao_site.motivo_bloqueio` — o motivo pelo qual o 📦
+    ENTREGUE do painel seria recusado AGORA (409; o card volta sozinho em
+    30 s). Read-only. Params: ?ate=YYYY-MM-DD (default ontem)."""
+    from datetime import date, timedelta
+
+    from app.models import (
+        AtribuicaoEntrega,
+        LalamoveEntrega,
+        PainelPedidoStatus,
+        PedidoOnline,
+        SaidaProducaoSite,
+    )
+    from app.services import saida_producao_site
+    from app.utils import hoje
+
+    try:
+        ate = date.fromisoformat(request.args.get('ate') or '')
+    except ValueError:
+        ate = hoje() - timedelta(days=1)
+    pedidos = (PedidoOnline.query
+               .filter(PedidoOnline.status.in_(('pago', 'em_preparo', 'a_caminho')),
+                       PedidoOnline.data_entrega.isnot(None),
+                       PedidoOnline.data_entrega <= ate)
+               .order_by(PedidoOnline.data_entrega, PedidoOnline.id).all())
+    codes = [p.codigo for p in pedidos]
+    painel = {s.pedido_code: s for s in PainelPedidoStatus.query.filter(
+        PainelPedidoStatus.pedido_code.in_(codes)).all()} if codes else {}
+    atrib = {a.pedido_code: a for a in AtribuicaoEntrega.query.filter(
+        AtribuicaoEntrega.pedido_code.in_(codes)).all()} if codes else {}
+    lala = {}
+    if codes:
+        for e in (LalamoveEntrega.query.filter(LalamoveEntrega.pedido_code.in_(codes))
+                  .order_by(LalamoveEntrega.criado_em.asc()).all()):
+            lala[e.pedido_code] = e
+    out = []
+    for p in pedidos:
+        try:
+            motivo = saida_producao_site.motivo_bloqueio(p)
+        except Exception as exc:  # noqa: BLE001 — sonda nunca derruba
+            motivo = f'ERRO ao avaliar: {type(exc).__name__}: {exc}'[:300]
+        s = painel.get(p.codigo)
+        a = atrib.get(p.codigo)
+        e = lala.get(p.codigo)
+        out.append({
+            'codigo': p.codigo, 'status': p.status, 'modo': p.modo_entrega,
+            'data_entrega': p.data_entrega.isoformat(),
+            'nome_cliente': p.nome_cliente, 'valor_total': float(p.valor_total or 0),
+            'itens': [f'{it.quantidade}x {it.nome}' for it in p.itens],
+            'painel': ({'status': s.status,
+                        'atualizado_em': s.atualizado_em.isoformat()
+                        if s.atualizado_em else None,
+                        'atualizado_por': s.atualizado_por} if s else None),
+            'saidas_producao': SaidaProducaoSite.query.filter_by(
+                pedido_id=p.id).count(),
+            'atribuicao': ({'status': a.status, 'data': a.data_entrega.isoformat()
+                            if a.data_entrega else None} if a else None),
+            'lalamove': ({'status': e.status, 'order_id': e.order_id} if e else None),
+            'motivo_bloqueio_saida': motivo,
+        })
+    return jsonify(ok=True, ate=ate.isoformat(), total=len(out), pedidos=out)
