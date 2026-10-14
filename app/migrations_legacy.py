@@ -129,6 +129,7 @@ def _migrate(app):
         _seed_minis_fora_pedido_loja(app)
         _seed_fotos_misto_2026_10(app)
         _seed_pesto_pote_2026_10(app)
+        _seed_entregues_vencidos_2026_10_14(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1110,6 +1111,62 @@ def _seed_fotos_misto_2026_10(app):
         logger.info('seed fotos misto: %s', r)
     except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
         logger.warning('migrate skip (seed fotos misto): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+# Pedidos do site pagos com entrega vencida até 13/10/2026 que ficaram
+# presos (dono 14/10/2026: "colocar como entregue os pedidos que deveriam
+# ter sido entregues até ontem"). Lista FECHADA tirada da sonda
+# /api/claude/pedidos-site-vencidos?ate=2026-10-13 — nunca pega pedido novo.
+ENTREGUES_VENCIDOS_2026_10_14 = (
+    'A2E8C52C', 'AD0F5229', '86763CE6', '1643CADC', 'B47A8691', 'B435AE56',
+    '0644F507', '93F53A48', 'CE639E7C', 'BE702D3D', '118B67D6', 'C84E8277',
+    '8DF6D61F', '320026F8', '9BA5AE0F', 'ED054A8A', '651E8F3D', 'C64E9373',
+)
+
+
+def _seed_entregues_vencidos_2026_10_14(app):
+    """UMA VEZ: marca como entregue (status + card do painel) os pedidos da
+    lista acima que ainda estejam pago/em_preparo/a_caminho com entrega até
+    13/10. Conciliação de STATUS, mesmo contrato do `sincronizar_entregues`
+    (entregas/routes.py): SEM e-mail ao cliente (aviso dias depois só
+    confunde) e SEM movimento de estoque (a baixa da saída dos kits é
+    decisão separada do dono — pode já estar refletida em contagem).
+    Marker com os códigos alterados e os pulados."""
+    try:
+        from datetime import date
+
+        from app.models import AppConfig, PainelPedidoStatus, PedidoOnline
+        chave = 'seed_entregues_vencidos_2026_10_14'
+        if AppConfig.get(chave):
+            return
+        limite = date(2026, 10, 13)
+        feitos, pulados = [], []
+        for p in (PedidoOnline.query
+                  .filter(PedidoOnline.codigo.in_(ENTREGUES_VENCIDOS_2026_10_14))
+                  .order_by(PedidoOnline.id).all()):
+            if (p.status not in ('pago', 'em_preparo', 'a_caminho')
+                    or p.data_entrega is None or p.data_entrega > limite):
+                pulados.append(f'{p.codigo}:{p.status}')
+                continue
+            p.status = 'entregue'
+            s = PainelPedidoStatus.query.filter_by(pedido_code=p.codigo).first()
+            if s:
+                s.status = 'entregue'
+            else:
+                db.session.add(PainelPedidoStatus(
+                    pedido_code=p.codigo, status='entregue', data_ref=p.data_entrega))
+            feitos.append(p.codigo)
+        AppConfig.set(chave, f"entregues={','.join(feitos) or 'nenhum'} "
+                             f"n={len(feitos)} pulados={','.join(pulados) or 'nenhum'}")
+        db.session.commit()
+        logger.info('seed entregues vencidos: %d marcados, pulados=%s',
+                    len(feitos), pulados)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed entregues vencidos): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001

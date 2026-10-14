@@ -672,15 +672,53 @@
     return lista;
   }
 
+  // Envio do status com retorno de verdade (14/10/2026, dono: "quando marcam
+  // na TV como entregue ele volta os status"). Antes a falha só ia pro
+  // console e a pendência otimista desfazia o card SOZINHA em 30 s — a
+  // equipe via o "entregue" voltar sem saber por quê (caso: Kit Dia das
+  // Crianças recusado com 409 pela saída da produção). Agora: corpo JSON
+  // (falha de CSRF volta JSON e é re-tentada com token novo), e qualquer
+  // recusa desfaz o card NA HORA e diz o motivo do servidor.
+  var CSRF_URL = "{{ url_for('auth.csrf_token_novo') }}";
+  var ROTULO_STATUS = { visto: 'visto', pronto: 'PRONTO', entregue: 'ENTREGUE' };
+  function postStatus(code, status) {
+    return fetch(STATUS_TMPL.replace('__CODE__', encodeURIComponent(code)), {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ status: status })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        d = d || {};
+        if (!r.ok && !d.erro) d.erro = 'o servidor respondeu com erro (HTTP ' + r.status + ')';
+        if (!r.ok) d.ok = false;
+        return d;
+      });
+    });
+  }
+  function falhouStatus(code, status, msg) {
+    delete pendentes[code];
+    carregar();                       // volta já ao que o servidor tem
+    if (status === 'visto') { console.warn('painel: visto não salvou', code, msg); return; }
+    window.alert('O pedido ' + code + ' NÃO foi marcado como ' + (ROTULO_STATUS[status] || status) +
+                 '.\n\nMotivo: ' + msg + '\n\nAvise a gerência antes de tentar de novo.');
+  }
   function mandarStatus(code, status) {
     marcarPendente(code, status);
-    fetch(STATUS_TMPL.replace('__CODE__', encodeURIComponent(code)) + '?status=' + status, {
-      method: 'POST', headers: { 'X-CSRFToken': CSRF }
-    }).then(function (r) {
-      // Não engole erro: 400 de CSRF expirado ou 4xx/5xx vira aviso no
-      // console (a pendência otimista reverte sozinha em 30s se não salvar).
-      if (!r.ok) console.warn('painel: status não salvou', code, status, r.status);
-    }).catch(function () { console.warn('painel: status sem rede', code, status); });
+    postStatus(code, status)
+      .then(function (d) {
+        if (d.erro !== 'csrf_expirada') return d;
+        return fetch(CSRF_URL, { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (t) {
+            if (t && t.token) { CSRF = t.token; return postStatus(code, status); }
+            return d;
+          });
+      })
+      .then(function (d) {
+        if (d && d.ok) return;
+        falhouStatus(code, status, (d && (d.msg || d.erro)) || 'erro desconhecido');
+      })
+      .catch(function () { falhouStatus(code, status, 'sem conexão com o servidor'); });
   }
   function setStatus(code, status) {
     var p = pedidos.find(function (x) { return x.code === code; });

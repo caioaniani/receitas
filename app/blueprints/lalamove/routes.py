@@ -172,7 +172,16 @@ def webhook():
     # no COMPLETED vindo do ORDER_STATUS_CHANGED — nunca por retirada/alocação.
     if status == 'COMPLETED':
         from app.services.loja_entrega import avancar_status_entrega
-        avancar_status_entrega(e.pedido_code, 'entregue')
+        try:
+            avancar_status_entrega(e.pedido_code, 'entregue')
+        except ValueError as exc:
+            # Saída da produção recusada (ex.: composição de kit sem vínculo):
+            # o pedido fica como está e a equipe confere. Antes isto virava
+            # 500 a cada reentrega da Lalamove (caso CE639E7C, 12/10/2026 —
+            # corrida COMPLETED com o pedido preso em "a caminho").
+            db.session.rollback()
+            logger.error('lalamove: pedido %s concluído mas NÃO marcado entregue '
+                         '(saída recusada): %s', e.pedido_code, exc)
     # Encerrada SEM entrega (CANCELED/EXPIRED/REJECTED): alerta ALTA no
     # painel + WhatsApp crítico ao dono + conversa do cliente pra equipe.
     # Nunca marca entregue nem mexe no status do pedido (23/09/2026).
