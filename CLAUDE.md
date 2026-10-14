@@ -4787,6 +4787,21 @@ três portas para a 2ª corrida, todas fechadas.
   tentativas; `sobreposta` = chamada com a anterior ainda viva). Manual de
   operação: gesto "liberar" registrado. COBERTURA: corrida criada lá cuja resposta se perdeu não tem
   linha aqui — o webhook dela loga "ordem desconhecida".
+- **Conferência das corridas vivas (mesma noite)**: a sonda com
+  `?conferir=1` (GET /v3/orders/{id}, só leitura) provou pela Lalamove que
+  o 43190CD6 tinha DOIS motoboys (um COMPLETED, outro ON_GOING) com as duas
+  linhas paradas aqui em ASSIGNING_DRIVER desde a chamada — o webhook
+  dessas corridas nunca chegou; 2F18BF49/C64E9373 também parados desde
+  13/10 e C2DA4A0E "CANCELED" aqui × COMPLETED lá. Histórico confirmado lá:
+  5B4162FB (13 s, 2 motoristas), AC6131C7 e 393D1A52 (mesmo motorista nas
+  duas corridas) e D91F591E/1A2DD4A4/F42594F3 (2 entregas com 1-2 h de
+  intervalo) COMPLETED em dobro. Fix: `app/services/lalamove_status.py` —
+  `aplicar_status` é a FONTE ÚNICA da regra do webhook (saída na coleta/
+  entrega, entregue no COMPLETED, alerta se encerrar sem entrega) e
+  `reconciliar` (cron 10 min, lock 7771, cooldown 420 s, kill-switch
+  `LALAMOVE_RECONCILIA=0`) consulta as corridas vivas há ≥ 10 min sem aviso
+  (janela 3 dias, teto 40) e aplica o status real. Falha na consulta mantém
+  o gravado. A sonda expõe `webhook` (último hit do container + saldo).
 - Testes: `tests/test_lalamove_uma_corrida.py`.
 
 ## Chamar cliente pelo WhatsApp (painel de entregas, 11/07/2026)

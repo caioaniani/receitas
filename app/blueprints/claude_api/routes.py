@@ -3688,6 +3688,15 @@ def lalamove_corridas():
                                'status_lalamove': r.get('status') if r.get('ok') else None,
                                'driver_id': r.get('driver_id') if r.get('ok') else None,
                                'erro': None if r.get('ok') else r.get('erro')})
+    # Os avisos da Lalamove estão chegando? Último hit do webhook neste
+    # container + última atualização do saldo (evento de carteira).
+    from app.blueprints.lalamove.routes import ultimo_hit
+    from app.extensions import db
+    from app.models import LalamoveSaldo
+    saldo = db.session.get(LalamoveSaldo, 1)
+    webhook = {'ultimo_hit': ultimo_hit(),
+               'saldo_atualizado_em': (saldo.atualizado_em.isoformat()
+                                       if saldo and saldo.atualizado_em else None)}
     return jsonify(ok=True, dias=dias, pedidos=len(por_pedido),
                    duplicados=duplicados, corridas=por_pedido,
-                   conferidas=conferidas)
+                   conferidas=conferidas, webhook=webhook)

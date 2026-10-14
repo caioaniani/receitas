@@ -72,6 +72,7 @@ LOCK_KEY_KITS_FISCAL = 7765  # preserva a chave histórica; fila de NF de todo o
 LOCK_KEY_FERMENTACAO_CONFERENCIA = 7769  # conferência da lista de fermentação (12:10/16:00)
 # 7770 = entregas.routes.LOCK_NAMESPACE_LALAMOVE_PEDIDO (chave dupla: trava por
 # pedido da chamada Lalamove — uma corrida por pedido).
+LOCK_KEY_LALAMOVE_RECONCILIA = 7771  # conferência das corridas Lalamove vivas (10 min)
 # 7750 foi reciclado: era do `briefing-dono` (removido 17/07/2026), agora e do
 # marketing (sync da base + campanha de aniversario no Listmonk).
 LOCK_KEY_MARKETING = 7750  # advisory lock pro marketing (Listmonk)
@@ -655,6 +656,17 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Conferência das corridas Lalamove (14/10/2026): webhook perdido deixava
+    # corrida "procurando entregador" aqui com motoboy a caminho/entregue lá
+    # (43190CD6 com dois motoboys). Pergunta à Lalamove o status das vivas e
+    # aplica a mesma regra do webhook. Desligar: LALAMOVE_RECONCILIA=0.
+    if os.environ.get('LALAMOVE_RECONCILIA', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_lalamove_reconcilia(app),
+            'interval', minutes=10, id='lalamove-reconcilia',
+            max_instances=1, coalesce=True,
+        )
+
     # Vigia de CUSTO de IA (11/07/2026): o gasto do dia (UsoIA) passou do
     # teto USO_IA_TETO_DIA_USD? Alerta WhatsApp na transicao (anti-spam de
     # 6h no servico). O relatorio /admin/uso-ia e passivo — sem este job,
@@ -1223,6 +1235,21 @@ def _run_pdv_vigia(app):
     with app.app_context():
         _com_lock(LOCK_KEY_PDV_VIGIA, pdv_vigia.vigiar, 'vigia pdv',
                   cooldown_seg=1200)
+
+
+def _run_lalamove_reconcilia(app):
+    """Job: conferência das corridas Lalamove vivas (14/10/2026) — aplica o
+    status real quando o webhook não chegou (lalamove_status.reconciliar)."""
+    from app.services import lalamove_status
+
+    def _rodar():
+        stats = lalamove_status.reconciliar()
+        if stats.get('corrigidas'):
+            logger.warning('lalamove reconcilia: %s', stats)
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_LALAMOVE_RECONCILIA, _rodar,
+                  'lalamove reconcilia', cooldown_seg=420)
 
 
 def _run_uso_ia_vigia(app):

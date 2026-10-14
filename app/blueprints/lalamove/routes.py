@@ -142,23 +142,8 @@ def webhook():
     # pedido vira "entregue" cedo demais (bug 19/06/2026: marcava entregue na
     # retirada/alocação). Aqui esses eventos só atualizam motorista/link.
     status = ''
-    anterior = e.status
     if event_type == 'ORDER_STATUS_CHANGED':
         status = (ordem.get('status') or '').upper()
-        if status in ('PICKED_UP', 'COMPLETED'):
-            from app.services.saida_producao_site import registrar_por_codigo
-            try:
-                with db.session.begin_nested():
-                    registrar_por_codigo(e.pedido_code, 'lalamove_' + status.lower())
-            except ValueError as exc:
-                # O motoboy JÁ coletou (fato físico): o webhook registra o
-                # status e a equipe confere a saída bloqueada (estorno de kit,
-                # composição sem vínculo). Recusar só faria a Lalamove
-                # reenviar para sempre.
-                logger.error('lalamove: saída do pedido %s não registrada (%s): %s',
-                             e.pedido_code, status, exc)
-        if status:
-            e.status = status
     if ordem.get('shareLink'):
         e.share_link = ordem['shareLink']
     motorista = data.get('driver') or {}
@@ -166,26 +151,13 @@ def webhook():
         e.motorista_nome = motorista['name'][:120]
     if motorista.get('phone'):
         e.motorista_telefone = str(motorista['phone'])[:40]
-    e.atualizado_em = agora()
-    db.session.commit()
-    # ENTREGUE = corrida realmente concluída (entregue ao cliente). Só dispara
-    # no COMPLETED vindo do ORDER_STATUS_CHANGED — nunca por retirada/alocação.
-    if status == 'COMPLETED':
-        from app.services.loja_entrega import avancar_status_entrega
-        try:
-            avancar_status_entrega(e.pedido_code, 'entregue')
-        except ValueError as exc:
-            # Saída da produção recusada (ex.: composição de kit sem vínculo):
-            # o pedido fica como está e a equipe confere. Antes isto virava
-            # 500 a cada reentrega da Lalamove (caso CE639E7C, 12/10/2026 —
-            # corrida COMPLETED com o pedido preso em "a caminho").
-            db.session.rollback()
-            logger.error('lalamove: pedido %s concluído mas NÃO marcado entregue '
-                         '(saída recusada): %s', e.pedido_code, exc)
-    # Encerrada SEM entrega (CANCELED/EXPIRED/REJECTED): alerta ALTA no
-    # painel + WhatsApp crítico ao dono + conversa do cliente pra equipe.
-    # Nunca marca entregue nem mexe no status do pedido (23/09/2026).
-    from app.services import lalamove_alerta
-    if status in lalamove_alerta.STATUS_SEM_ENTREGA:
-        lalamove_alerta.tratar_encerramento(e, status, anterior, dados)
+    if status:
+        # Mesma regra da reconciliação (14/10/2026): saída da produção na
+        # coleta/entrega, entregue no COMPLETED, alerta se encerrar sem
+        # entrega (23/09/2026). Fonte única em lalamove_status.
+        from app.services.lalamove_status import aplicar_status
+        aplicar_status(e, status, dados)
+    else:
+        e.atualizado_em = agora()
+        db.session.commit()
     return jsonify(ok=True)

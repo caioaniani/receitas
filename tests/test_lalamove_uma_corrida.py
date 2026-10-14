@@ -315,3 +315,57 @@ def test_sonda_conferir_pergunta_a_lalamove_sem_gravar(app):
                                 'status_lalamove': 'EXPIRED', 'driver_id': None,
                                 'erro': None}]
     assert db.session.get(LalamoveEntrega, vivo).status == 'ASSIGNING_DRIVER'
+
+
+# ── Conferência das corridas vivas (webhook perdido, 14/10/2026) ─────────
+
+def _viva(code, status, order_id, minutos=30):
+    from datetime import timedelta as _td
+    t = agora() - _td(minutes=minutos)
+    return _cotacao(code=code, status=status, order_id=order_id,
+                    criado_em=t, atualizado_em=t)
+
+
+def test_reconcilia_aplica_status_real_quando_o_aviso_nao_chegou(app):
+    from app.services import lalamove_status
+    _config(app)
+    a = _viva('PED-A', 'ASSIGNING_DRIVER', 'O-a')            # lá: entregue
+    b = _viva('PED-B', 'ASSIGNING_DRIVER', 'O-b')            # lá: expirou
+    c = _viva('PED-C', 'ON_GOING', 'O-c')                    # lá: igual
+    novo = _viva('PED-D', 'ASSIGNING_DRIVER', 'O-d', minutos=2)  # recente: não consulta
+    respostas = {'O-a': 'COMPLETED', 'O-b': 'EXPIRED', 'O-c': 'ON_GOING'}
+    with patch('app.services.lalamove.detalhes',
+               side_effect=lambda oid: {'ok': True, 'status': respostas[oid]}) as det, \
+         patch('app.services.loja_entrega.avancar_status_entrega') as avancar, \
+         patch('app.services.lalamove_alerta.tratar_encerramento') as alerta:
+        st = lalamove_status.reconciliar()
+    assert sorted(x.args[0] for x in det.call_args_list) == ['O-a', 'O-b', 'O-c']
+    assert st['corrigidas'] == 2 and st['consultadas'] == 3
+    assert db.session.get(LalamoveEntrega, a).status == 'COMPLETED'
+    assert db.session.get(LalamoveEntrega, b).status == 'EXPIRED'
+    assert db.session.get(LalamoveEntrega, c).status == 'ON_GOING'
+    assert db.session.get(LalamoveEntrega, novo).status == 'ASSIGNING_DRIVER'
+    avancar.assert_called_once_with('PED-A', 'entregue')
+    assert alerta.call_count == 1 and alerta.call_args.args[1] == 'EXPIRED'
+
+
+def test_reconcilia_falha_na_consulta_mantem_o_gravado(app):
+    from app.services import lalamove_status
+    _config(app)
+    a = _viva('PED-A', 'ON_GOING', 'O-a')
+    with patch('app.services.lalamove.detalhes', side_effect=requests.Timeout()):
+        st = lalamove_status.reconciliar()
+    assert st['falhas'] == 1 and st['corrigidas'] == 0
+    assert db.session.get(LalamoveEntrega, a).status == 'ON_GOING'
+
+
+def test_webhook_usa_a_mesma_regra(app):
+    """O webhook delega a aplicação a lalamove_status.aplicar_status."""
+    _config(app)
+    eid = _viva('PED-W', 'ASSIGNING_DRIVER', 'O-w')
+    with patch('app.services.lalamove_status.aplicar_status') as ap:
+        r = app.test_client().post('/lalamove/webhook', json={
+            'apiKey': 'pk_test_chave', 'eventType': 'ORDER_STATUS_CHANGED',
+            'data': {'order': {'orderId': 'O-w', 'status': 'ON_GOING'}}})
+    assert r.status_code == 200
+    assert ap.call_args.args[0].id == eid and ap.call_args.args[1] == 'ON_GOING'
