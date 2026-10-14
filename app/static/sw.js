@@ -79,6 +79,15 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // fetch() de DADOS (JSON das telas: /pdv/api/vendas, /entregas/api/...,
+    // /padeiro/*.json) NÃO passa pelo SW (14/10/2026, print do dono em
+    // /pdv/: "HTTP 200 — resposta não-JSON ... Sem conexão"). Antes, toda GET
+    // fora de /api/ caía no ramo abaixo e uma queda de rede virava a página
+    // offline com status 200 — o JS recebia HTML no lugar do JSON e mostrava
+    // um erro enganoso. Sem respondWith, a falha chega como falha de rede ao
+    // .catch() da tela. A página "Sem conexão" é só para NAVEGAÇÃO.
+    if (request.mode !== 'navigate') return;
+
     // Páginas HTML = SEMPRE da rede, NUNCA do cache.
     // Não cacheamos (nem servimos do cache) HTML: a página autenticada traz o
     // token CSRF embutido e dado do usuário. Uma cópia em cache = token velho
