@@ -299,3 +299,19 @@ def test_id_gigante_e_400(app, admin_user):
     c = _cliente(app)
     assert c.post(CHAMAR, json={'entrega_id': 10 ** 12}).status_code == 400
     assert c.post(LIBERAR, json={'entrega_id': -1}).status_code == 400
+
+
+def test_sonda_conferir_pergunta_a_lalamove_sem_gravar(app):
+    app.config['CLAUDE_API_TOKEN'] = 'tok'
+    vivo = _cotacao(code='PED-V', status='ASSIGNING_DRIVER', order_id='O-v')
+    _cotacao(code='PED-F', status='COMPLETED', order_id='O-f')   # fora: nem dup nem vivo
+    with patch('app.services.lalamove.detalhes',
+               return_value={'ok': True, 'status': 'EXPIRED', 'driver_id': None}) as det:
+        d = app.test_client().get('/api/claude/lalamove-corridas?dias=3&conferir=1',
+                                  headers={'Authorization': 'Bearer tok'}).get_json()
+    det.assert_called_once_with('O-v')
+    assert d['conferidas'] == [{'pedido': 'PED-V', 'order_id': 'O-v',
+                                'status_aqui': 'ASSIGNING_DRIVER',
+                                'status_lalamove': 'EXPIRED', 'driver_id': None,
+                                'erro': None}]
+    assert db.session.get(LalamoveEntrega, vivo).status == 'ASSIGNING_DRIVER'

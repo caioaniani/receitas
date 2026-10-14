@@ -3663,5 +3663,31 @@ def lalamove_corridas():
                                'order_ids': [x['order_id'] for x in chamadas],
                                'criadas': [x['criado_em'] for x in chamadas],
                                'por': [x['criado_por_id'] for x in chamadas]})
+    # ?conferir=1: pergunta à Lalamove (GET /v3/orders/{id}, só leitura —
+    # nada é gravado aqui) o status REAL das corridas dos pedidos duplicados
+    # e das que estão "vivas" aqui. Distingue registro parado (webhook
+    # perdido) de dois motoboys de verdade. Teto de 80 consultas.
+    conferidas = None
+    if request.args.get('conferir') == '1':
+        from app.services import lalamove as lala_svc
+        alvos = []
+        dup_codes = {x['pedido'] for x in duplicados}
+        for code, linhas in por_pedido.items():
+            for x in linhas:
+                if x['order_id'] and (code in dup_codes or x['status'] in (
+                        'ASSIGNING_DRIVER', 'ON_GOING', 'PICKED_UP')):
+                    alvos.append((code, x))
+        conferidas = []
+        for code, x in alvos[:80]:
+            try:
+                r = lala_svc.detalhes(x['order_id'])
+            except Exception as exc:  # noqa: BLE001 — sonda: erro vira dado
+                r = {'ok': False, 'erro': type(exc).__name__}
+            conferidas.append({'pedido': code, 'order_id': x['order_id'],
+                               'status_aqui': x['status'],
+                               'status_lalamove': r.get('status') if r.get('ok') else None,
+                               'driver_id': r.get('driver_id') if r.get('ok') else None,
+                               'erro': None if r.get('ok') else r.get('erro')})
     return jsonify(ok=True, dias=dias, pedidos=len(por_pedido),
-                   duplicados=duplicados, corridas=por_pedido)
+                   duplicados=duplicados, corridas=por_pedido,
+                   conferidas=conferidas)
