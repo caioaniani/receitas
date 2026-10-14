@@ -130,6 +130,7 @@ def _migrate(app):
         _seed_fotos_misto_2026_10(app)
         _seed_pesto_pote_2026_10(app)
         _seed_entregues_vencidos_2026_10_14(app)
+        _seed_saida_entregues_vencidos_2026_10_14(app)
 
 
 def _backfill_cargos_funcionarios(app):
@@ -1167,6 +1168,61 @@ def _seed_entregues_vencidos_2026_10_14(app):
                     len(feitos), pulados)
     except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
         logger.warning('migrate skip (seed entregues vencidos): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_saida_entregues_vencidos_2026_10_14(app):
+    """UMA VEZ (dono 14/10/2026, "o que você achar melhor" sobre a baixa dos
+    kits): os pedidos da lista acima SAÍRAM fisicamente da indústria, mas a
+    saída foi recusada na hora (Kit Dia das Crianças com componente sem
+    vínculo em 12/10 — a composição já foi corrigida; os kits pagos de
+    18 e 24/10 saem sem bloqueio) e o seed anterior só conciliou o STATUS.
+    Sem conferência da indústria depois de 12/10 nas linhas envolvidas
+    (razão conferido pela sonda), então a baixa ainda não está refletida em
+    contagem nenhuma. Registra a saída pelo MESMO motor do painel
+    (`saida_producao_site.registrar`, composição atual, falta vira
+    `saida_site_direto_sem_estoque` sem saldo negativo), idempotente por item
+    (`SaidaProducaoSite`). Kit de café (EntregaKit) fica fora — a coleta dele
+    também baixa a loja e tem fluxo próprio. Savepoint por pedido; marker
+    com o resultado de cada código."""
+    try:
+        from app.models import AppConfig, EntregaKit, PedidoOnline, SaidaProducaoSite
+        from app.services.saida_producao_site import registrar
+        chave = 'seed_saida_entregues_vencidos_2026_10_14'
+        if AppConfig.get(chave):
+            return
+        res = []
+        for p in (PedidoOnline.query
+                  .filter(PedidoOnline.codigo.in_(ENTREGUES_VENCIDOS_2026_10_14))
+                  .order_by(PedidoOnline.id).all()):
+            if p.status != 'entregue':
+                res.append(f'{p.codigo}:pulado_{p.status}')
+                continue
+            if EntregaKit.query.filter_by(pedido_id=p.id).first() is not None:
+                res.append(f'{p.codigo}:kit_cafe')
+                continue
+            antes = SaidaProducaoSite.query.filter_by(pedido_id=p.id).count()
+            try:
+                with db.session.begin_nested():
+                    faltas = registrar(p, 'acerto_entregue_2026_10_14',
+                                       permitir_entregue=True)
+            except ValueError as exc:
+                res.append(f'{p.codigo}:recusado({str(exc)[:80]})')
+                continue
+            novos = SaidaProducaoSite.query.filter_by(pedido_id=p.id).count() - antes
+            if novos:
+                res.append(f'{p.codigo}:itens={novos}'
+                           + (f',faltas={len(faltas)}' if faltas else ''))
+            else:
+                res.append(f'{p.codigo}:nada')
+        AppConfig.set(chave, '; '.join(res) or 'nenhum')
+        db.session.commit()
+        logger.info('seed saída entregues vencidos: %s', res)
+    except Exception as e:  # noqa: BLE001 — seed de boot nunca derruba o startup
+        logger.warning('migrate skip (seed saída entregues vencidos): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001

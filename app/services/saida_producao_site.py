@@ -125,11 +125,14 @@ def registrar_por_codigo(codigo, origem, usuario_id=None):
     return registrar(pedido, origem, usuario_id)
 
 
-def registrar(pedido, origem, usuario_id=None):
+def registrar(pedido, origem, usuario_id=None, *, permitir_entregue=False):
     """Registra uma vez os itens sob encomenda. Retorna faltas para auditoria.
 
     Pedido entregue antigo não é reprocessado por um webhook repetido.
     O acerto manual do dia compartilha o lock e exclui os itens aqui gravados.
+    `permitir_entregue` só para acerto explícito de pedido que SAIU mas foi
+    conciliado como entregue sem a baixa (seed de 14/10/2026) — nunca em
+    caminho automático.
     """
     from app.services.acerto_despacho import _LOCK_ACERTO, _codigos_acertados
     from app.services.estoque_congelados import obter_linha_producao
@@ -139,7 +142,9 @@ def registrar(pedido, origem, usuario_id=None):
         if db.engine.dialect.name == 'postgresql':
             db.session.execute(text('SELECT pg_advisory_xact_lock(:k)'), {'k': _LOCK_ACERTO})
         db.session.refresh(pedido, with_for_update=True)
-    if pedido.status not in ('pago', 'em_preparo', 'a_caminho') or pedido.divulgacao:
+    status_validos = ('pago', 'em_preparo', 'a_caminho') + (
+        ('entregue',) if permitir_entregue else ())
+    if pedido.status not in status_validos or pedido.divulgacao:
         return []
     acertado = bool(pedido.data_entrega
                     and pedido.codigo in _codigos_acertados(pedido.data_entrega))

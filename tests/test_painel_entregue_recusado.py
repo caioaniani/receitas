@@ -103,3 +103,32 @@ def test_seed_marca_so_a_lista_vencida_sem_email_nem_estoque(app):
     db.session.commit()
     _seed_entregues_vencidos_2026_10_14(app)
     assert PedidoOnline.query.filter_by(codigo='93F53A48').one().status == 'pago'
+
+
+def test_seed_saida_baixa_kits_entregues_pelo_motor_uma_vez(app):
+    """Kits do 12/10 conciliados como entregues SEM baixa: o acerto registra a
+    saída pelo motor do painel (composição atual), só pros pedidos entregues
+    da lista, uma vez."""
+    from app.migrations_legacy import _seed_saida_entregues_vencidos_2026_10_14
+    from app.models import EstoqueProducao, MovEstoqueProducao, Receita
+    from tests.test_padeiro_kit_entregue import _kit, _pedido
+    kit = _kit()
+    croissant = Receita.query.filter_by(nome='Croissant Tradicional').one()
+    db.session.add(EstoqueProducao(receita_id=croissant.id, quantidade=20))
+    p = _pedido(kit, codigo='CE639E7C')
+    p.status = 'entregue'
+    _pedido(kit, codigo='93F53A48')                    # ainda pago: pulado
+    db.session.commit()
+    _seed_saida_entregues_vencidos_2026_10_14(app)
+    assert EstoqueProducao.query.filter_by(receita_id=croissant.id).one().quantidade == 19
+    assert SaidaProducaoSite.query.filter_by(pedido_id=p.id).count() == 1
+    assert MovEstoqueProducao.query.filter_by(tipo='saida_site_direto').count() == 1
+    marker = AppConfig.get('seed_saida_entregues_vencidos_2026_10_14')
+    assert 'CE639E7C:itens=1' in marker and '93F53A48:pulado_pago' in marker
+    # Uma vez só (marker) e idempotente por item mesmo sem ele.
+    _seed_saida_entregues_vencidos_2026_10_14(app)
+    AppConfig.query.filter_by(key='seed_saida_entregues_vencidos_2026_10_14').delete()
+    db.session.commit()
+    _seed_saida_entregues_vencidos_2026_10_14(app)
+    assert EstoqueProducao.query.filter_by(receita_id=croissant.id).one().quantidade == 19
+    assert 'CE639E7C:nada' in AppConfig.get('seed_saida_entregues_vencidos_2026_10_14')

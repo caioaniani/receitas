@@ -4295,6 +4295,13 @@ Histórico já entregue e sincronização de status antigos não são reprocessa
 
 Operação: `docs/saida-producao-site.md` e manual admin. Regressões:
 `tests/test_saida_producao_site.py`, `tests/test_saida_site_padeiro.py`.
+Acerto de 14/10/2026 (dono: "o que você achar melhor"): pedidos da lista
+`ENTREGUES_VENCIDOS_2026_10_14` saíram em 12/10 com a saída recusada (Kit
+Dia das Crianças com componente sem vínculo, já corrigido) e foram
+conciliados como entregues SEM baixa. Sem conferência da indústria depois
+disso, o seed `_seed_saida_entregues_vencidos_2026_10_14` registra a saída
+pelo mesmo motor (`registrar(..., permitir_entregue=True)` — kwarg só para
+acerto explícito, nunca caminho automático); kit de café fica fora.
 
 ### Acerto de DESPACHO DIRETO da industria (08/08/2026, Dia dos Pais)
 
@@ -4742,6 +4749,37 @@ UI, em duas camadas:
 `telefone_destinatario` (porta), o botao "Chamar cliente" e Pagar.me/NF usam
 `telefone_cliente` (comprador). Login/identidade e por E-MAIL, nao telefone —
 mudar o ROTULO do campo e seguro. Testes: `tests/test_pedido_presente_telefone.py`.
+
+## Lalamove: UMA corrida por pedido (14/10/2026)
+
+Dono: "às vezes ao pedir motoboy Lalamove ele multiplica e chama 2 motoboys
+para o mesmo pedido". `api_lalamove_chamar` (entregas/routes.py) checava
+`status == 'cotacao'` SEM claim e chamava `criar_ordem` (rede, até 15 s):
+três portas para a 2ª corrida, todas fechadas.
+- **Mesma cotação duas vezes** (duplo clique, TV + celular, o poll de 20 s
+  re-renderizando o detalhe com o botão habilitado no meio do POST): claim
+  atômico `cotacao → chamando` por UPDATE condicional ANTES da rede.
+- **Duas cotações do mesmo pedido**: `pg_advisory_xact_lock(7770,
+  crc32(código))` + `_corrida_que_bloqueia` (qualquer linha fora de
+  cotação/encerrada sem entrega) → 409 com o motivo. `cotar` recusa cedo.
+  Cancelada/expirada/recusada/`descartada` NÃO bloqueiam (chamar de novo).
+- **Sem resposta**: timeout/rede/5xx/408 no POST (`criar_ordem` devolve
+  `incerto`) e exceção inesperada viram `sem_resposta` (a corrida PODE
+  existir lá) — bloqueia até alguém conferir no app da Lalamove e clicar
+  "Não há corrida no app — liberar" (`/api/painel/lalamove/liberar`, só
+  nesse estado; vira `descartada`). `chamando` com mais de
+  `CHAMANDO_ORFA_SEG`=120 s conta como `sem_resposta` (worker morto no meio).
+  Recusa clara (4xx) devolve a linha a `cotacao`. Erro DEPOIS da corrida
+  criada (saída da produção recusada — caso do kit de 12/10 —, e-mail)
+  vira `aviso` com ok=True; antes era 500 e a equipe chamava de novo.
+- Estados locais e `STATUS_ENCERRADOS_SEM_ENTREGA` em `lalamove.py` (fonte
+  única; o sinal "motoboy chamado" do detalhe admin usa a mesma tupla). O
+  card (`_lalamove_por_code`) mostra a linha que bloqueia (ativa, chamando,
+  sem resposta) antes da mais recente encerrada.
+- Sonda `GET /api/claude/lalamove-corridas?dias=` (pedidos com 2+ corridas
+  chamadas). COBERTURA: corrida criada lá cuja resposta se perdeu não tem
+  linha aqui — o webhook dela loga "ordem desconhecida".
+- Testes: `tests/test_lalamove_uma_corrida.py`.
 
 ## Chamar cliente pelo WhatsApp (painel de entregas, 11/07/2026)
 
