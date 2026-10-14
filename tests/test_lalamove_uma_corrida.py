@@ -173,7 +173,7 @@ def test_chamando_orfa_vira_sem_resposta_e_fresca_nao_libera(app, admin_user):
     fresca = _cotacao(code='PED-A', status='chamando', atualizado_em=agora())
     assert c.post(LIBERAR, json={'entrega_id': fresca}).status_code == 409
     orfa = _cotacao(code='PED-B', status='chamando',
-                    atualizado_em=agora() - timedelta(minutes=5))
+                    atualizado_em=agora() - timedelta(minutes=10))
     from app.blueprints.entregas.routes import _lalamove_por_code
     resumo = _lalamove_por_code(['PED-B'])['PED-B']
     assert resumo['status'] == 'sem_resposta' and resumo['pode_liberar'] is True
@@ -205,8 +205,97 @@ def test_sonda_lista_pedidos_com_duas_corridas(app):
     _cotacao(code='PED-D', status='ASSIGNING_DRIVER', order_id='O-a')
     _cotacao(code='PED-D', status='ON_GOING', order_id='O-b')
     _cotacao(code='PED-U', status='COMPLETED', order_id='O-c')
+    _cotacao(code='PED-R', status='CANCELED', order_id='O-d')     # rechamada legítima
+    _cotacao(code='PED-R', status='ON_GOING', order_id='O-e')
+    _cotacao(code='PED-S', status='descartada')                    # sem número
+    _cotacao(code='PED-S', status='ASSIGNING_DRIVER', order_id='O-f')
     d = app.test_client().get('/api/claude/lalamove-corridas?dias=3',
                               headers={'Authorization': 'Bearer tok'}).get_json()
     assert d['ok'] is True
-    assert [x['pedido'] for x in d['duplicados']] == ['PED-D']
-    assert d['duplicados'][0]['corridas'] == 2
+    dup = {x['pedido']: x for x in d['duplicados']}
+    assert set(dup) == {'PED-D', 'PED-R', 'PED-S'}
+    assert dup['PED-D']['sobreposta'] is True and dup['PED-D']['corridas'] == 2
+    assert dup['PED-R']['sobreposta'] is False
+    assert dup['PED-S']['sobreposta'] is False
+
+
+def test_resposta_sem_order_id_e_incerta(app):
+    from app.services import lalamove as lala_svc
+    _config(app)
+    with patch('app.services.lalamove._request', return_value=(201, {'data': {}})):
+        r = lala_svc.criar_ordem('Q', 'S0', 'S1', 'Ana', '11988887777')
+    assert r['ok'] is False and r['incerto'] is True
+    with patch('app.services.lalamove._request', return_value=(200, {'raw': 'oops'})):
+        assert lala_svc.criar_ordem('Q', 'S0', 'S1', 'Ana', '11988887777')['incerto'] is True
+
+
+def test_sem_conexao_nao_e_incerto_e_devolve_a_cotacao(app, admin_user):
+    c = _cliente(app)
+    eid = _cotacao()
+    with patch('app.services.lalamove._request',
+               side_effect=requests.ConnectTimeout('connect timed out')):
+        r = c.post(CHAMAR, json={'entrega_id': eid})
+    assert r.status_code == 502 and not r.get_json().get('incerto')
+    assert db.session.get(LalamoveEntrega, eid).status == 'cotacao'
+
+
+def test_webhook_perdido_e_reconciliado_antes_de_recusar(app, admin_user):
+    """Corrida expirou na Lalamove e o webhook não chegou: a linha seguia
+    ASSIGNING_DRIVER e travaria o pedido para sempre."""
+    c = _cliente(app)
+    viva = _cotacao(status='ASSIGNING_DRIVER', order_id='O-perdida')
+    with patch('app.services.lalamove.detalhes',
+               return_value={'ok': True, 'status': 'EXPIRED'}) as det:
+        r, _ = _cotar(c)
+    det.assert_called_once_with('O-perdida')
+    assert r.status_code == 200
+    assert db.session.get(LalamoveEntrega, viva).status == 'EXPIRED'
+    # Lalamove confirma viva (ou fora do ar): continua bloqueando.
+    _cotacao(code='PED-2', status='ON_GOING', order_id='O-viva')
+    with patch('app.services.lalamove.detalhes',
+               return_value={'ok': True, 'status': 'ON_GOING'}):
+        assert _cotar(c, 'PED-2')[0].status_code == 409
+    with patch('app.services.lalamove.detalhes', side_effect=requests.Timeout()):
+        assert _cotar(c, 'PED-2')[0].status_code == 409
+
+
+def test_entregue_nao_bloqueia_reentrega(app, admin_user):
+    c = _cliente(app)
+    _cotacao(status='COMPLETED', order_id='O-entregue')
+    assert _cotar(c)[0].status_code == 200
+
+
+def test_desfecho_tardio_nao_sobrescreve_liberacao_mas_corrida_criada_grava(app):
+    from app.blueprints.entregas.routes import _finalizar_chamada
+    eid = _cotacao(status='descartada')
+    assert _finalizar_chamada(eid, {'status': 'cotacao'}) is True
+    assert db.session.get(LalamoveEntrega, eid).status == 'descartada'
+    assert _finalizar_chamada(eid, {'order_id': 'O-tarde', 'status': 'ASSIGNING_DRIVER'},
+                              corrida_criada=True) is True
+    e = db.session.get(LalamoveEntrega, eid)
+    assert e.order_id == 'O-tarde' and e.status == 'ASSIGNING_DRIVER'
+
+
+def test_falha_ao_gravar_corrida_criada_ainda_grava_o_numero(app):
+    from app.blueprints.entregas.routes import _finalizar_chamada
+    eid = _cotacao(status='chamando', atualizado_em=agora())
+    real = db.session.commit
+    chamadas = {'n': 0}
+
+    def commit_falha_uma_vez():
+        chamadas['n'] += 1
+        if chamadas['n'] == 1:
+            raise RuntimeError('blip do banco')
+        return real()
+    with patch.object(db.session, 'commit', side_effect=commit_falha_uma_vez):
+        ok = _finalizar_chamada(eid, {'order_id': 'O-x', 'status': 'ASSIGNING_DRIVER',
+                                      'share_link': 's'}, corrida_criada=True)
+    assert ok is False
+    e = db.session.get(LalamoveEntrega, eid)
+    assert e.order_id == 'O-x' and e.status == 'ASSIGNING_DRIVER'
+
+
+def test_id_gigante_e_400(app, admin_user):
+    c = _cliente(app)
+    assert c.post(CHAMAR, json={'entrega_id': 10 ** 12}).status_code == 400
+    assert c.post(LIBERAR, json={'entrega_id': -1}).status_code == 400

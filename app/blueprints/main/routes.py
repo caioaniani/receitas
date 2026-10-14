@@ -6760,7 +6760,7 @@ def _expedicao_com_pedido(p):
                        + lala_svc.STATUS_ENCERRADOS_SEM_ENTREGA))
            .first())
     if lal:
-        return 'motoboy Lalamove chamado (%s)' % lal.status
+        return 'motoboy Lalamove chamado (%s)' % lala_svc.rotulo_status(lal.status)
     pps = PainelPedidoStatus.query.filter_by(pedido_code=p.codigo).first()
     if pps and pps.status in ('visto', 'pronto'):
         return 'cozinha já marcou "%s" no Painel do Dia' % pps.status

@@ -4760,24 +4760,32 @@ três portas para a 2ª corrida, todas fechadas.
   re-renderizando o detalhe com o botão habilitado no meio do POST): claim
   atômico `cotacao → chamando` por UPDATE condicional ANTES da rede.
 - **Duas cotações do mesmo pedido**: `pg_advisory_xact_lock(7770,
-  crc32(código))` + `_corrida_que_bloqueia` (qualquer linha fora de
-  cotação/encerrada sem entrega) → 409 com o motivo. `cotar` recusa cedo.
-  Cancelada/expirada/recusada/`descartada` NÃO bloqueiam (chamar de novo).
+  crc32(código))` + `_corrida_que_bloqueia` (chamando, sem resposta,
+  ASSIGNING_DRIVER/ON_GOING/PICKED_UP) → 409 com o motivo. `cotar` recusa
+  cedo, mas antes RECONCILIA as linhas vivas com `lalamove.detalhes`
+  (webhook perdido de EXPIRED/CANCELED/COMPLETED travaria o pedido para
+  sempre — cancelar falha lá e não há liberar para corrida com número).
+  Entregue, cancelada/expirada/recusada/`descartada` NÃO bloqueiam.
 - **Sem resposta**: timeout/rede/5xx/408 no POST (`criar_ordem` devolve
   `incerto`) e exceção inesperada viram `sem_resposta` (a corrida PODE
   existir lá) — bloqueia até alguém conferir no app da Lalamove e clicar
   "Não há corrida no app — liberar" (`/api/painel/lalamove/liberar`, só
   nesse estado; vira `descartada`). `chamando` com mais de
-  `CHAMANDO_ORFA_SEG`=120 s conta como `sem_resposta` (worker morto no meio).
-  Recusa clara (4xx) devolve a linha a `cotacao`. Erro DEPOIS da corrida
+  `CHAMANDO_ORFA_SEG`=300 s conta como `sem_resposta` (worker morto no meio).
+  200 sem `orderId` também é incerto; `ConnectTimeout` (nem conectou) não.
+  Recusa clara (4xx) devolve a linha a `cotacao`. Desfecho gravado por
+  `_finalizar_chamada` SÓ se a linha ainda está `chamando` (liberada por
+  cima = ERROR no log); corrida criada grava o número mesmo assim, com 2ª
+  tentativa só de order_id+status se o commit falhar. Erro DEPOIS da corrida
   criada (saída da produção recusada — caso do kit de 12/10 —, e-mail)
   vira `aviso` com ok=True; antes era 500 e a equipe chamava de novo.
 - Estados locais e `STATUS_ENCERRADOS_SEM_ENTREGA` em `lalamove.py` (fonte
   única; o sinal "motoboy chamado" do detalhe admin usa a mesma tupla). O
   card (`_lalamove_por_code`) mostra a linha que bloqueia (ativa, chamando,
   sem resposta) antes da mais recente encerrada.
-- Sonda `GET /api/claude/lalamove-corridas?dias=` (pedidos com 2+ corridas
-  chamadas). COBERTURA: corrida criada lá cuja resposta se perdeu não tem
+- Sonda `GET /api/claude/lalamove-corridas?dias=` (pedidos com 2+
+  tentativas; `sobreposta` = chamada com a anterior ainda viva). Manual de
+  operação: gesto "liberar" registrado. COBERTURA: corrida criada lá cuja resposta se perdeu não tem
   linha aqui — o webhook dela loga "ordem desconhecida".
 - Testes: `tests/test_lalamove_uma_corrida.py`.
 

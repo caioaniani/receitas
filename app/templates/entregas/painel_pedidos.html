@@ -826,7 +826,7 @@
   // Chamada em voo: o poll de 20 s re-renderiza o detalhe e devolvia o botão
   // habilitado no meio do POST (2º clique = 2º motoboy, 14/10/2026). O
   // servidor também recusa; isto só evita mandar.
-  var lalaChamando = false;
+  var lalaChamando = null;   // código do pedido com chamada em voo
 
   function lalamoveHTML(p) {
     // Lalamove gasta dinheiro — só admin/gerente (bate com @gerente_required
@@ -907,8 +907,17 @@
   }
 
   function lalaErro(msg) {
+    // No card com corrida o #lala-res só existe dentro da gorjeta: sem ele,
+    // a mensagem ia pro nada (liberar/409 falhavam em silêncio).
     var r = document.getElementById('lala-res');
-    if (r) { r.innerHTML = '<span class="lala-erro">⚠ ' + esc(msg) + '</span>'; }
+    if (!r) {
+      var box = document.querySelector('#detalhe-box .lala-box');
+      if (!box) { window.alert(msg); return; }
+      r = document.createElement('div');
+      r.className = 'lala-res'; r.id = 'lala-res';
+      box.appendChild(r);
+    }
+    r.innerHTML = '<span class="lala-erro">⚠ ' + esc(msg) + '</span>';
   }
 
   function ligarLalamove(p) {
@@ -980,12 +989,16 @@
           }).then(function (r) { return r.json(); }).then(function (d) {
             b.disabled = false;
             if (!d.ok) {
-              lalaErro(d.erro || 'falhou');
               // Corrida já existe / em voo: mostra o estado real no card.
-              if (d.lalamove) { p.lalamove = d.lalamove; abrirDetalhe(p); lalaErro(d.erro); }
+              if (d.lalamove) { p.lalamove = d.lalamove; if (abertoCode === p.code) abrirDetalhe(p); }
+              if (abertoCode === p.code) lalaErro(d.erro || 'falhou');
               return;
             }
+            // A cotação é DESTE pedido: se o detalhe já mudou para outro, não
+            // mostra o CHAMAR lá (sairia corrida para o endereço errado).
+            d.code = p.code;
             lalaCotacao = d;
+            if (abertoCode !== p.code) return;
             document.getElementById('lala-res').innerHTML =
               '<b>R$ ' + esc(d.valor) + '</b>' +
               (d.distancia ? ' · ' + esc(d.distancia) : '') + ' · ' + esc(d.veiculo);
@@ -995,13 +1008,13 @@
           return;
         }
         if (act === 'chamar') {
-          if (lalaChamando) { lalaErro('a chamada já está em andamento — aguarde'); return; }
-          if (!lalaCotacao) { lalaErro('cote o preço primeiro'); return; }
+          if (lalaChamando === p.code) { lalaErro('a chamada já está em andamento — aguarde'); return; }
+          if (!lalaCotacao || lalaCotacao.code !== p.code) { lalaErro('cote o preço primeiro'); return; }
           if (!confirm('Chamar entregador (' + lalaCotacao.veiculo + ', R$ ' +
                        lalaCotacao.valor + ') para:\n' + (p.endereco || ''))) return;
           var cot = lalaCotacao;
           lalaCotacao = null;   // cotação só serve para UMA tentativa
-          lalaChamando = true;
+          lalaChamando = p.code;
           b.disabled = true;
           b.textContent = 'Chamando…';
           fetch(LALA_CHAMAR, {
@@ -1011,7 +1024,7 @@
           }).then(function (r) {
             return r.json().catch(function () { return { ok: false, incerto: true }; });
           }).then(function (d) {
-            lalaChamando = false;
+            lalaChamando = null;
             if (d.lalamove) { p.lalamove = d.lalamove; }
             if (!d.ok) {
               abrirDetalhe(p);
@@ -1027,7 +1040,7 @@
             if (d.aviso) { window.alert('Corrida chamada, mas atenção: ' + d.aviso); }
             abrirDetalhe(p); carregar();
           }).catch(function () {
-            lalaChamando = false;
+            lalaChamando = null;
             abrirDetalhe(p);
             lalaErro('sem conexão com o servidor — a corrida PODE ter sido criada. ' +
                      'Espere o painel atualizar e confira no app da Lalamove antes de chamar de novo.');
@@ -1048,7 +1061,13 @@
             return r.json().catch(function () { return {}; });
           }).then(function (d) {
             b.disabled = false;
-            if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
+            if (!d.ok) {
+              lalaErro(d.erro === 'csrf_expirada'
+                ? 'sua sessão expirou — recarregue a página (F5) e tente de novo.'
+                : (d.erro || 'falhou'));
+              carregar();
+              return;
+            }
             p.lalamove = d.lalamove;
             abrirDetalhe(p); carregar();
           }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });

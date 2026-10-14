@@ -71,9 +71,15 @@ STATUS_DESCARTADA = 'descartada'
 # Corrida ENCERRADA sem entrega: não impede chamar de novo. Fonte única
 # (painel, cotar/chamar, sinal de "motoboy chamado" do admin).
 STATUS_ENCERRADOS_SEM_ENTREGA = ('CANCELED', 'EXPIRED', 'REJECTED', STATUS_DESCARTADA)
-# Uma linha 'chamando' mais velha que isto não tem mais requisição viva (o
-# timeout da API é 15 s): vira "sem resposta" para exibir e para liberar.
-CHAMANDO_ORFA_SEG = 120
+# Uma linha 'chamando' mais velha que isto não tem mais requisição viva: o
+# timeout do requests (15 s) é por fase e a thread do gthread não é morta
+# pelo arbiter, então a folga é larga. Depois disso vira "sem resposta"
+# para exibir e para liberar; as gravações finais da chamada são
+# condicionadas a ainda estar 'chamando' (sobrescrita tardia = ERROR).
+CHAMANDO_ORFA_SEG = 300
+# Status da Lalamove em que a corrida ainda está viva (bloqueia nova chamada
+# e é reconciliada com a API antes de recusar uma cotação).
+STATUS_LALAMOVE_ATIVOS = ('ASSIGNING_DRIVER', 'ON_GOING', 'PICKED_UP')
 
 STATUS_LABEL = {
     'CHAMANDO': 'Chamando entregador…',
@@ -137,8 +143,7 @@ def _erro_api(status, corpo, contexto):
                         f"{e.get('message') or e.get('detail', '')}"
                         for e in erros if isinstance(e, dict)) or str(corpo)[:300]
     logger.warning('lalamove %s falhou (%s): %s', contexto, status, detalhe)
-    return {'ok': False, 'erro': f'Lalamove recusou ({status}): {detalhe}',
-            'http_status': status}
+    return {'ok': False, 'erro': f'Lalamove recusou ({status}): {detalhe}'}
 
 
 def _fone_e164(fone):
@@ -290,6 +295,11 @@ def criar_ordem(quotation_id, sender_stop_id, recipient_stop_id,
     }}
     try:
         status, corpo = _request('POST', '/v3/orders', payload)
+    except requests.ConnectTimeout as exc:
+        # Nem conectou: o pedido NÃO chegou à Lalamove — pode chamar de novo.
+        logger.warning('lalamove criação de ordem sem conexão: %s', exc)
+        return {'ok': False, 'incerto': False,
+                'erro': 'não foi possível conectar à Lalamove — tente de novo'}
     except requests.RequestException as exc:
         # Timeout/queda de conexão DEPOIS de enviar: a Lalamove pode ter
         # criado a corrida. `incerto` faz o painel bloquear nova chamada até
@@ -304,7 +314,14 @@ def criar_ordem(quotation_id, sender_stop_id, recipient_stop_id,
         # 5xx/408: erro do lado deles depois de receber — a ordem pode existir.
         r['incerto'] = status >= 500 or status == 408
         return r
-    d = corpo.get('data') or {}
+    d = corpo.get('data') if isinstance(corpo.get('data'), dict) else {}
+    if not d.get('orderId'):
+        # 200/201 sem orderId (corpo inesperado): a corrida pode existir e
+        # não teríamos como rastreá-la nem cancelá-la — trata como incerto.
+        logger.error('lalamove criação de ordem: resposta %s sem orderId: %s',
+                     status, str(corpo)[:300])
+        return {'ok': False, 'incerto': True,
+                'erro': 'a Lalamove respondeu sem o número da corrida'}
     preco = d.get('priceBreakdown') or {}
     if aviso:
         logger.warning('lalamove criar_ordem: %s (contato da corrida = filial)', aviso)

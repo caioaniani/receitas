@@ -3618,9 +3618,12 @@ def lalamove_corridas():
     motoboy Lalamove ele chama 2 motoboys para o mesmo pedido"). Lista as
     linhas `LalamoveEntrega` criadas na janela (cotações incluídas com
     `?cotacoes=1`) agrupadas por pedido e destaca `duplicados`: pedidos com
-    MAIS DE UMA corrida que chegou a ser chamada (order_id) e não foi
-    cancelada antes da outra. COBERTURA: só o que ficou gravado aqui — a
-    corrida criada na Lalamove cuja resposta se perdeu (timeout) NÃO tem
+    MAIS DE UMA tentativa de corrida (com order_id, ou sem_resposta/
+    descartada/chamando — a chamada que pode ter criado corrida lá). Cada
+    item traz `sobreposta`: houve tentativa enquanto a anterior ainda não
+    tinha sido cancelada/expirada/recusada (o caso dos 2 motoboys); sem ela,
+    é rechamada legítima. COBERTURA: só o que ficou gravado aqui — a corrida
+    criada na Lalamove cuja resposta se perdeu antes de 14/10/2026 NÃO tem
     linha (o webhook dela cai em "ordem desconhecida" no log). Read-only.
     Params: ?dias=N (default 14, máx 120)."""
     from datetime import timedelta
@@ -3645,12 +3648,19 @@ def lalamove_corridas():
             'atualizado_em': e.atualizado_em.isoformat() if e.atualizado_em else None,
             'criado_por_id': e.criado_por_id, 'motorista': e.motorista_nome,
         })
+    locais = ('chamando', 'sem_resposta', 'descartada')
+    encerradas = ('CANCELED', 'EXPIRED', 'REJECTED', 'descartada')
     duplicados = []
     for code, linhas in por_pedido.items():
-        chamadas = [x for x in linhas if x['order_id']]
+        chamadas = [x for x in linhas if x['order_id'] or x['status'] in locais]
         if len(chamadas) > 1:
+            # Só o status ATUAL é conhecido: uma anterior hoje encerrada pode
+            # ter sido cancelada depois da nova — `sobreposta` é o piso.
+            sobreposta = any(x['status'] not in encerradas for x in chamadas[:-1])
             duplicados.append({'pedido': code, 'corridas': len(chamadas),
+                               'sobreposta': sobreposta,
                                'status': [x['status'] for x in chamadas],
+                               'order_ids': [x['order_id'] for x in chamadas],
                                'criadas': [x['criado_em'] for x in chamadas],
                                'por': [x['criado_por_id'] for x in chamadas]})
     return jsonify(ok=True, dias=dias, pedidos=len(por_pedido),
