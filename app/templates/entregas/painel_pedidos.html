@@ -341,6 +341,7 @@
   var LALA_CHAMAR = "{{ url_for('entregas.api_lalamove_chamar') }}";
   var LALA_CANCELAR = "{{ url_for('entregas.api_lalamove_cancelar') }}";
   var LALA_ACELERAR = "{{ url_for('entregas.api_lalamove_acelerar') }}";
+  var LALA_LIBERAR = "{{ url_for('entregas.api_lalamove_liberar') }}";
   var LALA_WHATS_MOT = "{{ url_for('entregas.api_atendimento_chamar_motorista') }}";
   var LALA_VEICULOS = {{ (lala_veiculos or []) | tojson }};
   // Gasto Lalamove é admin/gerente (espelha @gerente_required no backend).
@@ -822,6 +823,10 @@
 
   // ── Lalamove (chamar entregador quando PRONTO) ─────────
   var lalaCotacao = null;   // {entrega_id, valor, ...} da cotação corrente
+  // Chamada em voo: o poll de 20 s re-renderiza o detalhe e devolvia o botão
+  // habilitado no meio do POST (2º clique = 2º motoboy, 14/10/2026). O
+  // servidor também recusa; isto só evita mandar.
+  var lalaChamando = false;
 
   function lalamoveHTML(p) {
     // Lalamove gasta dinheiro — só admin/gerente (bate com @gerente_required
@@ -868,6 +873,13 @@
           '</div>';
       }
       var botoes = '';
+      if (L.pode_liberar) {
+        botoes += '<div class="lala-res"><span class="lala-erro">⚠ Antes de chamar ' +
+          'de novo, abra o app da Lalamove e confira se já existe corrida para ' +
+          'este pedido.</span></div>' +
+          '<button class="lala-btn cancelar" data-lala="liberar" data-id="' +
+          L.id + '">Não há corrida no app — liberar</button>';
+      }
       if (L.pode_cancelar) {
         botoes += '<button class="lala-btn cancelar" data-lala="cancelar" data-id="' +
                   L.id + '">✕ Cancelar corrida</button>';
@@ -967,7 +979,12 @@
                                    telefone: p.telefone, veiculo: veic })
           }).then(function (r) { return r.json(); }).then(function (d) {
             b.disabled = false;
-            if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
+            if (!d.ok) {
+              lalaErro(d.erro || 'falhou');
+              // Corrida já existe / em voo: mostra o estado real no card.
+              if (d.lalamove) { p.lalamove = d.lalamove; abrirDetalhe(p); lalaErro(d.erro); }
+              return;
+            }
             lalaCotacao = d;
             document.getElementById('lala-res').innerHTML =
               '<b>R$ ' + esc(d.valor) + '</b>' +
@@ -978,22 +995,61 @@
           return;
         }
         if (act === 'chamar') {
+          if (lalaChamando) { lalaErro('a chamada já está em andamento — aguarde'); return; }
           if (!lalaCotacao) { lalaErro('cote o preço primeiro'); return; }
           if (!confirm('Chamar entregador (' + lalaCotacao.veiculo + ', R$ ' +
                        lalaCotacao.valor + ') para:\n' + (p.endereco || ''))) return;
+          var cot = lalaCotacao;
+          lalaCotacao = null;   // cotação só serve para UMA tentativa
+          lalaChamando = true;
           b.disabled = true;
+          b.textContent = 'Chamando…';
           fetch(LALA_CHAMAR, {
-            method: 'POST',
+            method: 'POST', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body: JSON.stringify({ entrega_id: lalaCotacao.entrega_id })
-          }).then(function (r) { return r.json(); }).then(function (d) {
+            body: JSON.stringify({ entrega_id: cot.entrega_id })
+          }).then(function (r) {
+            return r.json().catch(function () { return { ok: false, incerto: true }; });
+          }).then(function (d) {
+            lalaChamando = false;
+            if (d.lalamove) { p.lalamove = d.lalamove; }
+            if (!d.ok) {
+              abrirDetalhe(p);
+              lalaErro(d.erro || (d.incerto
+                ? 'sem resposta clara do servidor — a corrida PODE ter sido criada. ' +
+                  'Confira no app da Lalamove antes de chamar de novo.'
+                : 'falhou'));
+              carregar();
+              return;
+            }
+            // Contato do destinatário não foi na corrida (internacional /
+            // inválido / ausente) ou o pedido não mudou de status.
+            if (d.aviso) { window.alert('Corrida chamada, mas atenção: ' + d.aviso); }
+            abrirDetalhe(p); carregar();
+          }).catch(function () {
+            lalaChamando = false;
+            abrirDetalhe(p);
+            lalaErro('sem conexão com o servidor — a corrida PODE ter sido criada. ' +
+                     'Espere o painel atualizar e confira no app da Lalamove antes de chamar de novo.');
+            carregar();
+          });
+          return;
+        }
+        if (act === 'liberar') {
+          if (!confirm('Você conferiu no APP DA LALAMOVE que NÃO existe corrida para o ' +
+                       'pedido ' + p.code + '?\n\nSe existir, NÃO libere: chamar de novo ' +
+                       'manda um SEGUNDO motoboy.')) return;
+          b.disabled = true;
+          fetch(LALA_LIBERAR, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ entrega_id: +b.getAttribute('data-id') })
+          }).then(function (r) {
+            return r.json().catch(function () { return {}; });
+          }).then(function (d) {
             b.disabled = false;
             if (!d.ok) { lalaErro(d.erro || 'falhou'); return; }
-            lalaCotacao = null;
             p.lalamove = d.lalamove;
-            // Contato do destinatário não foi na corrida (internacional /
-            // inválido / ausente): o entregador vai ligar pra padaria.
-            if (d.aviso) { window.alert('Corrida chamada, mas atenção: ' + d.aviso); }
             abrirDetalhe(p); carregar();
           }).catch(function () { b.disabled = false; lalaErro('sem conexão'); });
           return;

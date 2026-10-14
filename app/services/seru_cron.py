@@ -70,6 +70,8 @@ LOCK_KEY_KITS_FISCAL = 7765  # preserva a chave histórica; fila de NF de todo o
 # 7766 = tiny_nf.LOCK_NAMESPACE_NF_KIT; 7767 = fermentacao.LOCK_KEY (envio da
 # lista); 7768 = fichas_producao.LOCK_KEY_APLICAR.
 LOCK_KEY_FERMENTACAO_CONFERENCIA = 7769  # conferência da lista de fermentação (12:10/16:00)
+# 7770 = entregas.routes.LOCK_NAMESPACE_LALAMOVE_PEDIDO (chave dupla: trava por
+# pedido da chamada Lalamove — uma corrida por pedido).
 # 7750 foi reciclado: era do `briefing-dono` (removido 17/07/2026), agora e do
 # marketing (sync da base + campanha de aniversario no Listmonk).
 LOCK_KEY_MARKETING = 7750  # advisory lock pro marketing (Listmonk)

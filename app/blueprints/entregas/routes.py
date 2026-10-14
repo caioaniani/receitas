@@ -914,14 +914,83 @@ def api_painel_status(code):
 
 # ── Lalamove (entregador sob demanda a partir do painel) ──────────────────
 
+# Trava por pedido da chamada Lalamove (pg_advisory_xact_lock de 2 chaves:
+# namespace + crc32 do código). Registro: seru_cron.py, lista de locks.
+LOCK_NAMESPACE_LALAMOVE_PEDIDO = 7770
+
+
+def _travar_pedido_lalamove(code):
+    """Serializa, por pedido, a decisão "pode chamar?" + o claim. Duas
+    cotações do MESMO pedido confirmadas ao mesmo tempo (TV + celular)
+    passariam ambas pela checagem sem isto. No-op fora do Postgres (SQLite
+    dos testes = um processo)."""
+    if db.engine.dialect.name != 'postgresql':
+        return
+    import zlib
+
+    from sqlalchemy import text
+    k = zlib.crc32((code or '').encode('utf-8'))
+    if k >= 2 ** 31:
+        k -= 2 ** 32
+    db.session.execute(text('SELECT pg_advisory_xact_lock(:a, :b)'),
+                       {'a': LOCK_NAMESPACE_LALAMOVE_PEDIDO, 'b': k})
+
+
+def _estado_lalamove(e):
+    """Status efetivo: 'chamando' sem requisição viva (mais velha que
+    CHAMANDO_ORFA_SEG — worker morto no meio do POST) conta como
+    'sem_resposta': a corrida pode ter saído e ninguém soube."""
+    from app.services import lalamove as lala_svc
+    if e.status == lala_svc.STATUS_CHAMANDO:
+        ref = e.atualizado_em or e.criado_em
+        if ref is None or (agora() - ref).total_seconds() > lala_svc.CHAMANDO_ORFA_SEG:
+            return lala_svc.STATUS_SEM_RESPOSTA
+    return e.status
+
+
+def _corrida_que_bloqueia(code, excluir_id=None):
+    """Corrida deste pedido que impede chamar OUTRO motoboy: qualquer linha
+    que não seja cotação nem encerrada sem entrega (chamando, sem resposta,
+    procurando, a caminho, coletada, entregue). A mais recente."""
+    from app.services import lalamove as lala_svc
+    q = LalamoveEntrega.query.filter(
+        LalamoveEntrega.pedido_code == code,
+        LalamoveEntrega.status.notin_(
+            (lala_svc.STATUS_COTACAO,) + lala_svc.STATUS_ENCERRADOS_SEM_ENTREGA))
+    if excluir_id is not None:
+        q = q.filter(LalamoveEntrega.id != excluir_id)
+    return q.order_by(LalamoveEntrega.criado_em.desc(), LalamoveEntrega.id.desc()).first()
+
+
+def _msg_bloqueio_lalamove(b):
+    from app.services import lalamove as lala_svc
+    estado = _estado_lalamove(b)
+    if estado == lala_svc.STATUS_SEM_RESPOSTA:
+        hora = (b.atualizado_em or b.criado_em)
+        quando = f' às {hora:%H:%M}' if hora else ''
+        return ('Já houve uma chamada de entregador para este pedido' + quando +
+                ' sem resposta da Lalamove — a corrida PODE ter sido criada. '
+                'Confira no app da Lalamove; se não houver corrida lá, use '
+                '"Não há corrida no app — liberar" no card e chame de novo.')
+    if estado == lala_svc.STATUS_CHAMANDO:
+        return ('O entregador deste pedido está sendo chamado agora (outro '
+                'aparelho ou clique repetido) — aguarde, não chame de novo.')
+    if estado == 'COMPLETED':
+        return 'A Lalamove já entregou este pedido — não há o que chamar.'
+    return ('Já existe corrida Lalamove para este pedido (' +
+            lala_svc.rotulo_status(estado) + '). Para trocar de motoboy, '
+            'cancele a corrida atual antes de chamar outra.')
+
+
 def _lalamove_json(e):
     """Resumo de uma LalamoveEntrega pro front do painel."""
     from app.services import lalamove as lala_svc
+    estado = _estado_lalamove(e)
     return {
         'id': e.id,
-        'status': e.status,
+        'status': estado,
         'rotulo': ('Cotação feita — confirme a chamada'
-                   if e.status == 'cotacao' else lala_svc.rotulo_status(e.status)),
+                   if estado == 'cotacao' else lala_svc.rotulo_status(estado)),
         'valor': str(e.valor) if e.valor is not None else None,
         'moeda': e.moeda or 'BRL',
         'veiculo': lala_svc.ROTULO_VEICULO.get(e.service_type, e.service_type),
@@ -929,7 +998,10 @@ def _lalamove_json(e):
         'motorista': e.motorista_nome,
         'motorista_fone': e.motorista_telefone,
         'pode_cancelar': e.status in ('ASSIGNING_DRIVER', 'ON_GOING'),
-        'encerrada': e.status in ('COMPLETED', 'CANCELED', 'REJECTED', 'EXPIRED'),
+        'encerrada': (estado == 'COMPLETED'
+                      or estado in lala_svc.STATUS_ENCERRADOS_SEM_ENTREGA),
+        # Chamada sem resposta: só quem conferiu no app da Lalamove libera.
+        'pode_liberar': estado == lala_svc.STATUS_SEM_RESPOSTA,
         # Gorjeta (priority fee): so faz sentido enquanto procura entregador.
         # O front mostra o campo "Acelerar" so quando `pode_acelerar`.
         'priority_fee': str(e.priority_fee) if e.priority_fee is not None else None,
@@ -938,18 +1010,30 @@ def _lalamove_json(e):
 
 
 def _lalamove_por_code(codes):
-    """{code: resumo} da corrida mais recente JÁ CHAMADA (com order_id) de
-    cada pedido. Cotações não confirmadas ficam de fora do card."""
+    """{code: resumo} da corrida de cada pedido que o card mostra: a mais
+    recente que ainda BLOQUEIA nova chamada (ativa, chamando ou sem
+    resposta); sem nenhuma, a mais recente já chamada/encerrada. Cotações
+    não confirmadas ficam de fora do card. Antes valia só "a mais recente
+    com order_id": uma chamada em voo ou sem resposta não aparecia e o card
+    oferecia chamar de novo (14/10/2026)."""
+    from sqlalchemy import or_
+
+    from app.services import lalamove as lala_svc
     if not codes:
         return {}
-    out = {}
+    locais = (lala_svc.STATUS_CHAMANDO, lala_svc.STATUS_SEM_RESPOSTA,
+              lala_svc.STATUS_DESCARTADA)
     rows = (LalamoveEntrega.query
             .filter(LalamoveEntrega.pedido_code.in_(codes),
-                    LalamoveEntrega.order_id.isnot(None))
-            .order_by(LalamoveEntrega.criado_em.asc()).all())
+                    or_(LalamoveEntrega.order_id.isnot(None),
+                        LalamoveEntrega.status.in_(locais)))
+            .order_by(LalamoveEntrega.criado_em.asc(), LalamoveEntrega.id.asc()).all())
+    ultima, ativa = {}, {}
     for e in rows:           # asc + sobrescrita = vence a mais recente
-        out[e.pedido_code] = _lalamove_json(e)
-    return out
+        ultima[e.pedido_code] = e
+        if e.status not in lala_svc.STATUS_ENCERRADOS_SEM_ENTREGA:
+            ativa[e.pedido_code] = e
+    return {c: _lalamove_json(ativa.get(c) or e) for c, e in ultima.items()}
 
 
 @entregas_bp.route('/api/painel/lalamove/cotar', methods=['POST'])
@@ -966,6 +1050,11 @@ def api_lalamove_cotar():
     veiculo = (dados.get('veiculo') or 'moto').strip().lower()
     if not code or not endereco:
         return jsonify(ok=False, erro='pedido sem código ou sem endereço'), 400
+    # Corrida ativa / em voo / sem resposta: nem cota (a chamada recusaria).
+    bloq = _corrida_que_bloqueia(code)
+    if bloq is not None:
+        return jsonify(ok=False, erro=_msg_bloqueio_lalamove(bloq),
+                       lalamove=_lalamove_json(bloq)), 409
     r = lala_svc.cotar(endereco, veiculo)
     if not r.get('ok'):
         return jsonify(ok=False, erro=r.get('erro')), 502
@@ -994,43 +1083,169 @@ def api_lalamove_cotar():
 @login_required
 @gerente_required
 def api_lalamove_chamar():
-    """Confirma a corrida de uma cotação feita. JSON: {entrega_id}."""
+    """Confirma a corrida de uma cotação feita. JSON: {entrega_id}.
+
+    UMA corrida por pedido (14/10/2026, "às vezes chama 2 motoboys para o
+    mesmo pedido"). Três portas fechadas:
+    1. claim atômico da cotação ('cotacao' → 'chamando' por UPDATE
+       condicional) — clique repetido / dois aparelhos com a MESMA cotação
+       chamavam duas vezes enquanto o POST estava em voo;
+    2. trava por pedido + recusa se outra linha do pedido está ativa,
+       chamando ou sem resposta — duas cotações do mesmo pedido viravam duas
+       corridas;
+    3. sem resposta da Lalamove (timeout/rede/5xx) e erro DEPOIS da corrida
+       criada nunca viram 500 com a linha ainda em 'cotacao': a primeira
+       fica 'sem_resposta' (bloqueia até alguém conferir no app), a segunda
+       devolve ok com aviso."""
     from app.services import lalamove as lala_svc
     dados = request.get_json(silent=True) or {}
-    e = db.session.get(LalamoveEntrega, dados.get('entrega_id'))
-    if not e or e.status != 'cotacao':
-        return jsonify(ok=False, erro='cotação não encontrada ou já usada'), 400
-    observacao = f'Pedido {e.pedido_code} — O Pão Padaria Artesanal'
+    try:
+        entrega_id = int(dados.get('entrega_id'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='cotação não encontrada'), 400
+    e = db.session.get(LalamoveEntrega, entrega_id)
+    if not e:
+        return jsonify(ok=False, erro='cotação não encontrada'), 400
+    code = e.pedido_code
+    _travar_pedido_lalamove(code)
+    db.session.refresh(e)
+    if e.status != lala_svc.STATUS_COTACAO:
+        bloq = _corrida_que_bloqueia(code)
+        msg = (_msg_bloqueio_lalamove(bloq) if bloq is not None
+               else 'cotação já usada — cote o preço de novo')
+        resumo = _lalamove_json(bloq) if bloq is not None else None
+        db.session.rollback()
+        return jsonify(ok=False, erro=msg, lalamove=resumo), 409
+    bloq = _corrida_que_bloqueia(code, excluir_id=e.id)
+    if bloq is not None:
+        msg, resumo = _msg_bloqueio_lalamove(bloq), _lalamove_json(bloq)
+        db.session.rollback()
+        return jsonify(ok=False, erro=msg, lalamove=resumo), 409
+    n = (LalamoveEntrega.query
+         .filter(LalamoveEntrega.id == e.id,
+                 LalamoveEntrega.status == lala_svc.STATUS_COTACAO)
+         .update({'status': lala_svc.STATUS_CHAMANDO, 'atualizado_em': agora()},
+                 synchronize_session=False))
+    if n != 1:
+        db.session.rollback()
+        return jsonify(ok=False, erro='cotação já usada — cote o preço de novo'), 409
+    db.session.commit()   # claim visível aos outros e trava do pedido solta
+
+    observacao = f'Pedido {code} — O Pão Padaria Artesanal'
     # Presente SEM telefone de quem recebe (pedido anterior a 23/09/2026): o
     # número da cotação é o do COMPRADOR (fallback do card). A corrida diz
     # isso ao entregador — ele não vai achar quem recebe por esse telefone.
     from app.models import PedidoOnline
-    po = PedidoOnline.query.filter_by(codigo=e.pedido_code).first() if e.pedido_code else None
+    po = PedidoOnline.query.filter_by(codigo=code).first() if code else None
     if (po is not None and (po.nome_destinatario or '').strip()
             and not (po.telefone_destinatario or '').strip()):
         observacao += (' — PRESENTE: quem recebe não informou telefone; o '
                        'número é do COMPRADOR (não comentar o conteúdo).')
-    r = lala_svc.criar_ordem(
-        e.quotation_id, e.sender_stop_id, e.recipient_stop_id,
-        e.destinatario, e.telefone_destino, observacao=observacao)
+    try:
+        r = lala_svc.criar_ordem(
+            e.quotation_id, e.sender_stop_id, e.recipient_stop_id,
+            e.destinatario, e.telefone_destino, observacao=observacao)
+    except Exception:  # noqa: BLE001 — bug nosso no meio: não sabemos se saiu
+        current_app.logger.exception('lalamove chamar: erro inesperado (pedido=%s)', code)
+        r = {'ok': False, 'incerto': True,
+             'erro': 'erro interno durante a chamada à Lalamove'}
     if not r.get('ok'):
+        if r.get('incerto'):
+            e.status = lala_svc.STATUS_SEM_RESPOSTA
+            current_app.logger.error(
+                'lalamove chamar SEM RESPOSTA: pedido=%s entrega=%s por uid=%s — %s',
+                code, e.id, current_user.id, r.get('erro'))
+        else:
+            e.status = lala_svc.STATUS_COTACAO   # recusa clara: nada foi criado
+        e.atualizado_em = agora()
+        db.session.commit()
+        if r.get('incerto'):
+            return jsonify(ok=False, incerto=True,
+                           erro=_msg_bloqueio_lalamove(e) + ' (' + (r.get('erro') or '') + ')',
+                           lalamove=_lalamove_json(e)), 502
         return jsonify(ok=False, erro=r.get('erro')), 502
+
     e.order_id = r['order_id']
     e.status = r.get('status') or 'ASSIGNING_DRIVER'
     e.share_link = r.get('share_link')
     if r.get('valor') is not None:
         e.valor = r['valor']
     e.atualizado_em = agora()
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:  # noqa: BLE001 — a corrida EXISTE: nunca deixar re-chamar
+        db.session.rollback()
+        current_app.logger.exception(
+            'lalamove chamar: corrida %s CRIADA mas não gravada (pedido=%s)',
+            r.get('order_id'), code)
+        LalamoveEntrega.query.filter_by(id=entrega_id).update(
+            {'status': lala_svc.STATUS_SEM_RESPOSTA, 'atualizado_em': agora()},
+            synchronize_session=False)
+        db.session.commit()
+        return jsonify(ok=False, incerto=True,
+                       erro=('A corrida ' + str(r.get('order_id')) + ' foi criada na '
+                             'Lalamove mas não ficou registrada aqui — confira no app '
+                             'antes de qualquer nova chamada.')), 500
     current_app.logger.info('lalamove chamada: pedido=%s order=%s por uid=%s',
-                            e.pedido_code, e.order_id, current_user.id)
+                            code, e.order_id, current_user.id)
     # Loja própria: motorista chamado = pedido "a caminho" (+ e-mail com o
     # link de rastreio do Lalamove). VNDA não tem PedidoOnline → no-op.
+    # A corrida já existe: falha aqui (saída da produção recusada, e-mail)
+    # vira AVISO, nunca 500 — o 500 fazia a equipe chamar de novo.
+    avisos = [r['aviso']] if r.get('aviso') else []
     from app.services.loja_entrega import avancar_status_entrega
-    avancar_status_entrega(e.pedido_code, 'a_caminho', rastreio_url=e.share_link)
+    try:
+        avancar_status_entrega(code, 'a_caminho', rastreio_url=e.share_link)
+    except ValueError as exc:
+        db.session.rollback()
+        current_app.logger.error('lalamove chamar: pedido %s NÃO passou a "a caminho": %s',
+                                 code, exc)
+        avisos.append(f'o pedido NÃO passou para "a caminho": {exc}')
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception('lalamove chamar: falha ao avançar o pedido %s', code)
+        avisos.append('o pedido NÃO passou para "a caminho" (erro interno — avise a gerência)')
     # `aviso`: o contato do destinatário NÃO foi na corrida (internacional /
     # inválido / ausente) — o entregador vai ligar pra padaria (23/09/2026).
-    return jsonify(ok=True, lalamove=_lalamove_json(e), aviso=r.get('aviso'))
+    e = db.session.get(LalamoveEntrega, entrega_id)
+    return jsonify(ok=True, lalamove=_lalamove_json(e),
+                   aviso=(' · '.join(avisos) or None))
+
+
+@entregas_bp.route('/api/painel/lalamove/liberar', methods=['POST'])
+@login_required
+@gerente_required
+def api_lalamove_liberar():
+    """Libera uma chamada SEM RESPOSTA da Lalamove depois que alguém
+    conferiu no app deles que não existe corrida para o pedido. JSON:
+    {entrega_id}. É o único caminho que destrava "chamar de novo" nesse
+    estado — liberar havendo corrida lá = segundo motoboy."""
+    from app.services import lalamove as lala_svc
+    dados = request.get_json(silent=True) or {}
+    try:
+        entrega_id = int(dados.get('entrega_id'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='chamada não encontrada'), 400
+    e = db.session.get(LalamoveEntrega, entrega_id)
+    if not e:
+        return jsonify(ok=False, erro='chamada não encontrada'), 400
+    if _estado_lalamove(e) != lala_svc.STATUS_SEM_RESPOSTA:
+        return jsonify(ok=False, erro='só dá para liberar uma chamada sem resposta '
+                       'da Lalamove'), 409
+    n = (LalamoveEntrega.query
+         .filter(LalamoveEntrega.id == e.id,
+                 LalamoveEntrega.status.in_((lala_svc.STATUS_CHAMANDO,
+                                             lala_svc.STATUS_SEM_RESPOSTA)),
+                 LalamoveEntrega.order_id.is_(None))
+         .update({'status': lala_svc.STATUS_DESCARTADA, 'atualizado_em': agora()},
+                 synchronize_session=False))
+    db.session.commit()
+    if n != 1:
+        return jsonify(ok=False, erro='a chamada mudou de estado — recarregue o painel'), 409
+    current_app.logger.warning('lalamove: chamada sem resposta LIBERADA pedido=%s entrega=%s por uid=%s',
+                               e.pedido_code, e.id, current_user.id)
+    db.session.refresh(e)
+    return jsonify(ok=True, lalamove=_lalamove_json(e))
 
 
 @entregas_bp.route('/api/painel/lalamove/cancelar', methods=['POST'])

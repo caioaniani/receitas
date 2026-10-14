@@ -6752,10 +6752,12 @@ def _expedicao_com_pedido(p):
                 'a_caminho': 'EM ROTA'}[p.status]
     # EXPIRED/REJECTED também são corrida ENCERRADA sem motoboy (23/09/2026)
     # — antes contavam como "chamado" e exigiam confirmação à toa.
+    from app.services import lalamove as lala_svc
     lal = (LalamoveEntrega.query
            .filter(LalamoveEntrega.pedido_code == p.codigo,
                    LalamoveEntrega.status.notin_(
-                       ('cotacao', 'CANCELED', 'EXPIRED', 'REJECTED')))
+                       (lala_svc.STATUS_COTACAO,)
+                       + lala_svc.STATUS_ENCERRADOS_SEM_ENTREGA))
            .first())
     if lal:
         return 'motoboy Lalamove chamado (%s)' % lal.status

@@ -58,7 +58,29 @@ ROTULO_VEICULO = dict(OPCOES_VEICULO)
 # Apelidos usados por chamadas antigas/bot — mapeiam pros nomes da API.
 SERVICE_TYPES = {'moto': 'LALAGO', 'carro': 'CAR'}
 
+# Estados LOCAIS de uma chamada (14/10/2026, caso "chamou 2 motoboys para o
+# mesmo pedido"). 'cotacao' = preço visto, nada chamado. 'chamando' = a
+# chamada foi REIVINDICADA (claim atômico) e o POST /v3/orders está em voo.
+# 'sem_resposta' = a Lalamove não respondeu (timeout/rede/5xx): a corrida
+# PODE existir lá — bloqueia nova chamada até alguém conferir no app e
+# liberar. 'descartada' = liberada por quem conferiu que não havia corrida.
+STATUS_COTACAO = 'cotacao'
+STATUS_CHAMANDO = 'chamando'
+STATUS_SEM_RESPOSTA = 'sem_resposta'
+STATUS_DESCARTADA = 'descartada'
+# Corrida ENCERRADA sem entrega: não impede chamar de novo. Fonte única
+# (painel, cotar/chamar, sinal de "motoboy chamado" do admin).
+STATUS_ENCERRADOS_SEM_ENTREGA = ('CANCELED', 'EXPIRED', 'REJECTED', STATUS_DESCARTADA)
+# Uma linha 'chamando' mais velha que isto não tem mais requisição viva (o
+# timeout da API é 15 s): vira "sem resposta" para exibir e para liberar.
+CHAMANDO_ORFA_SEG = 120
+
 STATUS_LABEL = {
+    'CHAMANDO': 'Chamando entregador…',
+    'SEM_RESPOSTA': ('Lalamove NÃO respondeu — a corrida pode ter sido '
+                          'criada. Confira no app da Lalamove antes de chamar '
+                          'de novo'),
+    'DESCARTADA': 'Liberada (conferido: não havia corrida na Lalamove)',
     'ASSIGNING_DRIVER': 'Procurando entregador',
     'ON_GOING': 'Entregador a caminho da padaria',
     'PICKED_UP': 'Saiu para entrega',
@@ -115,7 +137,8 @@ def _erro_api(status, corpo, contexto):
                         f"{e.get('message') or e.get('detail', '')}"
                         for e in erros if isinstance(e, dict)) or str(corpo)[:300]
     logger.warning('lalamove %s falhou (%s): %s', contexto, status, detalhe)
-    return {'ok': False, 'erro': f'Lalamove recusou ({status}): {detalhe}'}
+    return {'ok': False, 'erro': f'Lalamove recusou ({status}): {detalhe}',
+            'http_status': status}
 
 
 def _fone_e164(fone):
@@ -265,9 +288,22 @@ def criar_ordem(quotation_id, sender_stop_id, recipient_stop_id,
                         'remarks': remarks[:500]}],
         'isPODEnabled': False,
     }}
-    status, corpo = _request('POST', '/v3/orders', payload)
+    try:
+        status, corpo = _request('POST', '/v3/orders', payload)
+    except requests.RequestException as exc:
+        # Timeout/queda de conexão DEPOIS de enviar: a Lalamove pode ter
+        # criado a corrida. `incerto` faz o painel bloquear nova chamada até
+        # alguém conferir no app (antes isto virava 500 e a equipe chamava
+        # de novo — segundo motoboy para o mesmo pedido, 14/10/2026).
+        logger.error('lalamove criação de ordem SEM resposta (%s): %s',
+                     type(exc).__name__, exc)
+        return {'ok': False, 'incerto': True,
+                'erro': f'a Lalamove não respondeu ({type(exc).__name__})'}
     if status not in (200, 201):
-        return _erro_api(status, corpo, 'criação de ordem')
+        r = _erro_api(status, corpo, 'criação de ordem')
+        # 5xx/408: erro do lado deles depois de receber — a ordem pode existir.
+        r['incerto'] = status >= 500 or status == 408
+        return r
     d = corpo.get('data') or {}
     preco = d.get('priceBreakdown') or {}
     if aviso:

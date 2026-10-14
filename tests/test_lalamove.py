@@ -152,7 +152,7 @@ def test_fluxo_painel_cotar_chamar_cancelar(app, admin_user):
     # reuso da mesma cotacao nao pode
     with patch('app.services.lalamove.criar_ordem', return_value=ordem):
         assert c.post('/entregas/api/painel/lalamove/chamar',
-                      json={'entrega_id': eid}).status_code == 400
+                      json={'entrega_id': eid}).status_code == 409
 
     with patch('app.services.lalamove.cancelar', return_value={'ok': True}):
         r3 = c.post('/entregas/api/painel/lalamove/cancelar',

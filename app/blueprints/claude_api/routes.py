@@ -3609,3 +3609,49 @@ def pedidos_site_vencidos():
             'motivo_bloqueio_saida': motivo,
         })
     return jsonify(ok=True, ate=ate.isoformat(), total=len(out), pedidos=out)
+
+
+@claude_api_bp.route('/lalamove-corridas')
+@_claude_auth_required
+def lalamove_corridas():
+    """Corridas Lalamove por pedido (14/10/2026, dono: "às vezes ao pedir
+    motoboy Lalamove ele chama 2 motoboys para o mesmo pedido"). Lista as
+    linhas `LalamoveEntrega` criadas na janela (cotações incluídas com
+    `?cotacoes=1`) agrupadas por pedido e destaca `duplicados`: pedidos com
+    MAIS DE UMA corrida que chegou a ser chamada (order_id) e não foi
+    cancelada antes da outra. COBERTURA: só o que ficou gravado aqui — a
+    corrida criada na Lalamove cuja resposta se perdeu (timeout) NÃO tem
+    linha (o webhook dela cai em "ordem desconhecida" no log). Read-only.
+    Params: ?dias=N (default 14, máx 120)."""
+    from datetime import timedelta
+
+    from app.models import LalamoveEntrega
+    from app.utils import agora
+    try:
+        dias = max(1, min(int(request.args.get('dias', 14)), 120))
+    except (TypeError, ValueError):
+        dias = 14
+    com_cotacoes = request.args.get('cotacoes') == '1'
+    desde = agora() - timedelta(days=dias)
+    q = LalamoveEntrega.query.filter(LalamoveEntrega.criado_em >= desde)
+    if not com_cotacoes:
+        q = q.filter(LalamoveEntrega.status != 'cotacao')
+    por_pedido = {}
+    for e in q.order_by(LalamoveEntrega.criado_em.asc(), LalamoveEntrega.id.asc()).all():
+        por_pedido.setdefault(e.pedido_code, []).append({
+            'id': e.id, 'status': e.status, 'order_id': e.order_id,
+            'valor': str(e.valor) if e.valor is not None else None,
+            'criado_em': e.criado_em.isoformat() if e.criado_em else None,
+            'atualizado_em': e.atualizado_em.isoformat() if e.atualizado_em else None,
+            'criado_por_id': e.criado_por_id, 'motorista': e.motorista_nome,
+        })
+    duplicados = []
+    for code, linhas in por_pedido.items():
+        chamadas = [x for x in linhas if x['order_id']]
+        if len(chamadas) > 1:
+            duplicados.append({'pedido': code, 'corridas': len(chamadas),
+                               'status': [x['status'] for x in chamadas],
+                               'criadas': [x['criado_em'] for x in chamadas],
+                               'por': [x['criado_por_id'] for x in chamadas]})
+    return jsonify(ok=True, dias=dias, pedidos=len(por_pedido),
+                   duplicados=duplicados, corridas=por_pedido)
