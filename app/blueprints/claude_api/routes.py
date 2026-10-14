@@ -3700,3 +3700,107 @@ def lalamove_corridas():
     return jsonify(ok=True, dias=dias, pedidos=len(por_pedido),
                    duplicados=duplicados, corridas=por_pedido,
                    conferidas=conferidas, webhook=webhook)
+
+
+@claude_api_bp.route('/cobrancas-b2b')
+@_claude_auth_required
+def cobrancas_b2b():
+    """Vendas B2B, parcelas, boletos Sicredi e envios de UM cliente (14/10/2026,
+    caso Lavo Street: "foi emitido um boleto de R$514 e ele pagou no Pix").
+    Nenhuma outra sonda lê `cobranca`/`venda_b2b_parcela`. Read-only.
+
+    Params: ?cliente=<trecho do nome, sem acento/caixa> (obrigatório);
+    ?dias=N (data da venda, default 120, max 730).
+    COBERTURA: cliente CADASTRADO (venda avulsa casa pelo `cliente_nome`);
+    o estado do boleto é o que o sistema sabe pelos retornos importados — o
+    que mudou no Sicredi depois do último retorno não aparece aqui.
+    """
+    from datetime import timedelta
+
+    from app.models import (
+        AutomacaoCobranca,
+        ClienteB2B,
+        Cobranca,
+        EnvioCobranca,
+        FaturaB2B,
+        VendaB2B,
+    )
+    from app.utils import hoje
+    from app.utils import normalizar_busca as normalizar_texto
+
+    trecho = normalizar_texto(request.args.get('cliente') or '')
+    if not trecho:
+        return jsonify(ok=False, erro='informe ?cliente=<trecho>'), 400
+    try:
+        dias = max(1, min(int(request.args.get('dias') or 120), 730))
+    except ValueError:
+        return jsonify(ok=False, erro='dias invalido'), 400
+    desde = hoje() - timedelta(days=dias)
+
+    def _f(v):
+        return None if v is None else float(v)
+
+    def _d(v):
+        return None if v is None else v.isoformat()
+
+    def _cob(c):
+        return {'id': c.id, 'status': c.status, 'valor': _f(c.valor),
+                'vencimento': _d(c.vencimento), 'emissao': _d(c.emissao),
+                'nosso_numero': c.nosso_numero_fmt, 'remessa': c.remessa.numero if c.remessa else None,
+                'valor_pago': _f(c.valor_pago), 'pago_em': _d(c.pago_em),
+                'motivo_retorno': c.motivo_retorno, 'tem_pix': bool(c.pix_copia_cola),
+                'parcela_id': c.parcela_id, 'fatura_id': c.fatura_id}
+
+    clientes = [c for c in ClienteB2B.query.all() if trecho in normalizar_texto(c.nome)]
+    ids = [c.id for c in clientes]
+    vendas_q = VendaB2B.query.filter(VendaB2B.data_venda >= desde)
+    vendas = [v for v in vendas_q.order_by(VendaB2B.id.desc()).all()
+              if v.cliente_id in ids or trecho in normalizar_texto(v.cliente_nome or '')]
+    out_vendas, cob_ids = [], set()
+    for v in vendas:
+        parcelas = []
+        for p in sorted(v.parcelas, key=lambda x: x.numero):
+            cobs = [_cob(c) for c in (p.cobranca or [])]
+            cob_ids.update(c['id'] for c in cobs)
+            parcelas.append({'id': p.id, 'numero': p.numero, 'valor': _f(p.valor),
+                             'valor_pago': _f(p.valor_pago), 'pago_em': _d(p.pago_em),
+                             'forma_pagamento': p.forma_pagamento, 'observacao': p.observacao,
+                             'vencimento': _d(p.vencimento), 'fatura_id': p.fatura_id,
+                             'cobrancas': cobs})
+        out_vendas.append({'id': v.id, 'data_venda': _d(v.data_venda), 'data_entrega': _d(v.data_entrega),
+                           'status': v.status, 'valor_total': _f(v.valor_total), 'frete': _f(v.frete_valor),
+                           'nf_numero': v.nf_numero, 'nf_status': v.nf_status,
+                           'sem_cobranca': bool(v.dispensa_cobranca), 'parcelas': parcelas})
+    faturas = []
+    if ids:
+        for fa in FaturaB2B.query.filter(FaturaB2B.cliente_id.in_(ids),
+                                         FaturaB2B.data_fim >= desde).order_by(FaturaB2B.id.desc()):
+            cobs = [_cob(c) for c in fa.cobrancas]
+            cob_ids.update(c['id'] for c in cobs)
+            faturas.append({'id': fa.id, 'periodo': [_d(fa.data_inicio), _d(fa.data_fim)],
+                            'vencimento': _d(fa.vencimento), 'status': fa.status,
+                            'valor_total': _f(fa.valor_total), 'pago_em': _d(fa.pago_em),
+                            'nf_numero': fa.nf_numero, 'cobrancas': cobs})
+    # Boleto cuja parcela foi apagada (FK nula) mas o pagador casa o trecho.
+    orfas = [_cob(c) for c in Cobranca.query.filter(Cobranca.parcela_id.is_(None),
+                                                    Cobranca.fatura_id.is_(None)).all()
+             if trecho in normalizar_texto(c.pagador_nome or '')]
+    venda_ids = [v.id for v in vendas]
+    fatura_ids = [fa['id'] for fa in faturas]
+    automacoes = [
+        {'id': j.id, 'tipo': j.tipo, 'documento_id': j.documento_id, 'estado': j.estado,
+         'erro': j.erro, 'atualizado_em': _d(j.atualizado_em)}
+        for j in AutomacaoCobranca.query.order_by(AutomacaoCobranca.id.desc()).limit(500)
+        if (j.tipo == 'venda' and j.documento_id in venda_ids)
+        or (j.tipo == 'fatura' and j.documento_id in fatura_ids)]
+    envios = [
+        {'id': e.id, 'venda_id': e.venda_id, 'fatura_id': e.fatura_id, 'cobranca_ids': e.cobranca_ids,
+         'documentos': e.documentos, 'status': e.status, 'criado_em': _d(e.criado_em),
+         'destinatario': e.destinatario}
+        for e in EnvioCobranca.query.order_by(EnvioCobranca.id.desc()).limit(500)
+        if e.venda_id in venda_ids or e.fatura_id in fatura_ids
+        or set(e.cobranca_ids or []) & cob_ids]
+    return jsonify(ok=True, desde=_d(desde),
+                   clientes=[{'id': c.id, 'nome': c.nome} for c in clientes],
+                   vendas=out_vendas, faturas=faturas, cobrancas_sem_origem=orfas,
+                   automacoes=automacoes, envios=envios)
