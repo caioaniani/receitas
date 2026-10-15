@@ -4767,7 +4767,15 @@ pedido ainda emitível; `aguarda_dono` = declarado sem conferência) alimenta
 na MESMA trava 7765 da fila (`seru_cron._fila_fiscal_e_aviso`), e o item
 `nf_site_parada` no "Precisa de você hoje". Sonda
 `GET /api/claude/nf-site-fila[?codigo=]`. Depois da conferência a fila emite
-no minuto seguinte e manda o DANFE. Testes: `tests/test_nf_site_parada.py`.
+no minuto seguinte e manda o DANFE. E-mail do cliente RECUSADO DE VEZ
+(Postmark ErrorCode 406 = destinatário inativo, ou pedido sem e-mail —
+`loja_fiscal.email_recusado_definitivo`; `email.enviar` passou a devolver
+`codigo`) NÃO é repetido de hora em hora (havia 629 tentativas num endereço
+inativo): a próxima tentativa vai para 30 dias e a nota segue na lista de
+paradas; corrigir o e-mail no editor do pedido
+(`reenviar_apos_email_corrigido`) devolve a tarefa ao ciclo seguinte. Falha
+passageira segue com o backoff de até 60 min. Testes:
+`tests/test_nf_site_parada.py`.
 Também de 14-15/10: sonda `GET /api/claude/cobrancas-b2b?cliente=` (vendas,
 parcelas, boletos Sicredi, automação e envios de um cliente B2B; só leitura).
 

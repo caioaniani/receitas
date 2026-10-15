@@ -6488,7 +6488,10 @@ def _loja_online_pedido_editar(codigo):
     reserva_fisica_viva = (p.status == 'aguardando_pagamento'
                            and p.reserva_expira_em is not None)
     p.nome_cliente = nome
+    email_anterior = p.email_cliente
     p.email_cliente = email
+    from app.services.loja_fiscal import reenviar_apos_email_corrigido
+    reenviar_apos_email_corrigido(p, email_anterior)
     p.telefone_cliente = _s('telefone_cliente') or None
     p.nome_destinatario = _s('nome_destinatario') or None
     p.telefone_destinatario = _s('telefone_destinatario') or None

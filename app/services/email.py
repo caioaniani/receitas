@@ -110,7 +110,7 @@ def enviar(destinatario, assunto, html, *, texto=None, anexos=None, bcc=None, cc
         detalhe = corpo.get('Message') or r.text[:300] or f'HTTP {r.status_code}'
         codigo = corpo.get('ErrorCode')
         logger.warning('postmark %s (ErrorCode=%s): %s', r.status_code, codigo, detalhe)
-        return {'ok': False,
+        return {'ok': False, 'codigo': codigo,
                 'erro': f'Postmark recusou ({r.status_code}/{codigo}): {detalhe}'}
     except Exception as exc:  # noqa: BLE001
         logger.exception('email.enviar falhou')

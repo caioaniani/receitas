@@ -153,3 +153,82 @@ def test_aviso_de_email_recusado_diz_o_que_fazer(app, monkeypatch):
     monkeypatch.setattr(zapi, 'enviar_texto', enviar)
     loja_fiscal.avisar_travadas(BASE)
     assert 'corrija o e-mail no pedido' in enviar.call_args.args[1]
+
+
+# ── E-mail recusado de vez não é repetido (15/10/2026) ──────────────────────
+
+def _nf_emitida_com_email(monkeypatch, resposta):
+    from app.services import email as email_svc
+    p = _pedido_declarado('e406', tentativas=1, erro='x')
+    f = db.session.get(FiscalPedidoOnline, p.id)
+    f.confirmado_em, f.origem, f.erro = BASE, 'owner', None
+    p.nf_emitida_em, p.tiny_nota_fiscal_id = BASE, 'nf-1'
+    db.session.commit()
+    enviar = Mock(return_value=resposta)
+    monkeypatch.setattr(email_svc, 'enviar_nf_emitida', enviar)
+    monkeypatch.setattr(email_svc, 'disponivel', lambda: True)
+    return p, enviar
+
+
+def test_destinatario_inativo_nao_repete_ate_corrigir_o_email(app, monkeypatch):
+    p, enviar = _nf_emitida_com_email(monkeypatch, {
+        'ok': False, 'codigo': 406,
+        'erro': 'Postmark recusou (422/406): Found inactive addresses: x@gmail.cm.'})
+    loja_fiscal.processar_pendentes(base=BASE)
+    t = db.session.get(TarefaFiscalPedido, p.id)
+    assert enviar.call_count == 1 and t.concluido_em is None
+    assert t.proxima_tentativa_em >= BASE + timedelta(days=29)
+    # Ciclos seguintes (horas depois) não chamam o e-mail de novo.
+    loja_fiscal.processar_pendentes(base=BASE + timedelta(hours=5))
+    assert enviar.call_count == 1
+    # Continua na lista de NF parada para o dono corrigir.
+    assert [i['codigo'] for i in loja_fiscal.travadas(BASE)] == ['e406']
+    # Mesmo e-mail regravado: nada muda.
+    assert loja_fiscal.reenviar_apos_email_corrigido(p, p.email_cliente) is False
+    # E-mail corrigido: volta para o ciclo seguinte e sai.
+    anterior = p.email_cliente
+    p.email_cliente = 'certo@gmail.com'
+    assert loja_fiscal.reenviar_apos_email_corrigido(p, anterior, base=BASE + timedelta(hours=6))
+    db.session.commit()
+    enviar.return_value = {'ok': True}
+    loja_fiscal.processar_pendentes(base=BASE + timedelta(hours=6, minutes=1))
+    t = db.session.get(TarefaFiscalPedido, p.id)
+    assert enviar.call_count == 2 and t.concluido_em is not None and t.email_enviado_em
+
+
+def test_falha_passageira_do_email_segue_repetindo(app, monkeypatch):
+    p, enviar = _nf_emitida_com_email(monkeypatch, {'ok': False, 'erro': 'timeout', 'incerto': True})
+    loja_fiscal.processar_pendentes(base=BASE)
+    t = db.session.get(TarefaFiscalPedido, p.id)
+    assert t.proxima_tentativa_em <= BASE + timedelta(hours=1)
+
+
+def test_editar_pedido_com_email_novo_retoma_o_envio(app, owner_user, monkeypatch):
+    p, _ = _nf_emitida_com_email(monkeypatch, {'ok': False, 'codigo': 406, 'erro': 'inactive'})
+    loja_fiscal.processar_pendentes(base=BASE)
+    assert db.session.get(TarefaFiscalPedido, p.id).proxima_tentativa_em > BASE + timedelta(days=1)
+    app.config['WTF_CSRF_ENABLED'] = False
+    c = app.test_client()
+    with c.session_transaction() as sess:
+        sess['_user_id'] = str(owner_user.id)
+        sess['_fresh'] = True
+    r = c.post(f'/admin/loja-online/pedidos/{p.codigo}/editar', data={
+        'nome_cliente': p.nome_cliente, 'email_cliente': 'certo@gmail.com',
+        'modo_entrega': p.modo_entrega, 'data_entrega': p.data_entrega.isoformat(),
+        'janela_entrega': p.janela_entrega})
+    assert r.status_code in (302, 303)
+    db.session.expire_all()
+    t = db.session.get(TarefaFiscalPedido, p.id)
+    assert db.session.get(PedidoOnline, p.id).email_cliente == 'certo@gmail.com'
+    assert t.proxima_tentativa_em <= BASE + timedelta(minutes=1)
+
+
+def test_email_enviar_devolve_codigo_do_postmark(app, monkeypatch):
+    from app.services import email as email_svc
+    resposta = Mock(status_code=422, text='x')
+    resposta.json.return_value = {'ErrorCode': 406, 'Message': 'inactive'}
+    monkeypatch.setattr(email_svc.requests, 'post', Mock(return_value=resposta))
+    app.config['POSTMARK_SERVER_TOKEN'] = 'tok'
+    app.config['MAIL_FROM'] = 'pedidos@opao.online'
+    r = email_svc.enviar('a@b.com', 'assunto', '<p>x</p>')
+    assert r['ok'] is False and r['codigo'] == 406

@@ -115,6 +115,32 @@ def enviar_danfe(pedido, *, reenviar=False, base=None):
         return resultado
 
 
+# Postmark: 406 = destinatário inativo (hard bounce, reclamação de spam ou
+# supressão manual). Reenviar ao MESMO endereço nunca funciona; só um e-mail
+# corrigido (ou a reativação no Postmark) resolve.
+_POSTMARK_DESTINATARIO_RECUSADO = (406,)
+ESPERA_EMAIL_RECUSADO_MIN = 30 * 24 * 60   # rede de segurança: 1 tentativa/mês
+
+
+def email_recusado_definitivo(envio):
+    envio = envio or {}
+    return (not envio.get('ok') and
+            (envio.get('codigo') in _POSTMARK_DESTINATARIO_RECUSADO
+             or envio.get('erro') == 'pedido sem email'))
+
+
+def reenviar_apos_email_corrigido(pedido, email_anterior, *, base=None):
+    """E-mail do pedido corrigido: a tarefa com DANFE pendente volta para
+    o próximo ciclo (1 min). Sem commit — quem edita o pedido commita."""
+    if (pedido.email_cliente or '').strip().lower() == (email_anterior or '').strip().lower():
+        return False
+    tarefa = db.session.get(TarefaFiscalPedido, pedido.id)
+    if tarefa is None or tarefa.concluido_em or tarefa.email_enviado_em:
+        return False
+    tarefa.proxima_tentativa_em = _brt(base or agora())
+    return True
+
+
 def processar_pendentes(limite=25, *, base=None):
     """Cron a cada minuto sob lock global 7765; Tiny trava cada pedido.
 
@@ -190,7 +216,8 @@ def processar_pendentes(limite=25, *, base=None):
                     tarefa.email_enviado_em = base
                 else:
                     resultado = {'ok': False, 'msg': 'NF emitida; envio do DANFE por e-mail '
-                                 'pendente: ' + str((envio or {}).get('erro') or 'Tente novamente.')}
+                                 'pendente: ' + str((envio or {}).get('erro') or 'Tente novamente.'),
+                                 'email_definitivo': email_recusado_definitivo(envio)}
             if tarefa.email_enviado_em:
                 tarefa.concluido_em = base
                 tarefa.erro = None
@@ -198,6 +225,12 @@ def processar_pendentes(limite=25, *, base=None):
         if not tarefa.concluido_em:
             tarefa.erro = str(resultado.get('msg') or 'A emissão ainda não foi confirmada.')[:2000]
             atraso = min(60, 5 * (2 ** min(max(tarefa.tentativas - 1, 0), 4)))
+            if resultado.get('email_definitivo'):
+                # Endereço recusado de vez (15/10/2026: 629 tentativas num
+                # e-mail inativo). Não repete: corrigir o e-mail no pedido
+                # (`reenviar_apos_email_corrigido`) ou "Reenviar e-mails"
+                # retoma; o aviso de NF parada segue cobrando o dono.
+                atraso = ESPERA_EMAIL_RECUSADO_MIN
             tarefa.proxima_tentativa_em = base + timedelta(minutes=atraso)
             resumo['pendentes'] += 1
         db.session.commit()
