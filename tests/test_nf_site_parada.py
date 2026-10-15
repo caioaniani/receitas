@@ -139,3 +139,17 @@ def test_sonda_nf_site_fila(app):
     assert d['itens'][0]['fiscal']['origem'] == 'checkout_declarado'
     d = c.get('/api/claude/nf-site-fila?codigo=ca37', headers=h).get_json()
     assert d['pedido']['tarefa']['tentativas'] == 3
+
+
+def test_aviso_de_email_recusado_diz_o_que_fazer(app, monkeypatch):
+    p = _pedido_declarado(tentativas=3,
+                          erro='NF emitida; envio do DANFE por e-mail pendente: Postmark recusou '
+                               '(422/406): ... Found inactive addresses: x@gmail.cm.')
+    f = db.session.get(FiscalPedidoOnline, p.id)
+    f.confirmado_em, f.origem, f.erro = BASE, 'owner', None
+    p.nf_emitida_em, p.tiny_nota_fiscal_id = BASE, 'nf-1'
+    db.session.commit()
+    enviar = Mock(return_value={'ok': True})
+    monkeypatch.setattr(zapi, 'enviar_texto', enviar)
+    loja_fiscal.avisar_travadas(BASE)
+    assert 'corrija o e-mail no pedido' in enviar.call_args.args[1]

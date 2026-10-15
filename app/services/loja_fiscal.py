@@ -256,10 +256,15 @@ def _texto_aviso(itens):
     linhas = [f'🧾 NF do site PARADA — {len(itens)} pedido(s) sem nota fiscal:']
     for it in itens[:10]:
         entrega = it['data_entrega'].strftime('%d/%m') if it['data_entrega'] else '?'
-        motivo = ('falta você conferir o cadastro fiscal (CNPJ/IE) no pedido'
-                  if it['aguarda_dono'] else
-                  'NF emitida, envio do DANFE por e-mail pendente' if it['nf_emitida']
-                  else it['erro'][:140])
+        if it['aguarda_dono']:
+            motivo = 'falta você conferir o cadastro fiscal (CNPJ/IE) no pedido'
+        elif it['nf_emitida'] and 'inactive' in it['erro'].lower():
+            motivo = ('NF emitida, mas o e-mail do cliente foi recusado (endereço '
+                      'inativo ou digitado errado) — corrija o e-mail no pedido')
+        elif it['nf_emitida']:
+            motivo = 'NF emitida, envio do DANFE por e-mail pendente'
+        else:
+            motivo = it['erro'][:140]
         linhas.append(f'• {it["codigo"]} (entrega {entrega}) — {motivo}')
         if base_url:
             linhas.append(f'  {base_url}/admin/loja-online/pedidos/{it["codigo"]}')
