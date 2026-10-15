@@ -4783,13 +4783,25 @@ caso comum. `fiscal_online.resolver_declarado` (chamado por `consultar` na
 emissão, no máximo a cada `REAVALIAR_DECLARADO_MIN`=30) reconsulta a CNPJ.ws
 (`consulta_empresa.consultar`; `ie_ativas_uf` = inscrições ativas na UF, None
 quando a lista nem vem — só a CNPJ.ws sabe de IE, a fonte de endereço
-`cnpj_publico` nunca resolve): 1 IE ativa → contribuinte; ZERO → não
-contribuinte (isento se o cliente declarou isento), só empresa de
-`UF_EMITENTE`='SP'; a NOTA usa os dados da BASE (os digitados ficam em
-`dados['_auto']['declarado']`), origem `auto_consulta`. Ficam com o dono, com
-o motivo em `erro` (e no aviso diário): IE declarada ≠ base, cliente diz ter
-IE e a base não mostra, várias IEs, outra UF, base fora/sem lista,
-cadastro incompleto. A conferência do dono segue sobrescrevendo. Testes:
+`cnpj_publico` nunca resolve; inscrição da UF com `ativo` ausente ou
+entrada ilegível também = None): empresa fora de `UF_EMITENTE`='SP' → dono
+SEMPRE (a natureza de venda usa CFOP 5.xxx e a SEFAZ rejeita destino em
+outra UF — mesmo erro do 72717B84); base com `atualizado_em` ausente ou
+mais velha que `BASE_VALIDADE_DIAS`=365 → dono; EXATAMENTE 1 IE ativa →
+contribuinte; ZERO → não contribuinte (isento se o cliente declarou isento
+ou o contato do Tiny tem ISENTO). O contato do TINY é conferido: IE lá
+diferente da base (ou IE lá e zero na base) → dono. A NOTA usa os dados da
+BASE (os digitados ficam em `dados['_auto']['declarado']`; metadados `_*`
+como `_checkout` são preservados), origem `auto_consulta`. Ficam com o
+dono, com o motivo em `erro` (e no aviso diário): IE declarada ou do Tiny ≠
+base, cliente diz ter IE e a base não mostra, várias IEs, outra UF, base
+sem lista/velha, cadastro incompleto. Base ou Tiny FORA DO AR não é
+pendência do dono: erro com `SUFIXO_TRANSITORIO`, sem carimbar
+`consultado_em` (a próxima tentativa da fila reconsulta). Fonte única de
+"aguarda o dono": `fiscal_online.aguarda_dono(row)` (qualquer origem — a
+consulta forçada do dono troca a origem e o pedido não some do aviso). A
+rede (CNPJ.ws + Tiny) roda com a trava fiscal do chamador, como a consulta
+do owner. A conferência do dono segue sobrescrevendo. Testes:
 `tests/test_fiscal_resolucao_automatica.py`.
 Também de 14-15/10: sonda `GET /api/claude/cobrancas-b2b?cliente=` (vendas,
 parcelas, boletos Sicredi, automação e envios de um cliente B2B; só leitura).

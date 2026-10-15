@@ -322,8 +322,10 @@ def _payload_cliente(pedido):
     """Cliente da NF, COM endereco estruturado. A SEFAZ exige logradouro/
     numero/bairro/cidade/uf separados — sem eles a NF e' rejeitada
     ('endereco/bairro/cidade em branco'). O endereco vem do snapshot do
-    pedido (entrega). Retirada nao coleta endereco -> campos vazios (NF de
-    pedido de retirada exigiria coletar o endereco do cliente a parte)."""
+    pedido; na retirada e o endereco que o cliente informou para a NF
+    (checkout coleta desde 20/07/2026). UF do destinatario fora de SP com a
+    natureza de venda (CFOP 5.xxx) e rejeitada pela SEFAZ ('CFOP de operacao
+    interna e idDest <> 1', caso 72717B84)."""
     from app.services.fiscal_online import documento
     doc = documento(pedido)
     return {

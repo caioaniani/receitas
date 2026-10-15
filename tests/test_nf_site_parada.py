@@ -34,10 +34,15 @@ def _sem_rede(app, monkeypatch):
                  'buscar_contato_por_documento'):
         monkeypatch.setattr(tiny, nome, explode)
     monkeypatch.setattr(loja_fiscal, 'agora', lambda: BASE)
-    # Base pública fora: o cadastro declarado continua com o dono.
+    # Base pública responde SEM a lista de inscrições: não sabe a IE, então
+    # o cadastro declarado continua com o dono.
     from app.services import consulta_empresa
-    monkeypatch.setattr(consulta_empresa, 'consultar',
-                        lambda _d: {'dados': {}, 'origem': '', 'falha': 'indisponivel'})
+    monkeypatch.setattr(consulta_empresa, 'consultar', lambda _d: {
+        'origem': 'cnpj_ws', 'ie_ativas_uf': None, 'atualizado_em': None,
+        'dados': {'nome': 'SECURITY SYARD BRASIL LTDA', 'endereco': 'Av Berrini',
+                  'numero': '1748', 'complemento': '', 'bairro': 'Cidade Moncoes',
+                  'cidade': 'São Paulo', 'uf': 'SP', 'cep': '04571000', 'ie': '',
+                  'situacao_ie': None}})
     app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
     app.config['APP_BASE_URL'] = 'https://gestao.exemplo'
 

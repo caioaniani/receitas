@@ -189,12 +189,19 @@ def _normalizar_cnpj_ws(payload, documento):
     ativas_uf = 0 if isinstance(inscricoes, list) else None
     if isinstance(inscricoes, list):
         for inscricao in inscricoes:
-            if not isinstance(inscricao, dict) or inscricao.get('ativo') is not True:
+            if not isinstance(inscricao, dict):
+                ativas_uf = None  # entrada ilegível: a contagem não prova nada
                 continue
             estado_ie = inscricao.get('estado')
             if not isinstance(estado_ie, dict) or _texto(estado_ie.get('sigla')).upper() != uf:
                 continue
-            ativas_uf += 1
+            ativo = inscricao.get('ativo')
+            if ativo is not True:
+                if ativo is not False:
+                    ativas_uf = None  # situação desconhecida na UF: não sabe
+                continue
+            if ativas_uf is not None:
+                ativas_uf += 1
             raw_ie = _texto(inscricao.get('inscricao_estadual'))
             # Somente números e máscara; texto como ISENTO não comprova IE.
             if not raw_ie or not re.fullmatch(r'[0-9. /-]+', raw_ie):

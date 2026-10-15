@@ -105,7 +105,17 @@ def pendencias(row, rotulos=None):
 # é clara; o dono só é chamado no que a base não resolve.
 UF_EMITENTE = 'SP'                 # emissão intraestadual; fora disso, dono
 REAVALIAR_DECLARADO_MIN = 30       # não reconsulta a cada tentativa da fila
+BASE_VALIDADE_DIAS = 365           # base pública mais velha que isso não decide
 ORIGEM_AUTO = 'auto_consulta'
+# Erro que a própria fila resolve (base/Tiny fora do ar): não é pendência do
+# dono e não entra no aviso "precisa conferir". Fonte única: `aguarda_dono`.
+SUFIXO_TRANSITORIO = ' A fila tenta de novo automaticamente.'
+
+
+def aguarda_dono(row):
+    """O cadastro fiscal trava a nota até o dono conferir (qualquer origem)."""
+    return bool(row is not None and row.erro and not row.confirmado_em
+                and not row.erro.endswith(SUFIXO_TRANSITORIO))
 
 
 def _pendente_dono(row, motivo):
@@ -115,60 +125,107 @@ def _pendente_dono(row, motivo):
     return False
 
 
+def _pendente_transitorio(row, motivo):
+    """Base ou Tiny indisponível: sem carimbar `consultado_em`, a próxima
+    tentativa da fila (com o backoff dela) consulta de novo."""
+    row.erro = motivo + SUFIXO_TRANSITORIO
+    return False
+
+
+def _base_recente(atualizado_em):
+    """A base pública foi atualizada há menos de BASE_VALIDADE_DIAS? Data
+    ausente ou ilegível = não sabe (False)."""
+    from datetime import datetime, timedelta
+    texto = str(atualizado_em or '').strip()
+    if not texto:
+        return False
+    try:
+        quando = datetime.fromisoformat(texto.replace('Z', '+00:00'))
+    except ValueError:
+        return False
+    if quando.tzinfo is not None:
+        quando = quando.replace(tzinfo=None)
+    return quando >= agora() - timedelta(days=BASE_VALIDADE_DIAS)
+
+
 def resolver_declarado(row):
     """Tenta resolver um cadastro `checkout_declarado` pela base pública.
 
     Regras (só a CNPJ.ws lista as inscrições; outra fonte = não sabe):
-    - base com UMA IE ativa na UF → contribuinte com os dados da base; se o
-      cliente informou OUTRA IE, conflito → dono.
+    - empresa fora de SP (`UF_EMITENTE`) → dono: a natureza de venda usa
+      CFOP de dentro do estado e a SEFAZ rejeita destino em outra UF.
+    - base com EXATAMENTE uma IE ativa na UF → contribuinte com os dados da
+      base; se o cliente ou o cadastro do Tiny têm OUTRA IE → dono.
     - base listando ZERO IE ativa na UF → não contribuinte (ou isento, se o
-      cliente declarou isento) com os dados da base, só para empresa de SP
-      (`UF_EMITENTE`); cliente que declarou IE → dono.
-    - base fora, sem a lista ou com várias IEs → dono.
-    Sem commit. Devolve True se resolveu.
+      cliente declarou isento ou o Tiny tem ISENTO); IE declarada pelo
+      cliente ou no Tiny → dono.
+    - base sem a lista, com inscrição de situação desconhecida, com várias
+      IEs ou desatualizada há mais de BASE_VALIDADE_DIAS → dono.
+    - base ou Tiny fora do ar → a fila tenta de novo (não é pendência do dono).
+    Faz rede (CNPJ.ws e Tiny) com a trava fiscal do chamador, como a consulta
+    do owner. Sem commit. Devolve True se resolveu.
     """
-    from app.services import consulta_empresa
+    from app.services import consulta_empresa, tiny
     from app.services.checkout_fiscal import normalizar_dados
 
     consulta = consulta_empresa.consultar(row.documento)
     bruto = consulta.get('dados') or {}
-    if not bruto or consulta.get('origem') != 'cnpj_ws':
-        return _pendente_dono(row, 'A base pública não respondeu com a lista de '
-                              'inscrições estaduais; a fila tenta de novo.')
+    if not bruto or consulta.get('origem') != consulta_empresa._PROVEDOR:
+        return _pendente_transitorio(row, 'A base pública não respondeu com a lista de '
+                                     'inscrições estaduais.')
     pub, _ = cortar_aos_limites(normalizar_dados(bruto))
     declarado = row.dados or {}
     ie_decl = digitos(declarado.get('ie'))
-    if bruto.get('situacao_ie') == 'contribuinte' and pub['ie']:
-        if ie_decl and ie_decl != pub['ie']:
-            return _pendente_dono(row, f'O cliente informou a IE {ie_decl}, mas a base '
-                                  f'pública mostra a IE {pub["ie"]}.')
+    if pub['uf'] != UF_EMITENTE:
+        return _pendente_dono(row, f'Empresa de outro estado ({pub["uf"] or "?"}): a nota '
+                              'de venda usa CFOP de dentro do estado e a SEFAZ rejeita.')
+    n = consulta.get('ie_ativas_uf')
+    if n is None:
+        return _pendente_dono(row, 'A base pública não trouxe as inscrições '
+                              'estaduais desta empresa (ou alguma está sem situação).')
+    if not _base_recente(consulta.get('atualizado_em')):
+        return _pendente_dono(row, 'A base pública está desatualizada para decidir a '
+                              'inscrição estadual.')
+    contato_res = tiny.buscar_contato_por_documento(row.documento)
+    if contato_res.get('erro'):
+        return _pendente_transitorio(row, 'O cadastro do Tiny não respondeu.')
+    ie_tiny = str((contato_res.get('contato') or {}).get('ie') or '').strip()
+    tiny_isento = ie_tiny.upper() == 'ISENTO'
+    ie_tiny = '' if tiny_isento else digitos(ie_tiny)
+    if n == 1 and bruto.get('situacao_ie') == 'contribuinte' and pub['ie']:
+        for fonte, ie in (('O cliente informou', ie_decl), ('O cadastro do Tiny tem', ie_tiny)):
+            if ie and ie != pub['ie']:
+                return _pendente_dono(row, f'{fonte} a IE {ie}, mas a base pública '
+                                      f'mostra a IE {pub["ie"]}.')
         situacao = 'contribuinte'
-    else:
-        n = consulta.get('ie_ativas_uf')
-        if n is None:
-            return _pendente_dono(row, 'A base pública não trouxe as inscrições '
-                                  'estaduais desta empresa.')
-        if n > 0:
-            return _pendente_dono(row, f'A base pública lista {n} inscrições estaduais '
-                                  'ativas; não dá para escolher sozinho.')
+    elif n == 0:
         if ie_decl or row.situacao_ie == 'contribuinte':
             return _pendente_dono(row, 'O cliente informou ser contribuinte, mas a base '
                                   'pública não mostra inscrição estadual ativa.')
-        if pub['uf'] != UF_EMITENTE:
-            return _pendente_dono(row, f'Empresa de outro estado ({pub["uf"] or "?"}) sem '
-                                  'inscrição estadual: confira a regra da nota.')
+        if ie_tiny:
+            return _pendente_dono(row, f'O cadastro do Tiny tem a IE {ie_tiny}, mas a base '
+                                  'pública não mostra inscrição estadual ativa.')
         pub['ie'] = ''
-        situacao = row.situacao_ie if row.situacao_ie == 'isento' else 'nao_contribuinte'
+        situacao = ('isento' if row.situacao_ie == 'isento' or tiny_isento
+                    else 'nao_contribuinte')
+    else:
+        return _pendente_dono(row, f'A base pública lista {n} inscrições estaduais '
+                              'ativas; não dá para escolher sozinho.')
     candidato = FiscalPedidoOnline(documento=row.documento, dados=pub, situacao_ie=situacao)
     faltando = pendencias(candidato)
     if faltando:
         return _pendente_dono(row, 'A base pública não tem: ' + ', '.join(faltando) + '.')
-    row.dados = {**pub, '_auto': {
-        'resolvido_em': agora().isoformat(), 'fonte': consulta.get('origem'),
-        'base_atualizada_em': consulta.get('atualizado_em'),
-        'declarado': {k: v for k, v in declarado.items() if not str(k).startswith('_')},
-        'situacao_declarada': row.situacao_ie,
-    }}
+    row.dados = {**pub,
+                 # metadados anteriores (ex.: `_checkout`) ficam na trilha
+                 **{k: v for k, v in declarado.items() if str(k).startswith('_')},
+                 '_auto': {
+                     'resolvido_em': agora().isoformat(), 'fonte': consulta.get('origem'),
+                     'base_atualizada_em': consulta.get('atualizado_em'),
+                     'declarado': {k: v for k, v in declarado.items()
+                                   if not str(k).startswith('_')},
+                     'situacao_declarada': row.situacao_ie,
+                     'ie_tiny': 'ISENTO' if tiny_isento else ie_tiny,
+                 }}
     row.situacao_ie = situacao
     row.origem = ORIGEM_AUTO
     row.consultado_em = agora()

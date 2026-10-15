@@ -256,10 +256,12 @@ def travadas(base=None):
 
     Só pedido que ainda deve ter nota (pago, não divulgação, não cancelado).
     Cada item: {codigo, pedido_id, data_entrega, tentativas, erro,
-    aguarda_dono, desde}. `aguarda_dono` = trava do cadastro fiscal declarado
-    que só a conferência do dono libera.
+    aguarda_dono, desde}. `aguarda_dono` = trava do cadastro fiscal que só a
+    conferência do dono libera (`fiscal_online.aguarda_dono`, qualquer origem;
+    base/Tiny fora do ar não conta — a fila resolve sozinha).
     """
     from app.models import FiscalPedidoOnline
+    from app.services import fiscal_online
     base = _brt(base or agora())
     linhas = (db.session.query(TarefaFiscalPedido, PedidoOnline, FiscalPedidoOnline)
               .join(PedidoOnline, PedidoOnline.id == TarefaFiscalPedido.pedido_id)
@@ -273,8 +275,7 @@ def travadas(base=None):
     for tarefa, pedido, fiscal in linhas:
         if not pode_emitir(pedido):
             continue
-        aguarda_dono = bool(fiscal is not None and fiscal.erro and not fiscal.confirmado_em
-                            and fiscal.origem == 'checkout_declarado')
+        aguarda_dono = fiscal_online.aguarda_dono(fiscal)
         out.append({'codigo': pedido.codigo, 'pedido_id': pedido.id,
                     'data_entrega': pedido.data_entrega, 'tentativas': tarefa.tentativas,
                     'erro': (tarefa.erro or '')[:300], 'aguarda_dono': aguarda_dono,
