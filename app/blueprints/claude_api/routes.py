@@ -3804,3 +3804,55 @@ def cobrancas_b2b():
                    clientes=[{'id': c.id, 'nome': c.nome} for c in clientes],
                    vendas=out_vendas, faturas=faturas, cobrancas_sem_origem=orfas,
                    automacoes=automacoes, envios=envios)
+
+
+@claude_api_bp.route('/nf-site-fila')
+@_claude_auth_required
+def nf_site_fila():
+    """Fila de NF do site PARADA (15/10/2026, caso ca37c72e: nota de compra
+    com CNPJ esperando a conferência do dono havia 17 dias). Read-only.
+
+    Lista as tarefas que já tentaram e não saíram (`loja_fiscal.travadas`)
+    com o cadastro fiscal do pedido (origem, situação de IE, pendência).
+    ?codigo=<código> mostra um pedido qualquer, parado ou não.
+    COBERTURA: só a fila automática (`tarefa_fiscal_kit`); emissão manual
+    pelo botão do detalhe não passa por aqui.
+    """
+    from app.extensions import db
+    from app.models import AppConfig, FiscalPedidoOnline, PedidoOnline, TarefaFiscalPedido
+    from app.services import loja_fiscal
+
+    def _fiscal(pedido_id):
+        f = db.session.get(FiscalPedidoOnline, pedido_id)
+        if f is None:
+            return None
+        return {'documento': f.documento, 'origem': f.origem, 'situacao_ie': f.situacao_ie,
+                'erro': f.erro, 'dados': f.dados,
+                'confirmado_em': f.confirmado_em.isoformat() if f.confirmado_em else None,
+                'consultado_em': f.consultado_em.isoformat() if f.consultado_em else None}
+
+    codigo = (request.args.get('codigo') or '').strip()
+    if codigo:
+        p = PedidoOnline.query.filter(PedidoOnline.codigo.ilike(codigo + '%')).first()
+        if not p:
+            return jsonify(ok=False, erro='pedido nao encontrado'), 404
+        t = db.session.get(TarefaFiscalPedido, p.id)
+        return jsonify(ok=True, pedido={
+            'codigo': p.codigo, 'status': p.status, 'modo': p.modo_entrega,
+            'data_entrega': p.data_entrega.isoformat() if p.data_entrega else None,
+            'nf_status': p.nf_status, 'nf_emitida_em': p.nf_emitida_em.isoformat() if p.nf_emitida_em else None,
+            'tiny_nota_fiscal_id': p.tiny_nota_fiscal_id,
+            'tarefa': None if t is None else {
+                'tentativas': t.tentativas, 'erro': t.erro,
+                'criado_em': t.criado_em.isoformat() if t.criado_em else None,
+                'proxima_tentativa_em': t.proxima_tentativa_em.isoformat() if t.proxima_tentativa_em else None,
+                'concluido_em': t.concluido_em.isoformat() if t.concluido_em else None,
+                'email_enviado_em': t.email_enviado_em.isoformat() if t.email_enviado_em else None},
+            'fiscal': _fiscal(p.id)})
+    itens = loja_fiscal.travadas()
+    for it in itens:
+        it['data_entrega'] = it['data_entrega'].isoformat() if it['data_entrega'] else None
+        it['desde'] = it['desde'].isoformat() if it['desde'] else None
+        it['fiscal'] = _fiscal(it['pedido_id'])
+    return jsonify(ok=True, n=len(itens), aguardando_dono=sum(1 for i in itens if i['aguarda_dono']),
+                   ultimo_aviso=AppConfig.get('nf_site_travadas_aviso'), itens=itens)

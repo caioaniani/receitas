@@ -1196,11 +1196,19 @@ def _run_liberar_reservas_expiradas(app):
 
 def _run_kits_fiscal(app):
     """NF de cada pedido do site uma hora antes da entrega; ciclo a cada minuto."""
+    with app.app_context():
+        _com_lock(LOCK_KEY_KITS_FISCAL, _fila_fiscal_e_aviso,
+                  'fila fiscal do site')
+
+
+def _fila_fiscal_e_aviso():
+    """Processa a fila e, na MESMA trava, avisa o dono das NFs paradas
+    (1x/dia, claim persistente — caso ca37c72e, 15/10/2026)."""
     from app.services import loja_fiscal
 
-    with app.app_context():
-        _com_lock(LOCK_KEY_KITS_FISCAL, loja_fiscal.processar_pendentes,
-                  'fila fiscal do site')
+    resumo = loja_fiscal.processar_pendentes()
+    loja_fiscal.avisar_travadas()
+    return resumo
 
 
 def _run_vigia_chatwoot(app):

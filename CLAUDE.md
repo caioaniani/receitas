@@ -4750,6 +4750,27 @@ UI, em duas camadas:
 `telefone_cliente` (comprador). Login/identidade e por E-MAIL, nao telefone —
 mudar o ROTULO do campo e seguro. Testes: `tests/test_pedido_presente_telefone.py`.
 
+## NF do site PARADA avisa o dono (15/10/2026)
+
+Caso ca37c72e (Security Syard, CNPJ): compra express de 28/09 com dados
+fiscais DECLARADOS no checkout (`checkout_fiscal.salvar`, origem
+`checkout_declarado` — a consulta pública não confirmou IE ativa). A NF só
+sai depois que o DONO confere o cadastro no pedido
+(`fiscal_online.salvar_conferencia`, owner-only); a fila
+(`loja_fiscal.processar_pendentes`) só repetia de hora em hora e ninguém
+soube por 17 dias — cliente ameaçou denunciar. A conferência CONTINUA gesto
+do dono (decide a situação de IE na nota; não automatizar sem ordem). Agora:
+`loja_fiscal.travadas()` (tarefa não concluída, >= 2 tentativas, com erro,
+pedido ainda emitível; `aguarda_dono` = declarado sem conferência) alimenta
+`avisar_travadas` (WhatsApp ao dono 1x/dia via `whatsapp.claim_envio`,
+8h-21h, envio falho devolve o claim; kill-switch `NF_SITE_AVISO=0`), rodando
+na MESMA trava 7765 da fila (`seru_cron._fila_fiscal_e_aviso`), e o item
+`nf_site_parada` no "Precisa de você hoje". Sonda
+`GET /api/claude/nf-site-fila[?codigo=]`. Depois da conferência a fila emite
+no minuto seguinte e manda o DANFE. Testes: `tests/test_nf_site_parada.py`.
+Também de 14-15/10: sonda `GET /api/claude/cobrancas-b2b?cliente=` (vendas,
+parcelas, boletos Sicredi, automação e envios de um cliente B2B; só leitura).
+
 ## Lalamove: UMA corrida por pedido (14/10/2026)
 
 Dono: "às vezes ao pedir motoboy Lalamove ele multiplica e chama 2 motoboys

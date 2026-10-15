@@ -277,7 +277,15 @@ def test_cron_executa_fila_com_chave_propria(app, monkeypatch):
     lock = Mock()
     monkeypatch.setattr(seru_cron, '_com_lock', lock)
     seru_cron._run_kits_fiscal(app)
-    lock.assert_called_once_with(7765, kits_fiscal.processar_pendentes, 'fila fiscal do site')
+    # 15/10/2026: a mesma trava roda a fila e o aviso de NF parada ao dono.
+    lock.assert_called_once_with(7765, seru_cron._fila_fiscal_e_aviso, 'fila fiscal do site')
+    processar = Mock(return_value={'processados': 0})
+    avisar = Mock()
+    monkeypatch.setattr(kits_fiscal, 'processar_pendentes', processar)
+    monkeypatch.setattr(kits_fiscal, 'avisar_travadas', avisar)
+    assert seru_cron._fila_fiscal_e_aviso() == {'processados': 0}
+    processar.assert_called_once_with()
+    avisar.assert_called_once_with()
 
 
 def test_falha_email_repetida_reenvia_so_danfe_sem_reemitir_nota(owner_user, tiny_falso):

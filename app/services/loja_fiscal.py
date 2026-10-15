@@ -202,3 +202,106 @@ def processar_pendentes(limite=25, *, base=None):
             resumo['pendentes'] += 1
         db.session.commit()
     return resumo
+
+
+# ── NF do site PARADA: o dono precisa saber (15/10/2026) ─────────────────────
+# Caso ca37c72e: compra com CNPJ em 28/09, dados fiscais DECLARADOS pelo
+# cliente (a consulta pública não confirmou a inscrição estadual). A emissão
+# depende da conferência do dono (`fiscal_online.salvar_conferencia`), e a
+# fila só repetia a tentativa de hora em hora: 17 dias sem nota, ninguém
+# avisado, cliente ameaçando denunciar. A conferência continua sendo gesto do
+# dono (define a situação de IE na nota); o que muda é que a fila PARADA vira
+# aviso — WhatsApp uma vez por dia e item no "Precisa de você hoje".
+
+TENTATIVAS_PARA_AVISO = 2
+AVISO_HORA_INICIO, AVISO_HORA_FIM = 8, 21
+_CHAVE_AVISO = 'nf_site_travadas_aviso'
+
+
+def travadas(base=None):
+    """Tarefas de NF do site que já tentaram e não saíram, com o motivo.
+
+    Só pedido que ainda deve ter nota (pago, não divulgação, não cancelado).
+    Cada item: {codigo, pedido_id, data_entrega, tentativas, erro,
+    aguarda_dono, desde}. `aguarda_dono` = trava do cadastro fiscal declarado
+    que só a conferência do dono libera.
+    """
+    from app.models import FiscalPedidoOnline
+    base = _brt(base or agora())
+    linhas = (db.session.query(TarefaFiscalPedido, PedidoOnline, FiscalPedidoOnline)
+              .join(PedidoOnline, PedidoOnline.id == TarefaFiscalPedido.pedido_id)
+              .outerjoin(FiscalPedidoOnline,
+                         FiscalPedidoOnline.pedido_id == TarefaFiscalPedido.pedido_id)
+              .filter(TarefaFiscalPedido.concluido_em.is_(None),
+                      TarefaFiscalPedido.tentativas >= TENTATIVAS_PARA_AVISO,
+                      TarefaFiscalPedido.erro.isnot(None))
+              .order_by(PedidoOnline.data_entrega, PedidoOnline.id).all())
+    out = []
+    for tarefa, pedido, fiscal in linhas:
+        if not pode_emitir(pedido):
+            continue
+        aguarda_dono = bool(fiscal is not None and fiscal.erro and not fiscal.confirmado_em
+                            and fiscal.origem == 'checkout_declarado')
+        out.append({'codigo': pedido.codigo, 'pedido_id': pedido.id,
+                    'data_entrega': pedido.data_entrega, 'tentativas': tarefa.tentativas,
+                    'erro': (tarefa.erro or '')[:300], 'aguarda_dono': aguarda_dono,
+                    'nf_emitida': bool(pedido.nf_emitida_em),
+                    'desde': horario_emissao(pedido) or tarefa.criado_em})
+    return out
+
+
+def _texto_aviso(itens):
+    from flask import current_app
+    base_url = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+    linhas = [f'🧾 NF do site PARADA — {len(itens)} pedido(s) sem nota fiscal:']
+    for it in itens[:10]:
+        entrega = it['data_entrega'].strftime('%d/%m') if it['data_entrega'] else '?'
+        motivo = ('falta você conferir o cadastro fiscal (CNPJ/IE) no pedido'
+                  if it['aguarda_dono'] else
+                  'NF emitida, envio do DANFE por e-mail pendente' if it['nf_emitida']
+                  else it['erro'][:140])
+        linhas.append(f'• {it["codigo"]} (entrega {entrega}) — {motivo}')
+        if base_url:
+            linhas.append(f'  {base_url}/admin/loja-online/pedidos/{it["codigo"]}')
+    if len(itens) > 10:
+        linhas.append(f'… e mais {len(itens) - 10}.')
+    linhas.append('Depois da conferência a nota sai sozinha em ~1 min e vai por e-mail ao cliente.')
+    return '\n'.join(linhas)
+
+
+def avisar_travadas(base=None):
+    """WhatsApp ao dono com as NFs paradas: no máximo UMA vez por dia
+    (claim persistente — dois workers/containers não duplicam), entre 8h e
+    21h. A lista nova do mesmo dia não reenvia; a cobrança volta no dia
+    seguinte enquanto houver nota parada. Nunca levanta."""
+    from flask import current_app
+
+    from app.services import whatsapp, zapi
+    try:
+        base = _brt(base or agora())
+        if str(current_app.config.get('NF_SITE_AVISO', '1')).strip() == '0':
+            return {'enviado': False, 'motivo': 'desligado'}
+        if not AVISO_HORA_INICIO <= base.hour < AVISO_HORA_FIM:
+            return {'enviado': False, 'motivo': 'fora_do_horario'}
+        itens = travadas(base)
+        if not itens:
+            return {'enviado': False, 'motivo': 'nada_parado'}
+        numero = ((current_app.config.get('LOJA_ALERTA_NUMERO') or '').strip()
+                  or (current_app.config.get('ZAPI_NUMERO_DESTINO') or '').strip())
+        if not numero:
+            return {'enviado': False, 'motivo': 'sem_numero'}
+        estado, anterior = whatsapp.claim_envio(_CHAVE_AVISO, base.date().isoformat())
+        if estado != 'ok':
+            return {'enviado': False, 'motivo': estado}
+        res = zapi.enviar_texto(numero, _texto_aviso(itens))
+        if not (res or {}).get('ok'):
+            whatsapp.devolver_claim(_CHAVE_AVISO, anterior)
+            return {'enviado': False, 'motivo': 'falha_envio', 'n': len(itens)}
+        return {'enviado': True, 'n': len(itens)}
+    except Exception:  # noqa: BLE001 — aviso nunca derruba a fila fiscal
+        logger.exception('Fila fiscal: aviso de NF parada falhou')
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return {'enviado': False, 'motivo': 'erro'}

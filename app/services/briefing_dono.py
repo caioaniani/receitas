@@ -186,6 +186,21 @@ def pendencias(incluir_owner=True):
     except Exception:
         logger.exception('pendencias: checklist_loja falhou')
 
+    # NF do site parada (15/10/2026, caso ca37c72e: 17 dias sem nota e
+    # ninguém sabia). A conferência fiscal é do dono; o link abre o pedido.
+    try:
+        from app.services import loja_fiscal
+        nfs = loja_fiscal.travadas()
+    except Exception:  # noqa: BLE001 — fila fiscal fora não derruba a home
+        logger.exception('pendencias: NFs do site paradas falhou')
+        nfs = []
+    if nfs:
+        itens.append({'chave': 'nf_site_parada',
+                      'rotulo': 'Notas fiscais do site paradas',
+                      'qtd': len(nfs),
+                      'url': f'/admin/loja-online/pedidos/{nfs[0]["codigo"]}'
+                             if len(nfs) == 1 else '/admin/loja-online/pedidos'})
+
     if incluir_owner:
         # 6. Órfãos de cesta (componente sem FK não baixa estoque na venda).
         from app.services.cestas import contar_produto_itens_orfaos
