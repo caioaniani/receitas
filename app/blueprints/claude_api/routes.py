@@ -3842,6 +3842,10 @@ def nf_site_fila():
             'data_entrega': p.data_entrega.isoformat() if p.data_entrega else None,
             'nf_status': p.nf_status, 'nf_emitida_em': p.nf_emitida_em.isoformat() if p.nf_emitida_em else None,
             'tiny_nota_fiscal_id': p.tiny_nota_fiscal_id,
+            # Endereço que vai como destinatário da NF de CPF (o de CNPJ vem
+            # do cadastro fiscal acima). Diagnóstico de rejeição por UF.
+            'endereco_nf': {k: getattr(p, 'endereco_' + k) for k in
+                            ('logradouro', 'numero', 'bairro', 'cidade', 'uf', 'cep')},
             'tarefa': None if t is None else {
                 'tentativas': t.tentativas, 'erro': t.erro,
                 'criado_em': t.criado_em.isoformat() if t.criado_em else None,

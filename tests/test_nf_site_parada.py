@@ -143,6 +143,7 @@ def test_sonda_nf_site_fila(app):
     assert d['itens'][0]['fiscal']['origem'] == 'checkout_declarado'
     d = c.get('/api/claude/nf-site-fila?codigo=ca37', headers=h).get_json()
     assert d['pedido']['tarefa']['tentativas'] == 3
+    assert d['pedido']['endereco_nf']['uf'] is None or isinstance(d['pedido']['endereco_nf'], dict)
 
 
 def test_aviso_de_email_recusado_diz_o_que_fazer(app, monkeypatch):
