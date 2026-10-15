@@ -34,6 +34,10 @@ def _sem_rede(app, monkeypatch):
                  'buscar_contato_por_documento'):
         monkeypatch.setattr(tiny, nome, explode)
     monkeypatch.setattr(loja_fiscal, 'agora', lambda: BASE)
+    # Base pública fora: o cadastro declarado continua com o dono.
+    from app.services import consulta_empresa
+    monkeypatch.setattr(consulta_empresa, 'consultar',
+                        lambda _d: {'dados': {}, 'origem': '', 'falha': 'indisponivel'})
     app.config['ZAPI_NUMERO_DESTINO'] = '5511999990000'
     app.config['APP_BASE_URL'] = 'https://gestao.exemplo'
 
@@ -92,7 +96,7 @@ def test_aviso_whatsapp_uma_vez_por_dia_com_link(app, monkeypatch):
     monkeypatch.setattr(zapi, 'enviar_texto', enviar)
     assert loja_fiscal.avisar_travadas(BASE)['enviado'] is True
     texto = enviar.call_args.args[1]
-    assert 'ca37c72e' in texto and 'conferir o cadastro fiscal' in texto
+    assert 'ca37c72e' in texto and 'não resolveu o cadastro fiscal' in texto
     assert 'https://gestao.exemplo/admin/loja-online/pedidos/ca37c72e' in texto
     # Mesmo dia (outro worker, outro minuto): não repete.
     assert loja_fiscal.avisar_travadas(BASE + timedelta(hours=3))['enviado'] is False

@@ -182,6 +182,11 @@ def _normalizar_cnpj_ws(payload, documento):
     }
     inscricoes = estabelecimento.get('inscricoes_estaduais')
     elegiveis = {}
+    # Quantas inscrições ATIVAS a base lista nesta UF, em qualquer formato
+    # (15/10/2026). 0 = a base afirma que não há inscrição ativa — é o que a
+    # fila fiscal usa para emitir como não contribuinte sem esperar o dono.
+    # None = a base nem trouxe a lista (não sabe; nunca vira "não tem").
+    ativas_uf = 0 if isinstance(inscricoes, list) else None
     if isinstance(inscricoes, list):
         for inscricao in inscricoes:
             if not isinstance(inscricao, dict) or inscricao.get('ativo') is not True:
@@ -189,6 +194,7 @@ def _normalizar_cnpj_ws(payload, documento):
             estado_ie = inscricao.get('estado')
             if not isinstance(estado_ie, dict) or _texto(estado_ie.get('sigla')).upper() != uf:
                 continue
+            ativas_uf += 1
             raw_ie = _texto(inscricao.get('inscricao_estadual'))
             # Somente números e máscara; texto como ISENTO não comprova IE.
             if not raw_ie or not re.fullmatch(r'[0-9. /-]+', raw_ie):
@@ -201,8 +207,10 @@ def _normalizar_cnpj_ws(payload, documento):
         ie, inscricao = next(iter(elegiveis.items()))
         dados.update(ie=ie, situacao_ie='contribuinte')
         atualizado = _data_fonte(inscricao.get('atualizado_em'), atualizado)
-    return _resultado(dados, origem=_PROVEDOR, atualizado_em=atualizado,
-                      aviso='' if dados['ie'] else _AVISO_IE)
+    resultado = _resultado(dados, origem=_PROVEDOR, atualizado_em=atualizado,
+                           aviso='' if dados['ie'] else _AVISO_IE)
+    resultado['ie_ativas_uf'] = ativas_uf
+    return resultado
 
 
 def _consultar_cnpj_ws(documento):

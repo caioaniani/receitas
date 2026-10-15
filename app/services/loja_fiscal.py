@@ -290,7 +290,8 @@ def _texto_aviso(itens):
     for it in itens[:10]:
         entrega = it['data_entrega'].strftime('%d/%m') if it['data_entrega'] else '?'
         if it['aguarda_dono']:
-            motivo = 'falta você conferir o cadastro fiscal (CNPJ/IE) no pedido'
+            motivo = ('a base pública não resolveu o cadastro fiscal — confira no pedido: '
+                      + it['erro'].split(' O dono precisa')[0][:160])
         elif it['nf_emitida'] and 'inactive' in it['erro'].lower():
             motivo = ('NF emitida, mas o e-mail do cliente foi recusado (endereço '
                       'inativo ou digitado errado) — corrija o e-mail no pedido')

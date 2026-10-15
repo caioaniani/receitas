@@ -43,6 +43,11 @@ def _normalizar(dados):
     return res
 
 
+# Normalização única dos campos fiscais (checkout e resolução automática da
+# fila fiscal comparam pelo MESMO formato).
+normalizar_dados = _normalizar
+
+
 def resposta_consulta(doc, consulta):
     """Lista explícita de campos públicos: nunca devolve cadastro interno do ERP.
 

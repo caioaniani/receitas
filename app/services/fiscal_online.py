@@ -96,6 +96,87 @@ def pendencias(row, rotulos=None):
     return erros
 
 
+# ── Cadastro DECLARADO pelo cliente resolvido sem o dono (15/10/2026) ─────
+# Dono: "Por que fica aguardando minha conferência? Deveria já buscar
+# automaticamente e emitir". Caso ca37c72e: 17 dias sem nota porque a
+# consulta do checkout só "confirma" quando acha IE ativa — empresa SEM
+# inscrição (serviços) nunca era confirmada. Agora a fila reconsulta a base
+# pública (CNPJ.ws, a mesma do checkout) e decide sozinha quando a resposta
+# é clara; o dono só é chamado no que a base não resolve.
+UF_EMITENTE = 'SP'                 # emissão intraestadual; fora disso, dono
+REAVALIAR_DECLARADO_MIN = 30       # não reconsulta a cada tentativa da fila
+ORIGEM_AUTO = 'auto_consulta'
+
+
+def _pendente_dono(row, motivo):
+    row.erro = (f'{motivo} O dono precisa conferir o cadastro fiscal '
+                'antes de autorizar a nota.')
+    row.consultado_em = agora()
+    return False
+
+
+def resolver_declarado(row):
+    """Tenta resolver um cadastro `checkout_declarado` pela base pública.
+
+    Regras (só a CNPJ.ws lista as inscrições; outra fonte = não sabe):
+    - base com UMA IE ativa na UF → contribuinte com os dados da base; se o
+      cliente informou OUTRA IE, conflito → dono.
+    - base listando ZERO IE ativa na UF → não contribuinte (ou isento, se o
+      cliente declarou isento) com os dados da base, só para empresa de SP
+      (`UF_EMITENTE`); cliente que declarou IE → dono.
+    - base fora, sem a lista ou com várias IEs → dono.
+    Sem commit. Devolve True se resolveu.
+    """
+    from app.services import consulta_empresa
+    from app.services.checkout_fiscal import normalizar_dados
+
+    consulta = consulta_empresa.consultar(row.documento)
+    bruto = consulta.get('dados') or {}
+    if not bruto or consulta.get('origem') != 'cnpj_ws':
+        return _pendente_dono(row, 'A base pública não respondeu com a lista de '
+                              'inscrições estaduais; a fila tenta de novo.')
+    pub, _ = cortar_aos_limites(normalizar_dados(bruto))
+    declarado = row.dados or {}
+    ie_decl = digitos(declarado.get('ie'))
+    if bruto.get('situacao_ie') == 'contribuinte' and pub['ie']:
+        if ie_decl and ie_decl != pub['ie']:
+            return _pendente_dono(row, f'O cliente informou a IE {ie_decl}, mas a base '
+                                  f'pública mostra a IE {pub["ie"]}.')
+        situacao = 'contribuinte'
+    else:
+        n = consulta.get('ie_ativas_uf')
+        if n is None:
+            return _pendente_dono(row, 'A base pública não trouxe as inscrições '
+                                  'estaduais desta empresa.')
+        if n > 0:
+            return _pendente_dono(row, f'A base pública lista {n} inscrições estaduais '
+                                  'ativas; não dá para escolher sozinho.')
+        if ie_decl or row.situacao_ie == 'contribuinte':
+            return _pendente_dono(row, 'O cliente informou ser contribuinte, mas a base '
+                                  'pública não mostra inscrição estadual ativa.')
+        if pub['uf'] != UF_EMITENTE:
+            return _pendente_dono(row, f'Empresa de outro estado ({pub["uf"] or "?"}) sem '
+                                  'inscrição estadual: confira a regra da nota.')
+        pub['ie'] = ''
+        situacao = row.situacao_ie if row.situacao_ie == 'isento' else 'nao_contribuinte'
+    candidato = FiscalPedidoOnline(documento=row.documento, dados=pub, situacao_ie=situacao)
+    faltando = pendencias(candidato)
+    if faltando:
+        return _pendente_dono(row, 'A base pública não tem: ' + ', '.join(faltando) + '.')
+    row.dados = {**pub, '_auto': {
+        'resolvido_em': agora().isoformat(), 'fonte': consulta.get('origem'),
+        'base_atualizada_em': consulta.get('atualizado_em'),
+        'declarado': {k: v for k, v in declarado.items() if not str(k).startswith('_')},
+        'situacao_declarada': row.situacao_ie,
+    }}
+    row.situacao_ie = situacao
+    row.origem = ORIGEM_AUTO
+    row.consultado_em = agora()
+    row.erro = None
+    db.session.flush()
+    return True
+
+
 def consultar(pedido, *, forcar=False):
     """Somente leitura nos provedores; persiste a consulta no nosso pedido.
 
@@ -108,9 +189,18 @@ def consultar(pedido, *, forcar=False):
     row = congelar_documento(pedido, documento(pedido))
     if len(row.documento) != 14 or (row.confirmado_em and not forcar):
         return row
-    # Preserva o que o comprador conferiu, inclusive pendências de declaração.
-    # Apenas uma consulta explícita do owner pode substituir esse snapshot.
-    if not forcar and row.origem in ('checkout_consulta', 'checkout_declarado'):
+    # Cadastro declarado pelo cliente: a fila resolve pela base pública
+    # (`resolver_declarado`), no máximo a cada REAVALIAR_DECLARADO_MIN.
+    if not forcar and row.origem == 'checkout_declarado':
+        from datetime import timedelta
+        if (row.consultado_em is None
+                or row.consultado_em <= agora() - timedelta(minutes=REAVALIAR_DECLARADO_MIN)):
+            resolver_declarado(row)
+            db.session.flush()
+        return row
+    # Preserva o que o comprador conferiu e a consulta confirmou (e o que a
+    # resolução automática decidiu). Só a consulta explícita do owner troca.
+    if not forcar and row.origem in ('checkout_consulta', ORIGEM_AUTO):
         return row
     if not forcar and row.consultado_em:
         from datetime import timedelta
@@ -119,7 +209,7 @@ def consultar(pedido, *, forcar=False):
     if forcar:
         row.confirmado_em = None
         row.confirmado_por_id = None
-    do_checkout = row.origem in ('checkout_consulta', 'checkout_declarado')
+    do_checkout = row.origem in ('checkout_consulta', 'checkout_declarado', ORIGEM_AUTO)
     contato_res = tiny.buscar_contato_por_documento(row.documento)
     contato = contato_res.get('contato') or {}
     consulta_checkout = None

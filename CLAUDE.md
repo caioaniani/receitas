@@ -4776,6 +4776,21 @@ paradas; corrigir o e-mail no editor do pedido
 (`reenviar_apos_email_corrigido`) devolve a tarefa ao ciclo seguinte. Falha
 passageira segue com o backoff de até 60 min. Testes:
 `tests/test_nf_site_parada.py`.
+**Cadastro declarado resolvido SEM o dono (15/10/2026, ordem do dono: "Por
+que fica aguardando minha conferência? Deveria já buscar automaticamente e
+emitir")** — SUBSTITUI o "conferência continua gesto do dono" acima no
+caso comum. `fiscal_online.resolver_declarado` (chamado por `consultar` na
+emissão, no máximo a cada `REAVALIAR_DECLARADO_MIN`=30) reconsulta a CNPJ.ws
+(`consulta_empresa.consultar`; `ie_ativas_uf` = inscrições ativas na UF, None
+quando a lista nem vem — só a CNPJ.ws sabe de IE, a fonte de endereço
+`cnpj_publico` nunca resolve): 1 IE ativa → contribuinte; ZERO → não
+contribuinte (isento se o cliente declarou isento), só empresa de
+`UF_EMITENTE`='SP'; a NOTA usa os dados da BASE (os digitados ficam em
+`dados['_auto']['declarado']`), origem `auto_consulta`. Ficam com o dono, com
+o motivo em `erro` (e no aviso diário): IE declarada ≠ base, cliente diz ter
+IE e a base não mostra, várias IEs, outra UF, base fora/sem lista,
+cadastro incompleto. A conferência do dono segue sobrescrevendo. Testes:
+`tests/test_fiscal_resolucao_automatica.py`.
 Também de 14-15/10: sonda `GET /api/claude/cobrancas-b2b?cliente=` (vendas,
 parcelas, boletos Sicredi, automação e envios de um cliente B2B; só leitura).
 
