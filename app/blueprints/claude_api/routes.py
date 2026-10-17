@@ -1165,11 +1165,19 @@ def pedidos_site():
     from app.utils import hoje
 
     dias = max(1, min(request.args.get('dias', 3, type=int), 30))
+    from app.services import pagarme
     status_f = (request.args.get('status') or '').strip()
+    codigo_f = (request.args.get('codigo') or '').strip().upper()
+    # `gateway=1` (só com `codigo=`): consulta o Pagar.me (GET order e
+    # charge, nunca DELETE) para cada tentativa do pedido — o que o cron de
+    # expiração enxerga e por que adia (17/10/2026, caso 0C70AA31).
+    gateway = request.args.get('gateway') == '1' and bool(codigo_f)
     ini_dt = datetime.combine(hoje() - timedelta(days=dias - 1), time.min)
     q = PedidoOnline.query.filter(PedidoOnline.criado_em >= ini_dt)
     if status_f:
         q = q.filter(PedidoOnline.status == status_f)
+    if codigo_f:
+        q = PedidoOnline.query.filter(PedidoOnline.codigo == codigo_f)
     out = []
     for p in q.order_by(PedidoOnline.criado_em.desc()).limit(200).all():
         out.append({
@@ -1220,6 +1228,10 @@ def pedidos_site():
                 'pix_expira_em': (pg.pix_expira_em.isoformat()
                                   if pg.pix_expira_em else None),
                 'erro': pg.erro,
+                **({'gateway': {
+                    'order': pagarme.consultar_order(pg.pagarme_order_id),
+                    'charge': pagarme.consultar_charge_bruto(pg.pagarme_charge_id),
+                }} if gateway else {}),
             } for pg in p.pagamentos],
         })
     return jsonify(ok=True, dias=dias, pedidos=out)

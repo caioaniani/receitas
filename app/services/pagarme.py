@@ -554,6 +554,41 @@ def cancelar_cobranca_pendente(charge_id):
             'erro': f'status inesperado no cancelamento: {status or "?"}'}
 
 
+def consultar_charge_bruto(charge_id):
+    """GET /charges/{id} — só leitura, para diagnóstico (sonda do assistente,
+    17/10/2026, caso 0C70AA31: Pix vencido que o cron não conseguia encerrar
+    e a resposta do gateway não ficava registrada em lugar nenhum). Devolve
+    {ok, http, status, last_transaction: {status, transaction_type,
+    expires_at, gateway_response}, erro?} — nunca o corpo inteiro (dados
+    do cliente)."""
+    if not disponivel() or not charge_id:
+        return {'ok': False, 'erro': 'PAGARME_API_KEY ou charge_id ausente'}
+    try:
+        r = requests.get(f'{_BASE}/charges/{charge_id}', headers=_headers(),
+                         timeout=_TIMEOUT)
+    except Exception as exc:  # noqa: BLE001
+        return {'ok': False, 'erro': str(exc)}
+    try:
+        body = r.json() or {}
+    except ValueError:
+        body = {}
+    if r.status_code != 200 or not isinstance(body, dict):
+        return {'ok': False, 'http': r.status_code,
+                'erro': (r.text or '')[:300]}
+    tr = body.get('last_transaction') or {}
+    if not isinstance(tr, dict):
+        tr = {}
+    return {'ok': True, 'http': r.status_code,
+            'status': body.get('status'), 'paid_at': body.get('paid_at'),
+            'canceled_at': body.get('canceled_at'),
+            'last_transaction': {
+                'status': tr.get('status'),
+                'transaction_type': tr.get('transaction_type'),
+                'expires_at': tr.get('expires_at'),
+                'gateway_response': tr.get('gateway_response'),
+            }}
+
+
 def buscar_orders_por_codigo(codigo):
     """Orders do gateway com esse `code` (o código do pedido). Usado quando a
     criação de uma cobrança terminou sem resposta (timeout) e não temos o id
