@@ -1204,10 +1204,22 @@ def pedidos_site():
                     'preco': float(c.preco_unitario or 0),
                 } for c in (it.componentes or [])],
             } for it in p.itens],
+            # Expiração (17/10/2026, caso 0C70AA31 — pedido com Pix de
+            # 30 min ainda "aguardando pagamento" 12 h depois): sem o
+            # prazo da reserva e o vencimento/erro de cada tentativa não
+            # dava para dizer de fora POR QUE o cron de expiração não
+            # cancelou. Só leitura.
+            'reserva_expira_em': (p.reserva_expira_em.isoformat()
+                                  if p.reserva_expira_em else None),
             'pagamentos': [{
                 'metodo': pg.metodo, 'status': pg.status,
                 'valor': float(pg.valor or 0),
                 'charge_id': pg.pagarme_charge_id,
+                'order_id': pg.pagarme_order_id,
+                'criado_em': pg.criado_em.isoformat() if pg.criado_em else None,
+                'pix_expira_em': (pg.pix_expira_em.isoformat()
+                                  if pg.pix_expira_em else None),
+                'erro': pg.erro,
             } for pg in p.pagamentos],
         })
     return jsonify(ok=True, dias=dias, pedidos=out)
