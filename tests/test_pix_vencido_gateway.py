@@ -98,6 +98,7 @@ def test_nova_cobranca_passa_quando_o_pix_anterior_venceu_no_gateway(app):
     with patch('app.services.pagarme.consultar_order', return_value=_pendente(120)), \
             patch('app.services.pagarme.cancelar_cobranca_pendente', return_value=RECUSA):
         assert loja_pagamento._resolver_tentativas_pendentes(ped) is None
+    db.session.commit()   # o resolvedor não commita (contrato: o caller decide)
     db.session.refresh(pag)
     assert pag.status == 'falhou' and 'substituído' in pag.erro
 

@@ -14,6 +14,7 @@ pro caller; devolvem dict {'ok': ...}.
 """
 import base64
 import logging
+from datetime import datetime
 
 import requests
 from flask import current_app
@@ -531,9 +532,11 @@ def cancelar_cobranca_pendente(charge_id):
                             headers=_headers(), timeout=_TIMEOUT)
     except Exception as exc:  # noqa: BLE001
         logger.warning('pagarme cancelar_cobranca_pendente falhou: %s', exc)
-        return {'ok': False, 'incerto': True, 'erro': str(exc)}
+        # `rede`: o gateway nem respondeu — diferente de uma RECUSA dele
+        # (HTTP 4xx), que é resposta definitiva (17/10/2026).
+        return {'ok': False, 'incerto': True, 'rede': True, 'erro': str(exc)}
     if r.status_code not in (200, 201, 202):
-        return {'ok': False, 'incerto': True,
+        return {'ok': False, 'incerto': True, 'rede': r.status_code >= 500,
                 'erro': f'HTTP {r.status_code}: {(r.text or "")[:200]}'}
     try:
         corpo = r.json() or {}
@@ -658,4 +661,26 @@ def consultar_order(order_id):
         'pago': status == 'paid' or charge_status == 'paid',
         'charge_id': charge.get('id'),
         'charge_status': charge_status,
+        # Vencimento do QR segundo o PRÓPRIO gateway (BRT naive), ou None.
+        # O cron de expiração usa isto para não deixar um Pix morto lá
+        # segurar o pedido aqui (17/10/2026, caso 0C70AA31).
+        'pix_expires_at': _pix_expires_at(charge),
     }
+
+
+def _pix_expires_at(charge):
+    """`last_transaction.expires_at` de uma charge Pix → datetime BRT naive;
+    None se não é Pix, não veio ou está ilegível."""
+    from app.utils import para_brt
+    tr = charge.get('last_transaction') if isinstance(charge, dict) else None
+    if not isinstance(tr, dict):
+        return None
+    if (tr.get('transaction_type') or charge.get('payment_method') or '').lower() != 'pix':
+        return None
+    texto = str(tr.get('expires_at') or '').strip()
+    if not texto:
+        return None
+    try:
+        return para_brt(datetime.fromisoformat(texto.replace('Z', '+00:00')))
+    except ValueError:
+        return None

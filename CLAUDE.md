@@ -4041,6 +4041,21 @@ todos com teste em `tests/test_checkout_auditoria_graves.py`:
   checkout da loja inteira). Não cancela com QR do Pix válido; pedido que o
   gateway não deixa decidir vai pro fim da fila e avisa o dono após 24 h;
   order 404 conta como encerrada (com aviso).
+  **Pix morto no gateway (17/10/2026, caso 0C70AA31)**: o Pagar.me mantém
+  a charge `pending` depois de o QR vencer e RECUSA o `DELETE` — o cron
+  adiava a reserva a cada 5 min (12 h "aguardando pagamento") e o motivo
+  só ia ao log. Agora `pagarme.consultar_order` devolve `pix_expires_at`
+  (vencimento segundo o PRÓPRIO gateway, BRT) e `cancelar_cobranca_pendente`
+  marca `rede` (sem resposta/5xx) × recusa (4xx); em
+  `loja_pagamento._encerrar_pix_pendente`, recusa de um QR vencido lá há
+  mais de `_PIX_VENCIDO_FOLGA`=30 min vira 'encerrado' (tentativa
+  `falhou`, pedido `pix_expirado`; pagamento tardio cai no webhook, que
+  reabre como pago) — vale no cron e na nova cobrança
+  (`_resolver_tentativas_pendentes`); rede segue 'aguardar'. O que o
+  gateway respondeu fica em `pag.erro`. Sonda: `/api/claude/pedidos-site?
+  codigo=X&gateway=1` (GET order + charge, nunca DELETE) e
+  `reserva_expira_em`/`pix_expira_em`/`erro` por tentativa. Testes:
+  `tests/test_pix_vencido_gateway.py`.
 - A baixa continua SÓ por confirmação do gateway — webhook, ou consulta ao
   Pagar.me (conciliação, nova tentativa, expiração). Nunca pelo retorno do
   checkout. `conciliar_pedido` consulta TODAS as tentativas.

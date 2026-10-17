@@ -30,6 +30,7 @@ DECISÕES DE DINHEIRO (não desviar sem perguntar — CLAUDE.md peso especial):
   silenciosamente.
 """
 import logging
+from datetime import timedelta
 
 from app.constants import VENDA_TIPOS_LOJA
 from app.extensions import db
@@ -120,17 +121,39 @@ _MSG_PIX_ANTERIOR_ESTORNADO = (
     'extrato e tente de novo; se preferir, fale com a gente.')
 
 
+# Pix cujo QR venceu no PRÓPRIO gateway há mais que isto e que ele se recusa
+# a cancelar conta como encerrado (17/10/2026, caso 0C70AA31: QR de 30 min
+# vencido às 21:18, Pagar.me seguia 'pending' e recusava o DELETE — o cron
+# adiava o pedido a cada 5 min, 12 h "aguardando pagamento"). A folga cobre
+# relógio e processamento do PSP; pagamento tardio, se um dia existir, cai
+# no 'paid' do webhook, que reabre pedido `pix_expirado` como pago.
+_PIX_VENCIDO_FOLGA = timedelta(minutes=30)
+
+
 def _consultar_tentativa(pag):
-    """Situação de UMA tentativa no gateway: 'pago', 'encerrado' (falhou/
-    cancelada/estornada — não cobra mais), 'pendente' ou None (consulta
-    falhou de forma transitória: rede, 5xx, sem chave). Sem order_id = a
-    tentativa nunca chegou ao Pagar.me. 404 = a chave atual não enxerga a
-    order (ex.: troca de ambiente) — conta como encerrada, com aviso ao
-    dono, pra não prender o pedido pra sempre."""
+    """Situação de UMA tentativa no gateway (ver `_consultar_tentativa_detalhe`)."""
+    return _consultar_tentativa_detalhe(pag)[0]
+
+
+def _pix_vencido_no_gateway(consulta, base):
+    """O gateway informou o vencimento do QR e ele passou há mais de
+    `_PIX_VENCIDO_FOLGA`? Sem a informação = False (conservador)."""
+    exp = (consulta or {}).get('pix_expires_at')
+    return exp is not None and exp + _PIX_VENCIDO_FOLGA <= base
+
+
+def _consultar_tentativa_detalhe(pag):
+    """Situação de UMA tentativa no gateway: ('pago' | 'encerrado' (falhou/
+    cancelada/estornada — não cobra mais) | 'pendente' | None, consulta).
+    None = consulta falhou de forma transitória (rede, 5xx, sem chave). Sem
+    order_id = a tentativa nunca chegou ao Pagar.me. 404 = a chave atual não
+    enxerga a order (ex.: troca de ambiente) — conta como encerrada, com
+    aviso ao dono, pra não prender o pedido pra sempre. `consulta` é o dict
+    de `pagarme.consultar_order` (None quando não houve consulta)."""
     if not pag.pagarme_order_id:
         if (pag.erro or '').startswith(PREFIXO_INCERTO):
-            return _consultar_tentativa_incerta(pag)
-        return 'encerrado'
+            return _consultar_tentativa_incerta(pag), None
+        return 'encerrado', None
     consulta = pagarme.consultar_order(pag.pagarme_order_id)
     if not consulta.get('ok'):
         if str(consulta.get('erro') or '').startswith('HTTP 404'):
@@ -144,16 +167,16 @@ def _consultar_tentativa(pag):
                 'Pagar.me se não há dinheiro nela.',
                 f'order_404|{pag.pagarme_order_id}', critico=False,
                 cooldown=86400)
-            return 'encerrado'
-        return None
+            return 'encerrado', consulta
+        return None, consulta
     if consulta.get('pago'):
-        return 'pago'
+        return 'pago', consulta
     encerrados = ('failed', 'canceled', 'cancelled', 'refunded', 'voided',
                   'not_authorized', 'chargedback')
     if (consulta.get('status') in encerrados
             or consulta.get('charge_status') in encerrados):
-        return 'encerrado'
-    return 'pendente'
+        return 'encerrado', consulta
+    return 'pendente', consulta
 
 
 def _consultar_tentativa_incerta(pag):
@@ -275,7 +298,7 @@ def _confirmar_pelo_gateway(pedido, pag):
     return _marcar_pago(pedido, pag, enviar_confirmacao=False)
 
 
-def _encerrar_pix_pendente(pedido, pag, motivo):
+def _encerrar_pix_pendente(pedido, pag, motivo, *, vencido_no_gateway=False):
     """Cancela no gateway um Pix que o sistema acredita não pago.
 
     DELETE numa cobrança PAGA é estorno: se o cliente pagou o QR no mesmo
@@ -287,7 +310,12 @@ def _encerrar_pix_pendente(pedido, pag, motivo):
       pedido) e o dono é avisado;
     - 'pago': o cancelamento falhou porque ela já estava paga — o caller
       confirma o pedido;
-    - 'vivo': não deu pra saber — tratar como ainda pagável."""
+    - 'vivo': não deu pra saber — tratar como ainda pagável. Exceção: com
+      `vencido_no_gateway` (o próprio Pagar.me diz que o QR venceu há mais
+      de `_PIX_VENCIDO_FOLGA`) uma RECUSA do gateway ao cancelar não
+      segura o pedido — o QR já não é pagável e a tentativa vira 'falhou';
+      só falha de REDE segue 'vivo'. O que o gateway respondeu fica em
+      `pag.erro` (antes só ia ao log)."""
     cancel = pagarme.cancelar_cobranca_pendente(pag.pagarme_charge_id)
     if cancel.get('ok'):
         pag.status = 'falhou'
@@ -311,6 +339,13 @@ def _encerrar_pix_pendente(pedido, pag, motivo):
         return 'pago'
     logger.warning('Pedido %s: não cancelou o Pix %s: %s', pedido.codigo,
                    pag.pagarme_charge_id, cancel.get('erro'))
+    if vencido_no_gateway and not cancel.get('rede'):
+        pag.status = 'falhou'
+        pag.erro = (f'{motivo}; QR vencido no Pagar.me, que recusou o '
+                    f'cancelamento: {str(cancel.get("erro") or "?")[:200]}')
+        return 'encerrado'
+    pag.erro = ('cancelamento no Pagar.me sem efeito: '
+                f'{str(cancel.get("erro") or "?")[:200]}')
     return 'vivo'
 
 
@@ -331,7 +366,7 @@ def _resolver_tentativas_pendentes(pedido):
     for pag in sorted(pedido.pagamentos, key=lambda p: p.id or 0):
         if pag.status != 'pendente':
             continue
-        situacao = _consultar_tentativa(pag)
+        situacao, consulta = _consultar_tentativa_detalhe(pag)
         if situacao is None:
             return _MSG_GATEWAY_INDISPONIVEL
         if situacao == 'pago':
@@ -344,7 +379,10 @@ def _resolver_tentativas_pendentes(pedido):
         if pag.metodo == 'cartao':
             return _MSG_CARTAO_EM_ANALISE
         fim = _encerrar_pix_pendente(
-            pedido, pag, 'substituído por nova tentativa (cancelado no Pagar.me)')
+            pedido, pag, 'substituído por nova tentativa (cancelado no Pagar.me)',
+            vencido_no_gateway=_pix_vencido_no_gateway(consulta, agora()))
+        if fim == 'encerrado':
+            continue
         if fim == 'pago':
             _confirmar_pelo_gateway(pedido, pag)
             return _MSG_PAGAMENTO_JA_CONFIRMADO
@@ -380,7 +418,7 @@ def situacao_no_gateway(pedido, *, base=None):
             # QR ainda pagável: cancelar o pedido agora cobraria o cliente
             # por um pedido morto se ele pagar nos minutos que restam.
             return 'aguardar', None
-        situacao = _consultar_tentativa(pag)
+        situacao, consulta = _consultar_tentativa_detalhe(pag)
         if situacao is None:
             logger.warning('expiração %s: gateway fora, adiando', pedido.codigo)
             return 'aguardar', None
@@ -393,12 +431,17 @@ def situacao_no_gateway(pedido, *, base=None):
         if pag.metodo != 'pix':
             return 'aguardar', None
         # Pix vencido que o gateway ainda mostra pendente: encerra lá antes
-        # de cancelar aqui (senão ele ainda poderia ser pago).
-        fim = _encerrar_pix_pendente(pedido, pag,
-                                     'Pix expirado (cancelado no Pagar.me)')
+        # de cancelar aqui (senão ele ainda poderia ser pago). Se o gateway
+        # recusa o cancelamento de um QR que ELE diz vencido, o QR já não
+        # é pagável — não segura o pedido (17/10/2026).
+        fim = _encerrar_pix_pendente(
+            pedido, pag, 'Pix expirado (cancelado no Pagar.me)',
+            vencido_no_gateway=_pix_vencido_no_gateway(consulta, base))
         if fim == 'pago':
             return 'pago', pag
         if fim == 'vivo':
+            logger.warning('expiração %s: Pix %s segue vivo no gateway, adiando',
+                           pedido.codigo, pag.pagarme_charge_id)
             return 'aguardar', None
     return 'livre', None
 
